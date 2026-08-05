@@ -48,6 +48,7 @@ import {
 import type { PrimaryTransit } from './RoutingMap';
 import { DayTypeDropdown } from './DayTypeDropdown';
 import { VenueAutocomplete } from './VenueAutocomplete';
+import { AddressAutocomplete } from './AddressAutocomplete';
 import { TravelBox, type RoutingRow } from './RoutingGrid';
 import type { RoutingDayStatus, RoutingStatusByDate, DotState } from '@/server/operations/getRoutingDayStatus';
 
@@ -355,13 +356,23 @@ function LedgerRow({
           }}
         >
           <ExpansionField label="Venue address">
-            <input
-              type="text"
+            {/* Tour-builder fix (2026-08-05) — a live address search, not a dead
+                input. On a venue-less day (day off / travel) this is the ONLY
+                place in the row that can search anywhere; picking a result
+                fills the address and, ONLY where the row has none, city /
+                country / coords. It never touches venue_name. */}
+            <AddressAutocomplete
               value={row.address ?? ''}
               disabled={readOnly}
-              onChange={(e) => updateRow(rowIndex, { address: e.target.value })}
-              placeholder="Address"
-              className="w-full rounded-md border border-lp-border bg-lp-surface px-2.5 py-1.5 text-sm text-lp-text placeholder:text-lp-text-tertiary focus:outline-none focus:border-lp-orange focus:ring-2 focus:ring-lp-orange/30 disabled:opacity-70"
+              onChange={(address) => updateRow(rowIndex, { address })}
+              onAddressSelect={(r) => {
+                const updates: Partial<RoutingRow> = { address: r.address };
+                if (!row.city && r.city) updates.city = r.city;
+                if (!row.country && r.country) updates.country = r.country;
+                if (row.latitude == null && r.latitude != null) updates.latitude = r.latitude;
+                if (row.longitude == null && r.longitude != null) updates.longitude = r.longitude;
+                updateRow(rowIndex, updates);
+              }}
             />
           </ExpansionField>
           <ExpansionField label="Country">

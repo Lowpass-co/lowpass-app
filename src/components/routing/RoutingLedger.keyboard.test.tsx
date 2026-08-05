@@ -18,7 +18,7 @@
      KEY-05  Tab from the day-type cell → focus lands on the venue input.
    ============================================ */
 
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, beforeAll, vi } from 'vitest';
 import { useState } from 'react';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { RoutingLedger } from './RoutingLedger';
@@ -32,6 +32,19 @@ beforeEach(() => {
     vi.fn(() => Promise.resolve({ ok: true, json: () => Promise.resolve({ venues: [] }) })),
   );
 });
+
+// jsdom does no layout: offsetParent is null and every rect is 0x0, which made
+// focusAdjacentCell filter out EVERY candidate — the advance was untestable.
+// Give jsdom a plausible offsetParent so focus movement is observable.
+beforeAll(() => {
+  Object.defineProperty(HTMLElement.prototype, 'offsetParent', {
+    configurable: true,
+    get() {
+      return (this as HTMLElement).parentElement;
+    },
+  });
+});
+
 
 const ROWS: RoutingRow[] = [
   {
@@ -162,5 +175,46 @@ describe('routing ledger — the click-then-arrow path (F-1 repro)', () => {
 
     expect(commits.length).toBeGreaterThan(0);
     expect(commits[0]).not.toBe('rehearsal');
+  });
+});
+
+/* ============================================
+   Tour-builder fix (2026-08-05) — the day-type popup's Enter contract.
+   Enter in the filter box selects the highlighted type, CLOSES the menu, and
+   ADVANCES to the venue cell — Adam's "enter should select the highlight and
+   move to the next entry point". Pills are never Tab stops.
+   ============================================ */
+describe('day-type popup — Enter selects, closes, advances', () => {
+  it('type-ahead → Enter commits the match, closes the popup, focuses the venue input', async () => {
+    const commits: string[] = [];
+    render(<Host onCommit={(v) => commits.push(v)} />);
+    const cell = dayTypeCell(0);
+    cell.focus();
+
+    // Type-ahead opens the popup seeded with "s" (matches "show" first).
+    fireEvent.keyDown(cell, { key: 's' });
+    const search = await screen.findByPlaceholderText('Type to filter…');
+
+    fireEvent.keyDown(search, { key: 'Enter' });
+
+    expect(commits).toContain('show');
+    expect(screen.queryByPlaceholderText('Type to filter…')).toBeNull();
+    expect(document.activeElement).toBe(venueInput(0));
+  });
+
+  it('pills are not Tab stops, and Tab from anywhere in the popup exits to the venue cell', async () => {
+    render(<Host />);
+    const cell = dayTypeCell(0);
+    cell.focus();
+    fireEvent.keyDown(cell, { key: 's' });
+    const search = await screen.findByPlaceholderText('Type to filter…');
+
+    const pills = document.querySelectorAll('[data-lp-dropdown] button');
+    expect(pills.length).toBeGreaterThan(0);
+    for (const p of pills) expect((p as HTMLButtonElement).tabIndex).toBe(-1);
+
+    fireEvent.keyDown(search, { key: 'Tab' });
+    expect(document.activeElement).toBe(venueInput(0));
+    expect(screen.queryByPlaceholderText('Type to filter…')).toBeNull();
   });
 });

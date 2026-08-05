@@ -1373,3 +1373,46 @@ round-trip (needs a hand-pasted migration).
 **Verification:** tsc clean · 499 vitest green · build 119/119. (One flaky
 PDF-probe timeout, RCP-15, failed once under full-suite load and passes
 consistently otherwise — pre-existing, unrelated.)
+
+---
+
+## Tour-builder keyboard + venue/address search · 2026-08-05 (Cowork)
+
+**Adam's three complaints, each traced to its mechanism:**
+
+1. **"Tabs through lists."** The day-type popup's pills were real Tab stops,
+   and a mouse-click moved focus INTO the portal — every Tab after that walked
+   the pill list. Fixed three ways: pills (and every dropdown option, venue
+   list included) are `tabIndex={-1}` with `onMouseDown` preventDefault so
+   clicks never move focus off the input; and the popup has a portal-level
+   Tab/Escape catcher (defaultPrevented-guarded) so focus anywhere inside
+   exits to the adjacent CELL, never the next list row.
+2. **"Enter should select the highlight and move to the next entry point."**
+   Enter now commits AND advances everywhere, matching Tab: venue cell
+   (library pick / Google pick / free text — never a dead key), day-type
+   filter box (REPLACES the type — consistent with what ↑/↓ do — closes,
+   focuses the venue cell; multi-type stays a click flow), and the new
+   address field.
+3. **"Venue search asks you to add a venue before it searches" + "address col
+   should search on a day off."** The Google path was gated behind the
+   "Create new" row — with a thin library, typing showed nothing but an
+   invitation to add. Now ONE merged list: library matches first (◆, free),
+   Google Places automatically appended when the library returns <3 hits and
+   the query is ≥3 chars (session tokens unchanged; name-deduped against
+   library rows). The "Create new" row is deleted — free-text venues still
+   work by typing + Tab/Enter. And the address field (ledger expansion +
+   RoutingGrid column) is a new <AddressAutocomplete> — same contract, fills
+   address + missing city/country/coords, never touches venue_name.
+
+**Billing note (flagged, not hidden):** auto-running Places autocomplete means
+abandoned sessions (typed, never picked) bill per-request instead of the free
+per-session SKU. The ≥3-char + thin-library gates bound it; watch
+`google.places.autocomplete` in the usage meter after a week of real use.
+
+**Tests:** 507 (8 new) — VenueAutocomplete.contract.test.tsx pins all three
+behaviours; the ledger keyboard file gains the day-type Enter contract. Both
+files shim `offsetParent` (jsdom does no layout, which made focusAdjacentCell
+filter out every candidate — the advance was previously untestable, which is
+how "Enter doesn't move" shipped in the first place).
+
+**Verification:** tsc clean · 507 vitest green · build 119/119.

@@ -69,11 +69,8 @@ export function VenueAutocomplete({
   const { showToast } = useToast();
   const [query, setQuery] = useState(value);
   const [suggestions, setSuggestions] = useState<{ placeId: string; text: string }[]>([]);
-  // Library-first: matches from the venue library (cheap, no Places billing).
-  // `mode` = 'library' while type-to-searching the library (default); flips to
-  // 'places' only when the user chooses "Create new" → the Google path.
+  // Library matches (cheap, no Places billing) — always shown first.
   const [libraryMatches, setLibraryMatches] = useState<LibraryVenueMatch[]>([]);
-  const [mode, setMode] = useState<'library' | 'places'>('library');
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   // R4b defect 4 — in the ledger the placeholder must only show while EDITING;
@@ -104,12 +101,20 @@ export function VenueAutocomplete({
     if (!sessionTokenRef.current) sessionTokenRef.current = crypto.randomUUID();
     return sessionTokenRef.current;
   };
+  /* Monotonic search id — a slow library/places response from an earlier
+     keystroke must never overwrite a newer one's results. */
+  const searchSeqRef = useRef(0);
 
-  // 'library' mode renders [libraryMatches…, "Create new"]; 'places' mode renders
-  // the Google suggestions. totalItems drives highlight bounds + open-gating.
-  const totalItems = mode === 'library' ? libraryMatches.length + 1 : suggestions.length;
+  /* Tour-builder fix (2026-08-05) — ONE merged list: library matches first
+     (◆, no billing), then Google Places suggestions. The old design gated the
+     Google search behind a "Create new" row — so with a thin library, typing a
+     real venue name produced nothing but an invitation to "add" it, which read
+     as search-that-doesn't-search (Adam's exact complaint). Places now runs
+     automatically when the library comes back thin; free-text venues still
+     work by just typing and Tab/Enter (no FK, per CC_VENUE_SSOT). */
+  const totalItems = libraryMatches.length + suggestions.length;
   // Show the popup while a search is in flight too, so a quiet "Searching…" row
-  // renders instead of jumping straight to "create new" (CC_ROUTING_KEYBOARD).
+  // renders instead of a dead pause (CC_ROUTING_KEYBOARD).
   const hasDropdown = open && query.trim().length >= 1 && (loading || totalItems > 0);
 
   useEffect(() => {
@@ -144,22 +149,48 @@ export function VenueAutocomplete({
     debounceRef.current = setTimeout(() => {
       setLoading(true);
       const fromUser = queryFromUserRef.current;
-      // Open immediately so the "Searching…" row shows while results load — the
-      // create-new row must never lead before results have a chance to return.
+      // Open immediately so the "Searching…" row shows while results load.
       if (fromUser) setOpen(true);
-      // Library-first: type-to-search the venue library (cheap, NO Places billing).
-      // The Google Places path is invoked ONLY from the "Create new" row below.
+      const thisSearch = ++searchSeqRef.current;
+      // Library first (cheap, NO Places billing)…
       fetch(`/api/venues/canonical/search?q=${encodeURIComponent(query)}`)
         .then((r) => (r.ok ? r.json() : { venues: [] }))
         .then((data: { venues?: LibraryVenueMatch[] }) => {
-          setLibraryMatches(data.venues ?? []);
-          setMode('library');
-          setSuggestions([]);
+          if (thisSearch !== searchSeqRef.current) return; // stale
+          const libs = data.venues ?? [];
+          setLibraryMatches(libs);
           setHighlightedIndex(0);
           if (fromUser) setOpen(true);
+          /* …then Google, AUTOMATICALLY, when the library is thin. No more
+             "Create new" gate — the search just searches. Query ≥3 chars keeps
+             the very first keystrokes off the metered path; a rich library
+             (≥3 hits) short-circuits Google entirely. */
+          if (fromUser && libs.length < 3 && query.trim().length >= 3) {
+            return fetch('/api/places/autocomplete', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ input: query, sessiontoken: ensureSessionToken() }),
+            })
+              .then((r) => (r.ok ? r.json() : { suggestions: [] }))
+              .then((g: { suggestions?: { placeId: string; text: string }[] }) => {
+                if (thisSearch !== searchSeqRef.current) return; // stale
+                // Drop Google rows that duplicate a library hit by name.
+                const libNames = new Set(libs.map((l) => l.name.trim().toLowerCase()));
+                setSuggestions(
+                  (g.suggestions ?? []).filter(
+                    (s) => !libNames.has(s.text.split(',')[0]?.trim().toLowerCase() ?? ''),
+                  ),
+                );
+              });
+          }
+          setSuggestions([]);
         })
-        .catch(() => setLibraryMatches([]))
-        .finally(() => setLoading(false));
+        .catch(() => {
+          if (thisSearch === searchSeqRef.current) setLibraryMatches([]);
+        })
+        .finally(() => {
+          if (thisSearch === searchSeqRef.current) setLoading(false);
+        });
     }, 250);
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current);
@@ -193,14 +224,14 @@ export function VenueAutocomplete({
     return () => abortRef.current?.abort();
   }, []);
 
+  /** Merged-list pick: library rows first, Google rows after. */
   const selectByIndex = (i: number) => {
-    if (mode === 'library') {
-      if (i < libraryMatches.length) handleLibrarySelect(libraryMatches[i]);
-      else handleCreateNew();
-    } else {
-      const s = suggestions[i];
-      if (s) handleSelect(s.placeId, s.text);
+    if (i < libraryMatches.length) {
+      handleLibrarySelect(libraryMatches[i]);
+      return;
     }
+    const s = suggestions[i - libraryMatches.length];
+    if (s) void handleSelect(s.placeId, s.text);
   };
 
   const handleSelect = async (placeId: string, text: string) => {
@@ -339,28 +370,6 @@ export function VenueAutocomplete({
     isPickingRef.current = false;
   };
 
-  // "Create new" — the ONLY entry into the Google path. Opens a Places session
-  // (token logic unchanged) + shows Google matches for the typed name; picking one
-  // runs the existing handleSelect (Details → onPlaceSelect → canonical on save).
-  const handleCreateNew = () => {
-    if (query.trim().length < 2) return;
-    setLoading(true);
-    setMode('places');
-    fetch('/api/places/autocomplete', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ input: query, sessiontoken: ensureSessionToken() }),
-    })
-      .then((r) => r.json())
-      .then((data) => {
-        setSuggestions(data.suggestions ?? []);
-        setHighlightedIndex(0);
-        setOpen(true);
-      })
-      .catch(() => setSuggestions([]))
-      .finally(() => setLoading(false));
-  };
-
   const listRefCallback = (el: HTMLUListElement | null) => {
     listRef.current = el;
     dropdownRef.current = el;
@@ -399,28 +408,37 @@ export function VenueAutocomplete({
         }}
         onKeyDown={(e) => {
           // CC_ROUTING_KEYBOARD — TAB must ALWAYS exit the cell and move on.
-          // If a real result is highlighted, commit it (sets the canonical FK);
-          // otherwise commit the raw typed text as a free-text venue (FK null,
-          // supported per CC_VENUE_SSOT). Never trap focus here.
+          // If a real result is highlighted, commit it (sets the canonical FK /
+          // runs the Places pick); otherwise commit the raw typed text as a
+          // free-text venue (FK null, per CC_VENUE_SSOT). Never trap focus.
           if (e.key === 'Tab') {
             const dir: 1 | -1 = e.shiftKey ? -1 : 1;
-            if (open && mode === 'library' && libraryMatches.length > 0 && highlightedIndex < libraryMatches.length) {
+            if (open && totalItems > 0 && highlightedIndex < totalItems) {
               e.preventDefault();
-              handleLibrarySelect(libraryMatches[highlightedIndex]);
+              selectByIndex(highlightedIndex);
               focusAdjacentCell(inputRef.current, dir);
               return;
             }
-            if (open && mode === 'places' && suggestions[highlightedIndex]) {
-              e.preventDefault();
-              const s = suggestions[highlightedIndex];
-              void handleSelect(s.placeId, s.text);
-              focusAdjacentCell(inputRef.current, dir);
-              return;
-            }
-            // Nothing real highlighted (create-new row, or no results): commit the
-            // free text and let native Tab move to the next cell.
+            // No results: commit the free text, let native Tab move on.
             if (query !== value) onChange(query);
             setOpen(false);
+            return;
+          }
+          /* Tour-builder fix (2026-08-05) — ENTER commits AND ADVANCES, exactly
+             like Tab. It used to select and leave focus sitting in the cell,
+             which broke the type → Enter → type rhythm ("enter should select
+             the highlight and move to the next entry point"). With no list
+             open it commits the typed text and advances, so Enter is never a
+             dead key. */
+          if (e.key === 'Enter') {
+            e.preventDefault();
+            if (open && totalItems > 0 && highlightedIndex < totalItems) {
+              selectByIndex(highlightedIndex);
+            } else {
+              if (query !== value) onChange(query);
+              setOpen(false);
+            }
+            focusAdjacentCell(inputRef.current, 1);
             return;
           }
           if (!open || totalItems === 0) return;
@@ -432,11 +450,6 @@ export function VenueAutocomplete({
           if (e.key === 'ArrowUp') {
             e.preventDefault();
             setHighlightedIndex((i) => Math.max(i - 1, 0));
-            return;
-          }
-          if (e.key === 'Enter') {
-            e.preventDefault();
-            selectByIndex(highlightedIndex);
             return;
           }
           if (e.key === 'Escape') {
@@ -474,7 +487,6 @@ export function VenueAutocomplete({
             } else {
               // Re-run the cheap library search (no Places billing on focus).
               setLoading(true);
-              setMode('library');
               fetch(`/api/venues/canonical/search?q=${encodeURIComponent(query)}`)
                 .then((r) => (r.ok ? r.json() : { venues: [] }))
                 .then((data: { venues?: LibraryVenueMatch[] }) => {
@@ -513,65 +525,53 @@ export function VenueAutocomplete({
             className="lp-dropdown-layer fixed max-h-52 overflow-y-auto rounded-xl border border-lp-border bg-lp-surface py-1 shadow-lg"
             style={{ top: dropdownRect.top, left: dropdownRect.left, width: dropdownRect.width, minWidth: 240 }}
           >
-            {mode === 'library' ? (
-              <>
-                {libraryMatches.map((m, i) => {
-                  const meta = [m.city, m.country].filter(Boolean).join(', ');
-                  return (
-                    <li key={m.id} role="option" aria-selected={i === highlightedIndex}>
-                      <button
-                        type="button"
-                        onMouseDown={(e) => e.preventDefault()}
-                        onClick={() => handleLibrarySelect(m)}
-                        onMouseEnter={() => setHighlightedIndex(i)}
-                        className={`flex w-full items-baseline gap-2 px-3 py-2 text-left text-sm hover:bg-lp-surface-hover ${i === highlightedIndex ? 'bg-lp-surface-hover' : ''}`}
-                      >
-                        {/* library-linked marker (orange) */}
-                        <span aria-hidden style={{ color: 'var(--lp-orange)', flex: '0 0 auto', lineHeight: 1.2 }}>◆</span>
-                        <span className="min-w-0 flex-1 truncate text-lp-text">{m.name}</span>
-                        {meta ? <span className="shrink-0 text-xs text-lp-text-tertiary">{meta}{m.capacity ? ` · ${m.capacity.toLocaleString('en-GB')}` : ''}</span> : null}
-                      </button>
-                    </li>
-                  );
-                })}
-                {/* While the search is in flight, a quiet "Searching…" row holds
-                    the last slot so create-new never leads before results land. */}
-                {loading ? (
-                  <li className="flex items-center gap-2 px-3 py-2 text-sm text-lp-text-tertiary" style={{ borderTop: libraryMatches.length ? '1px solid var(--lp-border)' : undefined }}>
-                    Searching…
-                  </li>
-                ) : (
-                  /* Create-new — the ONLY entry into the Google Places path; always LAST. */
-                  <li role="option" aria-selected={highlightedIndex === libraryMatches.length}>
-                    <button
-                      type="button"
-                      onMouseDown={(e) => e.preventDefault()}
-                      onClick={handleCreateNew}
-                      onMouseEnter={() => setHighlightedIndex(libraryMatches.length)}
-                      className={`flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-lp-text-secondary hover:bg-lp-surface-hover ${highlightedIndex === libraryMatches.length ? 'bg-lp-surface-hover' : ''}`}
-                      style={{ borderTop: libraryMatches.length ? '1px solid var(--lp-border)' : undefined }}
-                    >
-                      <span aria-hidden>＋</span>
-                      <span>Create <span className="font-medium text-lp-text">“{query.trim()}”</span> as a new venue</span>
-                    </button>
-                  </li>
-                )}
-              </>
-            ) : (
-              suggestions.map((s, i) => (
-                <li key={s.placeId} role="option" aria-selected={i === highlightedIndex}>
+            {/* ONE merged list: library (◆, free) then Google. Every option is
+                tabIndex={-1} — list rows are Enter/click targets, NEVER Tab
+                stops; Tab always exits the cell to the next entry point. */}
+            {libraryMatches.map((m, i) => {
+              const meta = [m.city, m.country].filter(Boolean).join(', ');
+              return (
+                <li key={m.id} role="option" aria-selected={i === highlightedIndex}>
                   <button
                     type="button"
+                    tabIndex={-1}
                     onMouseDown={(e) => e.preventDefault()}
-                    onClick={() => handleSelect(s.placeId, s.text)}
+                    onClick={() => handleLibrarySelect(m)}
                     onMouseEnter={() => setHighlightedIndex(i)}
-                    className={`w-full px-3 py-2 text-left text-sm text-lp-text hover:bg-lp-surface-hover ${i === highlightedIndex ? 'bg-lp-surface-hover' : ''}`}
+                    className={`flex w-full items-baseline gap-2 px-3 py-2 text-left text-sm hover:bg-lp-surface-hover ${i === highlightedIndex ? 'bg-lp-surface-hover' : ''}`}
                   >
-                    {s.text}
+                    {/* library-linked marker (orange) */}
+                    <span aria-hidden style={{ color: 'var(--lp-orange)', flex: '0 0 auto', lineHeight: 1.2 }}>◆</span>
+                    <span className="min-w-0 flex-1 truncate text-lp-text">{m.name}</span>
+                    {meta ? <span className="shrink-0 text-xs text-lp-text-tertiary">{meta}{m.capacity ? ` · ${m.capacity.toLocaleString('en-GB')}` : ''}</span> : null}
                   </button>
                 </li>
-              ))
-            )}
+              );
+            })}
+            {suggestions.map((s, i) => {
+              const idx = libraryMatches.length + i;
+              return (
+                <li key={s.placeId} role="option" aria-selected={idx === highlightedIndex}>
+                  <button
+                    type="button"
+                    tabIndex={-1}
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => handleSelect(s.placeId, s.text)}
+                    onMouseEnter={() => setHighlightedIndex(idx)}
+                    className={`flex w-full items-baseline gap-2 px-3 py-2 text-left text-sm hover:bg-lp-surface-hover ${idx === highlightedIndex ? 'bg-lp-surface-hover' : ''}`}
+                    style={i === 0 && libraryMatches.length ? { borderTop: '1px solid var(--lp-border)' } : undefined}
+                  >
+                    <span className="min-w-0 flex-1 truncate text-lp-text">{s.text}</span>
+                    <span className="shrink-0 text-xs text-lp-text-tertiary">Google</span>
+                  </button>
+                </li>
+              );
+            })}
+            {loading ? (
+              <li className="flex items-center gap-2 px-3 py-2 text-sm text-lp-text-tertiary" style={{ borderTop: totalItems ? '1px solid var(--lp-border)' : undefined }}>
+                Searching…
+              </li>
+            ) : null}
           </ul>,
           document.body
         )}

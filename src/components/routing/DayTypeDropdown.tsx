@@ -231,6 +231,25 @@ export function DayTypeDropdown({
             // (now 1300) and forced the dropdown behind any
             // slide-over (z-index 1210). lp-dropdown-layer alone
             // is the right layer.
+            /* Tour-builder fix (2026-08-05) — the portal-level Tab/Escape
+               catcher. If focus is ANYWHERE in this popup (it could land on a
+               pill after a mouse click before pills were taken out of the tab
+               order), Tab must exit to the adjacent CELL — never walk the
+               pill list — and Escape must return to the trigger. The search
+               box's own handler runs first; defaultPrevented guards the
+               double-advance. */
+            onKeyDown={(e) => {
+              if (e.defaultPrevented) return;
+              if (e.key === 'Tab') {
+                e.preventDefault();
+                setMenu(false);
+                focusAdjacentCell(triggerRef.current, e.shiftKey ? -1 : 1);
+              } else if (e.key === 'Escape') {
+                e.preventDefault();
+                setMenu(false);
+                triggerRef.current?.focus();
+              }
+            }}
             className="lp-dropdown-layer fixed max-h-64 overflow-y-auto rounded-xl border border-lp-border bg-lp-surface py-2 shadow-xl"
             style={{
               top: dropdownRect.top,
@@ -260,9 +279,21 @@ export function DayTypeDropdown({
                     e.preventDefault();
                     setActiveIndex((i) => Math.max(i - 1, 0));
                   } else if (e.key === 'Enter') {
+                    /* Tour-builder fix (2026-08-05) — Enter SELECTS the
+                       highlight, CLOSES, and ADVANCES to the next entry point
+                       (the venue cell), matching Tab. It used to toggle and
+                       leave the menu open, which stalled the fill-a-day rhythm.
+                       Multi-type days remain available by CLICKING pills —
+                       clicks keep the menu open. */
                     e.preventDefault();
                     const t = filtered[activeIndex];
-                    if (t) toggle(t);
+                    /* REPLACE, not toggle-into-the-set: Enter is the quick
+                       single-select, consistent with what ↑/↓ do on the closed
+                       cell. Multi-type days stay a click flow (pills toggle and
+                       the menu stays open). */
+                    if (t) onChange(serializeDayTypes([t]));
+                    setMenu(false);
+                    focusAdjacentCell(triggerRef.current, 1);
                   } else if (e.key === 'Escape') {
                     e.preventDefault();
                     setMenu(false);
@@ -295,6 +326,13 @@ export function DayTypeDropdown({
                     <button
                       key={type}
                       type="button"
+                      /* Tour-builder fix (2026-08-05) — pills are click/Enter
+                         targets, never Tab stops, and a click must not move
+                         focus into the portal (it stays on the search box, so
+                         the next Tab exits to the venue cell instead of
+                         walking the pill list). */
+                      tabIndex={-1}
+                      onMouseDown={(e) => e.preventDefault()}
                       onClick={() => toggle(type)}
                       onMouseEnter={() => setActiveIndex(i)}
                       className={cn(

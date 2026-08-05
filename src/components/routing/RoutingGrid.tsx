@@ -12,6 +12,7 @@ import { parseRoutingDate, distanceMiles, formatRoutingDateShort, parseDayTypes 
 import { colourForDayType } from '@/lib/routing/dayType';
 import { DayTypeDropdown } from './DayTypeDropdown';
 import { VenueAutocomplete } from './VenueAutocomplete';
+import { AddressAutocomplete } from './AddressAutocomplete';
 import { Bus, Car, Plane, Trash2, ExternalLink, Eraser, Link2 } from 'lucide-react';
 import { ContextMenu } from '@/components/ui/ContextMenu';
 import { DeleteConfirmationModal } from '@/components/ui/DeleteConfirmationModal';
@@ -490,13 +491,23 @@ function RoutingRowWithMenu({
             className="w-full min-w-[80px] rounded-lg border border-lp-border bg-lp-surface px-3 py-2 text-sm text-lp-text placeholder:text-lp-text-tertiary focus:border-lp-orange focus:outline-none focus:ring-2 focus:ring-lp-orange/20"
           />
         </td>
-        {/* Address — editable; a manual edit does NOT unlink the canonical venue */}
+        {/* Address — LIVE address search (tour-builder fix 2026-08-05): on a
+            venue-less day (day off / travel) this is the row's only searching
+            field. A pick fills address + missing city/country/coords and never
+            touches venue_name; a manual edit still does NOT unlink the
+            canonical venue. */}
         <td className={cn(cellPadX, cellPadY)}>
-          <input
-            type="text"
+          <AddressAutocomplete
             value={row.address ?? ''}
-            onChange={(e) => updateRow(rowIndex, { address: e.target.value })}
-            placeholder="Address"
+            onChange={(address) => updateRow(rowIndex, { address })}
+            onAddressSelect={(r) => {
+              const updates: Partial<RoutingRow> = { address: r.address };
+              if (!row.city && r.city) updates.city = r.city;
+              if (!row.country && r.country) updates.country = r.country;
+              if (row.latitude == null && r.latitude != null) updates.latitude = r.latitude;
+              if (row.longitude == null && r.longitude != null) updates.longitude = r.longitude;
+              updateRow(rowIndex, updates);
+            }}
             className="w-full min-w-[100px] rounded-lg border border-lp-border bg-lp-surface px-3 py-2 text-sm text-lp-text placeholder:text-lp-text-tertiary focus:border-lp-orange focus:outline-none focus:ring-2 focus:ring-lp-orange/20"
           />
         </td>
