@@ -1291,3 +1291,36 @@ mocks now return null by default so cold-URL fixtures keep driving the props.
 **Verification:** tsc clean · 488 vitest green · `next build --webpack`
 compiles, 119/119 pages, no Suspense complaint on `useSearchParams` (every
 shelled route is dynamic via cookies, so no static-prerender bailout exists).
+
+---
+
+## Budget bar consolidation · 2026-08-04 (Cowork)
+
+**Adam's ask:** "fix the multitude of bars and clean it up." On
+`/budget/[tourId]` the stack above the content was: the shell top bar, the
+context band (whose tab strip rendered EMPTY on shelled chrome — S-2b moved
+the tabs to the Money rail, leaving a husk holding three controls), the
+standalone burn bar, plus the conditional FX / phase / data-health layers.
+
+**Now ONE budget toolbar.** `<BudgetContextBand>` is a self-contained sticky
+row — version selector · the burn meter inline (`<BudgetBurnBar inline>`, the
+band's flexible middle) · density toggle · export. The separate burn-bar row
+is gone; on Summary the meter yields to a spacer (the dashboard owns money
+display there — D-preflight #4 preserved). The Receipts needs-details badge
+rides the rail item as before. FX banner, phase strip and data-health banner
+stay conditional messages outside the band — they only render when they have
+something to say.
+
+**Deleted, all grep-verified orphans** (they only referenced each other):
+`BudgetSubBar`, `BudgetTabNav`, `BudgetOverviewToolbar`, `BudgetDensityToggle`,
+`BudgetTabPlaceholder`, and shell-v2's `ProductSubBar` (its last live importer
+was the band). shell-v2 is down to the switcher/avatar/helpers shell-v3
+actually mounts.
+
+**Not touched:** the grid's own toolbar (content, not chrome), the settlement
+page (already clean — PageHeader + walk), `budget-tab-utils` (the page still
+resolves ?tab= with it).
+
+**Verification:** tsc clean · 499 vitest green (27 files) · `next build
+--webpack` 119/119. Visual walk needed: /budget/[tourId] on every tab —
+expect exactly one sticky row above content, meter hidden on Summary only.

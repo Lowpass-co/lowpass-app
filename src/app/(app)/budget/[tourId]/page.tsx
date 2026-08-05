@@ -1,22 +1,19 @@
 /* ============================================
-   LOWPASS — Budget · Tour landing (Phase 3 §C tab nav)
+   LOWPASS — Budget · Tour landing
 
-   /budget/[tourId] — wraps the budget hub in <ProductShell> with
-   five tabs (Summary / Budget / Actuals / Reports / Settings).
-   Tab state via ?tab= searchParam; Summary is the default.
+   /budget/[tourId] — the budget hub. Chrome comes from the layout's
+   <ShellV3Mount>; tab state via ?tab= searchParam, driven by the MONEY rail
+   (Summary is the default). The page renders, top → bottom:
 
-   Layout (top → bottom):
-     <ProductShell>
-       <BudgetBurnBar>            (sticky — runway + spend meter)
-       <BudgetPhaseStripClient>    (sticky — phase context)
-       <BudgetContextBand>        (Band 2 — identity + tabs + actions)
-       <tab-content>               (Summary | Budget | Actuals | Reports | Settings)
-     </ProductShell>
+     <BudgetContextBand>     — THE one budget toolbar (sticky): version
+                                selector · inline burn meter · density · export
+     <FxMissingRateBanner>   — conditional, only when a rate is missing
+     <BudgetPhaseStrip>      — conditional, only when the tour tracks phases
+     <tab-content>           — Summary | Expenses | Income | Receipts | Reports
 
-   Summary tab carries the big-picture surface (charts, variance,
-   top spend, recent activity). Budget tab carries the dense
-   line-item spreadsheet from §B + Receipt Inbox sidebar. Other
-   three are placeholders this sprint.
+   Bar consolidation (2026-08-04): the separate burn-bar row and the tab
+   strip's empty husk collapsed into the band. Everything above the content
+   is now one row of chrome plus banners that earn their space.
    ============================================ */
 
 import { notFound } from 'next/navigation';
@@ -26,7 +23,6 @@ import { MobileBudgetBanner } from '@/components/mobile/MobileBudgetBanner';
 import { BudgetPhaseStripClient } from '@/components/budget/BudgetPhaseStripClient';
 import { BudgetPhaseStripGate } from '@/components/budget/BudgetPhaseStripReveal';
 import { BudgetTrackPhasesProvider } from '@/components/budget/BudgetTrackPhasesContext';
-import { BudgetBurnBar } from '@/components/budget/BudgetBurnBar';
 import { BudgetContextBand } from '@/components/budget/BudgetContextBand';
 import { BudgetGridView } from '@/components/budget/BudgetGridView';
 import { BudgetIncomeGrid } from '@/components/budget/BudgetIncomeGrid';
@@ -35,10 +31,8 @@ import { BudgetSettingsTab } from '@/components/budget/BudgetSettingsTab';
 import { ReceiptDropPanel } from '@/components/budget/receipts/ReceiptDropPanel';
 import { ReceiptsBank } from '@/components/budget/receipts/ReceiptsBank';
 import { loadTourReceipts } from '@/lib/budget/loadReceipts';
-// Fix 3 — Budget's sub-tabs (Summary/Expenses/Income + corner
-// Reports/Settings) render in <BudgetContextBand> (Band 2). The page
-// only needs the server-safe resolveBudgetTab helper to pick which tab
-// body to render.
+// The tabs live on the MONEY RAIL (ia.ts) since S-2b; the page only needs
+// the server-safe resolveBudgetTab helper to pick which tab body to render.
 import { resolveBudgetTab } from '@/components/budget/budget-tab-utils';
 import { BudgetDensityProvider } from '@/components/budget/BudgetDensityContext';
 import { enrichLinesWithTransactionAggregates, fetchLineVendorFacts, type LineVendorFacts } from '@/lib/budget/transactions';
@@ -415,6 +409,11 @@ export default async function BudgetTourPage({
         {/* Fix 3 — Band 2: tour identity + Summary/Expenses/Income tabs +
             display-currency/Export/Reports/Settings in one row (sticky),
             collapsing the old separate sub-bar + tour-header layers. */}
+        {/* Bar consolidation (2026-08-04) — ONE toolbar: version selector,
+            the burn meter inline (hidden on Summary, whose dashboard owns the
+            money display — D-preflight #4), density and export. The separate
+            <BudgetBurnBar> row is gone; the meter rides inside the band. The
+            Receipts badge lives on the rail item (ShellV3Mount). */}
         <BudgetContextBand
           tourCurrency={tourCurrency}
           lines={lines}
@@ -422,15 +421,9 @@ export default async function BudgetTourPage({
           versions={versions}
           viewedVersionId={viewed?.id ?? null}
           canApprove={canApprove}
-          needsDetailsCount={receiptsNeedingDetails}
+          fxRates={fxRates}
+          showMeter={tab !== 'summary'}
         />
-        {/* D-preflight #4 — the sticky burn bar (spent · remaining · committed)
-            duplicates the Summary dashboard's KPI cards, so it's hidden on the
-            Summary tab; the dashboard owns money display there. Other tabs keep
-            it as the always-visible spend meter. */}
-        {tab !== 'summary' ? (
-          <BudgetBurnBar lines={lines} tourCurrency={tourCurrency} fxRates={fxRates} />
-        ) : null}
         <FxMissingRateBanner
           missing={fxMissing}
           tourCurrency={tourCurrency}

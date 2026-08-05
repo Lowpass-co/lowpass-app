@@ -34,6 +34,10 @@ interface BudgetBurnBarProps {
   /** FX unify (Stage 2) — the tour's budget_fx_rates map; display conversions
    *  pivot through the tour currency via convertVia. */
   fxRates?: FxRateMap;
+  /** Bar-consolidation — render as the flexible MIDDLE of the budget toolbar
+   *  (no frame of its own: no border, padding or background; flex-1 min-w-0)
+   *  instead of a standalone full-width bar. The band owns the frame now. */
+  inline?: boolean;
 }
 
 const COMMITTED_STATUSES = new Set(['quoted', 'approved', 'paid']);
@@ -72,7 +76,7 @@ function formatAbbrev(value: number, currency: string): string {
 
 const clampPct = (n: number) => Math.max(0, Math.min(100, n));
 
-export function BudgetBurnBar({ lines, tourCurrency, fxRates = {} }: BudgetBurnBarProps) {
+export function BudgetBurnBar({ lines, tourCurrency, fxRates = {}, inline = false }: BudgetBurnBarProps) {
   const searchParams = useSearchParams();
   const displayCurrency = (
     searchParams.get('display') ?? tourCurrency
@@ -132,11 +136,19 @@ export function BudgetBurnBar({ lines, tourCurrency, fxRates = {} }: BudgetBurnB
        number · meter · Variance block) collapsed into a single inline row, so
        "Remaining $X of $Y" reads exactly once and the bar is half the height. */
     <div
-      className="lp-budget-burn-bar flex items-center gap-4 border-b px-6 py-2"
-      style={{
-        background: 'var(--lp-panel)',
-        borderColor: 'var(--lp-border-strong)',
-      }}
+      className={
+        inline
+          ? 'lp-budget-burn-bar flex min-w-0 flex-1 items-center gap-4'
+          : 'lp-budget-burn-bar flex items-center gap-4 border-b px-6 py-2'
+      }
+      style={
+        inline
+          ? undefined
+          : {
+              background: 'var(--lp-panel)',
+              borderColor: 'var(--lp-border-strong)',
+            }
+      }
     >
       {/* Remaining — the single runway figure, inline (no stacked label). */}
       <span className="shrink-0 whitespace-nowrap" style={{ fontSize: '12px', color: 'var(--lp-text-tertiary)' }}>
