@@ -14,7 +14,12 @@
    ============================================ */
 
 import type { GearExportData, GearExportItem } from './gear-data';
-import { analyseCarnetCompleteness, carnetCell, resolveCarnetValue } from './carnet-completeness';
+import {
+  analyseCarnetCompleteness,
+  carnetCell,
+  resolveCarnetValue,
+  summariseCarnetValues,
+} from './carnet-completeness';
 
 const esc = (s: unknown): string =>
   String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
@@ -28,6 +33,17 @@ function tradeDescription(i: GearExportItem): string {
   const label = head && head.toLowerCase() !== name.toLowerCase() ? `${name} — ${head}` : name || head;
   const serial = (i.serial_number ?? '').trim();
   return serial ? `${label} (s/n ${serial})` : label || 'Untitled item';
+}
+
+/** R3-2 — the manifest read raw value_amount, so its Value column was empty on
+ *  every production row while the carnet showed figures for the same items. Two
+ *  documents from one loader, disagreeing about what the truck is worth. Same
+ *  resolver, and the same R3-1 rule: no symbol when the unit is unknown. */
+function manifestValue(i: GearExportItem): string {
+  const v = resolveCarnetValue(i);
+  if (v.amount == null) return '';
+  const amount = v.amount.toFixed(2);
+  return v.currency ? `${esc(v.currency)} ${amount}` : `${amount} <sup>†</sup>`;
 }
 
 /* ── Gear manifest — the internal packing document ─────────────────────────── */
@@ -48,7 +64,7 @@ export function buildGearManifestBodyHtml(data: GearExportData): string {
                 <td class="lp-mono">${esc(i.serial_number ?? '')}</td>
                 <td class="num">1</td>
                 <td class="num">${i.weight_kg != null ? kg(Number(i.weight_kg)) : ''}</td>
-                <td class="num">${i.value_amount != null ? `${esc(i.value_currency ?? '')} ${Number(i.value_amount).toFixed(2)}` : ''}</td>
+                <td class="num">${manifestValue(i)}</td>
               </tr>`,
             )
             .join('');
@@ -61,7 +77,14 @@ export function buildGearManifestBodyHtml(data: GearExportData): string {
     })
     .join('');
 
-  return `<table class="lp-table">
+  const usedFallback = data.items.some((i) => resolveCarnetValue(i).source === 'purchase_cost');
+  const valueNote = usedFallback
+    ? `<p class="lp-note" style="margin:0 0 10px"><sup>†</sup> Figure taken from
+       purchase cost. Its currency is not recorded anywhere, so no symbol is
+       shown.</p>`
+    : '';
+
+  return `${valueNote}<table class="lp-table">
     <thead><tr>
       <th>Item</th><th>Make / model</th><th>Serial</th>
       <th class="num">Qty</th><th class="num">Weight</th><th class="num">Value</th>
@@ -102,9 +125,9 @@ export function buildCarnetBodyHtml(data: GearExportData): string {
          &ldquo;— MISSING —&rdquo; must be completed before submission.</p>`
       : `<p class="lp-note" style="margin:0 0 10px">${esc(completeness.summary)}.</p>`;
 
+  const totals = summariseCarnetValues(data.items);
   let pieces = 0;
   let weight = 0;
-  let value = 0;
   const rows = data.items
     .map((i, idx) => {
       const origin = carnetCell(i.country_of_origin);
@@ -114,7 +137,6 @@ export function buildCarnetBodyHtml(data: GearExportData): string {
       const val = carnetCell(resolved.amount);
       pieces += 1;
       weight += Number(i.weight_kg) || 0;
-      value += resolved.amount ?? 0;
       const mark = (c: { text: string; missing: boolean }) =>
         c.missing ? `<td class="gap" style="font-weight:600">${esc(c.text)}</td>` : `<td>${esc(c.text)}</td>`;
       return `<tr>
@@ -124,7 +146,12 @@ export function buildCarnetBodyHtml(data: GearExportData): string {
         <td class="num">${i.weight_kg != null ? Number(i.weight_kg).toFixed(2) : ''}</td>
         ${val.missing
           ? mark(val)
-          : `<td class="num">${esc(i.value_currency ?? '')} ${resolved.amount!.toFixed(2)}${
+          : `<td class="num">${
+              /* R3-1 — the symbol comes from resolved.currency, which is NULL for
+                 a purchase-cost fallback, so no symbol is printed at all. Reading
+                 value_currency here is what re-created R2-6. */
+              resolved.currency ? `${esc(resolved.currency)} ` : ''
+            }${resolved.amount!.toFixed(2)}${
               resolved.source === 'purchase_cost' ? ' <sup>†</sup>' : ''
             }</td>`}
         ${mark(origin)}
@@ -139,8 +166,10 @@ export function buildCarnetBodyHtml(data: GearExportData): string {
   const usedFallback = data.items.some((i) => resolveCarnetValue(i).source === 'purchase_cost');
   const valueNote = usedFallback
     ? `<p class="lp-note" style="margin:0 0 10px"><sup>†</sup> Value taken from
-       purchase cost, not a declared customs value. Customs value is
-       replacement or market value; confirm before submission.</p>`
+       purchase cost, not a declared customs value, and <strong>its currency is
+       not recorded</strong> — no symbol is shown because none can be
+       established. Customs value is replacement or market value; confirm both
+       the figure and its currency before submission.</p>`
     : '';
 
   return `${disclaimer}${warning}${valueNote}
@@ -151,12 +180,33 @@ export function buildCarnetBodyHtml(data: GearExportData): string {
         <th>Country of origin</th><th>HS code</th>
       </tr></thead>
       <tbody>${rows}</tbody>
-      <tfoot><tr class="tot">
-        <td></td><td>Totals</td>
-        <td class="num">${pieces}</td>
-        <td class="num">${weight.toFixed(2)}</td>
-        <td class="num">${value.toFixed(2)}</td>
-        <td colspan="2"></td>
-      </tr></tfoot>
-    </table>`;
+      <tfoot>
+        <tr class="tot">
+          <td></td><td>Totals</td>
+          <td class="num">${pieces}</td>
+          <td class="num">${weight.toFixed(2)}</td>
+          <td class="num">${
+            /* R3-1 — a single figure ONLY when every valued row shares one known
+               currency. Summing mixed units, or units we cannot name, produces a
+               number that means nothing on a document duty is assessed from. */
+            totals.summable
+              ? `${esc(totals.byCurrency[0].currency ?? '')} ${totals.byCurrency[0].amount.toFixed(2)}`
+              : '<span style="font-weight:400">see below</span>'
+          }</td>
+          <td colspan="2"></td>
+        </tr>
+      </tfoot>
+    </table>
+    ${
+      totals.summable
+        ? ''
+        : `<p class="lp-note" style="margin:10px 0 0"><strong>Not summable across
+           currencies.</strong> Subtotals: ${totals.byCurrency
+             .map((b) =>
+               b.currency
+                 ? `${esc(b.currency)} ${b.amount.toFixed(2)} (${b.rows} item${b.rows === 1 ? '' : 's'})`
+                 : `${b.amount.toFixed(2)} in unrecorded currency (${b.rows} item${b.rows === 1 ? '' : 's'})`,
+             )
+             .join(' · ')}</p>`
+    }`;
 }

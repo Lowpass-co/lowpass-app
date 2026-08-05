@@ -11,6 +11,7 @@ import {
   analyseCarnetCompleteness,
   carnetCell,
   resolveCarnetValue,
+  summariseCarnetValues,
   CARNET_GAP_MARK,
 } from './carnet-completeness';
 
@@ -103,18 +104,18 @@ describe('resolveCarnetValue — declared wins, purchase cost is the labelled fa
        carnet reported "33 of 33 incomplete" and printed — MISSING — in the
        value column of every row. */
     const row = { id: 'g1', name: 'AKG 414', country_of_origin: 'AU', customs_hs_code: '8518.10', value_amount: null, purchase_cost: 300 };
-    expect(resolveCarnetValue(row)).toEqual({ amount: 300, source: 'purchase_cost' });
+    expect(resolveCarnetValue(row)).toEqual({ amount: 300, source: 'purchase_cost', currency: null });
     expect(analyseCarnetCompleteness([row]).incomplete).toEqual([]);
   });
 
   it('a declared value WINS over purchase cost and is not labelled', () => {
-    expect(resolveCarnetValue({ value_amount: 500, purchase_cost: 300 }))
-      .toEqual({ amount: 500, source: 'declared' });
+    expect(resolveCarnetValue({ value_amount: 500, purchase_cost: 300, value_currency: 'GBP' }))
+      .toEqual({ amount: 500, source: 'declared', currency: 'GBP' });
   });
 
   it('neither source → still missing, still named', () => {
     expect(resolveCarnetValue({ value_amount: null, purchase_cost: null }))
-      .toEqual({ amount: null, source: 'none' });
+      .toEqual({ amount: null, source: 'none', currency: null });
     const r = analyseCarnetCompleteness([
       { id: 'g1', name: 'Case', country_of_origin: 'GB', customs_hs_code: '4202', value_amount: null, purchase_cost: null },
     ]);
@@ -126,19 +127,22 @@ describe('resolveCarnetValue — declared wins, purchase cost is the labelled fa
        as readily as a blank one, from whichever column it came. */
     expect(resolveCarnetValue({ value_amount: 0, purchase_cost: 0 }).amount).toBeNull();
     expect(resolveCarnetValue({ value_amount: 0, purchase_cost: 300 }))
-      .toEqual({ amount: 300, source: 'purchase_cost' });
+      .toEqual({ amount: 300, source: 'purchase_cost', currency: null });
     expect(resolveCarnetValue({ value_amount: -5, purchase_cost: -1 }).amount).toBeNull();
   });
 
   it('numeric strings work in both columns — spreadsheets import as text', () => {
     expect(resolveCarnetValue({ value_amount: null, purchase_cost: '300.00' }))
-      .toEqual({ amount: 300, source: 'purchase_cost' });
+      .toEqual({ amount: 300, source: 'purchase_cost', currency: null });
   });
 
-  it('THE ACCEPTANCE SHAPE: only HS code is left missing on production data', () => {
-    /* 33 rows, all with country_of_origin (bar 2) and purchase_cost, none with
-       an HS code. After the fallback the gaps must be HS-code-driven, which is
-       Adam data entry, not a code defect. */
+  it('after the fallback, NO gap is value-driven — the assertion that matters', () => {
+    /* R3-4 — framing corrected. This is a UNIT test over a fixture built to
+       resemble production; it proves the predicate behaves correctly given that
+       shape, NOT that production has it. The 33 is decorative — it would pass
+       identically at 5. And "every gap is HS-driven" was false on this very
+       fixture: every ROW has an HS gap, but two rows also carry an origin gap.
+       The claim worth making is the last assertion: value is no longer a gap. */
     const rows = Array.from({ length: 33 }, (_, i) => ({
       id: `g${i}`, name: `Item ${i}`,
       country_of_origin: i < 2 ? null : 'AU',
@@ -148,9 +152,74 @@ describe('resolveCarnetValue — declared wins, purchase cost is the labelled fa
     }));
     const r = analyseCarnetCompleteness(rows);
     expect(r.incomplete).toHaveLength(33);
-    /* Every gap is HS code; only the two known rows also lack origin. */
+    /* Every ROW has an HS gap; two of them additionally lack an origin. */
     expect(r.incomplete.every((g) => g.missing.includes('customs_hs_code'))).toBe(true);
     expect(r.incomplete.filter((g) => g.missing.includes('country_of_origin'))).toHaveLength(2);
     expect(r.incomplete.some((g) => g.missing.includes('value_amount'))).toBe(false);
+  });
+});
+
+/* ── R3-1: the unit travels with the number ──────────────────────────────── */
+
+describe('resolveCarnetValue currency — R2-6 must not recur here', () => {
+  it('a DECLARED value carries its declared currency', () => {
+    expect(resolveCarnetValue({ value_amount: 500, purchase_cost: 300, value_currency: 'USD' }))
+      .toEqual({ amount: 500, source: 'declared', currency: 'USD' });
+  });
+
+  it('THE REGRESSION: a purchase-cost fallback has NO currency', () => {
+    /* purchase_cost has no currency column anywhere — not on gear (247:22), not
+       on rental_inventory (092:43). Printing value_currency beside it is R2-6:
+       a symbol from one column over a number from another. */
+    const v = resolveCarnetValue({ value_amount: null, purchase_cost: 300, value_currency: 'GBP' });
+    expect(v).toEqual({ amount: 300, source: 'purchase_cost', currency: null });
+    expect(v.currency).not.toBe('GBP');
+  });
+
+  it('a blank or whitespace declared currency is unknown, not empty text', () => {
+    expect(resolveCarnetValue({ value_amount: 10, value_currency: '   ' }).currency).toBeNull();
+    expect(resolveCarnetValue({ value_amount: 10, value_currency: null }).currency).toBeNull();
+  });
+});
+
+describe('summariseCarnetValues — a wrong total is worse than no total', () => {
+  const row = (id: string, over: Record<string, unknown> = {}) => ({
+    id, name: id, country_of_origin: 'AU', customs_hs_code: '8518', ...over,
+  });
+
+  it('one known currency, no fallbacks → summable', () => {
+    const t = summariseCarnetValues([
+      row('a', { value_amount: 100, value_currency: 'GBP' }),
+      row('b', { value_amount: 50, value_currency: 'GBP' }),
+    ]);
+    expect(t.summable).toBe(true);
+    expect(t.byCurrency).toEqual([{ currency: 'GBP', amount: 150, rows: 2 }]);
+  });
+
+  it('MIXED CURRENCIES → refuses to sum, reports per currency', () => {
+    const t = summariseCarnetValues([
+      row('a', { value_amount: 100, value_currency: 'GBP' }),
+      row('b', { value_amount: 50, value_currency: 'USD' }),
+    ]);
+    expect(t.summable).toBe(false);
+    expect(t.byCurrency).toHaveLength(2);
+  });
+
+  it('ANY unknown-unit row poisons the total, even with one known currency', () => {
+    /* This is the production shape: all fallbacks, all unit-unknown. A single
+       GBP-looking total would be a mixed-unit figure wearing a symbol. */
+    const t = summariseCarnetValues([
+      row('a', { value_amount: 100, value_currency: 'GBP' }),
+      row('b', { value_amount: null, purchase_cost: 300, value_currency: 'GBP' }),
+    ]);
+    expect(t.hasUnknownUnit).toBe(true);
+    expect(t.summable).toBe(false);
+    expect(t.byCurrency.find((b) => b.currency === null)).toEqual({ currency: null, amount: 300, rows: 1 });
+  });
+
+  it('rows with no value at all are excluded, not counted as zero', () => {
+    const t = summariseCarnetValues([row('a', { value_amount: null, purchase_cost: null })]);
+    expect(t.byCurrency).toEqual([]);
+    expect(t.summable).toBe(false);
   });
 });

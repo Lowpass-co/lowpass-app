@@ -45,7 +45,14 @@
 -- workspace-scoped RLS; the write path is admin + manager via requireWrite on
 -- the route (S1 D-2), and readonly members may SELECT their workspace's rows.
 --
--- IDEMPOTENT: every step guarded; re-running is a no-op.
+-- IDEMPOTENT: every step guarded and safe to re-run. Note step 4 is not a
+-- literal no-op — it DROPs the FK by name and re-ADDs it, so a second paste
+-- briefly rebuilds the constraint. That is harmless (it sits inside a DO block,
+-- which rolls back as a unit on failure) but the outcome is convergent rather
+-- than untouched, and the distinction is worth stating rather than glossing.
+--
+-- Steps 1 and 5 both ASSERT before altering, because the SQL editor autocommits
+-- per statement: a failure partway leaves earlier steps applied.
 
 -- ── 1. ASSERT before altering. A loud failure beats a silent skip. ──────────
 DO $$
@@ -137,8 +144,11 @@ BEGIN
   RETURN NEW;
 END $$;
 
-DROP TRIGGER IF EXISTS gear_qr_token_biu ON public.gear;
-CREATE TRIGGER gear_qr_token_biu
+-- Named _bi, not _biu: this fires on INSERT ONLY. Regenerating on UPDATE would
+-- orphan every label already printed for that item.
+DROP TRIGGER IF EXISTS gear_qr_token_biu ON public.gear;  -- earlier draft's name
+DROP TRIGGER IF EXISTS gear_qr_token_bi ON public.gear;
+CREATE TRIGGER gear_qr_token_bi
   BEFORE INSERT ON public.gear
   FOR EACH ROW EXECUTE FUNCTION public.gear_set_qr_token();
 
@@ -147,13 +157,35 @@ UPDATE public.gear
 SET qr_token = substring(replace(gen_random_uuid()::text, '-', ''), 1, 8)
 WHERE qr_token IS NULL OR btrim(qr_token) = '';
 
+-- ASSERT BEFORE INDEXING — symmetric with step 1, and for the same reason.
+-- The Supabase SQL editor autocommits per statement rather than wrapping the
+-- script, so a CREATE UNIQUE INDEX that fails here would leave steps 1-4
+-- ALREADY COMMITTED — a partially applied hand-pasted migration, which is the
+-- exact failure database/migrations/README.md exists to prevent. Collision is
+-- unlikely at 8 hex chars over 33 rows, but "unlikely" is what step 1 correctly
+-- declined to accept about gear_id.
+DO $$
+DECLARE v_dupes BIGINT;
+BEGIN
+  SELECT count(*) INTO v_dupes FROM (
+    SELECT qr_token FROM public.gear
+    WHERE qr_token IS NOT NULL AND btrim(qr_token) <> ''
+    GROUP BY qr_token HAVING count(*) > 1
+  ) d;
+  IF v_dupes > 0 THEN
+    RAISE EXCEPTION
+      'ABORT: % duplicate qr_token value(s) on gear. Resolve before pasting 255 — the scan lookup is .eq(qr_token,...) and a duplicate resolves to the WRONG ITEM.',
+      v_dupes;
+  END IF;
+END $$;
+
 -- A token is only useful if it is unique — the lookup is .eq('qr_token', ...).
 CREATE UNIQUE INDEX IF NOT EXISTS gear_qr_token_key
   ON public.gear (qr_token) WHERE qr_token IS NOT NULL;
 
 -- ── down ──────────────────────────────────────────────────────────────────
 -- DROP INDEX IF EXISTS public.gear_qr_token_key;
--- DROP TRIGGER IF EXISTS gear_qr_token_biu ON public.gear;
+-- DROP TRIGGER IF EXISTS gear_qr_token_bi ON public.gear;
 -- DROP FUNCTION IF EXISTS public.gear_set_qr_token();
 -- ALTER TABLE public.rental_movements ALTER COLUMN gear_id DROP NOT NULL;
 -- -- rental_inventory_id NOT NULL cannot be restored while gear-native rows
