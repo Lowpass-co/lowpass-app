@@ -10,8 +10,9 @@
    ============================================ */
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { StagePlotEditorClient } from './StagePlotEditorClient';
+import { DocumentVersionControls } from '@/components/rider-pack/DocumentVersionControls';
 import type { StagePlotListRow } from './StagePlotLibraryList';
 import { PageTitle } from '@/components/ui/PageHeader';
 
@@ -19,12 +20,31 @@ export interface OperationsStagePlotClientProps {
   tourId: string;
   artistId: string | null;
   rows: StagePlotListRow[];
+  /** Decouple B1 — the tour-default stage-plot attachment, if one exists.
+   *  Enables Detach when the OPEN plot is the attached one. */
+  tourAttachment?: { packId: string; attachmentId: string } | null;
 }
 
-export function OperationsStagePlotClient({ tourId, artistId, rows }: OperationsStagePlotClientProps) {
+export function OperationsStagePlotClient({ tourId, artistId, rows, tourAttachment = null }: OperationsStagePlotClientProps) {
   const [list, setList] = useState(rows);
   const [selected, setSelected] = useState<string | null>(rows.length === 1 ? rows[0].stagePlotId : null);
   const [busy, setBusy] = useState(false);
+
+  /* B1 — versions created / attachments switched trigger router.refresh(),
+     which re-renders the server page with fresh rows. Merge them in (server
+     wins; optimistic entries not yet in the server list are kept) so the
+     list and the open editor's controls track reality without a remount.
+     queueMicrotask keeps the set-state out of the effect's render pass
+     (repo convention — see ArtistTourSwitcherClientWrapper). */
+  useEffect(() => {
+    queueMicrotask(() => {
+      setList((prev) => {
+        const incoming = new Set(rows.map((r) => r.stagePlotId));
+        const optimisticOnly = prev.filter((r) => !incoming.has(r.stagePlotId));
+        return [...optimisticOnly, ...rows];
+      });
+    });
+  }, [rows]);
 
   const create = async () => {
     if (!artistId) {
@@ -51,17 +71,31 @@ export function OperationsStagePlotClient({ tourId, artistId, rows }: Operations
   };
 
   if (selected) {
+    /* B1 — the open plot's PACK id (rows carry it since B1; a plot created
+       this session and not yet refreshed has none → controls wait). */
+    const openRow = list.find((r) => r.stagePlotId === selected);
+    const openPackId = openRow?.packId ?? null;
     return (
       <div style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0 }}>
-        {list.length > 1 ? (
-          <button
-            type="button"
-            onClick={() => setSelected(null)}
-            style={{ alignSelf: 'flex-start', margin: '10px 0 0 16px', fontSize: 'var(--lp-text-xs)', padding: '5px 10px', borderRadius: 6, border: '1px solid var(--lp-border)', background: 'var(--lp-surface)', color: 'var(--lp-text-secondary)', cursor: 'pointer' }}
-          >
-            ← All stage plots
-          </button>
-        ) : null}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap', margin: '10px 16px 0' }}>
+          {list.length > 1 ? (
+            <button
+              type="button"
+              onClick={() => setSelected(null)}
+              style={{ alignSelf: 'flex-start', fontSize: 'var(--lp-text-xs)', padding: '5px 10px', borderRadius: 6, border: '1px solid var(--lp-border)', background: 'var(--lp-surface)', color: 'var(--lp-text-secondary)', cursor: 'pointer' }}
+            >
+              ← All stage plots
+            </button>
+          ) : <span />}
+          {openPackId ? (
+            <DocumentVersionControls
+              packId={openPackId}
+              tourId={tourId}
+              kindLabel="stage plot"
+              tourAttachmentId={tourAttachment && tourAttachment.packId === openPackId ? tourAttachment.attachmentId : null}
+            />
+          ) : null}
+        </div>
         <div style={{ flex: 1, minHeight: 0 }}>
           <StagePlotEditorClient plotId={selected} />
         </div>

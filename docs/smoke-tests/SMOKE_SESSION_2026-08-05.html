@@ -78,13 +78,35 @@ const SECTIONS=[
 ["TB-4","Venue search actually searches","Thin library: typing a real venue shows Google rows (labelled) with NO 'create new venue' step. Picking one fills address/city/coords."],
 ["TB-5","Library still wins","A venue already in your library shows first with the orange ◆; picking it links (chain icon) without Google billing."],
 ["TB-6","Address search on a day off","Day-off row → expand → Venue address: typing searches addresses; picking fills address + city/coords; venue name untouched. Also works in the tour-create grid's Address column."]]},
-{name:"Rider decouple — phase A ⚠ migration 256 first",where:"After pasting database/migrations/256_… into Supabase SQL editor",items:[
+{name:"Rider decouple — phase A (migration 256 CONFIRMED live in prod)",where:"Migration already pasted — Cowork verified the attachments table + lineage columns directly",items:[
 ["RD-1","Migration pastes clean","256_document_versions_and_attachments.sql runs without error; re-running it is a no-op."],
 ["RD-2","Save a version (API)","POST /api/rider-packs/{channelListPackId}/save-version {\"label\":\"Saturday — with keys\"} returns an id; the new pack has every channel row copied."],
 ["RD-3","Attach to the tour","POST /api/rider-pack-attachments {document_pack_id, tour_id}: /operations/[tour]/channel-list now shows THAT version — fully editable, no override wall."],
 ["RD-4","Saturday differs","Attach a different version to one show (routing_id): that show's advance packet lists the Saturday version; other shows keep the tour default."],
 ["RD-5","Edits hit everywhere","Edit rows on an attached version: every place it's attached shows the change; other versions untouched."],
-["RD-6","Nothing broke pre-attachment","A tour with NO attachments behaves exactly as before (legacy scan)."]]}
+["RD-6","Nothing broke pre-attachment","A tour with NO attachments behaves exactly as before (legacy scan)."]]},
+{name:"Rider decouple — B1 · version/attach controls (tour surfaces)",where:"/operations/[tourId]/channel-list and /operations/[tourId]/stage-plot",items:[
+["VC-1","Version picker shows the family","Channel-list surface: the Version select lists the original (marked '(original)') + every saved version of the shown document."],
+["VC-2","Picking a version ATTACHES it","Select a different version: toast 'Tour channel list switched', page re-resolves to that version's rows, and Detach appears. This is the design — the picker answers 'which version is this tour using'."],
+["VC-3","Save as version… doesn't switch","Name one inline (Enter saves, Escape cancels): toast, new entry in the picker, but the tour STAYS on the current version — you attach it where it belongs yourself."],
+["VC-4","Attach to show… overrides one show only","Pick a routing row: toast names the city/date. That show's advance packet lists this version; the tour default and other shows are untouched."],
+["VC-5","Detach is honest","A tour resolving via the LEGACY scan shows no Detach. An attached tour shows it; detaching toasts and falls back to the legacy scan. Detach must never appear for a document the surface isn't actually showing."],
+["VC-6","Stage plot has the same row","Above the open plot editor (immediately on a 1-plot tour): same Version / Save as version / Attach to show / Detach controls; Detach only when the OPEN plot is the tour-attached one."]]},
+{name:"Rider decouple — B1 · the rider's tech section",where:"Rider editor on a RIDER pack that has a channel_list section",items:[
+["RS-1","Owned legacy section is read-only + Convert","The embedded channel list renders as a read-only sheet with the 'lives INSIDE the rider (legacy)' banner and a Convert button — no editable grid, no edit link."],
+["RS-2","Convert works end-to-end","Click Convert: toast, the section flips to 'Attached document' with a preview + 'Edit channel list ↗'. The new standalone doc exists (with every row copied), the original rows are still in the DB, and the doc is its own family root (no version label)."],
+["RS-3","Attached mode: Change… / Detach / Edit ↗","Change… lists channel-list documents on the tour + artist scope; picking one replaces the attachment. Edit ↗ opens the standalone editor (full grid). Detach returns to the legacy state."],
+["RS-4","Inherited sections untouched","An artist-inherited channel list still shows the tested override wall/flow — Convert is NOT offered there (its rows live on the parent pack; API refuses with a message saying to convert at the owning scope)."],
+["RS-5","Standalone channel-list docs unaffected","Opening a channel_list PACK (from /rider-packs or Edit ↗) still gives the FULL editor — grid, dropdowns, stage boxes, patch grid."]]},
+{name:"Rider builder — B2 · fixed groups",where:"/rider-packs/[id]?mode=edit on a plain rider pack",items:[
+["GB-1","Four fixed tabs, legacy lands in Production","Production · Technical · Hospitality · Travel tabs with section counts; every pre-existing section sits under Production; the old accordion + left template library + drop zone are gone."],
+["GB-2","Rail selects, canvas shows ONE section","The left rail lists the active group's sections; clicking one puts it on the canvas, open, no collapse chevron. Fields edit exactly as before (add, drag-reorder, delete)."],
+["GB-3","Add section is group-aware","In Technical the menu offers Audio/FOH, Monitors/IEMs, Lighting, Backline, Risers/Stage (+ Blank); in Production, Contacts + Schedule. A section added from a tab STAYS in that tab after a reload."],
+["GB-4","+ Add group is curated only","The menu offers exactly Security, Merch, Press & Promo, Parking & Access, Catering, Local Crew — no freeform input anywhere. Adding one opens its tab; templates for it (e.g. Security) appear in ITS add menu."],
+["GB-5","Move to group persists","The select in the section card header moves the section; tab counts update; the move survives a hard reload (metadata.group)."],
+["GB-6","Rail drag reorders within the group","Drag a rail row above another: order changes, persists on reload, and sections in OTHER groups keep their relative order."],
+["GB-7","Properties rail still wired","Click a field on the canvas: the right panel opens; editing label/type updates the field; delete from the panel removes it."],
+["GB-8","Empty added group is session-local","Add a group, put nothing in it, reload: the tab is gone (by design — it returns when a section lands in it). No error."]]}
 ];
 let state={};
 const app=document.getElementById('app');

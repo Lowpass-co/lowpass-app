@@ -29,12 +29,29 @@ export interface SaveVersionError {
   error: string;
 }
 
+/** Phase B1 — section-scoped copies + family roots (the "Convert to attached
+ *  document" path). All optional; absent = phase-A behaviour byte-for-byte.
+ *
+ *  - onlySectionId: copy ONLY this section (sub-snakes / stage boxes / rows
+ *    filter naturally through sectionIdMap — anything belonging to another
+ *    section maps to nothing and is skipped).
+ *  - kindOverride:  the new pack's kind (e.g. 'channel_list' when converting
+ *    a rider's embedded section into a standalone document).
+ *  - asRoot:        the copy starts its OWN family — version_of_pack_id null,
+ *    version_label null, and the label IS the title (no "base — label"). */
+export interface SaveVersionOptions {
+  onlySectionId?: string;
+  kindOverride?: string;
+  asRoot?: boolean;
+}
+
 export async function saveVersion(
   supabase: SupabaseClient,
   ws: string,
   userId: string,
   sourcePackId: string,
   versionLabel: string,
+  opts: SaveVersionOptions = {},
 ): Promise<SaveVersionResult | SaveVersionError> {
   const label = versionLabel.trim();
   if (!label) return { ok: false, status: 400, error: 'A version name is required' };
@@ -49,7 +66,7 @@ export async function saveVersion(
 
   const rootId = (source.version_of_pack_id as string | null) ?? source.id;
   const baseTitle = String(source.title ?? 'Document').trim() || 'Document';
-  const newTitle = `${baseTitle} — ${label}`;
+  const newTitle = opts.asRoot ? label : `${baseTitle} — ${label}`;
 
   // Folder mirrors the source's scope — packs are 1:1 with a folder.
   const { data: folder, error: folderErr } = await supabase
@@ -77,9 +94,9 @@ export async function saveVersion(
       tour_id: source.tour_id,
       routing_id: source.routing_id,
       title: newTitle,
-      kind: source.kind ?? 'rider',
-      version_of_pack_id: rootId,
-      version_label: label,
+      kind: opts.kindOverride ?? source.kind ?? 'rider',
+      version_of_pack_id: opts.asRoot ? null : rootId,
+      version_label: opts.asRoot ? null : label,
       cover_logo_url: source.cover_logo_url,
       cover_subtitle: source.cover_subtitle,
       cover_disclaimer: source.cover_disclaimer,
@@ -104,12 +121,17 @@ export async function saveVersion(
   };
 
   // Sections — WITH metadata and status (the clone route drops metadata).
-  const { data: sections, error: secErr } = await supabase
+  let sectionQuery = supabase
     .from('rider_sections')
     .select('id, section_key, title, sort_order, fields, section_type, metadata')
-    .eq('pack_id', sourcePackId)
-    .order('sort_order');
+    .eq('pack_id', sourcePackId);
+  if (opts.onlySectionId) sectionQuery = sectionQuery.eq('id', opts.onlySectionId);
+  const { data: sections, error: secErr } = await sectionQuery.order('sort_order');
   if (secErr) { await rollback(); return { ok: false, status: 500, error: secErr.message }; }
+  if (opts.onlySectionId && (sections ?? []).length === 0) {
+    await rollback();
+    return { ok: false, status: 404, error: 'Section not found on this pack' };
+  }
 
   const sectionIdMap = new Map<string, string>();
   for (const s of sections ?? []) {

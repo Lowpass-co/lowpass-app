@@ -118,6 +118,15 @@ export default async function OperationsTourChannelListPage({
           section={resolvedSection}
           packId={resolvedPackId}
           tourId={tour.id}
+          /* B1 — resolvedPackId equals the attached doc only when the
+             attachment path produced the section; a legacy-scan hit leaves
+             attachedDoc for a DIFFERENT pack (or null), and Detach must not
+             offer to remove an attachment this surface is not showing. */
+          tourAttachmentId={
+            attachedDoc && attachedDoc.document_pack_id === resolvedPackId
+              ? attachedDoc.attachment_id
+              : null
+          }
           /* B2 — stage-plot packs on this tour + the one (if any) currently
              linked to this channel list, so the tab can link/unlink one. */
           stagePlotCandidates={(packs ?? [])

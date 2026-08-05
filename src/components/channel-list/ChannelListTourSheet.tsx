@@ -143,13 +143,21 @@ export function ChannelListTourSheet({
   tourId,
   packId,
   section,
+  editHref,
 }: {
   tourId: string;
   packId: string;
   section: ResolvedSection;
   /** Reserved for future per-row currency display; not currently consumed. */
   tourDefaultCurrency?: string;
+  /** Decouple B1 — where "Edit" should go. Defaults to the legacy
+   *  /tours/[id]/rider-packs URL (still resolves via next.config redirects);
+   *  the rider tech-section preview passes /rider-packs/[docId] instead.
+   *  Pass null to hide the edit affordance entirely (a read-only sheet whose
+   *  edit path is elsewhere — e.g. the owned-legacy convert state). */
+  editHref?: string | null;
 }) {
+  const href = editHref === null ? null : editHref ?? `/tours/${tourId}/rider-packs/${packId}`;
   const subSnakes = useMemo(() => section.subSnakes ?? [], [section.subSnakes]);
   const stageBoxes = useMemo(() => section.stageBoxes ?? [], [section.stageBoxes]);
 
@@ -186,21 +194,28 @@ export function ChannelListTourSheet({
             </p>
           ) : null}
         </div>
-        <Link
-          href={`/tours/${tourId}/rider-packs/${packId}`}
-          className="shrink-0 rounded-lg border border-lp-border bg-lp-surface px-3 py-2 text-xs font-semibold uppercase tracking-wide text-lp-orange hover:bg-lp-orange-subtle"
-        >
-          Edit in rider pack →
-        </Link>
+        {href !== null ? (
+          <Link
+            href={href}
+            className="shrink-0 rounded-lg border border-lp-border bg-lp-surface px-3 py-2 text-xs font-semibold uppercase tracking-wide text-lp-orange hover:bg-lp-orange-subtle"
+          >
+            {editHref ? 'Edit channel list ↗' : 'Edit in rider pack →'}
+          </Link>
+        ) : null}
       </div>
 
       {empty ? (
         <p className="rounded-lg border border-dashed border-lp-border px-4 py-8 text-center text-sm text-lp-text-secondary">
-          No channel list rows yet. Add a Channel list section and rows in the{' '}
-          <Link className="text-lp-orange hover:underline" href={`/tours/${tourId}/rider-packs/${packId}`}>
-            rider pack editor
-          </Link>
-          .
+          No channel list rows yet.
+          {href !== null ? (
+            <>
+              {' '}Add a Channel list section and rows in the{' '}
+              <Link className="text-lp-orange hover:underline" href={href}>
+                {editHref ? 'channel list editor' : 'rider pack editor'}
+              </Link>
+              .
+            </>
+          ) : null}
         </p>
       ) : (
         <SpreadsheetGrid<RowVm>

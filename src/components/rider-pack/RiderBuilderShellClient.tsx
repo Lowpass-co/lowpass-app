@@ -32,9 +32,14 @@
 
 'use client';
 
+/* B2 (rider decouple) — the left RiderSectionLibrary pane + the drag-drop
+   zone are RETIRED: the builder now carries its own grouped navigation
+   (fixed group tabs + per-group section rail + "Add section" from templates
+   filtered by group — see RiderSectionBuilder + lib/rider-packs/groups.ts).
+   This shell keeps the meta bar, the properties rail, and the CustomEvent
+   seams (field-selected / field-updated / field-delete) unchanged. */
+
 import { useEffect, useState } from 'react';
-import { Plus } from 'lucide-react';
-import { RiderSectionLibrary, RIDER_SECTION_DRAG_TYPE } from './RiderSectionLibrary';
 import { RiderTemplateMetaBar } from './RiderTemplateMetaBar';
 import { RiderSectionBuilder } from './RiderSectionBuilder';
 import { RiderFieldPropertiesPanel } from './RiderFieldPropertiesPanel';
@@ -76,7 +81,6 @@ export function RiderBuilderShellClient({
 }: RiderBuilderShellClientProps) {
   const { showToast } = useToast();
   const [selected, setSelected] = useState<RiderFieldSelection | null>(null);
-  const [dragOver, setDragOver] = useState(false);
 
   // Field-selection listener (canvas → shell).
   useEffect(() => {
@@ -88,19 +92,8 @@ export function RiderBuilderShellClient({
     return () => window.removeEventListener(RIDER_FIELD_SELECTED_EVENT, onSelect);
   }, []);
 
-  const dispatchSectionDrop = (templateId: string, label: string) => {
-    if (typeof window === 'undefined') return;
-    window.dispatchEvent(
-      new CustomEvent(RIDER_SECTION_DROP_EVENT, { detail: { templateId, label } }),
-    );
-  };
-
-  const handleAddBlank = () => dispatchSectionDrop('__blank__', 'Custom section');
-
   return (
     <div className="flex min-h-0 flex-1">
-      <RiderSectionLibrary onAddBlank={handleAddBlank} />
-
       <main className="flex min-w-0 flex-1 flex-col overflow-y-auto">
         <RiderTemplateMetaBar
           templateName={templateName}
@@ -113,45 +106,11 @@ export function RiderBuilderShellClient({
         />
 
         {/* Hashed builder-mode canvas — .lp-rider-builder-canvas on the
-            canvas container ONLY (§RA6). */}
-        <div className="lp-rider-builder-canvas flex-1 px-4 pb-12 pt-4">
+            canvas container ONLY (§RA6). B2: the builder owns group tabs,
+            section rail and single-section canvas; the drop zone went with
+            the library pane. */}
+        <div className="lp-rider-builder-canvas flex min-h-0 flex-1 flex-col px-4 pb-12 pt-4">
           <RiderSectionBuilder packId={packId} />
-
-          {/* Section drop zone — accepts a library card and dispatches
-              rider:section-drop. */}
-          <div
-            onDragOver={(e) => {
-              if (e.dataTransfer.types.includes(RIDER_SECTION_DRAG_TYPE)) {
-                e.preventDefault();
-                e.dataTransfer.dropEffect = 'copy';
-                if (!dragOver) setDragOver(true);
-              }
-            }}
-            onDragLeave={() => setDragOver(false)}
-            onDrop={(e) => {
-              const id = e.dataTransfer.getData(RIDER_SECTION_DRAG_TYPE);
-              if (id) {
-                e.preventDefault();
-                dispatchSectionDrop(id, e.dataTransfer.getData('text/plain') || 'Section');
-              }
-              setDragOver(false);
-            }}
-            className="btn-transition mt-4 flex items-center justify-center gap-2"
-            style={{
-              minHeight: 72,
-              borderRadius: 8,
-              border: `2px dashed ${dragOver ? 'var(--color-lp-orange)' : 'var(--lp-border-strong)'}`,
-              background: dragOver
-                ? 'color-mix(in srgb, var(--color-lp-orange) 6%, transparent)'
-                : 'transparent',
-              color: dragOver ? 'var(--color-lp-orange)' : 'var(--lp-text-tertiary)',
-              fontSize: '13px',
-              fontWeight: 500,
-            }}
-          >
-            <Plus className="h-4 w-4" />
-            Drag a section here, or use the library on the left
-          </div>
         </div>
       </main>
 

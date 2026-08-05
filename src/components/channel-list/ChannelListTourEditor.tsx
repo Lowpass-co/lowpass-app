@@ -25,6 +25,7 @@
 import { useRouter } from 'next/navigation';
 import { useCallback, useState } from 'react';
 import ChannelListEditor from '@/components/rider-pack/ChannelListEditor';
+import { DocumentVersionControls } from '@/components/rider-pack/DocumentVersionControls';
 import { LinkedRiderPackControl, type LinkCandidate } from '@/components/rider-pack/LinkedRiderPackControl';
 import type { SavePillState } from '@/components/rider-pack/SaveStatePill';
 import type { RiderPack, ResolvedSection } from '@/lib/rider-packs/types';
@@ -36,6 +37,7 @@ export function ChannelListTourEditor({
   packId,
   stagePlotCandidates = [],
   linkedStagePlotId = null,
+  tourAttachmentId = null,
 }: {
   pack: RiderPack;
   section: ResolvedSection;
@@ -45,6 +47,9 @@ export function ChannelListTourEditor({
   stagePlotCandidates?: LinkCandidate[];
   /** B2 — the stage-plot pack currently linked to this channel list, if any. */
   linkedStagePlotId?: string | null;
+  /** Decouple B1 — set when this list reached the tour via a TOUR attachment
+   *  (vs the legacy pack-scan). Enables Detach in the version controls. */
+  tourAttachmentId?: string | null;
 }) {
   const router = useRouter();
   const [pill, setPill] = useState<{ state: SavePillState; error: string | null }>({
@@ -98,8 +103,14 @@ export function ChannelListTourEditor({
     // revamp #17 — sits ON the page (Phase-1 chrome): no boxed panel; the editor
     // carries its own grid structure.
     <div className="min-w-0">
-      {/* B2 — pair this channel list with a stage plot on the tour. */}
-      <div className="mb-2 flex justify-end print:hidden">
+      {/* B1 versions/attachments + B2 stage-plot pairing, one control row. */}
+      <div className="mb-2 flex flex-wrap items-center justify-between gap-2 print:hidden">
+        <DocumentVersionControls
+          packId={packId}
+          tourId={tourId}
+          kindLabel="channel list"
+          tourAttachmentId={tourAttachmentId}
+        />
         <LinkedRiderPackControl
           label="Stage plot"
           value={linkedPlot}

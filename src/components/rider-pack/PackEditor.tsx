@@ -56,6 +56,7 @@ import NewSectionDialog from './NewSectionDialog';
 import { formatRelativeTime } from '@/lib/format-relative';
 import { SaveStatePill, type SavePillState } from './SaveStatePill';
 import ChannelListEditor from './ChannelListEditor';
+import { RiderChannelListAttachSection } from './RiderChannelListAttachSection';
 import { makeUniqueSectionKey } from '@/lib/rider-packs/templates';
 import { RichTextSectionEditor } from '@/components/rider/RichTextSectionEditor';
 import {
@@ -694,33 +695,77 @@ export function PackEditor({ packId }: Props) {
             Select a section, or add a new one.
           </div>
         ) : (selectedSection.section_type ?? 'fields') === 'channel_list' ? (
-          <ChannelListEditor
-            key={selectedSection.id}
-            section={selectedSection}
-            pack={data.pack}
-            savePill={savePill}
-            onTitleCommit={(title) => {
-              setData((prev) => {
-                if (!prev) return prev;
-                return {
-                  ...prev,
-                  sections: prev.sections.map((s) =>
-                    s.id === selectedSection.id ? { ...s, title } : s,
-                  ),
-                };
-              });
-              scheduleSectionSave({ sectionId: selectedSection.id, title });
-              void flushSectionSave();
-            }}
-            onFieldBlur={() => {
-              void flushSectionSave();
-            }}
-            onRemove={() => handleRemoveSection(selectedSection)}
-            onOverride={() => handleOverrideSection(selectedSection)}
-            onMoveUp={() => handleMoveSection(selectedSection, -1)}
-            onMoveDown={() => handleMoveSection(selectedSection, 1)}
-            onStructureChange={() => void refresh()}
-          />
+          /* Decouple B1 — a RIDER pack presents its channel list as an
+             ATTACHED document (preview + convert/attach controls); the full
+             ChannelListEditor survives as (a) THE editor when this pack IS a
+             channel_list document, and (b) the inherited-legacy fallback the
+             attach section renders as children. */
+          (data.pack as { kind?: string | null }).kind === 'channel_list' ? (
+            <ChannelListEditor
+              key={selectedSection.id}
+              section={selectedSection}
+              pack={data.pack}
+              savePill={savePill}
+              onTitleCommit={(title) => {
+                setData((prev) => {
+                  if (!prev) return prev;
+                  return {
+                    ...prev,
+                    sections: prev.sections.map((s) =>
+                      s.id === selectedSection.id ? { ...s, title } : s,
+                    ),
+                  };
+                });
+                scheduleSectionSave({ sectionId: selectedSection.id, title });
+                void flushSectionSave();
+              }}
+              onFieldBlur={() => {
+                void flushSectionSave();
+              }}
+              onRemove={() => handleRemoveSection(selectedSection)}
+              onOverride={() => handleOverrideSection(selectedSection)}
+              onMoveUp={() => handleMoveSection(selectedSection, -1)}
+              onMoveDown={() => handleMoveSection(selectedSection, 1)}
+              onStructureChange={() => void refresh()}
+            />
+          ) : (
+            <RiderChannelListAttachSection
+              key={selectedSection.id}
+              riderPackId={data.pack.id}
+              tourId={(data.pack as { tour_id?: string | null }).tour_id ?? null}
+              artistId={(data.pack as { artist_id?: string | null }).artist_id ?? null}
+              section={selectedSection}
+              onStructureChange={() => void refresh()}
+            >
+              <ChannelListEditor
+                key={selectedSection.id}
+                section={selectedSection}
+                pack={data.pack}
+                savePill={savePill}
+                onTitleCommit={(title) => {
+                  setData((prev) => {
+                    if (!prev) return prev;
+                    return {
+                      ...prev,
+                      sections: prev.sections.map((s) =>
+                        s.id === selectedSection.id ? { ...s, title } : s,
+                      ),
+                    };
+                  });
+                  scheduleSectionSave({ sectionId: selectedSection.id, title });
+                  void flushSectionSave();
+                }}
+                onFieldBlur={() => {
+                  void flushSectionSave();
+                }}
+                onRemove={() => handleRemoveSection(selectedSection)}
+                onOverride={() => handleOverrideSection(selectedSection)}
+                onMoveUp={() => handleMoveSection(selectedSection, -1)}
+                onMoveDown={() => handleMoveSection(selectedSection, 1)}
+                onStructureChange={() => void refresh()}
+              />
+            </RiderChannelListAttachSection>
+          )
         ) : (selectedSection.section_type ?? 'fields') === 'advance_summary' ? (
           /* Sprint 12 §9d.a — advance summary section. Body
              is an Array<{subject, body}> on

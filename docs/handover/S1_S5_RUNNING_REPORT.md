@@ -1532,3 +1532,46 @@ column fixed this state should be unreachable, but it is the same loop shape
 waiting for the next silent read failure; distinguishing user-null from
 data-null there is a design question for Adam. (c) dcfa2e5 accidentally
 committed a stray `.d3.tgz` (103KB) at repo root.
+
+---
+
+## Rider decouple phase B1 + B2 — version/attach UI + grouped builder · 2026-08-05 (Cowork)
+
+**B1 (per spec, Adam's calls inline):** `<DocumentVersionControls>` on the
+tour channel-list surface and above the open stage-plot editor — version
+picker (PICKING ATTACHES to the tour, Adam's call: the tour surface always
+shows the attached doc), "Save as version…" (creates, deliberately does NOT
+auto-attach), "Attach to show…" (routing picker; show overrides tour), Detach
+(only when the shown doc IS the tour attachment — a legacy-scan hit never
+offers to delete an attachment it isn't showing). Rider tech section
+(`RiderChannelListAttachSection` via PackEditor's channel_list branch):
+attached → read-only preview + "Edit channel list ↗" + Change/Detach; owned
+legacy → read-only sheet + "Convert to attached document" (new
+`convert-section` route: saveVersion `{onlySectionId, kindOverride, asRoot}`
+— section-only copy into a NEW family root — then attach; original rows kept,
+reversible); inherited legacy → untouched tested override flow (its rows live
+on the parent pack; converting here would copy nothing — route refuses with
+that exact message).
+
+**B2:** the grouped builder. `lib/rider-packs/groups.ts` = the four fixed
+groups + the six curated adds (NO freeform, locked). Group lives on
+`rider_sections.metadata.group` (rides on section CREATE now — route +
+client accept metadata); ungrouped legacy → Production. RiderSectionBuilder:
+group tab bar + per-group section rail (drag-reorder maps to global
+sort_order) + ONE open section on the canvas (accordion retired) + move-to-
+group select in the card header + "Add section" menu (platform templates
+mapped by template_type: contacts/schedule→Production,
+audio/monitoring/lighting/backline/risers→Technical, hospitality→Hospitality,
+transport→Travel, security/catering/merch/labour→their curated groups;
+unmapped types offered everywhere rather than unreachable).
+RiderBuilderShellClient: library pane + drop zone retired; meta bar,
+properties rail, CustomEvent seams unchanged. **RiderSectionLibrary is now
+orphaned** — flagged, not deleted (the zero-references rule cuts both ways;
+delete after the walk confirms nothing else mounts it).
+
+**Verification:** tsc --noEmit clean · eslint clean on changed files ·
+migration 256 confirmed LIVE in prod (attachments table + lineage columns
+queried directly). NOT yet verified — needs Adam's walk + vitest on the Mac:
+the B1 controls end-to-end (attach/version/detach round-trips), the convert
+path on a real legacy rider, and the B2 builder on a pack with existing
+sections. Uncommitted on main, deliberately: walk first, then commit.

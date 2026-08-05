@@ -119,6 +119,8 @@ export async function createSection(
     sort_order?: number;
     fields?: unknown[];
     section_type?: SectionType;
+    /** B2 — the builder group ({ group: <id> }); route defaults to {}. */
+    metadata?: Record<string, unknown>;
   },
 ): Promise<RiderSection> {
   const res = await fetch(`/api/rider-packs/${packId}/sections`, {

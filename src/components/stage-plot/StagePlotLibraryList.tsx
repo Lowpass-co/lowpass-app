@@ -14,6 +14,9 @@ export interface StagePlotListRow {
   stagePlotId: string;
   title: string;
   updatedAt: string;
+  /** Decouple B1 — the plot's rider_packs id, for version/attach controls on
+   *  the tour surface. Optional: the artist-library list doesn't need it. */
+  packId?: string;
 }
 
 export interface StagePlotLibraryListProps {

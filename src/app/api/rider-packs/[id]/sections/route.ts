@@ -75,6 +75,12 @@ export async function POST(
     body.section_type === 'channel_list'
       ? 'channel_list'
       : 'fields';
+  /* B2 — the builder group rides in on creation ({ group: <id> }) so a
+     section lands in the tab it was added from, not in Production first. */
+  const metadata =
+    body.metadata && typeof body.metadata === 'object' && !Array.isArray(body.metadata)
+      ? (body.metadata as Record<string, unknown>)
+      : {};
 
   if (typeof sectionKey !== 'string' || !sectionKey.trim()) {
     return NextResponse.json({ error: 'section_key is required' }, { status: 400 });
@@ -113,6 +119,7 @@ export async function POST(
       sort_order: sortOrder,
       fields,
       section_type: sectionType,
+      metadata,
     })
     .select()
     .single();

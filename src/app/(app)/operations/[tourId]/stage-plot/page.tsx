@@ -12,6 +12,7 @@ import { notFound } from 'next/navigation';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { OperationsStagePlotClient } from '@/components/stage-plot/OperationsStagePlotClient';
 import type { StagePlotListRow } from '@/components/stage-plot/StagePlotLibraryList';
+import { resolveShowDocuments } from '@/lib/rider-packs/attachments';
 
 export const dynamic = 'force-dynamic';
 
@@ -44,8 +45,15 @@ export default async function OperationsStagePlotPage({ params }: PageProps) {
     const byPack = new Map((plotData as { id: string; rider_pack_id: string }[] | null ?? []).map((p) => [p.rider_pack_id, p.id]));
     rows = packs
       .filter((p) => byPack.has(p.id))
-      .map((p) => ({ stagePlotId: byPack.get(p.id)!, title: p.title ?? 'Untitled stage plot', updatedAt: p.updated_at }));
+      .map((p) => ({ stagePlotId: byPack.get(p.id)!, title: p.title ?? 'Untitled stage plot', updatedAt: p.updated_at, packId: p.id }));
   }
 
-  return <OperationsStagePlotClient tourId={tourId} artistId={artistId} rows={rows} />;
+  /* Decouple B1 — the tour-default stage-plot attachment feeds the version
+     controls (Detach shows only on the attached plot). */
+  const attached = await resolveShowDocuments(supabase, tourId, null);
+  const tourAttachment = attached.stage_plot
+    ? { packId: attached.stage_plot.document_pack_id, attachmentId: attached.stage_plot.attachment_id }
+    : null;
+
+  return <OperationsStagePlotClient tourId={tourId} artistId={artistId} rows={rows} tourAttachment={tourAttachment} />;
 }
