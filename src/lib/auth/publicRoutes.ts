@@ -48,6 +48,12 @@
  *                     ABSENT from the HTML, not CSS-hidden. Cowork's byte-level
  *                     check after R5-2 confirmed this holds.
  *   /share/advance/   shared advance    — share token → advance, read-only.
+ *   /s/               ONE SHOW LINK (B4) — token → show_links row, service-role;
+ *                     the /api/public/show-link endpoint owns the password gate
+ *                     and assembles read-only data. Two characters, so the
+ *                     trailing slash is doing the same load-bearing work as
+ *                     /a/: '/s/TOKEN' opens; /settings, /signup and /share
+ *                     each have a non-slash third character and stay shut.
  */
 export const PUBLIC_PATH_PREFIXES: readonly string[] = [
   '/r/',
@@ -57,6 +63,7 @@ export const PUBLIC_PATH_PREFIXES: readonly string[] = [
   '/a/',
   '/m/day/',
   '/share/advance/',
+  '/s/',
 ];
 
 /** Dev-only: the Stage Plot icon catalog, browsable without a session while

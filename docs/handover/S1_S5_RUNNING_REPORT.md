@@ -1575,3 +1575,38 @@ queried directly). NOT yet verified — needs Adam's walk + vitest on the Mac:
 the B1 controls end-to-end (attach/version/detach round-trips), the convert
 path on a real legacy rider, and the B2 builder on a pack with existing
 sections. Uncommitted on main, deliberately: walk first, then commit.
+
+---
+
+## Rider decouple phase B3 + B4 — grouped read view + the one show link · 2026-08-05 (Cowork)
+
+**The spec is now built end to end** (A ✓ B1 ✓ B2 ✓ B3 ✓ B4 ✓).
+
+**B3:** ReadOnlyPackView groups with the builder's grammar — sticky group
+chips + left section list (screen, ≥md), group headings in the body; print
+stays a linear document. pdf-render gains `.lp-pdf-group-heading`. BOTH paths
+emit group chrome ONLY when a pack spans ≥2 groups — a legacy all-Production
+rider renders byte-identical to before.
+
+**B4:** migration `257_show_links.sql` (**HAND-PASTE** — mirrors 102,
+routing_id NOT NULL, canonical RLS, idempotent). `/s/[token]` → PublicShowView
+(password flow mirrors PublicPacketView): header via getPacketManifest (venue
+SSOT), tabs = Advance form (EMBEDS the routing's newest live advance-intake
+link — one intake code path; empty-state when none) · Rider · Channel list
+(B3 grouped ReadOnlyPackView over getPacketRiderPayloads) · Stage plot
+(attachment-first → tour fallback, server-rendered SVG via the export loader)
+· Downloads (the bundled-PDF route now honours show-link tokens alongside
+packet tokens — same scope check, same password gate, unknown tokens still
+404). `/api/show-links` mints ONE live link per routing (mint-or-reuse;
+DELETE revokes; pre-257 it answers "paste migration 257 first", not a bare
+500). PacketView's share panel grew "Copy show link". `/s/` joined
+publicRoutes with the /a/-class prefix-safety note + tests (/settings,
+/signup, /share stay shut — asserted).
+
+**Every tab fails soft** — a missing intake link / stage plot / attachment
+explains itself; the page never dies on one tab.
+
+**Verification:** tsc clean · eslint clean on changed files · smoke page
+grown to 59 items (RV-1..4, SL-1..8). NOT verified: everything needing the
+walk — /s/ end-to-end needs 257 pasted first (SL-1). Old four token doors
+untouched by construction; SL-8 asserts it live.

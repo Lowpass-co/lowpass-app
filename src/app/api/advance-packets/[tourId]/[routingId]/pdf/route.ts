@@ -62,10 +62,13 @@ export async function GET(
   const token = url.searchParams.get('token');
   const password = url.searchParams.get('pw');
 
-  /* Branch 1: token-based public access. */
+  /* Branch 1: token-based public access. B4 — a SHOW-LINK token (the /s/
+     one-door page) is honoured alongside the packet token: same tour +
+     routing scope check, same password gate. One PDF route, two front
+     doors, zero widening (an unknown token still 404s). */
   if (token) {
     const service = createServiceSupabaseClient();
-    const { data: link } = await service
+    let { data: link } = await service
       .from('advance_packet_links')
       .select('id, tour_id, routing_id, password_hash, revoked_at')
       .eq('token', token)
@@ -76,6 +79,20 @@ export async function GET(
         password_hash: string | null;
         revoked_at: string | null;
       }>();
+    if (!link) {
+      const { data: showLink } = await service
+        .from('show_links')
+        .select('id, tour_id, routing_id, password_hash, revoked_at')
+        .eq('token', token)
+        .maybeSingle<{
+          id: string;
+          tour_id: string;
+          routing_id: string | null;
+          password_hash: string | null;
+          revoked_at: string | null;
+        }>();
+      link = showLink ?? null;
+    }
     if (
       !link ||
       link.revoked_at ||

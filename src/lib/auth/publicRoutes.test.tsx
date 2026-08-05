@@ -32,6 +32,7 @@ const PROBE_PUBLIC = [
   '/share/advance/BOGUSTOKEN123',
   '/r/BOGUSTOKEN123',
   '/intake/BOGUSTOKEN123',
+  '/s/BOGUSTOKEN123', // B4 — the one show link
 ];
 
 /** Authed surfaces. Every one of these MUST still bounce to /login. */
@@ -89,6 +90,19 @@ describe('P0 — authed surfaces stay gated', () => {
   it('/advance-intake/ is public but /advance/ is not', () => {
     expect(isPublicPath('/advance-intake/tok', true)).toBe(true);
     expect(isPublicPath('/advance/tour/show', true)).toBe(false);
+  });
+
+  // B4 — /s/ is two characters, same collision class as /a/. The trailing
+  // slash keeps /settings, /signup and (redundantly with its own entry)
+  // /share out of its reach.
+  it('/s/ does not swallow /settings, /signup or /share', () => {
+    expect(isPublicPath('/s/tok', true)).toBe(true);
+    expect(isPublicPath('/settings', true)).toBe(false);
+    expect(isPublicPath('/settings/members', true)).toBe(false);
+    expect(isPublicPath('/signup', true)).toBe(false); // reachable via isAuthPath, not this list
+    expect(isAuthPath('/signup')).toBe(true);
+    expect(isPublicPath('/share/x', true)).toBe(false); // only /share/advance/ opens, via its own entry
+    expect(isPublicPath('/share/advance/tok', true)).toBe(true);
   });
 });
 

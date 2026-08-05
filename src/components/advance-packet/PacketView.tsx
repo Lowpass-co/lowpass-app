@@ -72,6 +72,36 @@ export function PacketView({ tourId, routingId, manifest, initialLink }: Props) 
   const [pwOpen, setPwOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  /* B4 — the ONE show link. Minted lazily (mint-or-reuse: one live link per
+     show) the first time "Copy show link" is clicked. */
+  const [showLinkBusy, setShowLinkBusy] = useState(false);
+  const [showLinkCopied, setShowLinkCopied] = useState(false);
+  const [showLinkError, setShowLinkError] = useState<string | null>(null);
+
+  const copyShowLink = useCallback(async () => {
+    setShowLinkBusy(true);
+    setShowLinkError(null);
+    try {
+      const res = await fetch('/api/show-links', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ routing_id: routingId }),
+      });
+      const json = (await res.json().catch(() => ({}))) as { url?: string; error?: string };
+      if (!res.ok || !json.url) {
+        setShowLinkError(json.error ?? 'Could not mint the show link.');
+        return;
+      }
+      const full = `${window.location.origin}${json.url}`;
+      await navigator.clipboard.writeText(full);
+      setShowLinkCopied(true);
+      setTimeout(() => setShowLinkCopied(false), 2000);
+    } catch {
+      setShowLinkError('Could not copy — try again.');
+    } finally {
+      setShowLinkBusy(false);
+    }
+  }, [routingId]);
 
   /* Origin is window.location.origin once mounted. Pre-mount
      we render the path-only form so SSR + first paint match. */
@@ -250,6 +280,25 @@ export function PacketView({ tourId, routingId, manifest, initialLink }: Props) 
           Public share
         </h2>
         <div className="space-y-3 p-4">
+          {/* B4 — the one show link: advance form + rider + channel list +
+              stage plot + downloads on a single venue-facing page. The packet
+              link below keeps working; this is the unified front door. */}
+          <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-lp-border bg-lp-bg px-3 py-2">
+            <p className="text-xs text-lp-text-secondary">
+              <span className="font-semibold text-lp-text">Show link</span> — one URL for
+              everything a venue needs (form · rider · channel list · stage plot · PDFs).
+            </p>
+            <button
+              type="button"
+              onClick={() => void copyShowLink()}
+              disabled={showLinkBusy}
+              className="inline-flex items-center gap-1 rounded-lg border border-lp-border px-2 py-1.5 text-xs font-medium text-lp-orange hover:bg-lp-surface-hover disabled:opacity-50"
+            >
+              <Copy className="h-3.5 w-3.5" />
+              {showLinkCopied ? 'Copied' : showLinkBusy ? 'Minting…' : 'Copy show link'}
+            </button>
+            {showLinkError ? <p className="w-full text-xs text-lp-error">{showLinkError}</p> : null}
+          </div>
           {!link ? (
             <div className="space-y-2">
               <p className="text-sm text-lp-text-secondary">

@@ -44,6 +44,7 @@
    ============================================ */
 
 import type { PublicRiderPayload } from '@/lib/rider-packs/web-links';
+import { RIDER_GROUPS, sectionGroupId } from '@/lib/rider-packs/groups';
 import { formatOrdinalDate } from '@/lib/text/ordinalDate';
 import type {
   ChannelListRow,
@@ -97,10 +98,26 @@ export function buildRiderBodyHtml(payload: PublicRiderPayload): string {
   const { pack, sections, signedUrls, mics } = payload;
   const ordered = [...sections].sort((a, b) => a.sort_order - b.sort_order);
   const micsByName = buildMicsByName(mics);
+  /* B3 (rider decouple) — group headings, mirroring the builder's groups
+     (lib/rider-packs/groups.ts). Emitted only when the pack spans ≥2 groups,
+     so an all-Production legacy rider's PDF is byte-identical to before. */
+  const grouped = RIDER_GROUPS
+    .map((g) => ({ ...g, items: ordered.filter((s) => sectionGroupId(s.metadata) === g.id) }))
+    .filter((g) => g.items.length > 0);
+  const body =
+    grouped.length > 1
+      ? grouped
+          .map(
+            (g) =>
+              `<h2 class="lp-pdf-group-heading">${escapeHtml(g.label)}</h2>\n` +
+              g.items.map((s) => renderSection(s, signedUrls, micsByName)).join('\n'),
+          )
+          .join('\n')
+      : ordered.map((s) => renderSection(s, signedUrls, micsByName)).join('\n');
   return `${renderCover(pack)}
 ${renderToc(ordered)}
 <main class="lp-pdf-body">
-${ordered.map((s) => renderSection(s, signedUrls, micsByName)).join('\n')}
+${body}
 </main>`;
 }
 
@@ -738,6 +755,18 @@ a { color: var(--lp-orange); text-decoration: none; }
 .lp-pdf-body { max-width: 48rem; margin: 0 auto; padding: 2rem 2rem 4rem; }
 .lp-pdf-section { margin-top: 1.5rem; border: 1px solid var(--lp-border); border-radius: 0.25rem; }
 .lp-pdf-section:first-child { margin-top: 0; }
+/* B3 — group heading above each group's sections (multi-group packs only). */
+.lp-pdf-group-heading {
+  margin: 2rem 0 0;
+  padding-bottom: 0.25rem;
+  border-bottom: 2px solid var(--lp-text, #111);
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  page-break-after: avoid;
+}
+.lp-pdf-group-heading:first-child { margin-top: 0; }
 .lp-section-heading {
   margin: 0;
   padding: 0.5rem 1rem;

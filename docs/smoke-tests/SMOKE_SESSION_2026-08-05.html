@@ -106,7 +106,21 @@ const SECTIONS=[
 ["GB-5","Move to group persists","The select in the section card header moves the section; tab counts update; the move survives a hard reload (metadata.group)."],
 ["GB-6","Rail drag reorders within the group","Drag a rail row above another: order changes, persists on reload, and sections in OTHER groups keep their relative order."],
 ["GB-7","Properties rail still wired","Click a field on the canvas: the right panel opens; editing label/type updates the field; delete from the panel removes it."],
-["GB-8","Empty added group is session-local","Add a group, put nothing in it, reload: the tab is gone (by design — it returns when a section lands in it). No error."]]}
+["GB-8","Empty added group is session-local","Add a group, put nothing in it, reload: the tab is gone (by design — it returns when a section lands in it). No error."]]},
+{name:"Venue read view — B3 · grouped",where:"/r/[token] (rider web link) — needs a pack whose sections span ≥2 groups",items:[
+["RV-1","Single-group packs unchanged","A legacy all-Production rider's public page looks exactly as before: no group chips, no left list, same flat flow."],
+["RV-2","Multi-group packs get the nav","Move a section to Technical in the builder, reopen the web link: sticky group chips up top + a left section list (desktop), group headings in the body; chips + list scroll-to the right anchors."],
+["RV-3","Print stays a linear document","Print preview (or the PDF): no chips, no side list — cover, TOC, then sections with group headings; page breaks sane."],
+["RV-4","PDF group headings","Download the rider PDF for the same multi-group pack: uppercase group headings above each group's sections; a single-group pack's PDF is unchanged."]]},
+{name:"One show link — B4 ⚠ paste migration 257 first",where:"database/migrations/257_show_links.sql → then /advance/[tour]/[routing] packet page",items:[
+["SL-1","Migration 257 pastes clean","Runs without error; re-running is a no-op."],
+["SL-2","Copy show link mints once","Packet page → Public share → 'Copy show link': URL /s/[token] lands on the clipboard. Click it again: SAME URL (mint-or-reuse, no link mill)."],
+["SL-3","/s/[token] opens logged-out","Open in a private window: header shows artist · tour · date · venue/city (venue via the resolver, never raw routing columns) + the five tabs. No login bounce."],
+["SL-4","Advance tab embeds the intake form","With a live venue-intake link for the show: the form renders in-page + 'Open in its own tab ↗'. Without one: a plain 'not opened yet' message, not an error."],
+["SL-5","Rider + Channel list tabs read grouped","Rider tab renders the show's riders with the B3 grouped read view; Channel list tab shows the attached (or fallback) list's grid. Empty states name what's missing."],
+["SL-6","Stage plot renders inline","The attached (or newest tour) plot draws as SVG in the tab; no plot → a clean empty state."],
+["SL-7","Downloads: bundled PDF via the show token","The download button produces the packet PDF using the /s/ token (no packet link needed). Old /a/ packet links still download fine."],
+["SL-8","Old doors still open","Existing /r/, /a/, /advance-intake/, /share/advance links all still work; /settings and /signup still bounce to login (the /s/ prefix swallowed nothing)."]]}
 ];
 let state={};
 const app=document.getElementById('app');

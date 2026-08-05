@@ -13,6 +13,7 @@
 
 import React from 'react';
 import type { PublicRiderPayload } from '@/lib/rider-packs/web-links';
+import { RIDER_GROUPS, sectionGroupId } from '@/lib/rider-packs/groups';
 import type {
   Field,
   FieldTable,
@@ -62,6 +63,17 @@ export function ReadOnlyPackView({ payload, printMode = false }: Props) {
     return m;
   }, [mics]);
 
+  /* B3 (rider decouple) — the venue-facing view groups sections with the
+     SAME grammar the builder uses (lib/rider-packs/groups.ts): sticky top
+     group chips + a left section list, both anchor-driven so print CSS and
+     the PDF path stay linear documents. Headings only appear when the pack
+     actually spans ≥2 groups — an all-Production legacy rider reads exactly
+     as it always did. */
+  const grouped = RIDER_GROUPS
+    .map((g) => ({ ...g, items: ordered.filter((s) => sectionGroupId(s.metadata) === g.id) }))
+    .filter((g) => g.items.length > 0);
+  const multiGroup = grouped.length > 1;
+
   return (
     <div className="bg-white text-neutral-900">
       {/* Sprint 12 §9b — cover page (logo + artist + title +
@@ -94,25 +106,84 @@ export function ReadOnlyPackView({ payload, printMode = false }: Props) {
         />
       </div>
 
-      <div className="max-w-3xl mx-auto p-6 space-y-6">
-        {ordered.length === 0 ? (
-          <div className="text-sm text-neutral-500">This pack has no sections yet.</div>
-        ) : (
-          ordered.map((s) => (
-            <section
-              key={s.id}
-              id={`section-${s.section_key}`}
-              className="rounded border border-neutral-200 bg-white scroll-mt-4"
-            >
-              <h2 className="border-b border-neutral-200 px-4 py-2 text-sm font-medium">{s.title}</h2>
-              <div className="p-4 space-y-3">
-                <SectionBody section={s} signedUrls={signedUrls} micsByName={micsByName} />
-              </div>
-            </section>
-          ))
-        )}
+      {/* B3 — sticky group chips (screen only; print stays a linear doc). */}
+      {multiGroup && !printMode ? (
+        <nav className="sticky top-0 z-10 border-b border-neutral-200 bg-white/95 px-4 py-2 backdrop-blur print:hidden">
+          <div className="mx-auto flex max-w-5xl flex-wrap gap-1">
+            {grouped.map((g) => (
+              <a
+                key={g.id}
+                href={`#group-${g.id}`}
+                className="rounded-full border border-neutral-200 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-neutral-600 hover:border-neutral-400 hover:text-neutral-900"
+              >
+                {g.label}
+              </a>
+            ))}
+          </div>
+        </nav>
+      ) : null}
 
-        <footer className="pt-4 text-[10px] text-neutral-400 text-center">Shared via Lowpass</footer>
+      <div className={multiGroup && !printMode ? 'mx-auto flex max-w-5xl gap-6 p-6' : 'max-w-3xl mx-auto p-6 space-y-6'}>
+        {/* B3 — left section list, sticky, grouped. Screen only. */}
+        {multiGroup && !printMode ? (
+          <aside className="sticky top-14 hidden max-h-[80vh] w-52 shrink-0 self-start overflow-y-auto md:block print:hidden">
+            {grouped.map((g) => (
+              <div key={g.id} className="mb-3">
+                <a
+                  href={`#group-${g.id}`}
+                  className="block text-[10px] font-bold uppercase tracking-wider text-neutral-400 hover:text-neutral-600"
+                >
+                  {g.label}
+                </a>
+                <ul className="mt-1 space-y-0.5">
+                  {g.items.map((s) => (
+                    <li key={s.id}>
+                      <a
+                        href={`#section-${s.section_key}`}
+                        className="block truncate rounded px-1.5 py-0.5 text-xs text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900"
+                      >
+                        {s.title}
+                      </a>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))}
+          </aside>
+        ) : null}
+
+        <div className="min-w-0 flex-1 space-y-6">
+          {ordered.length === 0 ? (
+            <div className="text-sm text-neutral-500">This pack has no sections yet.</div>
+          ) : (
+            grouped.map((g) => (
+              <React.Fragment key={g.id}>
+                {multiGroup ? (
+                  <h2
+                    id={`group-${g.id}`}
+                    className={`scroll-mt-14 border-b-2 border-neutral-900 pb-1 text-xs font-bold uppercase tracking-widest text-neutral-900${printMode ? ' lp-pdf-group-heading' : ''}`}
+                  >
+                    {g.label}
+                  </h2>
+                ) : null}
+                {g.items.map((s) => (
+                  <section
+                    key={s.id}
+                    id={`section-${s.section_key}`}
+                    className="rounded border border-neutral-200 bg-white scroll-mt-14"
+                  >
+                    <h2 className="border-b border-neutral-200 px-4 py-2 text-sm font-medium">{s.title}</h2>
+                    <div className="p-4 space-y-3">
+                      <SectionBody section={s} signedUrls={signedUrls} micsByName={micsByName} />
+                    </div>
+                  </section>
+                ))}
+              </React.Fragment>
+            ))
+          )}
+
+          <footer className="pt-4 text-[10px] text-neutral-400 text-center">Shared via Lowpass</footer>
+        </div>
       </div>
     </div>
   );
