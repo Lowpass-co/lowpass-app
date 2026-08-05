@@ -42,7 +42,44 @@ export type CarnetCandidate = {
   country_of_origin?: string | null;
   customs_hs_code?: string | null;
   value_amount?: number | string | null;
+  /** D1-L1 fallback source — see resolveCarnetValue. */
+  purchase_cost?: number | string | null;
 };
+
+/* ── VALUE HAS TWO SOURCES, AND THEY ARE NOT THE SAME QUANTITY ─────────────
+   Production carries value_amount NULL on all 33 rows and purchase_cost > 0 on
+   all 33. Nothing populates value_amount: the two gear routes ACCEPT it
+   (gear/route.ts:89, gear/[id]/route.ts:66) but no UI sends it, and the reason
+   value_currency looks populated is that gear/route.ts:90 defaults it to 'GBP'
+   on create. So the currency was never evidence of a partial write.
+
+   Customs wants value FOR CUSTOMS PURPOSES — replacement or market value.
+   purchase_cost is what was paid, which for a five-year-old amp is a different
+   number. Falling back is honest as a DEFAULT and dishonest as a silent
+   equivalence, so the fallback is used AND its provenance is labelled on the
+   document. value_amount always wins when set.
+
+   Derived at read time on purpose. A migration copying purchase_cost into
+   value_amount would destroy the distinction permanently and could not be
+   undone once someone edited either one. */
+
+export type CarnetValueSource = 'declared' | 'purchase_cost' | 'none';
+
+export function resolveCarnetValue(
+  item: Pick<CarnetCandidate, 'value_amount' | 'purchase_cost'>,
+): { amount: number | null; source: CarnetValueSource } {
+  const declared = toAmount(item.value_amount);
+  if (declared != null) return { amount: declared, source: 'declared' };
+  const fallback = toAmount(item.purchase_cost);
+  if (fallback != null) return { amount: fallback, source: 'purchase_cost' };
+  return { amount: null, source: 'none' };
+}
+
+function toAmount(v: unknown): number | null {
+  if (v == null || v === '') return null;
+  const n = typeof v === 'number' ? v : Number(v);
+  return Number.isFinite(n) && n > 0 ? n : null;
+}
 
 export type CarnetGap = {
   id: string;
@@ -65,14 +102,9 @@ function missingText(v: unknown): boolean {
   return v == null || typeof v !== 'string' || v.trim() === '';
 }
 
-/** Zero is a legitimate declared value in principle, but a zero-value carnet
- *  line is refused as readily as a blank one, so it is treated as missing and
- *  named. Better to over-report here than to have a truck turned around. */
-function missingAmount(v: unknown): boolean {
-  if (v == null || v === '') return true;
-  const n = typeof v === 'number' ? v : Number(v);
-  return !Number.isFinite(n) || n <= 0;
-}
+/* Zero-or-negative counts as absent in toAmount above: a zero-value carnet
+   line is refused as readily as a blank one. Better to over-report than to have
+   a truck turned around. */
 
 export function analyseCarnetCompleteness(items: readonly CarnetCandidate[]): CarnetCompleteness {
   const incomplete: CarnetGap[] = [];
@@ -80,7 +112,8 @@ export function analyseCarnetCompleteness(items: readonly CarnetCandidate[]): Ca
     const missing: CarnetRequiredField[] = [];
     if (missingText(it.country_of_origin)) missing.push('country_of_origin');
     if (missingText(it.customs_hs_code)) missing.push('customs_hs_code');
-    if (missingAmount(it.value_amount)) missing.push('value_amount');
+    /* Either source satisfies the requirement — see resolveCarnetValue. */
+    if (resolveCarnetValue(it).amount == null) missing.push('value_amount');
     if (missing.length > 0) {
       incomplete.push({ id: it.id, name: it.name?.trim() || 'Untitled item', missing });
     }

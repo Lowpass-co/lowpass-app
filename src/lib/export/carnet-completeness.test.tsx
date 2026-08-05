@@ -10,6 +10,7 @@ import { describe, it, expect } from 'vitest';
 import {
   analyseCarnetCompleteness,
   carnetCell,
+  resolveCarnetValue,
   CARNET_GAP_MARK,
 } from './carnet-completeness';
 
@@ -91,5 +92,65 @@ describe('NO SILENT BLANKS', () => {
     const r = analyseCarnetCompleteness(items);
     const marked = items.filter((i) => carnetCell(i.country_of_origin).missing).length;
     expect(marked).toBe(r.incomplete.length);
+  });
+});
+
+/* ── D1-L1: value has two sources ─────────────────────────────────────────── */
+
+describe('resolveCarnetValue — declared wins, purchase cost is the labelled fallback', () => {
+  it('THE PRODUCTION SHAPE: value_amount null, purchase_cost set → complete', () => {
+    /* All 33 rows on production look exactly like this. Before the fallback the
+       carnet reported "33 of 33 incomplete" and printed — MISSING — in the
+       value column of every row. */
+    const row = { id: 'g1', name: 'AKG 414', country_of_origin: 'AU', customs_hs_code: '8518.10', value_amount: null, purchase_cost: 300 };
+    expect(resolveCarnetValue(row)).toEqual({ amount: 300, source: 'purchase_cost' });
+    expect(analyseCarnetCompleteness([row]).incomplete).toEqual([]);
+  });
+
+  it('a declared value WINS over purchase cost and is not labelled', () => {
+    expect(resolveCarnetValue({ value_amount: 500, purchase_cost: 300 }))
+      .toEqual({ amount: 500, source: 'declared' });
+  });
+
+  it('neither source → still missing, still named', () => {
+    expect(resolveCarnetValue({ value_amount: null, purchase_cost: null }))
+      .toEqual({ amount: null, source: 'none' });
+    const r = analyseCarnetCompleteness([
+      { id: 'g1', name: 'Case', country_of_origin: 'GB', customs_hs_code: '4202', value_amount: null, purchase_cost: null },
+    ]);
+    expect(r.incomplete[0].missing).toEqual(['value_amount']);
+  });
+
+  it('zero or negative in EITHER source does not satisfy', () => {
+    /* The over-report rule survives the fallback — a zero-value line is refused
+       as readily as a blank one, from whichever column it came. */
+    expect(resolveCarnetValue({ value_amount: 0, purchase_cost: 0 }).amount).toBeNull();
+    expect(resolveCarnetValue({ value_amount: 0, purchase_cost: 300 }))
+      .toEqual({ amount: 300, source: 'purchase_cost' });
+    expect(resolveCarnetValue({ value_amount: -5, purchase_cost: -1 }).amount).toBeNull();
+  });
+
+  it('numeric strings work in both columns — spreadsheets import as text', () => {
+    expect(resolveCarnetValue({ value_amount: null, purchase_cost: '300.00' }))
+      .toEqual({ amount: 300, source: 'purchase_cost' });
+  });
+
+  it('THE ACCEPTANCE SHAPE: only HS code is left missing on production data', () => {
+    /* 33 rows, all with country_of_origin (bar 2) and purchase_cost, none with
+       an HS code. After the fallback the gaps must be HS-code-driven, which is
+       Adam data entry, not a code defect. */
+    const rows = Array.from({ length: 33 }, (_, i) => ({
+      id: `g${i}`, name: `Item ${i}`,
+      country_of_origin: i < 2 ? null : 'AU',
+      customs_hs_code: null,
+      value_amount: null,
+      purchase_cost: 300,
+    }));
+    const r = analyseCarnetCompleteness(rows);
+    expect(r.incomplete).toHaveLength(33);
+    /* Every gap is HS code; only the two known rows also lack origin. */
+    expect(r.incomplete.every((g) => g.missing.includes('customs_hs_code'))).toBe(true);
+    expect(r.incomplete.filter((g) => g.missing.includes('country_of_origin'))).toHaveLength(2);
+    expect(r.incomplete.some((g) => g.missing.includes('value_amount'))).toBe(false);
   });
 });

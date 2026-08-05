@@ -26,14 +26,29 @@ import type { GearExportScope } from '@/lib/export/gear-data';
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
 
-/** Caller-supplied scope is narrowed here — an unrecognised shape falls back to
- *  the whole workspace rather than throwing, and every branch is still
- *  workspace-scoped by the loader. */
-function readScope(raw: unknown): GearExportScope {
-  const s = raw as { kind?: unknown; spaceId?: unknown; tourId?: unknown } | null;
-  if (s && s.kind === 'space' && typeof s.spaceId === 'string') return { kind: 'space', spaceId: s.spaceId };
-  if (s && s.kind === 'tour' && typeof s.tourId === 'string') return { kind: 'tour', tourId: s.tourId };
-  return { kind: 'workspace' };
+/** D1-L4 — THIS USED TO FAIL OPEN. Anything unrecognised returned
+ *  {kind:'workspace'}, so a typo'd, stale or future scope kind silently
+ *  produced THE LARGEST POSSIBLE DOCUMENT — every item in the workspace when
+ *  the caller asked for one space. No exception, no log line, and the wrong
+ *  answer is the plausible-looking one. Workspace scope is now only what the
+ *  caller explicitly asked for, or an omitted scope; anything else is a 400
+ *  naming the offending value. */
+function readScope(raw: unknown): GearExportScope | { error: string } {
+  if (raw == null) return { kind: 'workspace' };
+  if (typeof raw !== 'object') return { error: `scope must be an object, got ${typeof raw}` };
+  const s = raw as { kind?: unknown; spaceId?: unknown; tourId?: unknown };
+  if (s.kind === 'workspace') return { kind: 'workspace' };
+  if (s.kind === 'space') {
+    return typeof s.spaceId === 'string' && s.spaceId
+      ? { kind: 'space', spaceId: s.spaceId }
+      : { error: 'scope.kind "space" requires a spaceId' };
+  }
+  if (s.kind === 'tour') {
+    return typeof s.tourId === 'string' && s.tourId
+      ? { kind: 'tour', tourId: s.tourId }
+      : { error: 'scope.kind "tour" requires a tourId' };
+  }
+  return { error: `unknown scope.kind ${JSON.stringify(s.kind)}` };
 }
 
 export async function POST(request: Request): Promise<NextResponse | Response> {
@@ -42,6 +57,7 @@ export async function POST(request: Request): Promise<NextResponse | Response> {
     const body = (await request.json().catch(() => ({}))) as { config?: unknown; scope?: unknown };
     const config = normalizeConfig('carnet', body.config);
     const scope = readScope(body.scope);
+    if ('error' in scope) return NextResponse.json({ error: scope.error }, { status: 400 });
 
     const supabase = await createServerSupabaseClient();
     const { data: { user } } = await supabase.auth.getUser();

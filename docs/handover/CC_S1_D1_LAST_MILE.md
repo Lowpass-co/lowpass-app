@@ -118,9 +118,17 @@ D-2 depends entirely on migration 250's `from_space_id / to_space_id / from_cont
 
 Related, and worth knowing before the scan flow is built: **`space_id` is set on 2 of 33 items and `container_id` on 0 of 33.** So the manifest's space → container grouping is real code rendering 31 items into "Unplaced / Loose items" — correct behaviour, no data. Scanning is what populates this, which is a decent argument for D-2 being the right next slice, but it also means SPD-01's weight roll-ups have no nested structure to roll up through yet. Test it with fixtures, not with production's shape.
 
+## CONCURRENCY — another agent is in the export surfaces right now
+
+Fable is writing updates to **rider packs and the channel list** as you start this. Channel list is one of the six surfaces sharing `ExportTemplateEditor.tsx` and `template-config.ts`, so those two files are contended.
+
+**Do not edit `ExportTemplateEditor.tsx` or `template-config.ts` in this bank.** That removes option 2 in D1-L2 for now — take the standalone scope-picker dialog, which is what I recommended on the merits anyway. If you conclude the editor genuinely must change, stop and say so rather than editing it; Adam will sequence it.
+
+The rest of D1-L1 through D1-L5 is in `src/lib/export/gear-*.ts`, `carnet-completeness.ts`, `gear-data.ts`, the two gear route files and the Assets surface — none of which Fable is touching. Confirm your working tree is clean and name your branch before you start.
+
 ## Order
 
-D1-L1 (data correctness — the document is wrong today) → D1-L4 (small, and it's a fail-open) → D1-L2 (the report on editor-vs-dialog first, then build) → D1-L3 → D1-L5 (audit, may be a no-op). Then D-2 once the probe returns.
+D1-L1 (data correctness — the document is wrong today) → D1-L4 (small, and it's a fail-open) → D1-L2 (standalone dialog, per the concurrency note) → D1-L3 → D1-L5 (audit, may be a no-op). Then D-2 once the probe returns.
 
 ## Gates
 

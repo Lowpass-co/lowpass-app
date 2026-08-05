@@ -29,6 +29,8 @@ export interface GearExportItem {
   customs_hs_code: string | null;
   weight_kg: number | null;
   value_amount: number | null;
+  /** D1-L1 — the carnet value falls back to this; see resolveCarnetValue. */
+  purchase_cost: number | null;
   value_currency: string | null;
   dimensions_cm: string | null;
   space_id: string | null;
@@ -53,7 +55,7 @@ export interface GearExportData {
 
 const SELECT =
   'id, name, manufacturer, model, serial_number, country_of_origin, customs_hs_code, ' +
-  'weight_kg, value_amount, value_currency, dimensions_cm, space_id, container_id';
+  'weight_kg, value_amount, purchase_cost, value_currency, dimensions_cm, space_id, container_id';
 
 /** Items with no space, and containers with no name, still have to appear —
  *  a manifest that quietly drops the unplaced items is worse than useless when

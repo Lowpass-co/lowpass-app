@@ -14,7 +14,7 @@
    ============================================ */
 
 import type { GearExportData, GearExportItem } from './gear-data';
-import { analyseCarnetCompleteness, carnetCell } from './carnet-completeness';
+import { analyseCarnetCompleteness, carnetCell, resolveCarnetValue } from './carnet-completeness';
 
 const esc = (s: unknown): string =>
   String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
@@ -109,10 +109,12 @@ export function buildCarnetBodyHtml(data: GearExportData): string {
     .map((i, idx) => {
       const origin = carnetCell(i.country_of_origin);
       const hs = carnetCell(i.customs_hs_code);
-      const val = carnetCell(i.value_amount);
+      /* D1-L1 — declared value wins; purchase cost is the labelled fallback. */
+      const resolved = resolveCarnetValue(i);
+      const val = carnetCell(resolved.amount);
       pieces += 1;
       weight += Number(i.weight_kg) || 0;
-      value += Number(i.value_amount) || 0;
+      value += resolved.amount ?? 0;
       const mark = (c: { text: string; missing: boolean }) =>
         c.missing ? `<td class="gap" style="font-weight:600">${esc(c.text)}</td>` : `<td>${esc(c.text)}</td>`;
       return `<tr>
@@ -120,14 +122,28 @@ export function buildCarnetBodyHtml(data: GearExportData): string {
         <td>${esc(tradeDescription(i))}</td>
         <td class="num">1</td>
         <td class="num">${i.weight_kg != null ? Number(i.weight_kg).toFixed(2) : ''}</td>
-        ${val.missing ? mark(val) : `<td class="num">${esc(i.value_currency ?? '')} ${Number(i.value_amount).toFixed(2)}</td>`}
+        ${val.missing
+          ? mark(val)
+          : `<td class="num">${esc(i.value_currency ?? '')} ${resolved.amount!.toFixed(2)}${
+              resolved.source === 'purchase_cost' ? ' <sup>†</sup>' : ''
+            }</td>`}
         ${mark(origin)}
         ${mark(hs)}
       </tr>`;
     })
     .join('');
 
-  return `${disclaimer}${warning}
+  /* The dagger is explained only when it appears. A legend for a mark that is
+     not on the page is noise; a mark with no legend is the silent equivalence
+     this fallback exists to avoid. */
+  const usedFallback = data.items.some((i) => resolveCarnetValue(i).source === 'purchase_cost');
+  const valueNote = usedFallback
+    ? `<p class="lp-note" style="margin:0 0 10px"><sup>†</sup> Value taken from
+       purchase cost, not a declared customs value. Customs value is
+       replacement or market value; confirm before submission.</p>`
+    : '';
+
+  return `${disclaimer}${warning}${valueNote}
     <table class="lp-table">
       <thead><tr>
         <th class="num">No.</th><th>Trade description</th><th class="num">Pieces</th>
