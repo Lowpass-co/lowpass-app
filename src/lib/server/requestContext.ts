@@ -65,16 +65,34 @@ export interface RequestProfile {
 }
 
 /** The caller's profile row — the four fields the chrome and the admin gates
- *  read. One SELECT per request no matter how many callers. */
+ *  read. One SELECT per request no matter how many callers.
+ *
+ *  INCIDENT 2026-08-05 №2 (the /artists ⇄ /login reload loop) — this select
+ *  originally asked for `full_name`, a column that exists on `persons` but NOT
+ *  on `profiles` (the column is `name`, migration 001). PostgREST 400'd
+ *  (42703) on EVERY request, `maybeSingle` returned { data: null, error }, the
+ *  error was silently discarded, and the null cascaded: profile → workspace
+ *  name → the (workspace) layout's redirect('/login') → middleware bounced the
+ *  (perfectly authenticated) user back → infinite document-reload loop. The
+ *  getClaims rollback (dcfa2e5) could not fix it because auth was never the
+ *  broken link. Two defences now:
+ *    · `full_name:name` aliases the REAL column into the shape callers read —
+ *      see profilesSelectContract.test.tsx, which pins every profiles select
+ *      in src/ to columns the migrations actually create.
+ *    · query errors are LOGGED, never silently coerced to "no profile" — a
+ *      42703 must show up in Vercel logs, not surface as a login redirect. */
 export const getRequestProfile = cache(async (): Promise<RequestProfile | null> => {
   const user = await getRequestUser();
   if (!user) return null;
   const supabase = await getRequestSupabase();
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from('profiles')
-    .select('full_name, avatar_url, is_site_admin, workspace_id')
+    .select('full_name:name, avatar_url, is_site_admin, workspace_id')
     .eq('id', user.id)
     .maybeSingle();
+  if (error) {
+    console.error('[requestContext] profiles select failed:', error.code, error.message);
+  }
   const p = (data ?? null) as {
     full_name?: string | null;
     avatar_url?: string | null;
@@ -97,11 +115,14 @@ export const getRequestWorkspaceName = cache(async (): Promise<string | null> =>
   const profile = await getRequestProfile();
   if (!profile?.workspace_id) return null;
   const supabase = await getRequestSupabase();
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from('workspaces')
     .select('name')
     .eq('id', profile.workspace_id)
     .maybeSingle<{ name: string | null }>();
+  if (error) {
+    console.error('[requestContext] workspaces select failed:', error.code, error.message);
+  }
   return data?.name ?? null;
 });
 

@@ -179,7 +179,9 @@ export default async function AdvanceShowPage({
       advance.last_updated_by_id
         ? supabase
             .from('profiles')
-            .select('full_name, email')
+            // INCIDENT 2026-08-05 №2 — profiles has `name`, not `full_name`
+            // (that's persons). Alias keeps the shape `p.full_name` reads.
+            .select('full_name:name, email')
             .eq('id', advance.last_updated_by_id)
             .maybeSingle()
         : Promise.resolve({ data: null }),

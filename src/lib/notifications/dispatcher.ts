@@ -120,7 +120,9 @@ async function lookupUserEmailAndName(
   const email = data.user.email;
   const { data: profile } = await supabase
     .from('profiles')
-    .select('full_name')
+    // INCIDENT 2026-08-05 №2 — profiles has `name`, not `full_name` (that's
+    // persons). Alias keeps the `full_name` shape read below.
+    .select('full_name:name')
     .eq('id', userId)
     .maybeSingle();
   const fullName = ((profile as { full_name?: string | null } | null)?.full_name ?? '').trim();

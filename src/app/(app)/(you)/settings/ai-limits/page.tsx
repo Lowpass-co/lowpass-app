@@ -98,7 +98,9 @@ export default async function AiLimitsPage() {
     const { data: profiles } = userIds.length
       ? await supabase
           .from('profiles')
-          .select('id, full_name, email')
+          // INCIDENT 2026-08-05 №2 — profiles has `name`, not `full_name`
+          // (that's persons). Alias keeps the row shape the map below reads.
+          .select('id, full_name:name, email')
           .in('id', userIds)
           .returns<{ id: string; full_name: string | null; email: string | null }[]>()
       : { data: [] as { id: string; full_name: string | null; email: string | null }[] };

@@ -701,7 +701,9 @@ export async function getWorkspaceLandingData(
   if (actorIds.size > 0) {
     const { data: profileData } = await supabase
       .from('profiles')
-      .select('id, full_name, email')
+      // INCIDENT 2026-08-05 №2 — profiles has `name`, not `full_name` (that's
+      // persons). Alias keeps the downstream shape; the contract test pins it.
+      .select('id, full_name:name, email')
       .in('id', Array.from(actorIds));
     const profiles = (profileData ?? []) as Array<{
       id: string;

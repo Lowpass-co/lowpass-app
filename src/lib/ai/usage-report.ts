@@ -133,7 +133,9 @@ export async function getAiUsageReport(
   if (userIds.size > 0) {
     const { data: profilesRaw } = await supabase
       .from('profiles')
-      .select('id, full_name, email')
+      // INCIDENT 2026-08-05 №2 — profiles has `name`, not `full_name` (that's
+      // persons). Alias keeps the row shape; the contract test pins it.
+      .select('id, full_name:name, email')
       .in('id', Array.from(userIds));
     for (const p of (profilesRaw ?? []) as {
       id: string;

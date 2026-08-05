@@ -1437,3 +1437,98 @@ show-aware advance manifest. Legacy behaviour is the fallback everywhere —
 nothing breaks pre-migration or pre-attachment.
 
 Verification: tsc clean · 507 vitest green · build 120/120.
+
+---
+
+## INCIDENT — c9affb9 getClaims, resolved · 2026-08-05 (Cowork)
+
+**Symptom (Adam, confirmed):** first page never loaded — a redirect CYCLE.
+**Log signature:** builds green, every request 200/3xx, ZERO error/fatal in
+12h. Not a crash: middleware auth-state divergence on Vercel's Edge runtime.
+**Mechanism:** c9affb9 swapped middleware getUser() → getClaims(). On the
+deployed Edge runtime the claims verdict and the route gate disagreed between
+consecutive requests (authed page → /login → back), producing an infinite
+redirect loop with no server error. Unreproducible under `next start` or
+jsdom — the exact gap the incident comments now warn about.
+**Fix:** getClaims removed everywhere (middleware + requestContext); getUser
+restored byte-for-byte incl. proactive cookie refresh. The per-request
+cache() dedupe + ShellV3Mount fan-out KEPT (auth-semantics-neutral, most of
+the perf win). Rule going forward, written at both sites: no auth-verification
+mechanism changes without observing a Vercel PREVIEW deployment first.
+
+---
+
+## INCIDENT №2 — the /artists ⇄ /login reload loop, RESOLVED · 2026-08-05 (Cowork)
+
+**The c9affb9 entry above is a partial misdiagnosis, corrected here.** The
+redirect cycle was never auth. Both incidents in this chain trace to ONE line
+shipped in c9affb9 itself: `getRequestProfile()` selected **`full_name` — a
+column that exists on `persons` (050) but has never existed on `profiles`**
+(001 named it `name`; no migration ever adds `full_name`). dcfa2e5's getClaims
+rollback couldn't fix the loop because auth was never the broken link — every
+auth signal was green the whole time.
+
+**Mechanism, verified live against the deployment (not inferred):**
+
+1. PostgREST answers the select with **42703 "column profiles.full_name does
+   not exist"** on EVERY request. `maybeSingle` returns `{ data: null, error }`;
+   the error was destructured away. Confirmed by replaying the exact query
+   against prod REST with the session token: 400, every time, deterministic.
+2. Null cascades: `getRequestProfile` → null → `getRequestWorkspaceName` →
+   null → the (workspace) layout's `if (workspaceName == null)
+   redirect('/login')`. The redirect streams AFTER the shell chunk (page and
+   layout render in parallel — the page's own client, selecting only
+   `workspace_id`, kept succeeding, which is why the page "partially loads"),
+   so Next emits `meta http-equiv=refresh url=/login` → a FULL document
+   navigation.
+3. Middleware sees the (perfectly valid) session on /login → 307 back to
+   /artists → repeat. ~50 full document loads/minute, all 200s, zero errors.
+
+**Why it looked like a component remount cycle:** every document load re-fires
+/api/artists (ArtistTourContext mount) and /auth/v1/user (useAuth in
+CommandPalette), both 200 — indistinguishable in the HAR from a client-side
+remount until the byte-identical response lengths and `redirectCount:1` on the
+navigation entry gave it away. The suspects from the handoff
+(ArtistTourScopeGuard / OverviewArtistQuerySync / the AppShellV3 client
+conversion) all statically no-op on /artists and are INNOCENT — including the
+nav-highlight fix.
+
+**Blast radius beyond the loop** (all silent, all now fixed): workspace name
+fell back to "Workspace" on every shell mount; avatar name/image empty;
+`is_site_admin` read as false for a true site admin (that's the /bugs 404);
+actor names in Needs-you/home/AI-usage/notifications fell back to email
+local-parts. Six more `profiles.full_name` selects carried the same phantom
+column: getWorkspaceLandingData, getHomeData, ai-limits page, advance
+[routingId] page, ai/usage-report, notifications/dispatcher.
+
+**Fix (7 files):** `full_name:name` PostgREST alias at every site (downstream
+`.full_name` shapes untouched), and requestContext now `console.error`s any
+profiles/workspaces select error instead of silently coercing to "no profile"
+— a 42703 must surface in Vercel logs, never as a login redirect.
+
+**Regression test:** `src/lib/server/profilesSelectContract.test.tsx` — derives
+the canonical profiles column set FROM database/migrations (CREATE/ADD/DROP/
+RENAME parsed, hand-maintained lists refused), scans every
+`.from('profiles')…select()` in src/ (222 sites), and fails BY FILE AND COLUMN
+on any column no migration creates. Parser and scanner both carry liveness
+assertions (the route-guard-coverage lesson). This is the prevention shape:
+the bad state is unaddable, not merely detectable.
+
+**Verification:** tsc --noEmit clean with all changes · contract scan: 222
+sites, all valid · the exact aliased select replayed against prod REST: 200,
+`{"full_name":"Adam 'Mr Big' Rowley", is_site_admin: true, …}` — the precise
+shape getRequestProfile expects. Vitest can't run from the Cowork VM (darwin
+rollup binding) — **run `npx vitest run` on the Mac before deploying.**
+
+**Standing correction:** getClaims may have been innocent (same commit, same
+symptom, this column was the loop) — but the no-preview-observation rule
+stands on its own merits. Latent flags, not touched: (a) middleware's
+`NextResponse.next({request:{headers: requestHeaders}})` snapshots headers
+BEFORE `request.cookies.set()` runs in setAll, so a mid-request token refresh
+forwards the STALE cookie to the render — benign today only because of
+Supabase's rotation reuse-grace; (b) the (workspace) layout still translates
+"workspace read failed" into redirect('/login') for an AUTHED user — with the
+column fixed this state should be unreachable, but it is the same loop shape
+waiting for the next silent read failure; distinguishing user-null from
+data-null there is a design question for Adam. (c) dcfa2e5 accidentally
+committed a stray `.d3.tgz` (103KB) at repo root.
