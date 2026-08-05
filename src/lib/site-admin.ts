@@ -9,26 +9,23 @@
      UPDATE profiles SET is_site_admin = true WHERE email = 'x@x.com';
    ============================================ */
 
-import { createServerSupabaseClient } from '@/lib/supabase-server';
+import { getRequestUser, getRequestProfile } from '@/lib/server/requestContext';
 
-/** Return { user, isAdmin }. `user` is null if the request is unauthenticated. */
+/** Return { user, isAdmin }. `user` is null if the request is unauthenticated.
+ *
+ *  Perf pass 1 (2026-08-04) — reads the per-request cache instead of running
+ *  its own auth round-trip + profile SELECT: pages that call this alongside
+ *  the shell now share one verification and one profile read. Signature and
+ *  expiry are still verified (getClaims / getUser inside the cache), and the
+ *  is_site_admin gate is the same profiles column as before. */
 export async function getUserAndAdminStatus(): Promise<{
   user: { id: string } | null;
   isAdmin: boolean;
 }> {
-  const supabase = await createServerSupabaseClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getRequestUser();
   if (!user) return { user: null, isAdmin: false };
-
-  const { data } = await supabase
-    .from('profiles')
-    .select('is_site_admin')
-    .eq('id', user.id)
-    .maybeSingle();
-
-  return { user: { id: user.id }, isAdmin: !!data?.is_site_admin };
+  const profile = await getRequestProfile();
+  return { user: { id: user.id }, isAdmin: !!profile?.is_site_admin };
 }
 
 /** Convenience: resolve to true only when the caller is authed AND an admin. */

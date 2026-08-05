@@ -46,10 +46,29 @@ export async function updateSession(request: NextRequest) {
     }
   );
 
-  // Refresh session if it exists
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  /* Perf pass 1 (2026-08-04) — verify locally when possible. getUser() sends
+     a round-trip to the Auth server on EVERY page navigation; getClaims()
+     verifies the JWT's signature and expiry against the project's cached JWKS
+     locally (asymmetric signing keys), and this middleware only needs a yes/no
+     on "is this a valid session". Fallbacks keep every old behaviour:
+     · expired token → getClaims rejects → getUser runs → session REFRESH
+       happens exactly as before (that is updateSession's other job);
+     · HS256 / legacy keys → getClaims itself takes the network path — never
+       worse than the old code. */
+  let user: { id: string } | null = null;
+  try {
+    const { data: claimsData, error: claimsError } = await supabase.auth.getClaims();
+    const sub = claimsData?.claims?.sub;
+    if (!claimsError && sub) user = { id: sub };
+  } catch {
+    /* fall through to the network path */
+  }
+  if (!user) {
+    const {
+      data: { user: fetched },
+    } = await supabase.auth.getUser();
+    user = fetched ? { id: fetched.id } : null;
+  }
 
   /* P0 — the unauthenticated allow-list now lives in one PURE, TESTABLE module:
      src/lib/auth/publicRoutes.ts. It used to be an inline chain here, which is

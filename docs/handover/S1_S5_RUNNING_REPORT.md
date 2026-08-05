@@ -1324,3 +1324,52 @@ resolves ?tab= with it).
 **Verification:** tsc clean · 499 vitest green (27 files) · `next build
 --webpack` 119/119. Visual walk needed: /budget/[tourId] on every tab —
 expect exactly one sticky row above content, meter hidden on Summary only.
+
+---
+
+## Perf pass 1 — the request chain · 2026-08-04 (Cowork)
+
+**Adam's report: "slow everywhere," on Vercel.** Measured cause in code, not
+guessed: every page render ran a SEQUENTIAL chain of Supabase round-trips and
+ran several twice — middleware getUser (network), then the workspace layout's
+auth → profile → workspace name, then ShellV3Mount's auth AGAIN → artists →
+profile AGAIN → workspace AGAIN → visibleResources. 6–10 serial round-trips
+of pure latency per page before the page's own data, multiplied by whatever
+the Vercel↔Supabase region gap is.
+
+**What shipped:**
+
+1. **`src/lib/server/requestContext.ts`** — React `cache()`-memoised
+   per-request helpers: `getRequestSupabase` / `getRequestUser` /
+   `getRequestProfile` / `getRequestWorkspaceName` /
+   `getRequestVisibleResources`. Any number of layouts/mounts/pages now share
+   ONE verification, ONE profile read, ONE workspace read per request. The
+   rule going forward: per-request reads go here, not inline in layouts.
+2. **getClaims over getUser** — in the request context AND in middleware.
+   Local JWT verification (signature + expiry against cached JWKS) instead of
+   an Auth-server round-trip on every navigation. Fallbacks preserve every old
+   behaviour: expired token → getClaims rejects → getUser refreshes the
+   session exactly as before; HS256/legacy keys → getClaims itself takes the
+   network path (never worse). RLS at Postgres remains the enforcement either
+   way — this is not "trust the cookie".
+3. **ShellV3Mount fan-out** — the serial chain became: user, then ONE
+   Promise.all(artists · receipts badge · profile · workspace name ·
+   visibleResources). Depth 2 instead of 5–6.
+4. **site-admin reads the cache** — settings/bugs/admin pages stop paying
+   their own auth + profile round-trips beside the shell's.
+5. **Retired `getWorkspaceName.ts`** — orphaned by the cache (last caller was
+   the workspace layout).
+
+**Expected effect:** chrome latency on every authenticated page drops from
+~(6–10 × region RTT) to ~(2–3 × region RTT). If pages still feel slow after
+this deploys, the next levers are, in order: (a) Vercel function region vs
+Supabase project region — check both dashboards; a mismatch is a one-line
+`"regions"` fix in vercel.json worth ~80–100ms × every remaining round-trip;
+(b) per-page query fan-outs (budget's reconcile-before-read, the 15–20s
+personnel roster client fetch — still open from the F-3 note); (c) a single
+`get_shell_context()` RPC folding profile + workspace + grants into one
+round-trip (needs a hand-pasted migration).
+
+**Verification:** tsc clean · 499 vitest green · build 119/119. (One flaky
+PDF-probe timeout, RCP-15, failed once under full-suite load and passes
+consistently otherwise — pre-existing, unrelated.)

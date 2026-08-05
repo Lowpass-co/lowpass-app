@@ -23,9 +23,12 @@
 import { redirect } from 'next/navigation';
 import { headers } from 'next/headers';
 import type { ReactNode } from 'react';
-import { createServerSupabaseClient } from '@/lib/supabase-server';
+import {
+  getRequestSupabase,
+  getRequestUser,
+  getRequestWorkspaceName,
+} from '@/lib/server/requestContext';
 import { ShellV3Mount } from '@/components/shell-v3/ShellV3Mount';
-import { getWorkspaceName } from '@/server/workspace/getWorkspaceName';
 import { getLandingSuggestion } from '@/server/workspace/landingPreference';
 import { EmptyWorkspacePrompt } from '@/components/shell-v2/EmptyWorkspacePrompt';
 
@@ -34,17 +37,20 @@ export default async function WorkspaceLayout({
 }: {
   children: ReactNode;
 }) {
-  const supabase = await createServerSupabaseClient();
-  /* Unauthenticated / no workspace → /login. Same gate the pre-S-3b layout
-     enforced; the shell itself renders for whoever gets past it. */
-  const workspaceName = await getWorkspaceName(supabase);
+  /* Perf pass 1 — the cached request context. The old shape verified the user
+     and walked profile → workspace HERE, then ShellV3Mount repeated all three.
+     Now both read the same per-request cache: the chain runs once. */
+  const supabase = await getRequestSupabase();
+
+  /* Unauthenticated / no workspace → /login. Same gate as ever. */
+  const workspaceName = await getRequestWorkspaceName();
   if (workspaceName == null) redirect('/login');
 
   /* Landing preference (659890a, merged into S-3b) — the workspace tier is
      where a stranded member arrives, so the offer belongs here and nowhere
      deeper. Suggestion only: it never redirects and never writes. It renders
      inside the shell's <main>, above the page body. */
-  const { data: { user } } = await supabase.auth.getUser();
+  const user = await getRequestUser();
   const suggestion = user ? await getLandingSuggestion(supabase, user.id) : null;
 
   const h = await headers();

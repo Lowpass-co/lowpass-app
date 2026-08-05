@@ -15,13 +15,18 @@
    shell was fed — one control, one data shape, no drift while both exist.
    ============================================ */
 
-import { createServerSupabaseClient } from '@/lib/supabase-server';
+import {
+  getRequestSupabase,
+  getRequestUser,
+  getRequestProfile,
+  getRequestWorkspaceName,
+  getRequestVisibleResources,
+} from '@/lib/server/requestContext';
 import { ArtistTourSwitcherClientWrapper } from '@/components/shell-v2/ArtistTourSwitcherClientWrapper';
 import { ProductHeaderAvatarMenu } from '@/components/shell-v2/ProductHeaderAvatarMenu';
 import { WorkspaceSwitcher } from '@/components/shell-v2/WorkspaceSwitcher';
 import { countReceiptsNeedingDetails } from '@/lib/budget/loadReceipts';
 import { resolveScope } from '@/lib/nav/ia';
-import { resolveVisibleResources } from '@/lib/nav/visibleResources';
 import { toTitleCase } from '@/lib/text/toTitleCase';
 import { AppShellV3 } from './AppShellV3';
 
@@ -54,73 +59,45 @@ export interface ShellV3MountProps {
 export async function ShellV3Mount({
   pathname, search, artistId, artistName, tourName, badges, denseRail, landing, children,
 }: ShellV3MountProps) {
-  const supabase = await createServerSupabaseClient();
+  /* Perf pass 1 (2026-08-04) — everything below rides the per-request cache
+     (src/lib/server/requestContext.ts). The old shape was a serial chain —
+     auth → artists → profile → workspace → permissions — REPEATING work the
+     layout above had already done. Now: verify the user once (locally when the
+     project's keys allow it), then fan out EVERYTHING in one Promise.all.
+     Workspace name chains through the cached profile inside the same fan-out,
+     so total depth is user → fan-out → render. */
+  const supabase = await getRequestSupabase();
+  const user = await getRequestUser();
 
-  /* S-2b — the Receipts badge. It existed in the budget tab band, and the band's
-     tabs are retired on Money surfaces now that the rail carries them, so the
-     count has to move rather than disappear: it's work-still-to-do, which is
-     the one number on that bar anybody acts on.
-
-     Resolved here rather than in each layout so every Money surface shows the
-     same figure — the rail is on Payroll and Settlement too, not just Budget.
-     It rides the same Promise.all as the artist list, so it costs no extra
-     round-trip depth on a cold lambda. */
+  /* S-2b — the Receipts badge: work-still-to-do, the one number on the old tab
+     band anybody acted on. Resolved here so every Money surface (Budget,
+     Payroll, Settlement) shows the same figure. */
   const scope = resolveScope(pathname, search ?? '');
   const wantsReceiptBadge = scope.scope === 'tour' && scope.mode === 'money' && !!scope.tourId;
 
-  const [{ data: userData }, { data: artistsRes }, needsDetails] = await Promise.all([
-    supabase.auth.getUser(),
-    supabase.from('artists').select('id, name, branding, spotify_image_url').order('name', { ascending: true }),
-    wantsReceiptBadge ? countReceiptsNeedingDetails(supabase, scope.tourId as string) : Promise.resolve(0),
-  ]);
-  const user = userData?.user ?? null;
+  const [{ data: artistsRes }, needsDetails, profile, workspaceName, visibleResources] =
+    await Promise.all([
+      supabase.from('artists').select('id, name, branding, spotify_image_url').order('name', { ascending: true }),
+      wantsReceiptBadge ? countReceiptsNeedingDetails(supabase, scope.tourId as string) : Promise.resolve(0),
+      getRequestProfile(),
+      /* S-3b — the REAL workspace name, everywhere (WorkspaceTopBar showed it;
+         the v3 bar hardcoded "Workspace"). Cached: if the layout above already
+         resolved it, this is free. */
+      getRequestWorkspaceName(),
+      /* P-1 — the rail's access filter, once per request. Costs nothing extra
+         for admin/manager — canAccess short-circuits on role. */
+      getRequestVisibleResources(),
+    ]);
+
   const initialArtists = (artistsRes ?? []) as SwitcherArtistMin[];
 
   const knownArtistId = artistId ?? scope.artistId ?? null;
   const resolvedArtistName =
     initialArtists.find((a) => a.id === knownArtistId)?.name ?? null;
 
-  let isSiteAdmin = false;
-  let avatarUrl: string | null = null;
-  let displayName = '';
-  let workspaceName: string | null = null;
-  if (user) {
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('full_name, avatar_url, is_site_admin, workspace_id')
-      .eq('id', user.id)
-      .maybeSingle();
-    const p = (profile ?? null) as {
-      full_name?: string | null; avatar_url?: string | null; is_site_admin?: boolean | null;
-      workspace_id?: string | null;
-    } | null;
-    isSiteAdmin = !!p?.is_site_admin;
-    avatarUrl = p?.avatar_url ?? null;
-    displayName = (p?.full_name ?? '').trim();
-
-    /* S-3b — the REAL workspace name, everywhere. shell-v2's WorkspaceTopBar
-       showed it at the workspace tier and the v3 bar hardcoded "Workspace" at
-       every tier; with the workspace tier migrating onto this mount, the name
-       has to come along. One indexed single-row read, sequenced after the
-       profile because it needs workspace_id. */
-    if (p?.workspace_id) {
-      const { data: ws } = await supabase
-        .from('workspaces')
-        .select('name')
-        .eq('id', p.workspace_id)
-        .maybeSingle<{ name: string | null }>();
-      workspaceName = ws?.name ?? null;
-    }
-  }
-
-  /* P-1 — the rail's own access filter. Resolved HERE so every shelled surface
-     gets the same answer: the sub-nav this replaces only ever covered eight
-     Operations pages, and Money and Production had no equivalent to inherit.
-
-     Sequenced after the profile read rather than beside it because it needs the
-     user id, and it costs nothing extra for admin/manager — canAccess
-     short-circuits on role, so no grants query runs. */
-  const visibleResources = await resolveVisibleResources(supabase, user?.id ?? null);
+  const isSiteAdmin = !!profile?.is_site_admin;
+  const avatarUrl = profile?.avatar_url ?? null;
+  const displayName = (profile?.full_name ?? '').trim();
 
   return (
     <AppShellV3
