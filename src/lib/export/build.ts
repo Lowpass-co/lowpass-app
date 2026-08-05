@@ -23,6 +23,9 @@ import { buildChannelListBodyHtml } from '@/lib/export/channel-list-pdf';
 import { loadStagePlotExportData } from '@/lib/export/stageplot-data';
 import { buildStagePlotBodyHtml } from '@/lib/export/stageplot-pdf';
 import { renderDocument } from '@/lib/export/shell';
+import { loadGearExportData, type GearExportScope } from '@/lib/export/gear-data';
+import { buildGearManifestBodyHtml, buildCarnetBodyHtml } from '@/lib/export/gear-pdf';
+import { analyseCarnetCompleteness } from '@/lib/export/carnet-completeness';
 import { fetchLogoDataUri, fetchExportAssetDataUri } from '@/lib/export/logo';
 import type { FooterStyle, TemplateConfig } from '@/lib/export/template-config';
 import { loadSettlementWalk } from '@/lib/settlement/loadWalk';
@@ -424,5 +427,76 @@ export async function buildStagePlotExport(
 
   const footerNote = `${data.artist?.name ? `${data.artist.name} — ` : ''}${data.plotName} · Stage plot`;
   const filename = `${sanitize(data.artist?.name ?? '', '')} — ${sanitize(data.plotName, 'Stage plot')} — Stage plot.pdf`.replace(/^ — /, '');
+  return { html, footerNote, filename, footer: config.footer, runningHeader: config.header.show ? footerNote : null };
+}
+
+/* ── S1 D-1 — gear manifest + ATA carnet general list ──────────────────────── */
+
+export async function buildGearManifestExport(
+  supabase: SupabaseClient,
+  workspaceId: string,
+  scope: GearExportScope,
+  config: TemplateConfig,
+): Promise<ExportBuild> {
+  const data = await loadGearExportData(supabase, workspaceId, scope);
+  const logoDataUri = config.logo ? await resolveLogo(supabase, workspaceId, config, data.logoUrl) : null;
+  const bgDataUri = await fetchExportAssetDataUri(supabase, workspaceId, config.header.bgAssetPath);
+
+  const html = renderDocument({
+    letterhead: {
+      artistName: data.artistName,
+      tourName: data.scopeLabel,
+      tourDates: null,
+      logoDataUri,
+      showLogo: config.logo,
+      generatedOn: nowStamp(),
+    },
+    pageSize: config.pageSize,
+    title: 'Gear manifest',
+    subtitle: `${data.items.length} item${data.items.length === 1 ? '' : 's'} · ${data.totalWeightKg.toFixed(2)} kg`,
+    general: config.general,
+    header: config.header,
+    bgDataUri,
+    bodyHtml: buildGearManifestBodyHtml(data),
+  });
+
+  const footerNote = `${data.scopeLabel} · Gear manifest`;
+  const filename = `${sanitize(data.scopeLabel, 'Gear')} — Manifest.pdf`;
+  return { html, footerNote, filename, footer: config.footer, runningHeader: config.header.show ? footerNote : null };
+}
+
+export async function buildCarnetExport(
+  supabase: SupabaseClient,
+  workspaceId: string,
+  scope: GearExportScope,
+  config: TemplateConfig,
+): Promise<ExportBuild> {
+  const data = await loadGearExportData(supabase, workspaceId, scope);
+  const logoDataUri = config.logo ? await resolveLogo(supabase, workspaceId, config, data.logoUrl) : null;
+  const bgDataUri = await fetchExportAssetDataUri(supabase, workspaceId, config.header.bgAssetPath);
+  const completeness = analyseCarnetCompleteness(data.items);
+
+  const html = renderDocument({
+    letterhead: {
+      artistName: data.artistName,
+      tourName: data.scopeLabel,
+      tourDates: null,
+      logoDataUri,
+      showLogo: config.logo,
+      generatedOn: nowStamp(),
+    },
+    pageSize: config.pageSize,
+    /* The title says general list, not carnet. The document travels; the UI
+       does not. */
+    title: 'ATA carnet — general list',
+    subtitle: completeness.summary,
+    general: config.general,
+    header: config.header,
+    bgDataUri,
+    bodyHtml: buildCarnetBodyHtml(data),
+  });
+
+  const footerNote = `${data.scopeLabel} · Carnet general list (not a carnet)`;
+  const filename = `${sanitize(data.scopeLabel, 'Gear')} — Carnet general list.pdf`;
   return { html, footerNote, filename, footer: config.footer, runningHeader: config.header.show ? footerNote : null };
 }

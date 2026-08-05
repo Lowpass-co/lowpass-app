@@ -16,7 +16,7 @@
    here later with no rework.
    ============================================ */
 
-export type ExportSurface = 'budget' | 'rooming' | 'payroll' | 'routing' | 'channel-list' | 'stage-plot' | 'settlement' | 'daysheet';
+export type ExportSurface = 'budget' | 'rooming' | 'payroll' | 'routing' | 'channel-list' | 'stage-plot' | 'settlement' | 'daysheet' | 'gear-manifest' | 'carnet';
 export type PageSize = 'A4' | 'Letter';
 /** Output format — a styled print PDF, or a flat machine-readable Excel grid. */
 export type ExportFormat = 'pdf' | 'excel';
@@ -419,6 +419,11 @@ export function defaultConfig(surface: ExportSurface): TemplateConfig {
   if (surface === 'stage-plot') return structuredClone(DEFAULT_STAGE_PLOT_CONFIG);
   if (surface === 'settlement') return structuredClone(DEFAULT_SETTLEMENT_CONFIG);
   if (surface === 'daysheet') return structuredClone(DEFAULT_DAYSHEET_CONFIG);
+  /* S1 D-1 — both gear documents are list-shaped, so they take the rooming
+     defaults deliberately rather than gaining a near-identical constant each.
+     Named explicitly instead of falling through, so the fallback below stays a
+     genuine last resort rather than quietly serving two real surfaces. */
+  if (surface === 'gear-manifest' || surface === 'carnet') return structuredClone(DEFAULT_ROOMING_CONFIG);
   return structuredClone(DEFAULT_ROOMING_CONFIG);
 }
 

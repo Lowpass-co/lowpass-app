@@ -88,6 +88,10 @@ const UNGUARDED: Record<string, string> = {
   '/public/advance-packet/[token]': /* POST */ 'PERMANENT — public. Venue opens a packet with no account; the token is the grant.',
   '/public/rider/[token]': /* POST */ 'PERMANENT — public. Tokenised rider view for people outside the workspace.',
 
+  /* ── S1 D-1 — gear documents (read-only) ── */
+  '/gear/export/manifest/pdf': /* POST */ 'PERMANENT — read-only POST. Writes nothing; renders the gear manifest from a config body. READ CHECK: authenticated session, then every gear/space/container row is loaded .eq(workspace_id, profile.workspace_id) by loadGearExportData.',
+  '/gear/export/carnet/pdf': /* POST */ 'PERMANENT — read-only POST. Writes nothing; renders the ATA carnet GENERAL LIST (not a carnet) from a config body. READ CHECK: same workspace-scoped load as the manifest sibling.',
+
   /* ── P0-B — 10 remaining, all fourth-category (47 converted) ── */
   '/budget/[tourId]/export/pdf': /* POST */ 'PERMANENT — read-only POST. Writes nothing; renders a budget PDF from a config body. READ CHECK: authenticated user, then the tour is loaded scoped to the profile workspace_id.',
   '/budget/[tourId]/export/preview': /* POST */ 'PERMANENT — read-only POST. Writes nothing; renders a preview. READ CHECK: same workspace-scoped load as the pdf sibling.',
