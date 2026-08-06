@@ -29,12 +29,17 @@ interface CableLengthSelectCellProps {
   value: string | null;
   onChange: (v: string | null) => void;
   ariaLabel: string;
+  /** Forwarded to BrandedSelect — fired after a keyboard Enter
+   *  commit so the channel grid can advance focus to the next
+   *  cell (§8b4 keyboard-contract parity with the mic picker). */
+  onEnterCommit?: () => void;
 }
 
 export function CableLengthSelectCell({
   value,
   onChange,
   ariaLabel,
+  onEnterCommit,
 }: CableLengthSelectCellProps) {
   return (
     <BrandedSelect
@@ -42,6 +47,7 @@ export function CableLengthSelectCell({
       onChange={(v) => onChange(v === '' ? null : v)}
       options={LENGTHS}
       ariaLabel={ariaLabel}
+      onEnterCommit={onEnterCommit}
       minWidth={0}
       size="sm"
       filterable

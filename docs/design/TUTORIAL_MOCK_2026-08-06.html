@@ -1,0 +1,453 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Lowpass — App tour &amp; tutorial · mock 2026-08-06</title>
+<style>
+:root{
+  /* mirrors globals.css semantic tokens (dark) */
+  --lp-bg:#0d0d0f;--lp-bg-secondary:#0b0b0d;--lp-panel:#111113;--lp-surface:#151517;
+  --lp-surface-hover:#1a1a1e;--lp-border:#26262a;--lp-border-light:rgba(255,255,255,.05);
+  --lp-text:#e9e9e9;--lp-text-secondary:#8a8a8a;--lp-text-tertiary:#5a5a5e;
+  --lp-orange:#FF4500;--lp-green:#10B981;--lp-blue:#3B82F6;--lp-violet:#8B5CF6;
+  --mono:'JetBrains Mono',ui-monospace,monospace;--cond:'Barlow Condensed','Arial Narrow',sans-serif;
+  --rail:236px}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--lp-bg);color:var(--lp-text);font:14px/1.45 -apple-system,'Inter',sans-serif;height:100vh;overflow:hidden}
+.app{display:flex;flex-direction:column;height:100vh}
+
+/* ── SHELL (behind the panel — chrome grammar from SHELL_CANONICAL_MOCK) ── */
+.top{display:flex;align-items:center;gap:10px;padding:0 14px;height:52px;border-bottom:1px solid var(--lp-border);background:var(--lp-panel);flex:0 0 auto;position:relative;z-index:60}
+.markq{width:9px;height:9px;border-radius:2px;background:var(--lp-orange)}
+.ws{font-size:12.5px;color:var(--lp-text-secondary);padding:5px 8px;white-space:nowrap}
+.sep{color:#333;font-size:12px}
+.pick{display:flex;align-items:center;gap:7px;background:#17171a;border:1px solid var(--lp-border);border-radius:8px;padding:5px 10px;white-space:nowrap}
+.pick b{font-size:13px;font-weight:600}.pick span{font-size:12.5px;color:var(--lp-text-secondary)}.pick i{color:var(--lp-text-tertiary);font-style:normal;font-size:10px}
+.dotav{width:19px;height:19px;border-radius:50%;background:linear-gradient(135deg,#FF4500,#8B5CF6)}
+.modes{position:relative;display:flex;background:#141417;border:1px solid var(--lp-border);border-radius:999px;padding:3px;margin:0 auto;gap:2px}
+.modes u{position:absolute;top:3px;bottom:3px;left:3px;width:86px;border-radius:999px;background:var(--lp-orange)}
+.modes b{position:relative;z-index:1;color:var(--lp-text-secondary);font:600 12.5px/1 -apple-system,'Inter',sans-serif;letter-spacing:.06em;text-transform:uppercase;padding:8px 20px}
+.modes b.on{color:#fff}
+.right{margin-left:auto;display:flex;align-items:center;gap:10px}
+.live{font-size:11px;color:var(--lp-green);border:1px solid #10B98144;border-radius:999px;padding:3px 9px}
+.av{width:26px;height:26px;border-radius:50%;background:var(--lp-orange);color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;box-shadow:0 0 0 3px #FF450044}
+.body{display:flex;flex:1;min-height:0}
+.rail{width:var(--rail);flex:0 0 auto;border-right:1px solid var(--lp-border);background:var(--lp-panel);display:flex;flex-direction:column}
+.scope{padding:12px 14px 9px;border-bottom:1px solid var(--lp-border-light);display:flex;align-items:center;min-height:44px}
+.scope .lab{font:600 10px/1 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--lp-text-tertiary)}
+.scope .up{margin-left:auto;color:var(--lp-text-secondary);font-size:11px}
+.nav{padding:8px}
+.grp{font:600 9.5px/1 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--lp-text-tertiary);padding:12px 10px 6px}
+.it{display:flex;align-items:center;gap:11px;padding:8px 10px;border-radius:7px;color:var(--lp-text-secondary);font-size:13.5px;position:relative}
+.it .ic{width:16px;text-align:center;font-size:13px;opacity:.85}
+.it.on{background:#FF450014;color:var(--lp-text);font-weight:500}
+.it.on:before{content:'';position:absolute;left:0;top:7px;bottom:7px;width:2.5px;border-radius:2px;background:var(--lp-orange)}
+.it .n{margin-left:auto;font:500 10.5px/1 var(--mono);color:var(--lp-text-tertiary);background:#0f0f11;border-radius:4px;padding:2px 5px}
+.main{flex:1;min-width:0;padding:20px 24px}
+.crumb{font:500 10.5px/1 var(--mono);letter-spacing:.12em;text-transform:uppercase;color:var(--lp-text-tertiary);margin-bottom:7px}
+h1{font-family:var(--cond);font-size:30px;letter-spacing:.04em;font-weight:700;text-transform:uppercase}
+.stat{font:12.5px var(--mono);color:var(--lp-text-secondary);display:flex;gap:15px;margin-top:8px}
+.stat b{color:var(--lp-text);font-weight:500}
+.ledger{margin-top:18px;border:1px solid var(--lp-border);border-radius:10px;overflow:hidden}
+.lrow{display:flex;gap:14px;padding:9px 14px;border-bottom:1px solid var(--lp-border-light);font:12.5px var(--mono);color:var(--lp-text-tertiary)}
+.lrow s{text-decoration:none;color:var(--lp-text-secondary)}
+
+/* ── SCRIM + AVATAR MENU ── */
+.scrim{position:fixed;inset:0;background:rgba(0,0,0,.55);backdrop-filter:blur(1.5px);z-index:70}
+.umenu{position:fixed;top:56px;right:14px;width:228px;background:var(--lp-surface);border:1px solid var(--lp-border);border-radius:10px;box-shadow:0 18px 50px rgba(0,0,0,.6);z-index:80;padding:6px;font-size:13px}
+.umenu .uh{padding:8px 10px;border-bottom:1px solid var(--lp-border-light);margin-bottom:5px}
+.umenu .uh b{display:block;font-size:13px}.umenu .uh span{font:11px var(--mono);color:var(--lp-text-tertiary)}
+.umenu .mi{display:flex;align-items:center;gap:10px;padding:7px 10px;border-radius:7px;color:var(--lp-text-secondary)}
+.umenu .mi .ic{width:15px;text-align:center;font-size:12px}
+.umenu .mi.hot{background:#FF450018;color:var(--lp-text);border:1px solid #FF450055}
+.umenu .mi.hot .ic{color:var(--lp-orange)}
+.umenu .div{height:1px;background:var(--lp-border-light);margin:5px 4px}
+.callout{position:fixed;top:96px;right:252px;z-index:80;font:600 10.5px/1.5 var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--lp-orange);text-align:right;max-width:180px}
+.callout:after{content:'→';margin-left:6px}
+
+/* ── TUTORIAL PANEL ── */
+.tpanel{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);width:min(1020px,94vw);height:min(660px,88vh);background:var(--lp-panel);border:1px solid var(--lp-border);border-radius:14px;box-shadow:0 30px 90px rgba(0,0,0,.7);z-index:75;display:flex;flex-direction:column;overflow:hidden}
+.thead{display:flex;align-items:center;gap:12px;padding:0 16px;height:54px;border-bottom:1px solid var(--lp-border);flex:0 0 auto}
+.thead .tt{font:600 11px/1 var(--mono);letter-spacing:.16em;text-transform:uppercase;color:var(--lp-text)}
+.thead .markq{width:8px;height:8px}
+.mtoggle{display:flex;background:#141417;border:1px solid var(--lp-border);border-radius:999px;padding:3px;margin-left:14px;gap:2px}
+.mtoggle button{background:none;border:0;color:var(--lp-text-secondary);font:600 11px/1 var(--mono);letter-spacing:.08em;text-transform:uppercase;padding:7px 15px;border-radius:999px;cursor:pointer}
+.mtoggle button.on{background:var(--lp-orange);color:#fff}
+.mtoggle button:not(.on):hover{color:var(--lp-text)}
+.thead .xw{margin-left:auto;display:flex;align-items:center;gap:12px}
+.thead .esc{font:10.5px var(--mono);color:var(--lp-text-tertiary)}
+.thead .x{width:28px;height:28px;border-radius:7px;border:1px solid var(--lp-border);background:none;color:var(--lp-text-secondary);cursor:pointer;font-size:13px}
+.thead .x:hover{border-color:var(--lp-orange);color:var(--lp-text)}
+.tbody{display:flex;flex:1;min-height:0}
+.ttabs{width:224px;flex:0 0 auto;border-right:1px solid var(--lp-border);background:var(--lp-bg-secondary);overflow-y:auto;padding:8px}
+.ttab{display:flex;align-items:center;gap:10px;padding:7px 9px;border-radius:7px;color:var(--lp-text-secondary);font-size:12.5px;cursor:pointer;position:relative;border:0;background:none;width:100%;text-align:left;font-family:inherit}
+.ttab:hover{background:#ffffff08;color:var(--lp-text)}
+.ttab.on{background:#FF450014;color:var(--lp-text);font-weight:500}
+.ttab.on:before{content:'';position:absolute;left:0;top:6px;bottom:6px;width:2.5px;border-radius:2px;background:var(--lp-orange)}
+.ttab .no{font:600 9.5px/1 var(--mono);color:var(--lp-text-tertiary);width:18px}
+.ttab.on .no{color:var(--lp-orange)}
+.ttab .ck{margin-left:auto;font-size:10px;color:var(--lp-green);opacity:0}
+.ttab.done .ck{opacity:1}
+.tcontent{flex:1;min-width:0;overflow-y:auto;padding:22px 26px 26px;display:flex;flex-direction:column}
+.kick{font:600 9.5px/1 var(--mono);letter-spacing:.16em;text-transform:uppercase;color:var(--lp-orange);margin-bottom:8px}
+h2{font-family:var(--cond);font-size:25px;letter-spacing:.04em;font-weight:700;text-transform:uppercase;margin-bottom:8px}
+.desc{font-size:13px;color:var(--lp-text-secondary);max-width:600px;line-height:1.6}
+
+/* wireframe mini-frames */
+.wf{position:relative;background:#0a0a0c;border:1px solid var(--lp-border);border-radius:10px;height:236px;display:flex;flex-direction:column;overflow:hidden;margin-top:16px}
+.wf .wtop{height:22px;border-bottom:1px solid #1d1d21;background:#101013;display:flex;align-items:center;gap:6px;padding:0 8px;flex:0 0 auto}
+.wf .wtop i{display:block;height:7px;border-radius:3px;background:#232327;width:34px}
+.wf .wtop i.o{background:#FF450088;width:7px}
+.wf .wtop i.pill{width:60px;border-radius:99px}
+.wf .wtop i.avm{width:12px;height:12px;border-radius:50%;background:#FF450088;margin-left:auto}
+.wf .wbody{display:flex;flex:1;min-height:0}
+.wf .wr{width:50px;border-right:1px solid #1d1d21;background:#0f0f12;padding:8px 7px;display:flex;flex-direction:column;gap:7px;flex:0 0 auto}
+.wf .wr i{display:block;height:7px;border-radius:3px;background:#222226}
+.wf .wr i.on{background:#FF450077}
+.wf .wm{flex:1;padding:10px 12px;display:flex;flex-direction:column;gap:7px;min-width:0}
+.wf .h{height:11px;width:38%;background:#26262a;border-radius:3px;flex:0 0 auto}
+.wf .row{height:16px;background:#141418;border:1px solid #1f1f24;border-radius:4px;flex:0 0 auto;display:flex;align-items:center;gap:8px;padding:0 8px}
+.wf .row u{display:block;height:6px;border-radius:3px;background:#26262a;text-decoration:none}
+.wf .row u.g{background:#10B98155}.wf .row u.b{background:#3B82F655}.wf .row u.o{background:#FF450066}
+.wf .cards{display:flex;gap:8px;flex:0 0 auto}
+.wf .card{flex:1;height:46px;background:#121216;border:1px solid #1f1f24;border-radius:6px;padding:7px}
+.wf .card i{display:block;height:6px;width:55%;background:#26262a;border-radius:3px;margin-bottom:7px}
+.wf .card u{display:block;height:9px;width:38%;background:#3a3a40;border-radius:3px;text-decoration:none}
+.wf .canvas{flex:1;border:1px dashed #26262a;border-radius:6px;position:relative}
+.wf .canvas b{position:absolute;background:#1c1c21;border:1px solid #2c2c32;border-radius:4px}
+.wf .modal{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:56%;background:#141418;border:1px solid #2c2c32;border-radius:8px;padding:12px;box-shadow:0 12px 30px rgba(0,0,0,.6)}
+.wf .modal .h{width:50%}
+.wf .link{margin-top:10px;height:18px;border:1px solid #FF450055;background:#FF45000d;border-radius:5px;display:flex;align-items:center;padding:0 8px;font:9px var(--mono);color:var(--lp-orange);letter-spacing:.04em}
+.wf .menu{position:absolute;right:10px;top:26px;width:34%;background:#141418;border:1px solid #2c2c32;border-radius:7px;padding:5px;box-shadow:0 10px 26px rgba(0,0,0,.55)}
+.wf .menu i{display:block;height:8px;border-radius:3px;background:#232327;margin:6px 5px}
+.wf .menu i.hot{background:#FF450066;outline:1px solid #FF450088}
+/* coach marks */
+.cm{position:absolute;width:21px;height:21px;border-radius:50%;background:var(--lp-orange);color:#fff;font:700 10.5px/21px var(--mono);text-align:center;box-shadow:0 0 0 4px #FF450033;z-index:2;animation:pulse 2.2s infinite}
+@keyframes pulse{0%,100%{box-shadow:0 0 0 4px #FF450033}50%{box-shadow:0 0 0 8px #FF450018}}
+.caps{margin-top:16px;display:flex;flex-direction:column;gap:9px}
+.cap{display:flex;gap:11px;font-size:12.5px;color:var(--lp-text-secondary);align-items:baseline}
+.cap b{flex:0 0 auto;width:19px;height:19px;border-radius:50%;background:var(--lp-orange);color:#fff;font:700 10px/19px var(--mono);text-align:center;transform:translateY(3px)}
+.cap span b{all:unset;color:var(--lp-text);font-weight:600}
+
+/* tutorial (DO) mode */
+.prog{display:flex;align-items:center;gap:12px;margin-bottom:18px}
+.prog .pl{font:600 10px/1 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--lp-text-tertiary);white-space:nowrap}
+.prog .pl b{color:var(--lp-orange)}
+.pbar{flex:1;height:6px;background:#1a1a1e;border-radius:99px;overflow:hidden}
+.pfill{height:100%;background:var(--lp-orange);border-radius:99px;transition:width .25s cubic-bezier(0,0,.2,1)}
+.tasks{margin-top:14px;display:flex;flex-direction:column;gap:8px;max-width:620px}
+.task{display:flex;gap:12px;align-items:flex-start;background:var(--lp-surface);border:1px solid var(--lp-border);border-radius:9px;padding:11px 13px;cursor:pointer}
+.task:hover{border-color:#3a3a40}
+.task .cb{flex:0 0 auto;width:17px;height:17px;border-radius:4px;border:1.5px solid #3a3a40;margin-top:1px;display:flex;align-items:center;justify-content:center;font-size:10px;color:#fff}
+.task.done .cb{background:var(--lp-orange);border-color:var(--lp-orange)}
+.task.done .tx{color:var(--lp-text-tertiary);text-decoration:line-through}
+.task .tx{font-size:13px}
+.task .tx em{font-style:normal;font-family:var(--mono);font-size:11.5px;background:#0f0f11;border:1px solid var(--lp-border);border-radius:4px;padding:1px 6px;color:var(--lp-orange)}
+.hint{margin-top:14px;border-left:2px solid var(--lp-orange);background:#FF45000a;border-radius:0 8px 8px 0;padding:10px 14px;font-size:12px;color:var(--lp-text-secondary);max-width:620px}
+.hint b{color:var(--lp-text)}
+.tfoot{margin-top:auto;padding-top:20px;display:flex;align-items:center;gap:10px}
+.btn{border:1px solid var(--lp-border);background:var(--lp-surface);color:var(--lp-text-secondary);border-radius:8px;padding:8px 18px;font:600 12px/1 -apple-system,'Inter',sans-serif;letter-spacing:.04em;cursor:pointer}
+.btn:hover{border-color:#3a3a40;color:var(--lp-text)}
+.btn.pri{background:var(--lp-orange);border-color:var(--lp-orange);color:#fff}
+.btn.pri:hover{filter:brightness(1.08)}
+.btn:disabled{opacity:.35;cursor:default}
+.tfoot .mid{margin-left:auto;font:10.5px var(--mono);color:var(--lp-text-tertiary)}
+
+/* implementation notes footer */
+.impl{position:fixed;left:14px;bottom:12px;z-index:90;max-width:560px}
+.impl details{background:var(--lp-surface);border:1px solid var(--lp-border);border-radius:10px;box-shadow:0 14px 40px rgba(0,0,0,.55);overflow:hidden}
+.impl summary{cursor:pointer;padding:9px 14px;font:600 10px/1 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--lp-text-tertiary);list-style:none}
+.impl summary::-webkit-details-marker{display:none}
+.impl summary:hover{color:var(--lp-orange)}
+.impl .ib{padding:4px 16px 14px;font-size:12px;color:var(--lp-text-secondary);line-height:1.65;max-height:44vh;overflow-y:auto}
+.impl .ib b{color:var(--lp-text)}
+.impl .ib code{font:11px var(--mono);background:#0f0f11;border:1px solid var(--lp-border);border-radius:4px;padding:1px 5px;color:var(--lp-orange)}
+.impl .ib ol{padding-left:18px;margin:6px 0}
+.impl .ib li{margin:4px 0}
+</style></head><body>
+<div class="app">
+  <div class="top">
+    <div class="markq"></div>
+    <div class="ws">Adam's Workspace</div><div class="sep">/</div>
+    <div class="pick"><span class="dotav"></span><b>My Band</b><i>▾</i></div>
+    <div class="pick"><span>Weekend Away | Aug'26</span><i>▾</i></div>
+    <div class="modes"><u></u><b class="on">Tour</b><b>Money</b><b>Production</b></div>
+    <div class="right"><span class="live">● Live</span><div class="av">AD</div></div>
+  </div>
+  <div class="body">
+    <div class="rail">
+      <div class="scope"><span class="lab">TOUR</span><span class="up">↑ Artist</span></div>
+      <div class="nav">
+        <div class="grp">THE RUN</div>
+        <div class="it on"><span class="ic">▤</span>Routing<span class="n">3</span></div>
+        <div class="it"><span class="ic">◷</span>Day sheets</div>
+        <div class="it"><span class="ic">⧉</span>Advance<span class="n">0/2</span></div>
+        <div class="grp">PEOPLE &amp; LOGISTICS</div>
+        <div class="it"><span class="ic">☰</span>Crew</div>
+        <div class="it"><span class="ic">⌂</span>Rooming</div>
+        <div class="it"><span class="ic">✈</span>Travel</div>
+        <div class="it"><span class="ic">▣</span>Files</div>
+      </div>
+    </div>
+    <div class="main">
+      <div class="crumb">MY BAND / WEEKEND AWAY | AUG'26 / TOUR</div>
+      <h1>ROUTING</h1>
+      <div class="stat"><b>3</b> days · <b>2</b> shows · <b>0/2</b> advanced</div>
+      <div class="ledger">
+        <div class="lrow"><s>FRI 14 AUG</s> SHOW · The Lexington · London</div>
+        <div class="lrow"><s>SAT 15 AUG</s> SHOW · Joiners · Southampton</div>
+        <div class="lrow"><s>SUN 16 AUG</s> TRAVEL · Home</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="scrim"></div>
+
+<!-- re-entry affordance: avatar menu rendered open -->
+<div class="callout">Re-open any time — avatar menu</div>
+<div class="umenu">
+  <div class="uh"><b>Adam Growley</b><span>adamgrowley@gmail.com · owner</span></div>
+  <div class="mi"><span class="ic">◉</span>Account</div>
+  <div class="mi"><span class="ic">⚙</span>Preferences</div>
+  <div class="mi"><span class="ic">☰</span>Team &amp; roles</div>
+  <div class="div"></div>
+  <div class="mi hot"><span class="ic">⛬</span>App tour &amp; tutorial</div>
+  <div class="mi"><span class="ic">⚑</span>Report a bug</div>
+  <div class="div"></div>
+  <div class="mi"><span class="ic">↪</span>Sign out</div>
+</div>
+
+<!-- THE TUTORIAL PANEL -->
+<div class="tpanel" role="dialog" aria-label="App tour and tutorial">
+  <div class="thead">
+    <div class="markq"></div><span class="tt">APP TOUR &amp; TUTORIAL</span>
+    <div class="mtoggle">
+      <button id="mTour" class="on" onclick="setMode('tour')">Tour of the app</button>
+      <button id="mTut" onclick="setMode('tut')">Tutorial: Weekend Away</button>
+    </div>
+    <div class="xw"><span class="esc">ESC closes · progress saved</span><button class="x">✕</button></div>
+  </div>
+  <div class="tbody">
+    <div class="ttabs" id="ttabs"></div>
+    <div class="tcontent" id="tcontent"></div>
+  </div>
+</div>
+
+<!-- implementation notes (meta — not part of the shipped UI) -->
+<div class="impl"><details>
+  <summary>▸ Implementation notes — the credit-efficient build this render implies</summary>
+  <div class="ib">
+    Everything above is <b>one panel + one data file</b>. Nothing here needs per-page bespoke code.
+    <ol>
+      <li><b>One step registry.</b> A single JSON/TS array drives both modes: <code>{section, mode, targetSelector, caption, task}</code>. The 12 tabs, every coach-mark caption and every checklist task in this mock are literally rows of that registry (see <code>SECTIONS</code> in this file's script — it is the shape of the real registry).</li>
+      <li><b>One overlay component.</b> A single spotlight+tooltip component reads <code>targetSelector</code> from the registry and positions itself over the live page — the grey-box frames in this mock stand in for "the real page, spotlit". No per-surface walkthrough code; adding a step = adding a registry row.</li>
+      <li><b>One mount point.</b> The panel mounts once in the app shell (same layer as ⌘K, <code>--lp-z-modal</code>) and is opened from one new item in the avatar menu — the highlighted <b>App tour &amp; tutorial</b> row shown top-right. That menu item is the only nav change.</li>
+      <li><b>Progress = one column.</b> Per-user progress is a single JSONB column on <code>profiles</code> (e.g. <code>tutorial_state: {mode, section, doneTasks[]}</code>), mirrored to localStorage for instant resume. No new tables.</li>
+      <li><b>Tutorial data is REAL data.</b> "Weekend Away" is created through the existing artist/tour/routing/rider/budget APIs with a <code>practice: true</code> flag on the tour — so every page behaves identically to production and there is zero mock-data plumbing. Finish screen offers keep-or-delete (one cascade delete on the flagged tour).</li>
+      <li><b>Task detection is cheap.</b> Checklist items verify via the same selectors/queries pages already use (e.g. "2 show days exist" = the routing count already in the rail badge). Anything hard to detect stays a manual checkbox, exactly as rendered here.</li>
+    </ol>
+    Net: <b>1 registry + 1 overlay component + 1 menu item</b> (+ 1 profiles column). Tour mode and Tutorial mode are the same machinery with <code>mode</code> flipped.
+  </div>
+</details></div>
+
+<script>
+/* frame builders — grey-box wireframes, deliberately not pixel-faithful */
+const R=(on)=>`<div class="wr">${[0,1,2,3,4,5].map(i=>`<i${i===on?' class="on"':''}></i>`).join('')}</div>`;
+const TOPW=`<div class="wtop"><i class="o"></i><i></i><i style="width:22px"></i><i class="pill"></i><i class="avm"></i></div>`;
+const F=(inner,marks)=>`<div class="wf">${inner}${marks.map(m=>`<span class="cm" style="left:${m[0]}%;top:${m[1]}%">${m[2]}</span>`).join('')}</div>`;
+const rows=(n,cls)=>Array.from({length:n},(_,i)=>`<div class="row"><u style="width:52px" class="${cls&&cls[i]||''}"></u><u style="width:26%"></u><u style="width:14%"></u><u style="width:9%"></u></div>`).join('');
+
+const SECTIONS=[
+{t:'Welcome',
+ tour:{h:'Welcome to Lowpass',d:'Lowpass runs your whole tour — routing, advancing, production paperwork and money — in one place. This walkthrough has two speeds: <b>Tour of the app</b> shows you around; <b>Tutorial: Weekend Away</b> has you build a real 3-day tour with your own hands. Switch any time with the toggle above.',
+  f:F(TOPW+`<div class="wbody">${R(0)}<div class="wm"><div class="h"></div>${rows(3)}</div></div><div class="menu"><i></i><i></i><i class="hot"></i><i></i></div>`,[[8,44,1],[57,10,2],[80,46,3]]),
+  caps:[['Two modes, one panel — watch, or build. Your progress in either is saved.'],
+        ['Re-open this any time from the <b>avatar menu → App tour &amp; tutorial</b> (shown open behind this panel).'],
+        ['<b>Esc</b> closes; the left tabs let you jump straight to any section.']]},
+ tut:{h:'Your Weekend Away',tasks:[
+  'You’re in Tutorial mode — everything you make here is <em>real data</em>, flagged as practice',
+  'Plan for ~10 minutes; leave and resume from the avatar menu whenever'],
+  hint:'<b>What you’ll build:</b> artist "My Band" → tour "Weekend Away" (Fri–Sun) → 2 shows + 1 travel day → a rider with 4 channels → a stage plot → one advance → a tiny budget → a settled show → a link your venue can open.'}},
+
+{t:'The shell & navigation',
+ tour:{h:'The shell & navigation',d:'One top bar, one left rail, everywhere. The path reads workspace / artist / tour, and the three-mode slider — Tour · Money · Production — swaps the whole rail underneath it.',
+  f:F(TOPW+`<div class="wbody">${R(0)}<div class="wm"><div class="h"></div><div class="cards"><div class="card"><i></i><u></u></div><div class="card"><i></i><u></u></div><div class="card"><i></i><u></u></div></div>${rows(2)}</div></div>`,[[16,9,1],[46,9,2],[3,40,3]]),
+  caps:[['The breadcrumb path: click <b>workspace</b> or <b>artist</b> to zoom out a tier.'],
+        ['The mode slider — <b>Tour · Money · Production</b> — only exists at tour scope.'],
+        ['The rail is your map for the current mode; the orange bar marks where you are.']]},
+ tut:{h:'Find your way around',tasks:[
+  'Click <em>Money</em> then back to <em>Tour</em> — watch the whole rail swap',
+  'Click your workspace name, then come back to the tour',
+  'Collapse the rail (bottom-left ⇤) and expand it again'],
+  hint:'<b>Rule of the house:</b> Tab moves between controls, arrows move within a list, Enter commits, Esc gets you out. Everywhere.'}},
+
+{t:'Artists',
+ tour:{h:'Artists',d:'Artists live at workspace level and own everything that outlives a single tour — year budgets, the master rider, brand assets, documents.',
+  f:F(TOPW+`<div class="wbody">${R(0)}<div class="wm"><div class="h"></div><div class="cards"><div class="card"><i></i><u></u></div><div class="card"><i></i><u></u></div><div class="card" style="border-style:dashed;background:none"><i style="width:30%"></i><u style="width:50%"></u></div></div>${rows(2)}</div></div>`,[[27,38,1],[76,38,2],[16,9,3]]),
+  caps:[['An artist card — click through to the artist home (tours, year budget, library).'],
+        ['<b>New artist</b> — name is the only required field.'],
+        ['You’re at workspace scope here; the rail shows the cross-artist pools.']]},
+ tut:{h:'Create "My Band"',tasks:[
+  'Go to <em>Workspace → Artists</em> and hit <em>New artist</em>',
+  'Name it <em>My Band</em> — leave everything else blank',
+  'Open the artist home and glance at the empty year budget'],
+  hint:'One field is enough. Everything else on the artist can be filled later, from any tour.'}},
+
+{t:'Create a tour (builder)',
+ tour:{h:'The tour builder',d:'A tour starts as a name, a date range and a currency. The builder grid lets you rough in days fast — every row you type becomes a routing day.',
+  f:F(TOPW+`<div class="wbody">${R(1)}<div class="wm"><div class="h"></div><div class="row"><u style="width:34%" class="o"></u><u style="width:20%"></u><u style="width:12%"></u></div>${rows(3,['g','g','b'])}</div></div>`,[[22,26,1],[13,45,2],[88,84,3]]),
+  caps:[['Name + dates + currency — the only three fields a tour needs to exist.'],
+        ['The builder grid: one line per day. Tab across cells, Enter for a new day.'],
+        ['<b>Create</b> turns the grid into your routing ledger.']]},
+ tut:{h:'New tour: "Weekend Away"',tasks:[
+  'From My Band, hit <em>New tour</em>',
+  'Name: <em>Weekend Away</em> · dates: <em>Fri 14 – Sun 16 Aug</em>',
+  'Currency: <em>GBP</em> · leave every other field alone',
+  'Hit <em>Create</em> — you land on an empty routing ledger'],
+  hint:'Three fields, one button. The grid can wait — you’ll add days on the next page.'}},
+
+{t:'Routing & days',
+ tour:{h:'Routing & days',d:'The routing ledger is the spine of the tour. Every day is a row with a type — show, travel, day off — and clicking a day opens its detail.',
+  f:F(TOPW+`<div class="wbody">${R(0)}<div class="wm"><div class="h"></div>${rows(4,['g','g','b',''])}</div></div>`,[[17,36,1],[38,49,2],[62,62,3]]),
+  caps:[['The day-type pill — <b>Show</b> green, <b>Travel</b> blue. Arrow keys move, Enter sets.'],
+        ['The venue cell: your library shows first (orange ◆), Google search fills the rest. Free text always commits on Enter.'],
+        ['Expand a day for times, contacts and notes — the day sheet builds itself from these.']]},
+ tut:{h:'Rough in the weekend',tasks:[
+  'Add <em>Fri 14</em> as a <em>Show</em> — venue: <em>The Lexington, London</em>',
+  'Add <em>Sat 15</em> as a <em>Show</em> — venue: <em>Joiners, Southampton</em>',
+  'Add <em>Sun 16</em> as <em>Travel</em> — destination: <em>Home</em>',
+  'Expand Friday and set doors <em>19:00</em>, stage <em>21:00</em>'],
+  hint:'Type venue names and trust Enter — picking a Google result fills address, city and coordinates for the routing map.'}},
+
+{t:'Riders & channel list',
+ tour:{h:'Riders & channel list',d:'Production mode holds the paperwork the venue needs. Riders are built from sections; the channel list is a compact grid venues can read at a glance. Versions can be saved and attached per-show.',
+  f:F(TOPW+`<div class="wbody">${R(3)}<div class="wm"><div class="h"></div><div class="row"><u style="width:22%" class="o"></u><u style="width:30%"></u></div>${rows(4)}</div></div>`,[[16,9,1],[22,36,2],[57,60,3]]),
+  caps:[['You’re in <b>Production</b> mode now — the slider moved, the rail changed.'],
+        ['A rider section — text, tables and images, stacked into a printable pack.'],
+        ['The channel grid: number · source · mic/DI · notes. Compact density, spreadsheet keys.']]},
+ tut:{h:'A rider and 4 channels',tasks:[
+  'Switch to <em>Production</em> → <em>Riders</em>, add one section: <em>Backline</em>',
+  'Write one line in it (e.g. "We bring our own amps")',
+  'Open <em>Channel list</em> and add 4 rows: <em>Kick · Snare · Bass DI · Vox</em>',
+  'Set a mic on each — anything, it’s practice'],
+  hint:'Tab walks the grid cells; Enter starts the next channel row. Four rows is a real (tiny) input list.'}},
+
+{t:'Stage plot',
+ tour:{h:'Stage plot',d:'A drag-and-drop plot of the stage. Items come from a palette, the plot exports to the advance packet alongside the channel list.',
+  f:F(TOPW+`<div class="wbody">${R(3)}<div class="wm"><div class="h"></div><div class="canvas"><b style="left:36%;top:14%;width:26%;height:26%"></b><b style="left:18%;bottom:14%;width:11%;height:17%"></b><b style="left:66%;bottom:14%;width:11%;height:17%"></b><b style="left:44%;bottom:10%;width:8%;height:11%"></b></div></div></div>`,[[48,33,1],[26,77,2],[91,26,3]]),
+  caps:[['Drag items from the palette — risers, wedges, mics, power drops.'],
+        ['Downstage is down. Wedges and the vox mic where the audience sees them.'],
+        ['Export drops a PDF of plot + channels straight into the advance.']]},
+ tut:{h:'Sketch the stage',tasks:[
+  'Open <em>Stage plot</em> and place a <em>drum riser</em> upstage centre',
+  'Add <em>2 wedges</em> downstage',
+  'Drop the <em>vox mic</em> centre — that’s a legal plot'],
+  hint:'Three items is enough for the venue to know the shape of your show. Detail is optional forever.'}},
+
+{t:'Advance',
+ tour:{h:'Advance',d:'Advancing is a per-show packet: contacts, schedule, tech, hospitality. Lowpass tracks what’s been sent and what the venue has answered — the 0/2 badge in the rail is this.',
+  f:F(TOPW+`<div class="wbody">${R(2)}<div class="wm"><div class="h"></div>${rows(4,['g','','o',''])}</div></div>`,[[17,36,1],[42,62,2],[80,36,3]]),
+  caps:[['One row per show. Green = advanced, orange = waiting on the venue.'],
+        ['Inside: sections you tick off — contacts, schedule, tech, hospitality.'],
+        ['Progress counts live in the rail badge (<b>0/2 → 2/2</b>).']]},
+ tut:{h:'Advance Friday',tasks:[
+  'Open <em>Advance → Fri, The Lexington</em>',
+  'Fill the <em>promoter contact</em> (any name + email)',
+  'Confirm the <em>schedule</em> section — your doors/stage times are already there',
+  'Mark the packet <em>ready to send</em>'],
+  hint:'Notice you typed nothing twice: times came from routing, tech comes from the rider and plot you just made.'}},
+
+{t:'Budget',
+ tour:{h:'Budget',d:'Money mode. The summary dashboard reads the whole tour; the expense grid is where lines live. Committed vs remaining runs across the top of every money page.',
+  f:F(TOPW+`<div class="wbody">${R(0)}<div class="wm"><div class="h"></div><div class="cards"><div class="card"><i></i><u></u></div><div class="card"><i></i><u></u></div><div class="card"><i></i><u></u></div><div class="card"><i></i><u></u></div></div>${rows(2)}</div></div>`,[[16,9,1],[30,42,2],[45,74,3]]),
+  caps:[['<b>Money</b> mode — third rail of the day. Summary · Expenses · Income · Settlements.'],
+        ['The dashboard cards: net P&amp;L, committed, unsettled, receipts awaiting review.'],
+        ['The expense grid — compact density, categories, versioned budgets.']]},
+ tut:{h:'A tiny budget',tasks:[
+  'Switch to <em>Money → Expenses</em>',
+  'Add <em>Van hire — £250</em> (Transport)',
+  'Add <em>Fuel — £90</em> (Transport)',
+  'Open <em>Income</em> and add Friday’s fee: <em>£500</em>'],
+  hint:'Watch the summary cards move as you type — the dashboard is live, not a report you run.'}},
+
+{t:'Settlement',
+ tour:{h:'Settlement',d:'Show night maths: guarantee vs actuals, deductions, who owes whom. One sheet per show; settled shows roll up into the tour P&amp;L.',
+  f:F(TOPW+`<div class="wbody">${R(4)}<div class="wm"><div class="h"></div>${rows(4,['g','','','o'])}</div></div>`,[[17,36,1],[45,49,2],[80,88,3]]),
+  caps:[['One settlement sheet per show — guarantee, splits, deductions.'],
+        ['Enter actuals next to contracted numbers; variance shows in orange.'],
+        ['<b>Mark settled</b> locks the sheet and feeds the tour P&amp;L.']]},
+ tut:{h:'Settle Friday',tasks:[
+  'Open <em>Settlements → Fri, The Lexington</em>',
+  'Guarantee: <em>£500</em> — matches the income line you made',
+  'Hit <em>Mark settled</em>'],
+  hint:'The unsettled badge drops from 2 to 1, and net P&amp;L on the summary is now real money.'}},
+
+{t:'Share with venues',
+ tour:{h:'Share with venues — the show link',d:'Every show gets a link. The venue opens it in a browser — no login — and sees exactly what they need: schedule, contacts, rider, channel list, stage plot. They can confirm details back.',
+  f:F(TOPW+`<div class="wbody">${R(2)}<div class="wm">${rows(2,['g'])}</div></div><div class="modal"><div class="h"></div><div class="link">lowpass.app/s/lex-fri-14aug</div></div>`,[[36,40,1],[52,63,2],[68,40,3]]),
+  caps:[['<b>Share</b> on any show opens the link modal.'],
+        ['One URL, no venue login. It always shows the latest version of everything.'],
+        ['Scope control — choose what the venue sees (rider yes, budget never).']]},
+ tut:{h:'Send the show link',tasks:[
+  'On <em>Fri, The Lexington</em>, hit <em>Share</em>',
+  'Generate the show link',
+  'Copy it and open it in a new tab — that’s the venue’s view of your night'],
+  hint:'That page is reading the same rows you just typed. Change a stage time and reload it — it’s live.'}},
+
+{t:'Finish',
+ tour:{h:'You know the shape',d:'That’s the whole loop: artist → tour → routing → paperwork → advance → money → settle → share. Ready to do it for real? Flip the toggle to <b>Tutorial: Weekend Away</b> and build one.',
+  f:F(TOPW+`<div class="wbody">${R(0)}<div class="wm"><div class="h"></div><div class="cards"><div class="card"><i></i><u></u></div><div class="card"><i></i><u></u></div><div class="card"><i></i><u></u></div></div>${rows(2,['g','g'])}</div></div>`,[[46,9,1],[80,10,2]]),
+  caps:[['The mode slider is the map: <b>Tour</b> runs the days, <b>Money</b> runs the numbers, <b>Production</b> runs the show.'],
+        ['This walkthrough lives under your avatar, forever. Bring new crew here on day one.']]},
+ tut:{h:'Weekend Away: done',tasks:[
+  'Look over the tour — 3 days, a rider, a plot, an advance, a settled show, a live link',
+  'Keep it as a sandbox, or delete it: <em>Tours → ⋯ → Delete practice tour</em>'],
+  hint:'<b>That’s every page in the app</b>, each with its smallest real input. Your first real tour is the same moves with more rows.'}}
+];
+
+let mode='tour',idx=0;
+/* pre-seeded tutorial progress so mid-flow state is visible: sections 1–3 complete */
+const done=SECTIONS.map((s,i)=>s.tut.tasks.map(()=>i<3));
+
+function setMode(m){mode=m;draw()}
+function goto(i){idx=i;draw()}
+function toggleTask(s,t){done[s][t]=!done[s][t];draw()}
+function secDone(i){return done[i].every(Boolean)}
+
+function draw(){
+  document.getElementById('mTour').classList.toggle('on',mode==='tour');
+  document.getElementById('mTut').classList.toggle('on',mode==='tut');
+  document.getElementById('ttabs').innerHTML=SECTIONS.map((s,i)=>
+    `<button class="ttab${i===idx?' on':''}${mode==='tut'&&secDone(i)?' done':''}" onclick="goto(${i})">
+      <span class="no">${String(i+1).padStart(2,'0')}</span>${s.t}<span class="ck">✓</span></button>`).join('');
+  const c=document.getElementById('tcontent');
+  if(mode==='tour'){
+    const s=SECTIONS[idx].tour;
+    c.innerHTML=`<div class="kick">TOUR OF THE APP · SECTION ${String(idx+1).padStart(2,'0')} / ${SECTIONS.length}</div>
+      <h2>${s.h}</h2><div class="desc">${s.d}</div>${s.f}
+      <div class="caps">${s.caps.map((cp,i)=>`<div class="cap"><b>${i+1}</b><span>${cp[0]}</span></div>`).join('')}</div>
+      <div class="tfoot">
+        <button class="btn" onclick="goto(${Math.max(0,idx-1)})" ${idx===0?'disabled':''}>← Back</button>
+        <button class="btn pri" onclick="goto(${Math.min(SECTIONS.length-1,idx+1)})" ${idx===SECTIONS.length-1?'disabled':''}>Next →</button>
+        <span class="mid">read-only walkthrough — nothing is changed</span></div>`;
+  }else{
+    const s=SECTIONS[idx].tut;
+    const pct=Math.round((idx+1)/SECTIONS.length*100);
+    c.innerHTML=`<div class="prog"><span class="pl">STEP <b>${idx+1}</b> OF ${SECTIONS.length}</span>
+        <div class="pbar"><div class="pfill" style="width:${pct}%"></div></div>
+        <span class="pl">${pct}%</span></div>
+      <div class="kick">TUTORIAL · WEEKEND AWAY</div><h2>${s.h}</h2>
+      <div class="tasks">${s.tasks.map((t,i)=>`<div class="task${done[idx][i]?' done':''}" onclick="toggleTask(${idx},${i})">
+        <span class="cb">${done[idx][i]?'✓':''}</span><span class="tx">${t}</span></div>`).join('')}</div>
+      ${s.hint?`<div class="hint">${s.hint}</div>`:''}
+      <div class="tfoot">
+        <button class="btn" onclick="goto(${Math.max(0,idx-1)})" ${idx===0?'disabled':''}>← Back</button>
+        <button class="btn pri" onclick="goto(${Math.min(SECTIONS.length-1,idx+1)})" ${idx===SECTIONS.length-1?'disabled':''}>${idx===SECTIONS.length-1?'Finish':'Next →'}</button>
+        <span class="mid">tasks tick automatically in the real app — click to simulate</span></div>`;
+  }
+}
+document.addEventListener('keydown',e=>{
+  if(e.key==='ArrowDown'){goto(Math.min(SECTIONS.length-1,idx+1))}
+  if(e.key==='ArrowUp'){goto(Math.max(0,idx-1))}
+});
+draw();
+</script></body></html>

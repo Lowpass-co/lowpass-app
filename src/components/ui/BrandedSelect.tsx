@@ -46,6 +46,7 @@ export function BrandedSelect({
   autoOpen = false,
   onOpenChange,
   filterable = false,
+  onEnterCommit,
 }: {
   value: string;
   onChange: (v: string) => void;
@@ -76,6 +77,14 @@ export function BrandedSelect({
    *  Default false — preserves the existing behaviour for the
    *  30 other mounts across the app. */
   filterable?: boolean;
+  /** Fired after an option is committed via the ENTER KEY while the
+   *  menu is open (keyboard flow only — mouse picks don't fire it).
+   *  Grid cells use this to advance focus to the next cell after an
+   *  Enter commit (channel-list §8b4 keyboard contract). The commit
+   *  itself still goes through the option's onClick → onChange path.
+   *
+   *  Default undefined — no behaviour change for existing mounts. */
+  onEnterCommit?: () => void;
 }) {
   const [open, setOpenState] = useState(autoOpen);
   const setOpen = useCallback(
@@ -191,6 +200,21 @@ export function BrandedSelect({
       if (!buttons.length) return;
       e.preventDefault();
       buttons[buttons.length - 1]?.focus();
+    } else if (e.key === 'Enter') {
+      /* Enter on a focused option commits it through the same
+         onClick path a mouse pick uses, then notifies
+         onEnterCommit (grid cells advance focus on it).
+         preventDefault stops the native button activation from
+         double-firing the click AND marks the event handled so
+         ancestor key handlers (e.g. the channel grid's NavCell)
+         don't react to the same Enter. Commit behaviour for
+         mounts without onEnterCommit is unchanged. */
+      const active = document.activeElement;
+      if (active instanceof HTMLButtonElement && menuRef.current.contains(active)) {
+        e.preventDefault();
+        active.click();
+        onEnterCommit?.();
+      }
     } else if (filterable) {
       /* Sprint 12 §8b4 — filter capture. Single-character
          printable keys append to the filter; Backspace chops

@@ -453,10 +453,12 @@ function TourRow({
       {/* fingerprint — its own pointer events sit above the overlay */}
       <div className="pointer-events-auto relative z-[2] min-w-0 flex-1">
         {tour.fingerprint.length > 0 ? (
+          // No weekMarkers at row scale — the date labels don't fit the
+          // compact strip and collide (Adam's 2026-08-06 screenshot). Week
+          // labels are hero-scale furniture; the row default (off) is right.
           <TourFingerprint
             days={tour.fingerprint}
             size="row"
-            weekMarkers
             highlightDate={highlightDate}
             ariaLabel={`${tour.name} day strip`}
           />

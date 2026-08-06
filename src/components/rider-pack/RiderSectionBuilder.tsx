@@ -229,6 +229,11 @@ export function RiderSectionBuilder({ packId }: { packId: string }) {
   const [addMenuOpen, setAddMenuOpen] = useState(false);
   const [groupMenuOpen, setGroupMenuOpen] = useState(false);
   const [templates, setTemplates] = useState<TemplateLite[] | null>(null);
+  /* 2026-08-06 (Adam) — "I don't want to insert all 15 fields if I only want
+     one or two": picking a template opens a FIELD CHECKLIST (all pre-checked)
+     instead of dumping the whole template. */
+  const [pickingTemplate, setPickingTemplate] = useState<TemplateLite | null>(null);
+  const [checkedFields, setCheckedFields] = useState<Set<number>>(new Set());
 
   // Refs mirror the latest state so the window CustomEvent listeners can
   // be stable ([] deps) yet always read current values (no stale closures).
@@ -733,6 +738,7 @@ export function RiderSectionBuilder({ packId }: { packId: string }) {
               type="button"
               onClick={() => {
                 setAddMenuOpen((v) => !v);
+                setPickingTemplate(null);
                 void loadTemplates();
               }}
               className="btn-transition flex w-full items-center gap-1.5"
@@ -747,22 +753,91 @@ export function RiderSectionBuilder({ packId }: { packId: string }) {
               >
                 {templates === null ? (
                   <p style={{ padding: '8px 10px', fontSize: 'var(--lp-text-xs)', color: 'var(--lp-text-tertiary)' }}>Loading templates…</p>
+                ) : pickingTemplate ? (
+                  /* Step 2 — the field checklist. All pre-checked; untick what
+                     you don't want; "Add" inserts only the checked ones. */
+                  <>
+                    <div className="flex items-center justify-between" style={{ padding: '4px 6px 6px' }}>
+                      <button
+                        type="button"
+                        onClick={() => setPickingTemplate(null)}
+                        className="btn-transition"
+                        style={{ border: 'none', background: 'transparent', color: 'var(--lp-text-tertiary)', cursor: 'pointer', fontSize: 'var(--lp-text-xs)' }}
+                      >
+                        ← Templates
+                      </button>
+                      <span style={{ fontSize: 'var(--lp-text-xs)', fontWeight: 600, color: 'var(--lp-text)' }}>{pickingTemplate.name}</span>
+                    </div>
+                    {(pickingTemplate.fields ?? []).map((f, i) => (
+                      <label
+                        key={f.id ?? i}
+                        className="btn-transition flex w-full cursor-pointer items-center gap-2"
+                        style={{ padding: '5px 10px', borderRadius: 6, fontSize: 'var(--lp-text-xs)', color: 'var(--lp-text)' }}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={checkedFields.has(i)}
+                          onChange={() =>
+                            setCheckedFields((prev) => {
+                              const next = new Set(prev);
+                              if (next.has(i)) next.delete(i);
+                              else next.add(i);
+                              return next;
+                            })
+                          }
+                        />
+                        <span className="truncate">{f.label ?? f.id}</span>
+                      </label>
+                    ))}
+                    <div className="flex items-center gap-2" style={{ padding: '8px 6px 4px', borderTop: '1px solid var(--lp-border-subtle)' }}>
+                      <button
+                        type="button"
+                        disabled={checkedFields.size === 0}
+                        onClick={() => {
+                          const t = pickingTemplate;
+                          const fields = (t.fields ?? []).filter((_, i) => checkedFields.has(i)).map(templateFieldToRiderField);
+                          setAddMenuOpen(false);
+                          setPickingTemplate(null);
+                          void appendSection(t.name, fields);
+                        }}
+                        className="btn-transition flex-1 rounded-md px-3 py-1.5"
+                        style={{ border: 'none', background: 'var(--lp-orange)', color: '#fff', fontSize: 'var(--lp-text-xs)', fontWeight: 600, cursor: 'pointer', opacity: checkedFields.size === 0 ? 0.5 : 1 }}
+                      >
+                        Add {checkedFields.size} {checkedFields.size === 1 ? 'field' : 'fields'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setCheckedFields((prev) =>
+                            prev.size === (pickingTemplate.fields ?? []).length
+                              ? new Set()
+                              : new Set((pickingTemplate.fields ?? []).map((_, i) => i)),
+                          )
+                        }
+                        className="btn-transition rounded-md px-2 py-1.5"
+                        style={{ border: '1px solid var(--lp-border)', background: 'transparent', color: 'var(--lp-text-secondary)', fontSize: 'var(--lp-text-2xs)', cursor: 'pointer' }}
+                      >
+                        {checkedFields.size === (pickingTemplate.fields ?? []).length ? 'None' : 'All'}
+                      </button>
+                    </div>
+                  </>
                 ) : (
+                  /* Step 1 — pick a template (opens its field checklist). */
                   <>
                     {groupTemplates.map((t) => (
                       <button
                         key={t.id}
                         type="button"
                         onClick={() => {
-                          setAddMenuOpen(false);
-                          void appendSection(t.name, (t.fields ?? []).map(templateFieldToRiderField));
+                          setPickingTemplate(t);
+                          setCheckedFields(new Set((t.fields ?? []).map((_, i) => i)));
                         }}
                         className="btn-transition block w-full text-left"
                         style={{ padding: '7px 10px', borderRadius: 6, border: 'none', background: 'transparent', color: 'var(--lp-text)', cursor: 'pointer', fontSize: 'var(--lp-text-xs)' }}
                       >
                         {t.name}
                         <span style={{ display: 'block', fontSize: '10px', color: 'var(--lp-text-tertiary)' }}>
-                          {(t.fields ?? []).length} fields
+                          {(t.fields ?? []).length} fields — pick which ›
                         </span>
                       </button>
                     ))}

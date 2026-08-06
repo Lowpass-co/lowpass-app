@@ -23,6 +23,12 @@ type PositionPickerProps = {
   formatLabel?: (entityLabel: string, pos: number) => string;
   manageLabel: string;
   getOccupant?: (entityId: string, pos: number) => Occupant | null;
+  /** Fired after an assignment is committed via the ENTER key
+   *  (or keyboard activation of a slot / Clear row) — keyboard
+   *  flow only, mouse picks don't fire it. The channel grid uses
+   *  this to advance focus to the next cell (§8b4 keyboard-
+   *  contract parity with the mic picker). */
+  onEnterCommit?: () => void;
 };
 
 export default function PositionPicker({
@@ -36,6 +42,7 @@ export default function PositionPicker({
   formatLabel = (label, pos) => `${label}-${pos}`,
   manageLabel,
   getOccupant,
+  onEnterCommit,
 }: PositionPickerProps) {
   const [open, setOpen] = useState(false);
   /* Type-to-search parity with the mic combobox: a filter input at the top of
@@ -44,6 +51,8 @@ export default function PositionPicker({
   const [filter, setFilter] = useState('');
   const rootRef = useRef<HTMLDivElement | null>(null);
   const filterRef = useRef<HTMLInputElement | null>(null);
+  const triggerRef = useRef<HTMLButtonElement | null>(null);
+  const menuRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     if (!open) {
@@ -80,12 +89,85 @@ export default function PositionPicker({
   const usedCountFor = (eid: string) =>
     (usedPositions[eid]?.size ?? 0) + (eid === entityId && position != null ? 1 : 0);
 
+  /* §8b4 keyboard-contract parity with the mic picker. The popover is
+     NOT portaled, so its keydowns bubble on into the channel grid's
+     NavCell wrapper — every branch that acts must preventDefault /
+     stopPropagation so grid nav stays quiet while the menu is open.
+       - Escape        → close + refocus the trigger.
+       - ArrowUp/Down  → move highlight (focus) through the enabled
+                         rows (slots / Clear / manage), wrapping.
+       - ←/→ in filter → caret movement only (blocked from grid nav).
+       - typing on a focused row → hop back into the filter input and
+         keep filtering (BrandedSelect's capture behaviour). */
+  const onMenuKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    const menu = menuRef.current;
+    if (!menu) return;
+    const inFilter = e.target === filterRef.current;
+    if (e.key === 'Escape') {
+      e.stopPropagation();
+      setOpen(false);
+      triggerRef.current?.focus();
+      return;
+    }
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      e.preventDefault();
+      const buttons = Array.from(
+        menu.querySelectorAll('button:not(:disabled)'),
+      ) as HTMLButtonElement[];
+      if (!buttons.length) return;
+      const idx = buttons.findIndex((b) => b === document.activeElement);
+      if (idx < 0) {
+        (e.key === 'ArrowDown' ? buttons[0] : buttons[buttons.length - 1])?.focus();
+      } else {
+        buttons[(idx + (e.key === 'ArrowDown' ? 1 : -1) + buttons.length) % buttons.length]?.focus();
+      }
+      return;
+    }
+    if (inFilter && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) {
+      e.stopPropagation();
+      return;
+    }
+    if (!inFilter && !e.ctrlKey && !e.metaKey && !e.altKey) {
+      if (e.key === 'Backspace') {
+        e.preventDefault();
+        filterRef.current?.focus();
+        setFilter((f) => f.slice(0, -1));
+      } else if (e.key.length === 1 && /\S/.test(e.key)) {
+        e.preventDefault();
+        filterRef.current?.focus();
+        setFilter((f) => f + e.key);
+      }
+    }
+  };
+
   return (
     <div ref={rootRef} className="relative min-w-0">
       <button
+        ref={triggerRef}
         type="button"
         className="flex w-full min-w-0 items-center gap-1 rounded border border-lp-border bg-lp-bg px-1.5 py-1 text-left text-xs outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--color-lp-orange)]"
         onClick={() => setOpen((o) => !o)}
+        onKeyDown={(e) => {
+          /* Parity with BrandedSelect's closed-trigger behaviour:
+             ArrowDown opens; a printable key opens AND seeds the
+             filter, so the operator types straight into the cell
+             (the filter input auto-focuses on open). */
+          if (open) return;
+          if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            setOpen(true);
+          } else if (
+            e.key.length === 1 &&
+            /\S/.test(e.key) &&
+            !e.ctrlKey &&
+            !e.metaKey &&
+            !e.altKey
+          ) {
+            e.preventDefault();
+            setFilter(e.key);
+            setOpen(true);
+          }
+        }}
         aria-label={ariaLabel}
       >
         {triggerLabel == null ? (
@@ -102,6 +184,8 @@ export default function PositionPicker({
       </button>
       {open && (
         <div
+          ref={menuRef}
+          onKeyDown={onMenuKeyDown}
           className="absolute left-0 z-40 mt-0.5 max-h-[320px] min-w-[14rem] overflow-y-auto rounded-md border border-lp-border bg-lp-surface py-1 shadow-lg"
           role="listbox"
         >
@@ -112,14 +196,12 @@ export default function PositionPicker({
               value={filter}
               onChange={(e) => setFilter(e.target.value)}
               onKeyDown={(e) => {
-                if (e.key === 'Escape') {
-                  e.stopPropagation();
-                  setOpen(false);
-                  return;
-                }
+                /* Escape is handled by the popover-level onMenuKeyDown
+                   (close + refocus trigger). */
                 if (e.key === 'Enter') {
                   e.preventDefault();
-                  /* Pick the first free slot in the filtered view. */
+                  /* Pick the first free slot in the filtered view,
+                     then advance (§8b4 Enter-commit-advance). */
                   for (const ent of entities) {
                     const cap = Math.max(1, Math.min(64, ent.capacity));
                     const labelHit = !!needle && ent.label.toLowerCase().includes(needle);
@@ -131,6 +213,7 @@ export default function PositionPicker({
                       if (hit && !blocked) {
                         onChange(ent.id, pos);
                         setOpen(false);
+                        onEnterCommit?.();
                         return;
                       }
                     }
@@ -181,10 +264,14 @@ export default function PositionPicker({
                               ? 'bg-lp-orange/10 text-lp-text'
                               : 'text-lp-text hover:bg-lp-surface-hover'
                         }`}
-                        onClick={() => {
+                        onClick={(e) => {
                           if (blockedByOther) return;
                           onChange(ent.id, pos);
                           setOpen(false);
+                          /* detail === 0 → keyboard-activated click
+                             (Enter/Space on the focused row): advance
+                             like the mic picker. Mouse picks don't. */
+                          if (e.detail === 0) onEnterCommit?.();
                         }}
                       >
                         <span className="w-3 shrink-0 text-center">{isThisRow ? '✓' : '▢'}</span>
@@ -207,9 +294,12 @@ export default function PositionPicker({
             <button
               type="button"
               className="w-full rounded px-1.5 py-1.5 text-left text-[11px] text-lp-text-secondary hover:bg-lp-surface-hover"
-              onClick={() => {
+              onClick={(e) => {
                 onChange(null, null);
                 setOpen(false);
+                /* Keyboard-activated clear also advances (a clear is
+                   a commit); mouse clears don't move focus. */
+                if (e.detail === 0) onEnterCommit?.();
               }}
             >
               — Clear assignment

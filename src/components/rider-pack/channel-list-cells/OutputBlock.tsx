@@ -214,10 +214,13 @@ export function OutputBlock({ row, outputRowIdx, onUpdateLocal, onRefresh }: Out
         </div>
       </NavCell>
 
-      {/* Delete action. */}
+      {/* Delete action — mouse furniture, skipped from the tab
+          order (tabIndex={-1}) so Tab walks cells only, matching
+          the input grid's Copy/Del treatment. */}
       <div className="flex justify-end pr-1 self-center">
         <button
           type="button"
+          tabIndex={-1}
           className="text-[10px] font-semibold whitespace-nowrap"
           style={{ color: 'var(--color-lp-error)' }}
           onClick={async () => {

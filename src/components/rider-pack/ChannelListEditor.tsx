@@ -33,7 +33,7 @@ import { InventoryAggregates } from './channel-list-cells/InventoryAggregates';
 import { AddManyChannelsModal } from './channel-list-cells/AddManyChannelsModal';
 import { ChannelListSectionBand } from './channel-list-cells/ChannelListSectionBand';
 import { PatchMatrix, type SocketPatch } from './PatchMatrix';
-import { CellNavProvider, NavCell } from '@/lib/hooks/useCellNav';
+import { CellNavProvider, NavCell, useCellNav } from '@/lib/hooks/useCellNav';
 import {
   COLUMN_BY_KEY,
   OPTIONAL_COLUMNS,
@@ -91,6 +91,10 @@ type Props = {
   onMoveUp: () => void;
   onMoveDown: () => void;
   onStructureChange: () => void | Promise<void>;
+  /* Gear-chip seam — when provided, the per-row "Gear linked" chip
+     becomes a button reporting the linked gear id (e.g. to open a
+     gear slide-over). Absent → the chip renders passively as before. */
+  onGearChipClick?: (gearId: string) => void;
 };
 
 export default function ChannelListEditor({
@@ -104,6 +108,7 @@ export default function ChannelListEditor({
   onMoveUp,
   onMoveDown,
   onStructureChange,
+  onGearChipClick,
 }: Props) {
   const { showToast } = useToast();
   const [titleDraft, setTitleDraft] = useState(section.title);
@@ -664,6 +669,7 @@ export default function ChannelListEditor({
                       }
                       autoFocusName={row.id === newlyAddedRowId}
                       onAutoFocused={() => setNewlyAddedRowId(null)}
+                      onGearChipClick={onGearChipClick}
                     />
                     </Fragment>
                   );
@@ -865,6 +871,7 @@ function ChannelBlock({
   onMicCreated,
   autoFocusName,
   onAutoFocused,
+  onGearChipClick,
 }: {
   row: ChannelListRow;
   rows: ChannelListRow[];
@@ -896,9 +903,23 @@ function ChannelBlock({
      parent's onAutoFocused fires to clear the trigger. */
   autoFocusName?: boolean;
   onAutoFocused?: () => void;
+  /* Gear-chip seam (see Props on ChannelListEditor). */
+  onGearChipClick?: (gearId: string) => void;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: row.id });
   const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.85 : 1 };
+  /* §8b4 keyboard-contract parity — Enter-commit-advance for the
+     dropdown cells. Reuses the CellNav plumbing (the same focusCell
+     registry the mic cell's NavCell wrapper drives — no parallel
+     focus mechanism): after a keyboard Enter commit inside a select,
+     focus hops to the NEXT cell in the row, wrapping to the next
+     row's first cell at the row end exactly like Tab. */
+  const { focusCell } = useCellNav();
+  const advanceFrom = (key: ChannelListColumnKey) => {
+    const col = navCol[key];
+    if (col == null) return;
+    focusCell({ row: inputRowIdx, col: col + 1 });
+  };
   /* VIS-CL-02 — the left row-stripe reflects the STAGE BOX (Adam's call:
      re-pointed from sub_snake → stage_box, the distinct entity with its own
      column + colour). Desaturated at render via filter: saturate() so the
@@ -1030,6 +1051,22 @@ function ChannelBlock({
     queue(patch);
     void saveRow.flush();
   };
+
+  /* Gear chip — rendered INLINE with the Mic/DI input (same row,
+     right of the input) instead of the old mt-1 block below it, so
+     linked rows no longer grow taller. Ownership colour logic is
+     unchanged. `gearId` is hoisted so the narrowed string survives
+     into the click closure (TS doesn't carry property narrowing
+     across function boundaries). */
+  const gearId = local.gear_id;
+  const gearOwnershipClass = (() => {
+    const ownership = gearByName.get(local.mic.trim().toLowerCase())?.ownership ?? 'owned';
+    if (ownership === 'hired_to_client') return 'text-lp-orange';
+    if (ownership === 'sub_hired') return 'text-blue-400';
+    return 'text-emerald-500';
+  })();
+  const gearChipClass =
+    'inline-flex shrink-0 items-center whitespace-nowrap rounded border border-lp-border bg-lp-bg px-1.5 py-0.5 text-[10px] text-lp-text-secondary';
   return (
     <div ref={setNodeRef} style={style} className="group w-full border-b border-lp-border-light bg-lp-surface">
       <div
@@ -1041,10 +1078,15 @@ function ChannelBlock({
           style={{ backgroundColor: stripe ?? 'transparent', filter: stripe ? 'saturate(0.55)' : undefined }}
           aria-hidden
         />
+        {/* Drag handle — row furniture, not a tab stop. tabIndex={-1}
+            AFTER the dnd-kit spreads overrides the tabIndex=0 that
+            useSortable's attributes inject; pointer dragging is
+            unaffected (listeners are pointer-based). */}
         <div
           className="flex w-5 shrink-0 cursor-grab items-center justify-center text-lp-text-tertiary opacity-0 transition-opacity group-hover:opacity-100 active:cursor-grabbing"
           {...attributes}
           {...listeners}
+          tabIndex={-1}
         >
           <GripVertical className="h-3.5 w-3.5" aria-hidden />
         </div>
@@ -1098,6 +1140,7 @@ function ChannelBlock({
                   void saveRow.flush();
                 }}
                 ariaLabel={`Stage position for channel ${row.row_index}`}
+                onEnterCommit={() => advanceFrom('position')}
               />
             </div>
           </NavCell>
@@ -1122,6 +1165,7 @@ function ChannelBlock({
                 manageLabel="Manage stage I/O"
                 getOccupant={getStageOccupant}
                 formatLabel={(l, p) => `${l}-${p}`}
+                onEnterCommit={() => advanceFrom('stage_box')}
               />
             </div>
           </NavCell>
@@ -1146,6 +1190,7 @@ function ChannelBlock({
                 manageLabel="Manage sub-snakes"
                 getOccupant={getSubOccupant}
                 formatLabel={(l, p) => `${l}-${p}`}
+                onEnterCommit={() => advanceFrom('sub_snake')}
               />
             </div>
           </NavCell>
@@ -1161,6 +1206,7 @@ function ChannelBlock({
                   void saveRow.flush();
                 }}
                 ariaLabel={`Cable length for channel ${row.row_index}`}
+                onEnterCommit={() => advanceFrom('cable_length')}
               />
             </div>
           </NavCell>
@@ -1168,31 +1214,35 @@ function ChannelBlock({
         {/* Mic / DI — combined mic_library picker (optional column). */}
         {show.has('mic') && (
           <NavCell row={inputRowIdx} col={navCol.mic!}>
-          <div className="min-w-0 self-center px-0.5">
-            <MicDiSelectCell
-              value={local.mic}
-              mics={mics}
-              onPick={pickMicFromLibrary}
-              ariaLabel={`Mic or DI for channel ${row.row_index}`}
-              workspaceId={workspaceId}
-              onMicCreated={onMicCreated}
-            />
-            {local.gear_id ? (
-              <div className="mt-1 inline-flex items-center rounded border border-lp-border bg-lp-bg px-1.5 py-0.5 text-[10px] text-lp-text-secondary">
-                <span
-                  className={
-                    (() => {
-                      const ownership =
-                        gearByName.get(local.mic.trim().toLowerCase())?.ownership ?? 'owned';
-                      if (ownership === 'hired_to_client') return 'text-lp-orange';
-                      if (ownership === 'sub_hired') return 'text-blue-400';
-                      return 'text-emerald-500';
-                    })()
-                  }
+          <div className="flex min-w-0 items-center gap-1 self-center px-0.5">
+            <div className="min-w-0 flex-1">
+              <MicDiSelectCell
+                value={local.mic}
+                mics={mics}
+                onPick={pickMicFromLibrary}
+                ariaLabel={`Mic or DI for channel ${row.row_index}`}
+                workspaceId={workspaceId}
+                onMicCreated={onMicCreated}
+              />
+            </div>
+            {gearId ? (
+              onGearChipClick ? (
+                /* Interactive seam: mouse furniture only (tabIndex -1),
+                   not part of the cell tab path. */
+                <button
+                  type="button"
+                  tabIndex={-1}
+                  title="Open this gear item"
+                  onClick={() => onGearChipClick(gearId)}
+                  className={`${gearChipClass} hover:border-lp-orange/40`}
                 >
-                  Gear linked
-                </span>
-              </div>
+                  <span className={gearOwnershipClass}>Gear linked</span>
+                </button>
+              ) : (
+                <div className={gearChipClass}>
+                  <span className={gearOwnershipClass}>Gear linked</span>
+                </div>
+              )
             ) : null}
           </div>
         </NavCell>
@@ -1225,6 +1275,7 @@ function ChannelBlock({
                   void saveRow.flush();
                 }}
                 ariaLabel={`Stand type for channel ${row.row_index}`}
+                onEnterCommit={() => advanceFrom('stand')}
               />
             </div>
           </NavCell>
@@ -1303,6 +1354,7 @@ function ChannelBlock({
               minWidth={0}
               size="sm"
               filterable
+              onEnterCommit={() => advanceFrom('provider')}
               className="w-full min-w-0"
               triggerClassName="min-h-8 w-full"
             />
@@ -1334,9 +1386,12 @@ function ChannelBlock({
           </div>
         </NavCell>
         )}
+        {/* Row actions — mouse furniture, skipped from the tab order
+            (tabIndex={-1}) so Tab walks cells only. */}
         <div className="flex flex-col items-stretch justify-center gap-0.5 self-center pl-0.5 pr-1 text-[10px] sm:flex-row sm:items-center sm:gap-1">
           <button
             type="button"
+            tabIndex={-1}
             className="whitespace-nowrap text-lp-text-secondary hover:text-lp-text"
             onClick={async () => {
               await ch.duplicateRow(createClient(), row.id, sectionId, packId);
@@ -1348,6 +1403,7 @@ function ChannelBlock({
           <span className="hidden text-lp-text-tertiary/40 sm:inline">|</span>
           <button
             type="button"
+            tabIndex={-1}
             className="whitespace-nowrap text-lp-error hover:opacity-90"
             onClick={async () => {
               if (!confirm('Delete this channel row?')) return;

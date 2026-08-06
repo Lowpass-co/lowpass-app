@@ -33,12 +33,17 @@ interface PositionSelectCellProps {
   value: string;
   onChange: (v: string) => void;
   ariaLabel: string;
+  /** Forwarded to BrandedSelect — fired after a keyboard Enter
+   *  commit so the channel grid can advance focus to the next
+   *  cell (§8b4 keyboard-contract parity with the mic picker). */
+  onEnterCommit?: () => void;
 }
 
 export function PositionSelectCell({
   value,
   onChange,
   ariaLabel,
+  onEnterCommit,
 }: PositionSelectCellProps) {
   return (
     <BrandedSelect
@@ -46,6 +51,7 @@ export function PositionSelectCell({
       onChange={onChange}
       options={POSITIONS}
       ariaLabel={ariaLabel}
+      onEnterCommit={onEnterCommit}
       minWidth={0}
       size="sm"
       filterable
