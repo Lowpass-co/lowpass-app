@@ -25,6 +25,7 @@ import { PackEditor } from '@/components/rider-pack/PackEditor';
 import { ShellV3Mount } from '@/components/shell-v3/ShellV3Mount';
 import { hasOwnRail } from '@/lib/nav/ia';
 import { RiderPackHeader } from '@/components/rider-pack/RiderPackHeader';
+import { RiderPackDeleteButton } from '@/components/rider-pack/RiderPackDeleteButton';
 import { RiderPackSidebar } from '@/components/rider-pack/RiderPackSidebar';
 import { RiderBuilderShellClient } from '@/components/rider-pack/RiderBuilderShellClient';
 import { RiderShowReadView } from '@/components/rider-pack/RiderShowReadView';
@@ -163,6 +164,15 @@ export async function RiderPackEditorView({
       activeTab={activeTab}
       builderHref={builderHref}
       publicPreviewHref={null}
+      /* 2026-08-06 — "you can't delete riders": the editor grows the delete
+         the lists always had. Back-target: the list this pack belongs to. */
+      deleteSlot={
+        <RiderPackDeleteButton
+          packId={id}
+          packTitle={pack.title || 'Untitled rider'}
+          backHref={pack.tour_id ? `/operations/${pack.tour_id}/riders` : `/artists/${pack.artist_id ?? ''}`}
+        />
+      }
     />
   );
 

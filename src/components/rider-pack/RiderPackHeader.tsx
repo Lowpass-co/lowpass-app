@@ -61,6 +61,9 @@ interface RiderPackHeaderProps {
   builderHref: string;
   /** Public read-only preview URL — shown only when a share token exists. */
   publicPreviewHref?: string | null;
+  /** 2026-08-06 — the editor's delete action (a client button; this header
+   *  stays presentational). Rendered first in the action row. */
+  deleteSlot?: React.ReactNode;
 }
 
 const SCOPE_LABEL: Record<RiderScope, string> = {
@@ -83,6 +86,7 @@ export function RiderPackHeader({
   activeTab,
   builderHref,
   publicPreviewHref,
+  deleteSlot,
 }: RiderPackHeaderProps) {
   const pct =
     sectionsTotal > 0
@@ -202,6 +206,8 @@ export function RiderPackHeader({
 
         {/* ── Actions — outlined secondary + orange primary (one primary). */}
         <div className="flex shrink-0 items-center gap-2">
+          {/* 2026-08-06 — delete lives in the editor now, not just the lists. */}
+          {deleteSlot ?? null}
           {activeTab === 'show' ? (
             <Link
               href={builderHref}

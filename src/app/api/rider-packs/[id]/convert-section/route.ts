@@ -36,7 +36,7 @@ export async function POST(
   const { data: profile } = await supabase.from('profiles').select('workspace_id').eq('id', user.id).single();
   if (!profile?.workspace_id) return NextResponse.json({ error: 'No workspace' }, { status: 403 });
 
-  let body: { section_id?: string };
+  let body: { section_id?: string; tour_id?: string };
   try { body = await request.json(); } catch { return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 }); }
   if (!body.section_id) return NextResponse.json({ error: 'section_id required' }, { status: 400 });
 
@@ -59,7 +59,14 @@ export async function POST(
     return NextResponse.json({ error: 'Only channel_list sections convert to documents' }, { status: 400 });
   }
 
-  const label = (section.title as string | null)?.trim() || 'Channel list';
+  /* 2026-08-06 (Adam's walk) — "the channel list still isn't editable without
+     overriding": the tour surface converts an INHERITED list by calling this
+     route on the section's SOURCE pack (where the rows actually live) with
+     tour_id set — the copy attaches to the TOUR instead of a rider, and the
+     tour tab resolves it as its own editable document from then on. */
+  const label = body.tour_id
+    ? `${(section.title as string | null)?.trim() || 'Channel list'} — tour copy`
+    : (section.title as string | null)?.trim() || 'Channel list';
   const copy = await saveVersion(supabase, profile.workspace_id, user.id, id, label, {
     onlySectionId: body.section_id,
     kindOverride: 'channel_list',
@@ -67,9 +74,9 @@ export async function POST(
   });
   if (!copy.ok) return NextResponse.json({ error: copy.error }, { status: copy.status });
 
-  const attach = await attachDocument(supabase, profile.workspace_id, user.id, copy.packId, {
-    riderPackId: id,
-  });
+  const attach = await attachDocument(supabase, profile.workspace_id, user.id, copy.packId,
+    body.tour_id ? { tourId: body.tour_id } : { riderPackId: id },
+  );
   if (!attach.ok) return NextResponse.json({ error: attach.error }, { status: attach.status });
 
   return NextResponse.json({ id: copy.packId, attachment_id: attach.id });

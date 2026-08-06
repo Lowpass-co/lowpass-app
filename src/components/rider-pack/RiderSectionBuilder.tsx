@@ -583,16 +583,19 @@ export function RiderSectionBuilder({ packId }: { packId: string }) {
         setGroupMenuOpen(false);
       }}
       className="btn-transition"
+      /* 2026-08-06 punch-up — "much more obvious": bigger tabs, a hard
+         orange underline on the active group, no more whisper-pills. */
       style={{
-        padding: '6px 12px',
-        borderRadius: 6,
+        padding: '10px 16px',
+        borderRadius: '8px 8px 0 0',
         border: 'none',
+        borderBottom: activeGroup === id ? '2px solid var(--lp-orange)' : '2px solid transparent',
         cursor: 'pointer',
-        fontSize: 'var(--lp-text-xs)',
-        fontWeight: 600,
+        fontSize: 'var(--lp-text-sm)',
+        fontWeight: 700,
         textTransform: 'uppercase',
-        letterSpacing: '0.04em',
-        background: activeGroup === id ? 'color-mix(in srgb, var(--lp-orange) 12%, transparent)' : 'transparent',
+        letterSpacing: '0.05em',
+        background: activeGroup === id ? 'color-mix(in srgb, var(--lp-orange) 10%, transparent)' : 'transparent',
         color: activeGroup === id ? 'var(--lp-orange)' : 'var(--lp-text-secondary)',
       }}
     >
@@ -652,8 +655,13 @@ export function RiderSectionBuilder({ packId }: { packId: string }) {
 
       <div className="flex min-h-0 flex-1 gap-3">
         {/* Rail — the active group's sections. Drag to reorder (indices map to
-            the GLOBAL list, so cross-group ordering is preserved). */}
-        <aside className="flex shrink-0 flex-col" style={{ width: 224 }}>
+            the GLOBAL list, so cross-group ordering is preserved). 2026-08-06
+            punch-up: the rail is a real PANEL now (surface + border), not
+            floating buttons lost against the hashed canvas. */}
+        <aside
+          className="flex shrink-0 flex-col rounded-xl border p-2"
+          style={{ width: 248, borderColor: 'var(--lp-border-strong)', background: 'var(--lp-surface)', alignSelf: 'flex-start' }}
+        >
           <ul className="flex flex-col gap-0.5">
             {visible.map((s) => {
               const gi = sections.findIndex((x) => x.id === s.id);
@@ -694,15 +702,16 @@ export function RiderSectionBuilder({ packId }: { packId: string }) {
                       borderRadius: 6,
                       border: 'none',
                       cursor: 'pointer',
-                      borderLeft: `2px solid ${isActive ? 'var(--lp-orange)' : 'transparent'}`,
+                      borderLeft: `3px solid ${isActive ? 'var(--lp-orange)' : 'transparent'}`,
                       background:
                         dropIndex === gi && dragIndex !== null && dragIndex !== gi
                           ? 'color-mix(in srgb, var(--lp-orange) 8%, transparent)'
                           : isActive
-                            ? 'var(--lp-surface-hover, rgba(255,255,255,0.04))'
+                            ? 'color-mix(in srgb, var(--lp-orange) 8%, transparent)'
                             : 'transparent',
                       color: isActive ? 'var(--lp-text)' : 'var(--lp-text-secondary)',
-                      fontSize: 'var(--lp-text-xs)',
+                      fontSize: 'var(--lp-text-sm)',
+                      fontWeight: isActive ? 600 : 400,
                       opacity: dragIndex === gi ? 0.5 : 1,
                     }}
                   >

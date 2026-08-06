@@ -120,7 +120,14 @@ const SECTIONS=[
 ["SL-5","Rider + Channel list tabs read grouped","Rider tab renders the show's riders with the B3 grouped read view; Channel list tab shows the attached (or fallback) list's grid. Empty states name what's missing."],
 ["SL-6","Stage plot renders inline","The attached (or newest tour) plot draws as SVG in the tab; no plot → a clean empty state."],
 ["SL-7","Downloads: bundled PDF via the show token","The download button produces the packet PDF using the /s/ token (no packet link needed). Old /a/ packet links still download fine."],
-["SL-8","Old doors still open","Existing /r/, /a/, /advance-intake/, /share/advance links all still work; /settings and /signup still bounce to login (the /s/ prefix swallowed nothing)."]]}
+["SL-8","Old doors still open","Existing /r/, /a/, /advance-intake/, /share/advance links all still work; /settings and /signup still bounce to login (the /s/ prefix swallowed nothing)."]]},
+{name:"Walk-feedback fixes — 2026-08-06 ⚠ paste 258+259+260 for the template items",where:"Rider editor · tour channel-list · artist page",items:[
+["WF-1","Builder reads as a builder","Group tabs are big with a hard orange underline; the section rail is a real panel; the active section is unmistakable. Not subtle."],
+["WF-2","Riders delete from the editor","The editor header has Delete (confirm → back to the tour riders list / artist page). Lists still delete as before."],
+["WF-3","Show view is grouped","A rider spanning ≥2 groups shows group chips + headings in Show mode, same grammar as the builder. One-group riders: plain scroll, unchanged."],
+["WF-4","Channel list edits without overriding","On /operations/[tour]/channel-list an INHERITED list shows the rows read-only + one button: 'Create this tour's editable copy'. Click it: the tour gets its own attached document, fully editable, artist master untouched. No override bounce."],
+["WF-5","Tour picker is one honest list","Artist page: 'TOURS · N' header + New tour; every tour always listed (upcoming asc, PAST group below); visible Operations · Budget · Advance links per row; the previously-opened tour is highlighted, never hides the list."],
+["WF-6","Templates are deep (paste 258/259/260 first)","Rider 'Add section' menus offer 17 enriched/new templates with 12-25 fields; the advance library carries the full 17-section / ~427-field catalog; budget template gains the missing income/cost/percentage lines. Re-pasting any of the three is a no-op."]]}
 ];
 let state={};
 const app=document.getElementById('app');

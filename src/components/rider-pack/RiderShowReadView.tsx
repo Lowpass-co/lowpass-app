@@ -30,9 +30,10 @@
 
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { AlertCircle, AlertTriangle, Loader2, CheckCircle2 } from 'lucide-react';
 import { getPackRaw, updateSection } from '@/lib/rider-packs/client';
+import { RIDER_GROUPS, sectionGroupId } from '@/lib/rider-packs/groups';
 import type { Field, RiderSection, SectionType } from '@/lib/rider-packs/types';
 import { Dispatcher, isFieldConsideredEmpty } from './FieldEditors';
 import type { PackContext } from './AssetPicker';
@@ -120,19 +121,72 @@ export function RiderShowReadView({ packId }: { packId: string }) {
     );
   }
 
+  /* 2026-08-06 (Adam's walk) — "viewing them should also be the tabbable
+     view": the Show surface adopts the builder's group grammar. Sticky group
+     chips + headings, driven by the same metadata.group the builder writes.
+     Chips only when the rider spans ≥2 groups — a one-group rider stays a
+     plain scroll. */
+  const grouped = RIDER_GROUPS
+    .map((g) => ({ ...g, items: sections.filter((s) => sectionGroupId(s.metadata) === g.id) }))
+    .filter((g) => g.items.length > 0);
+  const multiGroup = grouped.length > 1;
+
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex items-center justify-end" style={{ height: 16 }}>
+      <div className="flex items-center justify-between" style={{ minHeight: 16 }}>
+        {multiGroup ? (
+          <nav className="flex flex-wrap gap-1">
+            {grouped.map((g) => (
+              <a
+                key={g.id}
+                href={`#show-group-${g.id}`}
+                className="btn-transition rounded-full border px-3 py-1"
+                style={{
+                  borderColor: 'var(--lp-border-strong)',
+                  color: 'var(--lp-text-secondary)',
+                  fontSize: 'var(--lp-text-2xs)',
+                  fontWeight: 600,
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.04em',
+                }}
+              >
+                {g.label}
+              </a>
+            ))}
+          </nav>
+        ) : <span />}
         <SavePill state={save} />
       </div>
-      {sections.map((section) => (
-        <SectionCard
-          key={section.id}
-          section={section}
-          packContext={packCtx}
-          onChangeField={(key, next) => updateFieldValue(section.id, key, next)}
-          onBlur={() => void persistSection(section.id)}
-        />
+      {grouped.map((g) => (
+        <React.Fragment key={g.id}>
+          {multiGroup ? (
+            <h2
+              id={`show-group-${g.id}`}
+              className="scroll-mt-4"
+              style={{
+                margin: '8px 0 0',
+                paddingBottom: 4,
+                borderBottom: '2px solid var(--lp-border-strong)',
+                fontSize: 'var(--lp-text-2xs)',
+                fontWeight: 700,
+                letterSpacing: '0.12em',
+                textTransform: 'uppercase',
+                color: 'var(--lp-text-secondary)',
+              }}
+            >
+              {g.label}
+            </h2>
+          ) : null}
+          {g.items.map((section) => (
+            <SectionCard
+              key={section.id}
+              section={section}
+              packContext={packCtx}
+              onChangeField={(key, next) => updateFieldValue(section.id, key, next)}
+              onBlur={() => void persistSection(section.id)}
+            />
+          ))}
+        </React.Fragment>
       ))}
     </div>
   );

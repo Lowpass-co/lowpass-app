@@ -1,29 +1,37 @@
 'use client';
 
 /* ============================================
-   LOWPASS — TourPicker (IA tour-flow fix §3)
+   LOWPASS — TourPicker (rebuild, 2026-08)
 
-   The artist-home tour-selection surface. Two states, driven by
-   ArtistTourContext.selectedTourId (scoped to THIS artist's tours so a
-   stale cross-artist selection falls back to the picker):
+   The artist-home tour list. ONE state, always: a standard section
+   (lp-label-caps header row + bordered lp-surface container) listing
+   every tour. The old duality — orange hero callout vs. a collapsed
+   "Active tour" banner driven by invisible ArtistTourContext state —
+   is gone; whether you can see your tours no longer depends on
+   context you can't see.
 
-   - no tour selected → a hero callout + a grid of selectable tour cards
-     (status, dates, show count, last activity). Picking one selects it
-     and opens its last-used product (see openTour) — and unlocks the
-     product bar above.
-   - a tour selected → a compact "Active tour" banner with per-product
-     quick links + a "Change tour" affordance that re-opens the picker.
+   - On-the-road / upcoming tours: full rows (name, status pill,
+     date range, <TourFingerprint size="row">, one status line,
+     visible Operations · Budget · Advance quick links), sorted
+     start-date ascending.
+   - Past tours: compact "PAST · N" group, most-recent first.
+   - If ArtistTourContext.selectedTourId matches a row, that row gets
+     the app's standard active treatment (2px orange left border +
+     subtle surface tint) — it never hides the rest of the list.
 
-   Design language follows the UI/UX skill: clear empty-state CTA,
-   status-coloured accent, hover lift + active:scale press feedback,
-   brand-orange active treatment. Adaptive via --lp tokens.
+   Navigation semantics (preserved from the previous version, Q4):
+   a row click NAVIGATES IN via router.push(tourHref(id)) — the
+   tour's last-used product with Operations fallback. We do NOT call
+   setSelectedTourId here: ArtistTourContext derives selectedTourId
+   from the destination path, and calling the setter would only race
+   the push (see ArtistTourSwitcher.handleTourClick).
 
-   Never auto-selects — selection is always an explicit click.
+   Never auto-selects — opening a tour is always an explicit click.
    ============================================ */
 
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Briefcase, DollarSign, ClipboardList, ChevronRight } from 'lucide-react';
+import { ChevronRight } from 'lucide-react';
 import { useArtistTourContext } from '@/contexts/ArtistTourContext';
 import { useTourEditor } from '@/contexts/TourEditorContext';
 import { tourHref } from '@/lib/nav/lastProduct';
@@ -132,33 +140,53 @@ function nextShowDate(t: HomeTourSummary): string | null {
   );
 }
 
+/** Current/upcoming tours: equal weight, date-ordered (start asc). */
+function cmpStartAsc(a: HomeTourSummary, b: HomeTourSummary): number {
+  const av = a.startDate ?? a.endDate ?? '9999';
+  const bv = b.startDate ?? b.endDate ?? '9999';
+  return av < bv ? -1 : av > bv ? 1 : 0;
+}
+
+/** Past tours: most-recently-wrapped first. */
+function cmpEndDesc(a: HomeTourSummary, b: HomeTourSummary): number {
+  const av = a.endDate ?? a.startDate ?? '0000';
+  const bv = b.endDate ?? b.startDate ?? '0000';
+  return av > bv ? -1 : av < bv ? 1 : 0;
+}
+
+/** Per-row product quick links — visible, not hover-only. */
+const QUICK_LINKS: Array<{ label: string; href: (id: string) => string }> = [
+  { label: 'Operations', href: (id) => `/operations/${id}/routing` },
+  { label: 'Budget', href: (id) => `/budget/${id}` },
+  { label: 'Advance', href: (id) => `/advance/${id}` },
+];
+
 export function TourPicker({ tours }: { tours: HomeTourSummary[] }) {
   const router = useRouter();
   const { openCreateTour } = useTourEditor();
-  const { selectedTourId, setSelectedTourId } = useArtistTourContext();
-  const selected = tours.find((t) => t.id === selectedTourId) ?? null;
+  const { selectedTourId } = useArtistTourContext();
+  // Scoped to THIS artist's tours so a stale cross-artist selection
+  // highlights nothing rather than something wrong.
+  const activeTourId = tours.some((t) => t.id === selectedTourId)
+    ? selectedTourId
+    : null;
 
   const openTour = (id: string) => {
-    // Q4 — a row click NAVIGATES IN to the tour's last-used product (Operations
-    // fallback) rather than selecting it in place on the artist page. We do NOT
-    // setSelectedTourId here: ArtistTourContext derives selectedTourId from the
-    // destination path (/operations|/budget|/advance/[id]), so the breadcrumb +
-    // every product-route consumer still resolve — and calling the setter would
-    // only race the push (see ArtistTourSwitcher.handleTourClick).
+    // Q4 — a row click NAVIGATES IN to the tour's last-used product
+    // (Operations fallback). No setSelectedTourId: context derives the
+    // selection from the destination path (see header comment).
     router.push(tourHref(id));
   };
-
-  if (selected) {
-    return <ActiveTourBanner tour={selected} onChange={() => setSelectedTourId(null)} />;
-  }
 
   if (tours.length === 0) {
     return (
       <section
-        className="rounded-xl border p-6 text-center"
+        className="text-center"
         style={{
-          borderColor: 'var(--lp-border-strong)',
+          padding: 'var(--lp-space-6)',
           background: 'var(--lp-surface)',
+          border: '1px solid var(--lp-border-strong)',
+          borderRadius: 'var(--lp-radius-lg)',
         }}
       >
         <h2 className="lp-h3" style={{ margin: 0 }}>
@@ -187,144 +215,189 @@ export function TourPicker({ tours }: { tours: HomeTourSummary[] }) {
     );
   }
 
+  const upcoming = tours.filter((t) => !isPastTour(t)).sort(cmpStartAsc);
+  const past = tours.filter(isPastTour).sort(cmpEndDesc);
+
   return (
-    <section
-      className="relative overflow-hidden rounded-xl border p-5 sm:p-6"
-      style={{
-        borderColor: 'color-mix(in srgb, var(--color-lp-orange) 35%, var(--lp-border-strong))',
-        background:
-          'color-mix(in srgb, var(--color-lp-orange) 3.5%, var(--lp-surface))',
-      }}
-    >
-      <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <h2 className="lp-h3" style={{ margin: 0 }}>
-          Pick a tour to get started
+    <section className="space-y-2">
+      {/* Section header — standard workspace-landing grammar:
+          caps label + mono count left, compact action right. */}
+      <div className="flex items-baseline justify-between">
+        <h2
+          className="lp-label-caps"
+          style={{ margin: 0, color: 'var(--lp-text-tertiary)' }}
+        >
+          Tours
+          <span aria-hidden style={{ margin: '0 var(--lp-space-2)' }}>
+            ·
+          </span>
+          <span className="lp-mono">{tours.length}</span>
         </h2>
-        <span
+        <button
+          type="button"
+          onClick={() => openCreateTour()}
+          className="btn-transition inline-flex items-center rounded-md px-2.5 py-1"
           style={{
-            fontSize: 11,
-            fontWeight: 700,
-            letterSpacing: '0.08em',
-            textTransform: 'uppercase',
-            color: 'var(--lp-text-tertiary)',
+            gap: 4,
+            fontSize: 12,
+            fontWeight: 600,
+            color: 'var(--color-lp-orange)',
+            background: 'transparent',
+            border: '1px solid var(--lp-border-strong)',
           }}
         >
-          {tours.length} {tours.length === 1 ? 'tour' : 'tours'}
-        </span>
+          + New tour
+        </button>
       </div>
-      <p
-        className="mt-1"
-        style={{ fontSize: 14, color: 'var(--lp-text-secondary)' }}
+
+      {/* Plain bordered surface container — the tour list, always visible. */}
+      <div
+        className="overflow-hidden"
+        style={{
+          background: 'var(--lp-surface)',
+          border: '1px solid var(--lp-border-strong)',
+          borderRadius: 'var(--lp-radius-lg)',
+        }}
       >
-        Operations, Budget, and Advance all work on a specific tour. Choose
-        one to unlock Operations, Budget and Advance in the bar above.
-      </p>
+        <div className="flex flex-col">
+          {upcoming.length === 0 ? (
+            <p
+              style={{
+                margin: 0,
+                padding: 'var(--lp-space-3) var(--lp-space-4)',
+                fontSize: 13,
+                color: 'var(--lp-text-tertiary)',
+              }}
+            >
+              No current or upcoming tours — past tours are listed below.
+            </p>
+          ) : (
+            upcoming.map((t, i) => (
+              <TourRow
+                key={t.id}
+                tour={t}
+                first={i === 0}
+                active={t.id === activeTourId}
+                onPick={() => openTour(t.id)}
+              />
+            ))
+          )}
+        </div>
 
-      {(() => {
-        // VIS-AR-02 — non-past tours: equal weight, date-ordered (start asc).
-        // Past tours: collapse to one settled line each, most-recent first.
-        const cmpAsc = (a: HomeTourSummary, b: HomeTourSummary) => {
-          const av = a.startDate ?? a.endDate ?? '9999';
-          const bv = b.startDate ?? b.endDate ?? '9999';
-          return av < bv ? -1 : av > bv ? 1 : 0;
-        };
-        const cmpDesc = (a: HomeTourSummary, b: HomeTourSummary) => {
-          const av = a.endDate ?? a.startDate ?? '0000';
-          const bv = b.endDate ?? b.startDate ?? '0000';
-          return av > bv ? -1 : av < bv ? 1 : 0;
-        };
-        const upcoming = tours.filter((t) => !isPastTour(t)).sort(cmpAsc);
-        const past = tours.filter(isPastTour).sort(cmpDesc);
-        return (
-          <>
-            <div className="mt-4 flex flex-col">
-              {upcoming.length === 0 ? (
-                <p
-                  className="py-3"
-                  style={{ fontSize: 13, color: 'var(--lp-text-tertiary)' }}
-                >
-                  No current or upcoming tours — past tours are listed below.
-                </p>
-              ) : (
-                upcoming.map((t, i) => (
-                  <TourRow
-                    key={t.id}
-                    tour={t}
-                    first={i === 0}
-                    onPick={() => openTour(t.id)}
-                  />
-                ))
-              )}
+        {past.length > 0 ? (
+          <div style={{ borderTop: '1px solid var(--lp-border-subtle)' }}>
+            <div
+              className="lp-label-caps"
+              style={{
+                padding:
+                  'var(--lp-space-2) var(--lp-space-4) var(--lp-space-1)',
+                color: 'var(--lp-text-tertiary)',
+              }}
+            >
+              Past
+              <span aria-hidden style={{ margin: '0 var(--lp-space-2)' }}>
+                ·
+              </span>
+              <span className="lp-mono">{past.length}</span>
             </div>
-
-            {past.length > 0 ? (
-              <div className="mt-5">
-                <div
-                  className="lp-label-caps"
-                  style={{
-                    color: 'var(--lp-text-tertiary)',
-                    marginBottom: 'var(--lp-space-1)',
-                  }}
-                >
-                  Past
-                  <span
-                    aria-hidden
-                    style={{ margin: '0 var(--lp-space-2)', color: 'var(--lp-text-tertiary)' }}
-                  >
-                    ·
-                  </span>
-                  <span className="lp-mono">{past.length}</span>
-                </div>
-                <div className="flex flex-col">
-                  {past.map((t, i) => (
-                    <PastTourLine
-                      key={t.id}
-                      tour={t}
-                      first={i === 0}
-                      onPick={() => openTour(t.id)}
-                    />
-                  ))}
-                </div>
-              </div>
-            ) : null}
-          </>
-        );
-      })()}
+            <div className="flex flex-col">
+              {past.map((t) => (
+                <PastTourLine
+                  key={t.id}
+                  tour={t}
+                  active={t.id === activeTourId}
+                  onPick={() => openTour(t.id)}
+                />
+              ))}
+            </div>
+          </div>
+        ) : null}
+      </div>
     </section>
   );
 }
 
-/* VIS-AR-03 — tour ROW (replaces the card grid): name / dates /
-   <TourFingerprint size="row"> / one status line. No readiness chips.
+/* Visible per-row product quick links (Operations · Budget · Advance) —
+   small-uppercase-link style, dot-separated. Sits ABOVE the row's
+   absolute-fill click target so each link navigates directly without
+   triggering the row's openTour. */
+function QuickLinks({ tourId, tourName }: { tourId: string; tourName: string }) {
+  return (
+    <span
+      className="pointer-events-auto relative z-[2] inline-flex shrink-0 items-center"
+      style={{ gap: 'var(--lp-space-1)' }}
+    >
+      {QUICK_LINKS.map(({ label, href }, i) => (
+        <span key={label} className="inline-flex items-center" style={{ gap: 'var(--lp-space-1)' }}>
+          {i > 0 ? (
+            <span aria-hidden style={{ color: 'var(--lp-text-tertiary)', fontSize: 10 }}>
+              ·
+            </span>
+          ) : null}
+          <Link
+            href={href(tourId)}
+            aria-label={`${label} — ${tourName}`}
+            className="btn-transition rounded-sm px-1 py-0.5 outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-lp-orange)]"
+            style={{
+              fontSize: 10,
+              fontWeight: 600,
+              letterSpacing: '0.06em',
+              textTransform: 'uppercase',
+              color: 'var(--lp-text-secondary)',
+            }}
+          >
+            {label}
+          </Link>
+        </span>
+      ))}
+    </span>
+  );
+}
+
+/* Tour ROW: name / status pill / dates / <TourFingerprint size="row"> /
+   one status line / visible quick links.
 
    Nav ruling (preserved): the row is a <div>, not a <button> — the
    fingerprint's day ticks are <button>s and nesting buttons is invalid HTML.
-   An absolute-fill <button> is the click target (onPick → openTour →
-   setSelectedTourId + product-bar unlock); the fingerprint sits above it with
-   its own pointer events so day-clicks open their popover without selecting
-   the tour. */
+   An absolute-fill <button> is the click target (onPick → openTour); the
+   fingerprint and quick links sit above it with their own pointer events.
+
+   Active treatment (standard app grammar): 2px orange left border + subtle
+   surface tint when this row is the context-selected tour. Every row carries
+   a transparent 2px left border so activation never shifts layout. */
 function TourRow({
   tour,
   first,
+  active,
   onPick,
 }: {
   tour: HomeTourSummary;
   first: boolean;
+  active: boolean;
   onPick: () => void;
 }) {
   const meta = statusMeta(tour.status);
   const highlightDate = nextShowDate(tour);
   return (
     <div
-      className="group btn-transition relative flex items-center gap-4 py-3.5 pl-2 pr-1"
-      style={{ borderTop: first ? 'none' : '1px solid var(--lp-border-subtle)' }}
+      className="group btn-transition relative flex items-center gap-4 py-3.5 pl-3 pr-3"
+      style={{
+        borderTop: first ? 'none' : '1px solid var(--lp-border-subtle)',
+        borderLeft: active
+          ? '2px solid var(--lp-orange)'
+          : '2px solid transparent',
+        background: active
+          ? 'color-mix(in srgb, var(--lp-orange) 4%, transparent)'
+          : 'transparent',
+      }}
     >
-      {/* absolute-fill click target — selects the tour in place */}
+      {/* absolute-fill click target — opens the tour */}
       <button
         type="button"
         onClick={onPick}
         aria-label={`Open ${tour.name}`}
-        className="absolute inset-0 z-0 cursor-pointer rounded-md outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-lp-orange)] focus-visible:ring-inset"
+        aria-current={active ? 'true' : undefined}
+        className="absolute inset-0 z-0 cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-lp-orange)] focus-visible:ring-inset"
         style={{ background: 'transparent', border: 0 }}
       />
       {/* status accent tick */}
@@ -333,8 +406,9 @@ function TourRow({
         className="relative z-[1] shrink-0 self-stretch"
         style={{ width: 3, borderRadius: 2, background: meta.color }}
       />
-      {/* identity — name + status + dates + one status line. pointer-events
-          off so clicks fall through to the overlay. */}
+      {/* identity — name + status + dates + one status line + quick links.
+          pointer-events off so clicks fall through to the overlay; the
+          quick links re-enable their own. */}
       <div
         className="pointer-events-none relative z-[1] min-w-0"
         style={{ flex: '0 1 300px' }}
@@ -372,6 +446,9 @@ function TourRow({
         >
           {tourStatusLine(tour)}
         </div>
+        <div className="mt-1.5">
+          <QuickLinks tourId={tour.id} tourName={tour.name} />
+        </div>
       </div>
       {/* fingerprint — its own pointer events sit above the overlay */}
       <div className="pointer-events-auto relative z-[2] min-w-0 flex-1">
@@ -399,27 +476,36 @@ function TourRow({
   );
 }
 
-/* VIS-AR-02 — past tour collapsed to one settled line (de-emphasised,
-   still selectable to reopen). */
+/* Past tour collapsed to one settled line — de-emphasised, still openable,
+   same quick links so a wrapped tour's products stay one click away. */
 function PastTourLine({
   tour,
-  first,
+  active,
   onPick,
 }: {
   tour: HomeTourSummary;
-  first: boolean;
+  active: boolean;
   onPick: () => void;
 }) {
   return (
     <div
-      className="group btn-transition relative flex items-center justify-between gap-3 py-2 pl-2 pr-1"
-      style={{ borderTop: first ? 'none' : '1px solid var(--lp-border-subtle)' }}
+      className="group btn-transition relative flex flex-wrap items-center justify-between gap-x-3 gap-y-1 py-2 pl-3 pr-3"
+      style={{
+        borderTop: '1px solid var(--lp-border-subtle)',
+        borderLeft: active
+          ? '2px solid var(--lp-orange)'
+          : '2px solid transparent',
+        background: active
+          ? 'color-mix(in srgb, var(--lp-orange) 4%, transparent)'
+          : 'transparent',
+      }}
     >
       <button
         type="button"
         onClick={onPick}
         aria-label={`Open ${tour.name}`}
-        className="absolute inset-0 z-0 cursor-pointer rounded-md outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-lp-orange)] focus-visible:ring-inset"
+        aria-current={active ? 'true' : undefined}
+        className="absolute inset-0 z-0 cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-lp-orange)] focus-visible:ring-inset"
         style={{ background: 'transparent', border: 0 }}
       />
       <span
@@ -433,94 +519,18 @@ function PastTourLine({
         </span>
       </span>
       <span
-        className="pointer-events-none relative z-[1] shrink-0"
-        style={{ fontSize: 11, color: 'var(--lp-text-tertiary)' }}
+        className="relative z-[1] flex shrink-0 items-center"
+        style={{ gap: 'var(--lp-space-3)' }}
       >
-        <span className="lp-mono">{tour.showCount}</span>{' '}
-        {tour.showCount === 1 ? 'show' : 'shows'} · wrapped
+        <QuickLinks tourId={tour.id} tourName={tour.name} />
+        <span
+          className="pointer-events-none"
+          style={{ fontSize: 11, color: 'var(--lp-text-tertiary)' }}
+        >
+          <span className="lp-mono">{tour.showCount}</span>{' '}
+          {tour.showCount === 1 ? 'show' : 'shows'} · wrapped
+        </span>
       </span>
     </div>
-  );
-}
-
-function ActiveTourBanner({
-  tour,
-  onChange,
-}: {
-  tour: HomeTourSummary;
-  onChange: () => void;
-}) {
-  const meta = statusMeta(tour.status);
-  const quick = [
-    { label: 'Operations', href: `/operations/${tour.id}`, Icon: Briefcase },
-    { label: 'Budget', href: `/budget/${tour.id}`, Icon: DollarSign },
-    { label: 'Advance', href: `/advance/${tour.id}`, Icon: ClipboardList },
-  ];
-  return (
-    <section
-      className="flex flex-wrap items-center gap-x-4 gap-y-3 rounded-xl border px-5 py-3.5"
-      style={{
-        borderColor: 'color-mix(in srgb, var(--color-lp-orange) 35%, var(--lp-border-strong))',
-        background: 'color-mix(in srgb, var(--color-lp-orange) 5%, var(--lp-surface))',
-      }}
-    >
-      <span
-        aria-hidden
-        className="inline-block h-2 w-2 shrink-0 rounded-full"
-        style={{ background: meta.color }}
-      />
-      <div className="min-w-0">
-        <div
-          style={{
-            fontSize: 10,
-            fontWeight: 700,
-            letterSpacing: '0.08em',
-            textTransform: 'uppercase',
-            color: 'var(--lp-text-tertiary)',
-          }}
-        >
-          Active tour
-        </div>
-        <div
-          className="truncate"
-          style={{ fontSize: 15, fontWeight: 600, color: 'var(--lp-text)' }}
-        >
-          {tour.name}
-        </div>
-      </div>
-
-      <div className="ml-auto flex flex-wrap items-center gap-2">
-        {quick.map(({ label, href, Icon }) => (
-          <Link
-            key={label}
-            href={href}
-            className="btn-transition inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1.5"
-            style={{
-              borderColor: 'var(--lp-border-strong)',
-              background: 'var(--lp-bg)',
-              color: 'var(--lp-text-secondary)',
-              fontSize: 12,
-              fontWeight: 500,
-            }}
-          >
-            <Icon size={13} />
-            {label}
-          </Link>
-        ))}
-        <button
-          type="button"
-          onClick={onChange}
-          className="btn-transition rounded-md px-2.5 py-1.5"
-          style={{
-            fontSize: 12,
-            fontWeight: 600,
-            color: 'var(--color-lp-orange)',
-            background: 'transparent',
-          }}
-        >
-          Change tour
-        </button>
-      </div>
-    </section>
   );
 }

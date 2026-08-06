@@ -99,6 +99,80 @@ export function ChannelListTourEditor({
     [packId, section.id],
   );
 
+  /* 2026-08-06 (Adam's walk) — an INHERITED (artist-scope) list no longer
+     dead-ends in the override wall. One click copies the section from its
+     SOURCE pack into a standalone tour-attached document (convert-section
+     with tour_id), and this surface re-resolves to an OWNED, editable list.
+     The artist master is untouched. */
+  if (section.inherited_from) {
+    return (
+      <div className="min-w-0">
+        <div
+          className="flex flex-wrap items-center justify-between gap-3 rounded-xl border px-4 py-3"
+          style={{ borderColor: 'var(--lp-border-strong)', background: 'var(--lp-surface)' }}
+        >
+          <p style={{ margin: 0, fontSize: 'var(--lp-text-sm)', color: 'var(--lp-text-secondary)', maxWidth: 560 }}>
+            This channel list is inherited from the{' '}
+            <span style={{ fontWeight: 600, color: 'var(--lp-text)' }}>{section.inherited_from}</span>-level
+            rider, so it can’t be edited here directly. Make this tour its own copy to edit freely —
+            the {section.inherited_from} master stays untouched.
+          </p>
+          <button
+            type="button"
+            disabled={pill.state === 'saving'}
+            onClick={() => {
+              void (async () => {
+                setPill({ state: 'saving', error: null });
+                try {
+                  const res = await fetch(`/api/rider-packs/${section.source_pack_id}/convert-section`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ section_id: section.id, tour_id: tourId }),
+                  });
+                  const j = await res.json().catch(() => ({}));
+                  if (!res.ok) throw new Error(typeof j.error === 'string' ? j.error : `Copy failed (${res.status})`);
+                  setPill({ state: 'saved', error: null });
+                  router.refresh();
+                } catch (e) {
+                  setPill({ state: 'error', error: e instanceof Error ? e.message : 'Copy failed' });
+                }
+              })();
+            }}
+            className="btn-transition rounded-lg px-4 py-2"
+            style={{
+              border: 'none',
+              background: 'var(--lp-orange)',
+              color: '#fff',
+              fontSize: 'var(--lp-text-sm)',
+              fontWeight: 600,
+              cursor: pill.state === 'saving' ? 'default' : 'pointer',
+            }}
+          >
+            {pill.state === 'saving' ? 'Copying…' : 'Create this tour’s editable copy'}
+          </button>
+          {pill.state === 'error' && pill.error ? (
+            <p style={{ margin: 0, width: '100%', fontSize: 'var(--lp-text-xs)', color: 'var(--lp-error, #f85149)' }}>{pill.error}</p>
+          ) : null}
+        </div>
+        {/* The inherited rows, read-only, so the copy decision is informed. */}
+        <div className="mt-3 pointer-events-none opacity-80">
+          <ChannelListEditor
+            section={section}
+            pack={pack}
+            savePill={{ state: 'idle', error: null }}
+            onTitleCommit={() => {}}
+            onFieldBlur={() => {}}
+            onRemove={() => {}}
+            onOverride={() => {}}
+            onMoveUp={() => {}}
+            onMoveDown={() => {}}
+            onStructureChange={() => {}}
+          />
+        </div>
+      </div>
+    );
+  }
+
   return (
     // revamp #17 — sits ON the page (Phase-1 chrome): no boxed panel; the editor
     // carries its own grid structure.
