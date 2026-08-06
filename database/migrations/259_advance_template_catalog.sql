@@ -6,25 +6,40 @@
 -- Seeds advance_templates with the full catalog from
 -- docs/design/ATOM_TEMPLATE_CATALOG_2026-08-06.md: 17 sections,
 -- field labels verbatim (snake_case ids derived from them).
--- 12 sections arrive as NEW platform templates (Event Basics,
--- Key Contacts, Documents and Maps, Bus and Trailer, Driver and
--- Hotels, Personal Vehicle Parking, Venue Amenities, Dressing
--- Rooms, Runner, Comps and Ticketing, Airport and Local
--- Distances, Outdoor Venue and Final Confirmation); the remaining
--- 5 catalog sections overlap 003 seeds so heavily that the
--- existing template is ENRICHED in place instead of duplicated in
--- the palette (collision choices):
+-- 11 sections arrive as NEW platform templates (Event Basics,
+-- Documents and Maps, Bus and Trailer, Driver and Hotels,
+-- Personal Vehicle Parking, Venue Amenities, Dressing Rooms,
+-- Runner, Comps and Ticketing, Airport and Local Distances,
+-- Outdoor Venue and Final Confirmation); 5 catalog sections
+-- overlap 003 seeds so heavily that the existing template is
+-- ENRICHED in place instead of duplicated in the palette
+-- (collision choices):
 --   * ATOM "Schedule"                  -> enrich 003 'Schedule'
 --   * ATOM "Catering and Hospitality"  -> enrich 003 'Hospitality'
 --   * ATOM "Merchandise"               -> enrich 003 'Merch'
 --   * ATOM "Security and Credentials"  -> enrich 003 'Security'
 --   * ATOM "Settlement"                -> enrich 003 'Settlement'
--- Enrichment keeps every 003 field descriptor verbatim (ids
+-- Enrichment keeps every 003 field descriptor (ids/labels
 -- untouched) and appends the catalog section's fields; a catalog
 -- field is skipped only when an existing 003 field is a near-
 -- exact duplicate (each skip is commented at the template).
--- ATOM "Contacts" ships under the name 'Key Contacts' — the
--- builder pins a section of that name to the top of the doc.
+--
+-- CONTACT FIELDS (076 rule): migration 076
+-- (advance_key_contacts_consolidation) strips contact-type fields
+-- from, and forbids them in, every platform advance template
+-- EXCEPT the one named exactly 'Key Contacts'
+-- (advance_templates_contact_only_check — enforced as a trigger
+-- in prod). Therefore:
+--   * every catalog/003 field that would be contact-type is
+--     seeded here as "type":"text" (ids/labels kept) in all
+--     templates below;
+--   * the catalog "Contacts" section (13 roles) is NOT a new
+--     template — it is consolidated into the EXISTING platform
+--     'Key Contacts' template via a computed append-UPDATE that
+--     adds only the roles whose id or label (case-insensitive)
+--     is not already on the row, leaving the 014/076 seed fields
+--     untouched. If no platform 'Key Contacts' row exists, that
+--     statement is a silent no-op.
 -- 003's Production / Transport / Hotel / Flights / Venue Info /
 -- Local Info are left untouched.
 --
@@ -45,7 +60,7 @@
 -- Down-migration block at the end.
 -- ============================================
 
--- ---- enrich: Schedule (28 fields) ----
+-- ---- enrich: Schedule (28 fields — 1 contact->text per 076) ----
 UPDATE public.advance_templates
 SET fields = '[
   {"id": "doors_open", "label": "Doors", "type": "time", "required": true},
@@ -60,7 +75,7 @@ SET fields = '[
   {"id": "schedule_notes", "label": "Schedule Notes", "type": "textarea", "required": false},
   {"id": "earliest_bus_arrival", "label": "Earliest bus arrival", "type": "time", "required": false},
   {"id": "earliest_venue_access", "label": "Earliest venue access", "type": "time", "required": false},
-  {"id": "parking_contact_on_site", "label": "Parking contact on site", "type": "contact", "required": false},
+  {"id": "parking_contact_on_site", "label": "Parking contact on site", "type": "text", "required": false},
   {"id": "runner_on_clock", "label": "Runner on clock", "type": "time", "required": false},
   {"id": "hospitality_available", "label": "Hospitality available", "type": "time", "required": false},
   {"id": "breakfast", "label": "Breakfast", "type": "time", "required": false},
@@ -92,7 +107,7 @@ WHERE workspace_id IS NULL
   {"id": "schedule_notes", "label": "Schedule Notes", "type": "textarea", "required": false},
   {"id": "earliest_bus_arrival", "label": "Earliest bus arrival", "type": "time", "required": false},
   {"id": "earliest_venue_access", "label": "Earliest venue access", "type": "time", "required": false},
-  {"id": "parking_contact_on_site", "label": "Parking contact on site", "type": "contact", "required": false},
+  {"id": "parking_contact_on_site", "label": "Parking contact on site", "type": "text", "required": false},
   {"id": "runner_on_clock", "label": "Runner on clock", "type": "time", "required": false},
   {"id": "hospitality_available", "label": "Hospitality available", "type": "time", "required": false},
   {"id": "breakfast", "label": "Breakfast", "type": "time", "required": false},
@@ -110,7 +125,7 @@ WHERE workspace_id IS NULL
   {"id": "next_morning_departure_deadline", "label": "Next-morning departure deadline", "type": "time", "required": false}
 ]'::jsonb;
 
--- ---- enrich: Hospitality (34 fields) ----
+-- ---- enrich: Hospitality (34 fields — 1 contact->text per 076) ----
 UPDATE public.advance_templates
 SET fields = '[
   {"id": "dressing_rooms", "label": "Dressing Rooms", "type": "textarea", "required": false, "placeholder": "Number and description of available rooms"},
@@ -120,7 +135,7 @@ SET fields = '[
   {"id": "dietary_accommodations", "label": "Dietary Accommodations", "type": "textarea", "required": false},
   {"id": "rider_status", "label": "Rider Status", "type": "select", "required": true, "options": ["Sent", "Confirmed", "Partial", "Not sent"]},
   {"id": "rider_notes", "label": "Rider Notes / Issues", "type": "textarea", "required": false},
-  {"id": "hospitality_contact", "label": "Hospitality Contact", "type": "contact", "required": false},
+  {"id": "hospitality_contact", "label": "Hospitality Contact", "type": "text", "required": false},
   {"id": "laundry_available", "label": "Laundry Available", "type": "boolean", "required": false},
   {"id": "catering_budget", "label": "Catering budget", "type": "currency", "required": false},
   {"id": "hospitality_budget", "label": "Hospitality budget", "type": "currency", "required": false},
@@ -158,7 +173,7 @@ WHERE workspace_id IS NULL
   {"id": "dietary_accommodations", "label": "Dietary Accommodations", "type": "textarea", "required": false},
   {"id": "rider_status", "label": "Rider Status", "type": "select", "required": true, "options": ["Sent", "Confirmed", "Partial", "Not sent"]},
   {"id": "rider_notes", "label": "Rider Notes / Issues", "type": "textarea", "required": false},
-  {"id": "hospitality_contact", "label": "Hospitality Contact", "type": "contact", "required": false},
+  {"id": "hospitality_contact", "label": "Hospitality Contact", "type": "text", "required": false},
   {"id": "laundry_available", "label": "Laundry Available", "type": "boolean", "required": false},
   {"id": "catering_budget", "label": "Catering budget", "type": "currency", "required": false},
   {"id": "hospitality_budget", "label": "Hospitality budget", "type": "currency", "required": false},
@@ -187,7 +202,7 @@ WHERE workspace_id IS NULL
   {"id": "meal_credentials_required", "label": "Meal credentials/wristbands required", "type": "boolean", "required": false}
 ]'::jsonb;
 
--- ---- enrich: Merch (26 fields) ----
+-- ---- enrich: Merch (26 fields — 1 contact->text per 076) ----
 UPDATE public.advance_templates
 SET fields = '[
   {"id": "merch_split", "label": "Merch Split", "type": "text", "required": false, "placeholder": "e.g. 80/20 in favour of artist"},
@@ -195,7 +210,7 @@ SET fields = '[
   {"id": "merch_seller", "label": "Merch Seller", "type": "select", "required": false, "options": ["Venue provides", "Own seller", "Self-serve"]},
   {"id": "merch_table_provided", "label": "Table/Display Provided", "type": "boolean", "required": false},
   {"id": "card_payments", "label": "Card Payments Available", "type": "boolean", "required": false},
-  {"id": "merch_contact", "label": "Merch Contact", "type": "contact", "required": false},
+  {"id": "merch_contact", "label": "Merch Contact", "type": "text", "required": false},
   {"id": "merch_notes", "label": "Merch Notes", "type": "textarea", "required": false},
   {"id": "merch_load_in_time", "label": "Merchandise load-in time", "type": "time", "required": false},
   {"id": "indoor_outdoor_covered", "label": "Indoor/outdoor/covered", "type": "text", "required": false},
@@ -225,7 +240,7 @@ WHERE workspace_id IS NULL
   {"id": "merch_seller", "label": "Merch Seller", "type": "select", "required": false, "options": ["Venue provides", "Own seller", "Self-serve"]},
   {"id": "merch_table_provided", "label": "Table/Display Provided", "type": "boolean", "required": false},
   {"id": "card_payments", "label": "Card Payments Available", "type": "boolean", "required": false},
-  {"id": "merch_contact", "label": "Merch Contact", "type": "contact", "required": false},
+  {"id": "merch_contact", "label": "Merch Contact", "type": "text", "required": false},
   {"id": "merch_notes", "label": "Merch Notes", "type": "textarea", "required": false},
   {"id": "merch_load_in_time", "label": "Merchandise load-in time", "type": "time", "required": false},
   {"id": "indoor_outdoor_covered", "label": "Indoor/outdoor/covered", "type": "text", "required": false},
@@ -248,11 +263,11 @@ WHERE workspace_id IS NULL
   {"id": "outdoor_weather_contingency", "label": "Outdoor weather contingency", "type": "textarea", "required": false}
 ]'::jsonb;
 
--- ---- enrich: Security (28 fields) ----
+-- ---- enrich: Security (28 fields — 1 contact->text per 076) ----
 UPDATE public.advance_templates
 SET fields = '[
   {"id": "security_company", "label": "Security Company", "type": "text", "required": false},
-  {"id": "security_contact", "label": "Security Contact", "type": "contact", "required": false},
+  {"id": "security_contact", "label": "Security Contact", "type": "text", "required": false},
   {"id": "barrier_setup", "label": "Barrier Setup", "type": "text", "required": false},
   {"id": "guest_list_process", "label": "Guest List Process", "type": "textarea", "required": false},
   {"id": "wristband_system", "label": "Wristband / Pass System", "type": "text", "required": false},
@@ -284,7 +299,7 @@ WHERE workspace_id IS NULL
   AND name = 'Security'
   AND fields <> '[
   {"id": "security_company", "label": "Security Company", "type": "text", "required": false},
-  {"id": "security_contact", "label": "Security Contact", "type": "contact", "required": false},
+  {"id": "security_contact", "label": "Security Contact", "type": "text", "required": false},
   {"id": "barrier_setup", "label": "Barrier Setup", "type": "text", "required": false},
   {"id": "guest_list_process", "label": "Guest List Process", "type": "textarea", "required": false},
   {"id": "wristband_system", "label": "Wristband / Pass System", "type": "text", "required": false},
@@ -313,7 +328,7 @@ WHERE workspace_id IS NULL
   {"id": "incident_reporting_procedure", "label": "Incident reporting procedure", "type": "textarea", "required": false}
 ]'::jsonb;
 
--- ---- enrich: Settlement (29 fields) ----
+-- ---- enrich: Settlement (29 fields — 1 contact->text per 076) ----
 UPDATE public.advance_templates
 SET fields = '[
   {"id": "deal_type", "label": "Deal Type", "type": "select", "required": false, "options": ["Guarantee", "Guarantee + bonus", "Door deal", "Flat fee", "Festival fee"]},
@@ -325,7 +340,7 @@ SET fields = '[
   {"id": "deposit_received", "label": "Deposit Received", "type": "boolean", "required": false},
   {"id": "deposit_amount", "label": "Deposit Amount", "type": "currency", "required": false},
   {"id": "settlement_notes", "label": "Settlement Notes", "type": "textarea", "required": false},
-  {"id": "settlement_contact_and_cell", "label": "Settlement contact and cell", "type": "contact", "required": false},
+  {"id": "settlement_contact_and_cell", "label": "Settlement contact and cell", "type": "text", "required": false},
   {"id": "settlement_location", "label": "Settlement location", "type": "text", "required": false},
   {"id": "settlement_time", "label": "Settlement time", "type": "time", "required": false},
   {"id": "before_or_after_show", "label": "Before or after show", "type": "text", "required": false},
@@ -358,7 +373,7 @@ WHERE workspace_id IS NULL
   {"id": "deposit_received", "label": "Deposit Received", "type": "boolean", "required": false},
   {"id": "deposit_amount", "label": "Deposit Amount", "type": "currency", "required": false},
   {"id": "settlement_notes", "label": "Settlement Notes", "type": "textarea", "required": false},
-  {"id": "settlement_contact_and_cell", "label": "Settlement contact and cell", "type": "contact", "required": false},
+  {"id": "settlement_contact_and_cell", "label": "Settlement contact and cell", "type": "text", "required": false},
   {"id": "settlement_location", "label": "Settlement location", "type": "text", "required": false},
   {"id": "settlement_time", "label": "Settlement time", "type": "time", "required": false},
   {"id": "before_or_after_show", "label": "Before or after show", "type": "text", "required": false},
@@ -379,6 +394,59 @@ WHERE workspace_id IS NULL
   {"id": "wire_confirmation_provided", "label": "Wire confirmation provided", "type": "boolean", "required": false},
   {"id": "expected_wire_date", "label": "Expected wire date", "type": "text", "required": false}
 ]'::jsonb;
+
+-- ---- enrich: Key Contacts (append the catalog "Contacts" section,
+--      13 roles; existing 014/076 fields untouched; a role is
+--      skipped when its id or label already exists on the row) ----
+UPDATE public.advance_templates t
+SET fields = t.fields || COALESCE((
+  SELECT jsonb_agg(nf.f ORDER BY nf.ord)
+  FROM (VALUES
+    (1, '{"id": "promoter_buyer", "label": "Promoter/buyer", "type": "contact", "required": false}'::jsonb),
+    (2, '{"id": "primary_advance_contact", "label": "Primary advance contact", "type": "contact", "required": false}'::jsonb),
+    (3, '{"id": "day_of_show_venue_contact", "label": "Day-of-show venue contact", "type": "contact", "required": false}'::jsonb),
+    (4, '{"id": "production_contact", "label": "Production contact", "type": "contact", "required": false}'::jsonb),
+    (5, '{"id": "hospitality_catering_contact", "label": "Hospitality/catering contact", "type": "contact", "required": false}'::jsonb),
+    (6, '{"id": "runner_contact", "label": "Runner contact", "type": "contact", "required": false}'::jsonb),
+    (7, '{"id": "security_lead", "label": "Security lead", "type": "contact", "required": false}'::jsonb),
+    (8, '{"id": "box_office_ticketing_contact", "label": "Box office/ticketing contact", "type": "contact", "required": false}'::jsonb),
+    (9, '{"id": "merchandise_contact", "label": "Merchandise contact", "type": "contact", "required": false}'::jsonb),
+    (10, '{"id": "settlement_contact", "label": "Settlement contact", "type": "contact", "required": false}'::jsonb),
+    (11, '{"id": "hotel_contact", "label": "Hotel contact", "type": "contact", "required": false}'::jsonb),
+    (12, '{"id": "parking_site_operations_contact", "label": "Parking/site operations contact", "type": "contact", "required": false}'::jsonb),
+    (13, '{"id": "emergency_medical_contact", "label": "Emergency/medical contact", "type": "contact", "required": false}'::jsonb)
+  ) AS nf(ord, f)
+  WHERE NOT EXISTS (
+    SELECT 1 FROM jsonb_array_elements(t.fields) e
+    WHERE e->>'id' = nf.f->>'id'
+       OR lower(e->>'label') = lower(nf.f->>'label')
+  )
+), '[]'::jsonb)
+WHERE t.workspace_id IS NULL
+  AND t.name = 'Key Contacts'
+  AND EXISTS (
+    SELECT 1
+    FROM (VALUES
+    (1, '{"id": "promoter_buyer", "label": "Promoter/buyer", "type": "contact", "required": false}'::jsonb),
+    (2, '{"id": "primary_advance_contact", "label": "Primary advance contact", "type": "contact", "required": false}'::jsonb),
+    (3, '{"id": "day_of_show_venue_contact", "label": "Day-of-show venue contact", "type": "contact", "required": false}'::jsonb),
+    (4, '{"id": "production_contact", "label": "Production contact", "type": "contact", "required": false}'::jsonb),
+    (5, '{"id": "hospitality_catering_contact", "label": "Hospitality/catering contact", "type": "contact", "required": false}'::jsonb),
+    (6, '{"id": "runner_contact", "label": "Runner contact", "type": "contact", "required": false}'::jsonb),
+    (7, '{"id": "security_lead", "label": "Security lead", "type": "contact", "required": false}'::jsonb),
+    (8, '{"id": "box_office_ticketing_contact", "label": "Box office/ticketing contact", "type": "contact", "required": false}'::jsonb),
+    (9, '{"id": "merchandise_contact", "label": "Merchandise contact", "type": "contact", "required": false}'::jsonb),
+    (10, '{"id": "settlement_contact", "label": "Settlement contact", "type": "contact", "required": false}'::jsonb),
+    (11, '{"id": "hotel_contact", "label": "Hotel contact", "type": "contact", "required": false}'::jsonb),
+    (12, '{"id": "parking_site_operations_contact", "label": "Parking/site operations contact", "type": "contact", "required": false}'::jsonb),
+    (13, '{"id": "emergency_medical_contact", "label": "Emergency/medical contact", "type": "contact", "required": false}'::jsonb)
+  ) AS nf(ord, f)
+  WHERE NOT EXISTS (
+    SELECT 1 FROM jsonb_array_elements(t.fields) e
+    WHERE e->>'id' = nf.f->>'id'
+       OR lower(e->>'label') = lower(nf.f->>'label')
+  )
+  );
 
 -- ---- new template: Event Basics (18 fields) ----
 INSERT INTO public.advance_templates
@@ -409,30 +477,6 @@ WHERE NOT EXISTS (
   WHERE workspace_id IS NULL AND name = 'Event Basics'
 );
 
--- ---- new template: Key Contacts (13 fields) ----
-INSERT INTO public.advance_templates
-  (workspace_id, template_type, name, description, icon, fields, suggested_for_day_types)
-SELECT NULL, 'section', 'Key Contacts', 'Everyone you need on show day (ATOM Contacts)', 'building',
-  '[
-  {"id": "promoter_buyer", "label": "Promoter/buyer", "type": "contact", "required": true},
-  {"id": "primary_advance_contact", "label": "Primary advance contact", "type": "contact", "required": false},
-  {"id": "day_of_show_venue_contact", "label": "Day-of-show venue contact", "type": "contact", "required": false},
-  {"id": "production_contact", "label": "Production contact", "type": "contact", "required": false},
-  {"id": "hospitality_catering_contact", "label": "Hospitality/catering contact", "type": "contact", "required": false},
-  {"id": "runner_contact", "label": "Runner contact", "type": "contact", "required": false},
-  {"id": "security_lead", "label": "Security lead", "type": "contact", "required": false},
-  {"id": "box_office_ticketing_contact", "label": "Box office/ticketing contact", "type": "contact", "required": false},
-  {"id": "merchandise_contact", "label": "Merchandise contact", "type": "contact", "required": false},
-  {"id": "settlement_contact", "label": "Settlement contact", "type": "contact", "required": false},
-  {"id": "hotel_contact", "label": "Hotel contact", "type": "contact", "required": false},
-  {"id": "parking_site_operations_contact", "label": "Parking/site operations contact", "type": "contact", "required": false},
-  {"id": "emergency_medical_contact", "label": "Emergency/medical contact", "type": "contact", "required": false}
-]'::jsonb, ARRAY['show', 'festival']
-WHERE NOT EXISTS (
-  SELECT 1 FROM public.advance_templates
-  WHERE workspace_id IS NULL AND name = 'Key Contacts'
-);
-
 -- ---- new template: Documents and Maps (15 fields) ----
 INSERT INTO public.advance_templates
   (workspace_id, template_type, name, description, icon, fields, suggested_for_day_types)
@@ -459,7 +503,7 @@ WHERE NOT EXISTS (
   WHERE workspace_id IS NULL AND name = 'Documents and Maps'
 );
 
--- ---- new template: Bus and Trailer (32 fields) ----
+-- ---- new template: Bus and Trailer (32 fields — 1 contact->text per 076) ----
 INSERT INTO public.advance_templates
   (workspace_id, template_type, name, description, icon, fields, suggested_for_day_types)
 SELECT NULL, 'section', 'Bus and Trailer', 'Bus and trailer logistics: arrival, parking, power, water', 'truck',
@@ -483,7 +527,7 @@ SELECT NULL, 'section', 'Bus and Trailer', 'Bus and trailer logistics: arrival, 
   {"id": "low_branches_gates_weight_restrictions", "label": "Low branches/gates/weight restrictions", "type": "textarea", "required": false},
   {"id": "gate_code", "label": "Gate code", "type": "text", "required": false},
   {"id": "correct_entrance", "label": "Correct entrance", "type": "text", "required": false},
-  {"id": "arrival_contact_and_cell", "label": "Arrival contact and cell", "type": "contact", "required": false},
+  {"id": "arrival_contact_and_cell", "label": "Arrival contact and cell", "type": "text", "required": false},
   {"id": "escort_required", "label": "Escort required", "type": "boolean", "required": false},
   {"id": "shore_power_available", "label": "Shore power available", "type": "boolean", "required": false},
   {"id": "shore_power_amperage_connection", "label": "Shore power amperage/connection", "type": "text", "required": false},
@@ -621,13 +665,13 @@ WHERE NOT EXISTS (
   WHERE workspace_id IS NULL AND name = 'Dressing Rooms'
 );
 
--- ---- new template: Runner (16 fields) ----
+-- ---- new template: Runner (16 fields — 2 contact->text per 076) ----
 INSERT INTO public.advance_templates
   (workspace_id, template_type, name, description, icon, fields, suggested_for_day_types)
 SELECT NULL, 'section', 'Runner', 'Local runner availability, vehicle, and run policy', 'truck',
   '[
   {"id": "runner_available", "label": "Runner available", "type": "boolean", "required": false},
-  {"id": "runner_name_cell", "label": "Runner name and cell", "type": "contact", "required": false},
+  {"id": "runner_name_cell", "label": "Runner name and cell", "type": "text", "required": false},
   {"id": "runner_on_clock", "label": "Runner on clock", "type": "time", "required": false},
   {"id": "runner_off_clock", "label": "Runner off clock", "type": "time", "required": false},
   {"id": "runner_vehicle", "label": "Runner vehicle", "type": "text", "required": false},
@@ -641,14 +685,14 @@ SELECT NULL, 'section', 'Runner', 'Local runner availability, vehicle, and run p
   {"id": "food_pickup", "label": "Food pickup", "type": "boolean", "required": false},
   {"id": "dedicated_or_shared", "label": "Dedicated or shared runner", "type": "text", "required": false},
   {"id": "runner_after_show", "label": "Runner available after show", "type": "boolean", "required": false},
-  {"id": "backup_runner_contact", "label": "Backup runner contact", "type": "contact", "required": false}
+  {"id": "backup_runner_contact", "label": "Backup runner contact", "type": "text", "required": false}
 ]'::jsonb, ARRAY['show', 'festival']
 WHERE NOT EXISTS (
   SELECT 1 FROM public.advance_templates
   WHERE workspace_id IS NULL AND name = 'Runner'
 );
 
--- ---- new template: Comps and Ticketing (16 fields) ----
+-- ---- new template: Comps and Ticketing (16 fields — 2 contact->text per 076) ----
 INSERT INTO public.advance_templates
   (workspace_id, template_type, name, description, icon, fields, suggested_for_day_types)
 SELECT NULL, 'section', 'Comps and Ticketing', 'Comps, guest list, holds/kills, ticket counts', 'banknote',
@@ -656,7 +700,7 @@ SELECT NULL, 'section', 'Comps and Ticketing', 'Comps, guest list, holds/kills, 
   {"id": "artist_comps", "label": "Artist comps", "type": "number", "required": false},
   {"id": "support_comps", "label": "Support comps", "type": "number", "required": false},
   {"id": "comp_request_deadline", "label": "Comp request deadline", "type": "text", "required": false},
-  {"id": "guest_list_contact", "label": "Guest list contact", "type": "contact", "required": false},
+  {"id": "guest_list_contact", "label": "Guest list contact", "type": "text", "required": false},
   {"id": "required_guest_information", "label": "Required guest information", "type": "textarea", "required": false},
   {"id": "digital_or_box_office", "label": "Digital tickets or box office pickup", "type": "text", "required": false},
   {"id": "backstage_access_included", "label": "Backstage access included", "type": "boolean", "required": false},
@@ -668,7 +712,7 @@ SELECT NULL, 'section', 'Comps and Ticketing', 'Comps, guest list, holds/kills, 
   {"id": "one_week_out_update_requested", "label": "One-week-out update requested", "type": "boolean", "required": false},
   {"id": "one_week_out_paid_count", "label": "One-week-out paid count", "type": "number", "required": false},
   {"id": "one_week_out_expected_attendance", "label": "One-week-out expected attendance", "type": "number", "required": false},
-  {"id": "day_of_show_ticket_count_contact", "label": "Day-of-show ticket count contact", "type": "contact", "required": false}
+  {"id": "day_of_show_ticket_count_contact", "label": "Day-of-show ticket count contact", "type": "text", "required": false}
 ]'::jsonb, ARRAY['show', 'festival']
 WHERE NOT EXISTS (
   SELECT 1 FROM public.advance_templates
@@ -699,12 +743,12 @@ WHERE NOT EXISTS (
   WHERE workspace_id IS NULL AND name = 'Airport and Local Distances'
 );
 
--- ---- new template: Outdoor Venue and Final Confirmation (30 fields) ----
+-- ---- new template: Outdoor Venue and Final Confirmation (30 fields — 1 contact->text per 076) ----
 INSERT INTO public.advance_templates
   (workspace_id, template_type, name, description, icon, fields, suggested_for_day_types)
 SELECT NULL, 'section', 'Outdoor Venue and Final Confirmation', 'Weather protocols and the closing checklist', 'shield',
   '[
-  {"id": "weather_monitoring_contact", "label": "Weather monitoring contact", "type": "contact", "required": false},
+  {"id": "weather_monitoring_contact", "label": "Weather monitoring contact", "type": "text", "required": false},
   {"id": "rain_plan", "label": "Rain plan", "type": "textarea", "required": false},
   {"id": "lightning_protocol", "label": "Lightning protocol", "type": "textarea", "required": false},
   {"id": "high_wind_protocol", "label": "High-wind protocol", "type": "textarea", "required": false},
@@ -743,14 +787,14 @@ WHERE NOT EXISTS (
 -- ============================================
 -- DOWN MIGRATION (manual — uncomment to invert)
 -- ============================================
--- Removes the 12 new platform templates. The 5 enriched templates
+-- Removes the 11 new platform templates. The 5 enriched templates
 -- are NOT auto-restorable from here — re-run the matching INSERT
 -- blocks of 003_seed_advance_templates.sql after deleting the row
--- to get the original field lists back.
+-- to get the original field lists back. The Key Contacts append
+-- is inverted by removing the 13 catalog role ids.
 -- DELETE FROM public.advance_templates
 --   WHERE workspace_id IS NULL
 --     AND name IN ('Event Basics',
---                 'Key Contacts',
 --                 'Documents and Maps',
 --                 'Bus and Trailer',
 --                 'Driver and Hotels',
@@ -761,4 +805,11 @@ WHERE NOT EXISTS (
 --                 'Comps and Ticketing',
 --                 'Airport and Local Distances',
 --                 'Outdoor Venue and Final Confirmation');
+-- UPDATE public.advance_templates t
+-- SET fields = (
+--   SELECT COALESCE(jsonb_agg(e ORDER BY ord), '[]'::jsonb)
+--   FROM jsonb_array_elements(t.fields) WITH ORDINALITY AS x(e, ord)
+--   WHERE e->>'id' NOT IN ('promoter_buyer', 'primary_advance_contact', 'day_of_show_venue_contact', 'production_contact', 'hospitality_catering_contact', 'runner_contact', 'security_lead', 'box_office_ticketing_contact', 'merchandise_contact', 'settlement_contact', 'hotel_contact', 'parking_site_operations_contact', 'emergency_medical_contact')
+-- )
+-- WHERE t.workspace_id IS NULL AND t.name = 'Key Contacts';
 -- ============================================
