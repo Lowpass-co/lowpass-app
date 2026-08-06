@@ -44,6 +44,7 @@ import {
 } from '@/components/command-palette/CommandPaletteContext';
 import { CommandPalette } from '@/components/command-palette/CommandPalette';
 import { ConnectionStatusProvider } from '@/components/realtime/ConnectionIndicator';
+import { TutorialPanel } from '@/components/tutorial/TutorialPanel';
 
 /**
  * UX08b — Global ⌘K listener. Mounted inside CommandPaletteProvider so it
@@ -122,6 +123,11 @@ export function AppShell({
           {/* UX08b: ⌘K command palette — global mount + keyboard shortcut. */}
           <CommandPaletteShortcut />
           <CommandPalette />
+          {/* App tour & tutorial panel — opened via the 'lp:tutorial-open'
+              CustomEvent (avatar menu) and once automatically on first
+              login. usePathname only (no useSearchParams), so no Suspense
+              boundary is needed. */}
+          <TutorialPanel />
           <GlobalDropGuard />
         </div>
         </ConnectionStatusProvider>

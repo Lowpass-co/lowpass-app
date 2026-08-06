@@ -19,11 +19,13 @@ import { useEffect, useRef, useState } from 'react';
 import {
   Building2,
   Bug,
+  Compass,
   LogOut,
   Settings,
   SunMoon,
   Users,
 } from 'lucide-react';
+import { TUTORIAL_OPEN_EVENT } from '@/components/tutorial/TutorialPanel';
 import { AccountAvatar } from '@/components/ui/AccountAvatar';
 import { DarkModeToggle } from '@/components/layout/DarkModeToggle';
 import { createClient as createBrowserSupabase } from '@/lib/supabase-client';
@@ -233,6 +235,28 @@ export function ProductHeaderAvatarMenu({
             className="my-1"
             style={{ borderTop: '1px solid var(--lp-border)' }}
           />
+
+          {/* Tutorial — re-entry point for the App tour & tutorial panel.
+              Dispatches the global open event consumed by <TutorialPanel>
+              (mounted in AppShell), then closes this menu. */}
+          <button
+            type="button"
+            onClick={() => {
+              window.dispatchEvent(new CustomEvent(TUTORIAL_OPEN_EVENT));
+              close();
+            }}
+            className="w-full px-3 py-2 text-left"
+            style={{ fontSize: '14px', color: 'var(--lp-text)' }}
+            role="menuitem"
+          >
+            <span className="inline-flex items-center gap-2">
+              <Compass
+                className="h-4 w-4"
+                style={{ color: 'var(--lp-text-tertiary)' }}
+              />
+              App tour &amp; tutorial
+            </span>
+          </button>
 
           <button
             type="button"
