@@ -19,6 +19,7 @@
    ============================================ */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useSpineNavigate, isSpineHop } from '@/lib/nav/viewTransitionNav';
 import Link from 'next/link';
 import * as Icons from 'lucide-react';
 import { PanelLeftClose, PanelLeftOpen } from 'lucide-react';
@@ -58,6 +59,7 @@ export function NavRail({
      initialiser can't see storage on the server either. So: an initialiser that
      is correct on the client from the first paint, and falls back to the
      server's default during SSR. No effect, so no set-state-in-effect. */
+  const spineNavigate = useSpineNavigate();
   const [collapsed, setCollapsed] = useState<boolean>(() => {
     if (typeof window === 'undefined') return defaultCollapsed;
     try {
@@ -258,6 +260,20 @@ export function NavRail({
                   data-testid={`nav-item-${entry.id}`}
                   data-active={active ? 'true' : undefined}
                   aria-current={active ? 'page' : undefined}
+                  /* R5-3 completion — when BOTH ends of the hop are spine
+                     surfaces (routing / day sheets / advance), the ledger
+                     folds into the rail via a view transition. The morph IS
+                     the pending feedback on these hops (PendingNav's spinner
+                     never fires because we take over the navigation). */
+                  onClick={(e) => {
+                    if (
+                      e.button === 0 && !e.metaKey && !e.ctrlKey && !e.shiftKey && !e.altKey &&
+                      typeof window !== 'undefined' && isSpineHop(window.location.pathname, href)
+                    ) {
+                      e.preventDefault();
+                      spineNavigate(href);
+                    }
+                  }}
                 >
                   {/* Optimistic active: the row takes the destination's look the
                       instant it's clicked, so the click is acknowledged even

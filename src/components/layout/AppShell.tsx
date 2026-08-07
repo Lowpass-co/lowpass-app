@@ -44,6 +44,7 @@ import {
 } from '@/components/command-palette/CommandPaletteContext';
 import { CommandPalette } from '@/components/command-palette/CommandPalette';
 import { ConnectionStatusProvider } from '@/components/realtime/ConnectionIndicator';
+import { ViewTransitionResolver } from '@/lib/nav/viewTransitionNav';
 import { TutorialPanel } from '@/components/tutorial/TutorialPanel';
 
 /**
@@ -129,6 +130,8 @@ export function AppShell({
               boundary is needed. */}
           <TutorialPanel />
           <GlobalDropGuard />
+          {/* R5-3 completion — resolves pending spine-morph view transitions on route commit. */}
+          <ViewTransitionResolver />
         </div>
         </ConnectionStatusProvider>
       </CommandPaletteProvider>

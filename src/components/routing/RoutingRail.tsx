@@ -25,6 +25,7 @@
 'use client';
 
 import Link from 'next/link';
+import { useSpineNavigate } from '@/lib/nav/viewTransitionNav';
 import { parseRoutingDate } from '@/lib/utils';
 import { colourForDayType, labelForDayType } from '@/lib/routing/dayType';
 import { getWeekStart, formatWeekLabel } from '@/lib/routing/week';
@@ -160,6 +161,7 @@ export function RoutingRail({
   ariaLabel = 'Tour days',
   viewTransitionName,
 }: RoutingRailProps) {
+  const spineNavigate = useSpineNavigate();
   const renderEntry = (entry: RailEntry) => {
     const active = entry.id === selected;
     const blockStyle: React.CSSProperties = {
@@ -182,7 +184,16 @@ export function RoutingRail({
             className="btn-transition block px-3 py-2"
             style={blockStyle}
             aria-current={active ? 'true' : undefined}
-            onClick={() => onSelect(entry.id)}
+            /* R5-3 completion — rail-entry hops morph the spine. Plain-click
+               only; modified clicks keep native new-tab behaviour. Link stays
+               for prefetch + a11y. */
+            onClick={(e) => {
+              onSelect(entry.id);
+              if (e.button === 0 && !e.metaKey && !e.ctrlKey && !e.shiftKey && !e.altKey) {
+                e.preventDefault();
+                spineNavigate(hrefForEntry(entry));
+              }
+            }}
           >
             {inner}
           </Link>
