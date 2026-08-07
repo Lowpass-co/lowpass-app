@@ -347,7 +347,7 @@ export function TourFingerprint({
       {/* Anchored popover — portalled so the scrolling strip never clips it. */}
       {mounted && hover && hovered
         ? createPortal(
-            <FingerprintPopover rect={hover.rect} day={hovered} />,
+            <FingerprintPopover rect={hover.rect} day={hovered} compact={size === 'row'} />,
             document.body,
           )
         : null}
@@ -355,16 +355,21 @@ export function TourFingerprint({
   );
 }
 
-function FingerprintPopover({ rect, day }: { rect: DOMRect; day: FingerprintDay }) {
-  const width = 200;
-  const gap = 10;
-  const estHeight = 150; // typical popover height, for the flip decision
+function FingerprintPopover({ rect, day, compact = false }: { rect: DOMRect; day: FingerprintDay; compact?: boolean }) {
+  /* 2026-08-06 (Adam's screenshot) — at ROW scale the full 200px popover
+     floated up over the row's own name/status content (and the row above).
+     Compact mode: one line, small, ALWAYS below the tick — below a row strip
+     is the row's own whitespace, not another row's text. Hero keeps the full
+     card + flip logic (TR-03). */
+  const width = compact ? 160 : 200;
+  const gap = compact ? 6 : 10;
+  const estHeight = 150; // typical full-popover height, for the flip decision
   const left = Math.max(8, Math.min(window.innerWidth - width - 8, rect.left + rect.width / 2 - width / 2));
   // TR-03 (G1-B #15) — flip below the tick when there isn't room above (tick
   // near the top of the viewport / the routing hero strip), so the popover never
   // renders upward over the columns/chrome above the strip. It never covers the
   // tick itself, and stays pointer-events:none so clicks reach the cell.
-  const placeBelow = rect.top < estHeight + gap;
+  const placeBelow = compact || rect.top < estHeight + gap;
   const top = placeBelow ? rect.bottom + gap : rect.top - gap;
   const anchorX = rect.left + rect.width / 2 - left; // tail x within the popover
   return (
@@ -388,9 +393,18 @@ function FingerprintPopover({ rect, day }: { rect: DOMRect; day: FingerprintDay 
           border: '1px solid var(--lp-border-strong)',
           borderRadius: 'var(--lp-radius-md)',
           boxShadow: 'var(--lp-shadow-lg, 0 12px 32px rgba(0,0,0,0.35))',
-          padding: '8px 10px',
+          padding: compact ? '5px 8px' : '8px 10px',
+          ...(compact ? { whiteSpace: 'nowrap' as const, width: 'fit-content' } : {}),
         }}
       >
+        {compact ? (
+          /* One line: "Fri 23 Oct · Show Day" — nothing else at row scale. */
+          <div style={{ fontSize: 'var(--lp-text-2xs)', color: 'var(--lp-text)' }}>
+            <span className="lp-mono" style={{ fontWeight: 'var(--lp-weight-medium)' }}>{fmtDate(day.date)}</span>
+            <span style={{ color: 'var(--lp-text-secondary)' }}>{` · ${labelForDayType(day.dayType) || 'Day'}`}</span>
+          </div>
+        ) : (
+          <>
         <div className="lp-mono" style={{ fontSize: 'var(--lp-text-xs)', color: 'var(--lp-text)', fontWeight: 'var(--lp-weight-medium)' }}>
           {fmtDate(day.date)}
         </div>
@@ -404,6 +418,8 @@ function FingerprintPopover({ rect, day }: { rect: DOMRect; day: FingerprintDay 
             {ADVANCE_LABEL[day.advanceState]}
           </div>
         ) : null}
+          </>
+        )}
       </div>
       {/* Tail — a rotated square poking toward the tick; direction flips with
           placement (down when above the tick, up when flipped below it). */}

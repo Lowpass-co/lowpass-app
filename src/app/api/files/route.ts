@@ -1,17 +1,25 @@
 /* ============================================================
-   LOWPASS — /api/files (G1-A #2 · tour + artist file uploads)
+   LOWPASS — /api/files (G1-A #2 · tour + artist file uploads
+                Files v2 · Drive-style folder canvas)
 
    The writable side of the Files surfaces. Uploads a file to the `tour-files`
    Storage bucket and records a `file_references` row (the same model the Files
-   DataTables read). Scope is polymorphic: linked_to_type = 'tour' | 'artist',
+   surfaces read). Scope is polymorphic: linked_to_type = 'tour' | 'artist',
    linked_to_id = the tour/artist id. RLS scopes every read/write to the caller's
    workspace.
+
+   Folders (zero-migration): metadata.folder on the row is a '/'-joined path
+   string ("Contracts/2026"). No folders table — a folder exists if a file
+   carries it. POST accepts an optional `folder` form field; PATCH lets the
+   canvas rename a file or move it between folders.
 
    Bucket to create in Supabase Dashboard → Storage (name: `tour-files`, private)
    with the RLS policy shipped in database/migrations/241_tour_files_bucket.sql.
 
-     POST   multipart { file, linked_to_type, linked_to_id }  → { file }
-     DELETE ?refId=…                                          → { ok }
+     GET    ?linked_to_type=…&linked_to_id=…    → { files: [{ id, file_name, metadata }] }
+     POST   multipart { file, linked_to_type, linked_to_id, folder? } → { file }
+     PATCH  { id, file_name?, metadata: { folder? } }                 → { ok, file }
+     DELETE ?refId=…                                                  → { ok }
    ============================================================ */
 
 import { NextResponse } from 'next/server';
@@ -34,6 +42,45 @@ async function getWorkspaceId(
   return workspaceId ? { workspaceId, userId: user.id } : null;
 }
 
+/** Normalise a metadata.folder path: '/'-joined non-empty trimmed segments,
+    bounded length. Anything else (null, empty, non-string) → null = root. */
+function sanitizeFolder(raw: unknown): string | null {
+  if (typeof raw !== 'string') return null;
+  const parts = raw
+    .split('/')
+    .map((s) => s.trim())
+    .filter(Boolean);
+  if (parts.length === 0) return null;
+  const joined = parts.join('/');
+  return joined.length > 512 ? null : joined;
+}
+
+export async function GET(request: Request) {
+  const supabase = await createServerSupabaseClient();
+  const ctx = await getWorkspaceId(supabase);
+  if (!ctx) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+  const { searchParams } = new URL(request.url);
+  const linkedToType = searchParams.get('linked_to_type')?.trim();
+  const linkedToId = searchParams.get('linked_to_id')?.trim();
+  if (!linkedToType || !linkedToId) {
+    return NextResponse.json({ error: 'linked_to_type and linked_to_id are required' }, { status: 400 });
+  }
+  if (!ALLOWED_SCOPES.has(linkedToType)) {
+    return NextResponse.json({ error: 'linked_to_type must be tour or artist' }, { status: 400 });
+  }
+
+  const { data, error } = await supabase
+    .from('file_references')
+    .select('id, file_name, metadata')
+    .eq('workspace_id', ctx.workspaceId)
+    .eq('linked_to_type', linkedToType)
+    .eq('linked_to_id', linkedToId);
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  return NextResponse.json({ files: data ?? [] });
+}
+
 export async function POST(request: Request) {
   const supabase = await createServerSupabaseClient();
   const auth = await requireWrite(supabase);
@@ -45,6 +92,7 @@ export async function POST(request: Request) {
   const file = formData.get('file') as File | null;
   const linkedToType = (formData.get('linked_to_type') as string | null)?.trim();
   const linkedToId = (formData.get('linked_to_id') as string | null)?.trim();
+  const folder = sanitizeFolder(formData.get('folder'));
 
   if (!file || !linkedToType || !linkedToId) {
     return NextResponse.json({ error: 'Missing file, linked_to_type, or linked_to_id' }, { status: 400 });
@@ -88,6 +136,8 @@ export async function POST(request: Request) {
       provider_file_id: up.data.path,
       linked_to_type: linkedToType,
       linked_to_id: linkedToId,
+      // Files v2 — uploads land in the folder that was open on the canvas.
+      ...(folder ? { metadata: { folder } } : {}),
     })
     .select('id, file_name, file_type, file_size, storage_provider, provider_file_id, linked_to_type, linked_to_id, created_at')
     .maybeSingle();
@@ -128,6 +178,73 @@ export async function POST(request: Request) {
       linkedHref: null,
     },
   });
+}
+
+export async function PATCH(request: Request) {
+  const supabase = await createServerSupabaseClient();
+  const auth = await requireWrite(supabase);
+  if ('error' in auth) return auth.error;
+  const ctx = await getWorkspaceId(supabase);
+  if (!ctx) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+  let body: { id?: string; file_name?: unknown; metadata?: unknown };
+  try {
+    body = (await request.json()) as { id?: string; file_name?: unknown; metadata?: unknown };
+  } catch {
+    return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
+  }
+  const id = typeof body.id === 'string' ? body.id.trim() : '';
+  if (!id) return NextResponse.json({ error: 'id is required' }, { status: 400 });
+
+  const { data: row } = await supabase
+    .from('file_references')
+    .select('id, metadata')
+    .eq('id', id)
+    .eq('workspace_id', ctx.workspaceId)
+    .maybeSingle();
+  if (!row) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+
+  const current = ((row as { metadata?: Record<string, unknown> | null }).metadata ?? {}) as Record<string, unknown>;
+  const updates: { file_name?: string; metadata?: Record<string, unknown> } = {};
+
+  if (body.file_name !== undefined) {
+    if (typeof body.file_name !== 'string' || !body.file_name.trim()) {
+      return NextResponse.json({ error: 'file_name must be a non-empty string' }, { status: 400 });
+    }
+    updates.file_name = body.file_name.trim().slice(0, 255);
+  }
+
+  if (body.metadata !== undefined) {
+    if (typeof body.metadata !== 'object' || body.metadata === null || Array.isArray(body.metadata)) {
+      return NextResponse.json({ error: 'metadata must be an object' }, { status: 400 });
+    }
+    const patch = body.metadata as Record<string, unknown>;
+    // Merge — the canvas only manages metadata.folder; other keys survive.
+    const next: Record<string, unknown> = { ...current };
+    if ('folder' in patch) {
+      const folder = sanitizeFolder(patch.folder);
+      if (folder) next.folder = folder;
+      else delete next.folder; // null / '' / invalid → back to root
+    }
+    updates.metadata = next;
+  }
+
+  if (Object.keys(updates).length === 0) {
+    return NextResponse.json({ error: 'Nothing to update — pass file_name and/or metadata' }, { status: 400 });
+  }
+
+  const { data: updated, error } = await supabase
+    .from('file_references')
+    .update(updates)
+    .eq('id', id)
+    .eq('workspace_id', ctx.workspaceId)
+    .select('id, file_name, metadata')
+    .maybeSingle();
+  if (error || !updated) {
+    return NextResponse.json({ error: error?.message ?? 'Could not update the file' }, { status: 500 });
+  }
+
+  return NextResponse.json({ ok: true, file: updated });
 }
 
 export async function DELETE(request: Request) {

@@ -1,16 +1,18 @@
 /* ============================================
-   LOWPASS — /artists/[id]/files (G1-A #2)
+   LOWPASS — /artists/[id]/files (G1-A #2 · Files v2 canvas)
 
-   A real artist-files surface (was a dead placeholder stub, graded fail). Lists
-   the artist's uploaded files (file_references linked_to_type='artist') in the
-   shared <TourFilesClient> DataTable with Upload + drag-drop + an invitation
-   empty state. Uploads write to the `tour-files` bucket via /api/files
-   (migration 241 creates the bucket + RLS).
+   The artist-files surface. Lists the artist's uploaded files
+   (file_references linked_to_type='artist') in the shared <FilesCanvas> —
+   the Drive-style folder canvas (folder tiles + file cards, breadcrumb,
+   drag-to-move) that replaced the flat <TourFilesClient> DataTable.
+   Uploads write to the `tour-files` bucket via /api/files (migration 241
+   creates the bucket + RLS); folders live at metadata.folder — no
+   migration needed.
    ============================================ */
 
 import { notFound } from 'next/navigation';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
-import { TourFilesClient } from '@/components/tours/TourFilesClient';
+import { FilesCanvas } from '@/components/files/FilesCanvas';
 import { buildArtistScopedFileVms } from '@/lib/tour-files/buildArtistFileVms';
 
 export const dynamic = 'force-dynamic';
@@ -45,11 +47,11 @@ export default async function ArtistFilesPage({ params }: PageProps) {
 
   return (
     <div className="mx-auto w-full px-4 pt-6">
-      <TourFilesClient
+      <FilesCanvas
         initial={files}
         uploadScope={{ type: 'artist', id: artist.id }}
         title={`${artist.name} — Files`}
-        subtitle="Artist-level documents. Drag files here or use Upload."
+        subtitle="Artist-level documents. Drag files here or use Upload; organise them into folders."
       />
     </div>
   );

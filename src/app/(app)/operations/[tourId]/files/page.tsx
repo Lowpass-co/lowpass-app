@@ -1,15 +1,18 @@
 /* ============================================
-   LOWPASS — Operations · Files (Phase 4 unblock)
+   LOWPASS — Operations · Files (Phase 4 unblock · Files v2 canvas)
 
    /operations/[tourId]/files — live per-tour document store. Ports
    /tours/[id]/files, inner content only (ProductShell + TourHeader come
-   from /operations/[tourId]/layout.tsx).
+   from /operations/[tourId]/layout.tsx). Mounts <FilesCanvas>, the
+   Drive-style folder canvas (folder tiles + file cards, breadcrumb,
+   drag-to-move) that replaced the flat <TourFilesClient> DataTable.
+   Folders live at metadata.folder on file_references — no migration.
    ============================================ */
 
 import { notFound } from 'next/navigation';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { buildTourScopedFileVms } from '@/lib/tour-files/buildTourFileVms';
-import { TourFilesClient } from '@/components/tours/TourFilesClient';
+import { FilesCanvas } from '@/components/files/FilesCanvas';
 
 export const dynamic = 'force-dynamic';
 
@@ -37,10 +40,10 @@ export default async function OperationsTourFilesPage({ params }: { params: Prom
 
   return (
     <div className="mx-auto w-full px-4 pt-6">
-      <TourFilesClient
+      <FilesCanvas
         initial={files}
         uploadScope={{ type: 'tour', id: tour.id }}
-        subtitle="Consolidated uploads for this tour. Drag files here or use Upload."
+        subtitle="Consolidated uploads for this tour. Drag files here or use Upload; organise them into folders."
       />
     </div>
   );

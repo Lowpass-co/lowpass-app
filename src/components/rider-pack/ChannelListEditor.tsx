@@ -32,6 +32,7 @@ import { OutputBlock, OUTPUT_GRID, OUTPUT_COL_COUNT } from './channel-list-cells
 import { InventoryAggregates } from './channel-list-cells/InventoryAggregates';
 import { AddManyChannelsModal } from './channel-list-cells/AddManyChannelsModal';
 import { ChannelListSectionBand } from './channel-list-cells/ChannelListSectionBand';
+import { GearDetailSlideOver } from '@/components/gear/GearDetailSlideOver';
 import { PatchMatrix, type SocketPatch } from './PatchMatrix';
 import { CellNavProvider, NavCell, useCellNav } from '@/lib/hooks/useCellNav';
 import {
@@ -111,6 +112,10 @@ export default function ChannelListEditor({
   onGearChipClick,
 }: Props) {
   const { showToast } = useToast();
+  /* Gear-chip default target (2026-08-06) — when the parent supplies no
+     onGearChipClick, the chip opens this internal slide-over. Explicit prop
+     still wins (see the ChannelBlock wiring below). */
+  const [gearDetailId, setGearDetailId] = useState<string | null>(null);
   const [titleDraft, setTitleDraft] = useState(section.title);
   const [rows, setRows] = useState<ChannelListRow[]>(section.rows ?? []);
   /* §CL-NORELOAD — structure (sub-snakes / stage boxes / enabled columns) is
@@ -669,7 +674,7 @@ export default function ChannelListEditor({
                       }
                       autoFocusName={row.id === newlyAddedRowId}
                       onAutoFocused={() => setNewlyAddedRowId(null)}
-                      onGearChipClick={onGearChipClick}
+                      onGearChipClick={onGearChipClick ?? setGearDetailId}
                     />
                     </Fragment>
                   );
@@ -840,6 +845,7 @@ export default function ChannelListEditor({
         sectionId={section.id}
         onChanged={notifyStructureChange}
       />
+      <GearDetailSlideOver gearId={gearDetailId} onClose={() => setGearDetailId(null)} />
       <AddManyChannelsModal
         key={multiAddOpen ? 'multi-open' : 'multi-closed'}
         open={multiAddOpen}
