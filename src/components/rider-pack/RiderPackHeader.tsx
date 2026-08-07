@@ -34,11 +34,15 @@ import {
   AlertTriangle,
 } from 'lucide-react';
 import { CircularProgressRing } from '@/components/advance/CircularProgressRing';
+import { RiderPackTitleEditable } from './RiderPackTitleEditable';
 
 export type RiderScope = 'artist' | 'tour' | 'show';
 
 interface RiderPackHeaderProps {
   packTitle: string;
+  /** 2026-08-07 — when set, the title becomes click-to-rename (PATCHes the
+   *  pack). Without it the header stays purely presentational (read views). */
+  packId?: string | null;
   /** artist | tour | show — the rider's primary classifier (date analog). */
   scope: RiderScope;
   /** Context line: tour name (tour scope) / artist name (artist scope). */
@@ -74,6 +78,7 @@ const SCOPE_LABEL: Record<RiderScope, string> = {
 
 export function RiderPackHeader({
   packTitle,
+  packId = null,
   scope,
   scopeContext,
   templateName,
@@ -148,9 +153,13 @@ export function RiderPackHeader({
             ) : null}
           </div>
 
-          <h1 className="lp-h1 truncate" style={{ letterSpacing: '-0.01em' }}>
-            {packTitle}
-          </h1>
+          {packId ? (
+            <RiderPackTitleEditable packId={packId} title={packTitle} />
+          ) : (
+            <h1 className="lp-h1 truncate" style={{ letterSpacing: '-0.01em' }}>
+              {packTitle}
+            </h1>
+          )}
 
           {scopeContext ? (
             <p

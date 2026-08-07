@@ -64,6 +64,7 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import { getPackRaw, createSection, updateSection, deleteSection } from '@/lib/rider-packs/client';
+import { useToast } from '@/components/ui/Toast';
 import type { Field, FieldType, RiderSection, SectionType } from '@/lib/rider-packs/types';
 import {
   RIDER_GROUPS,
@@ -217,6 +218,7 @@ export function RiderSectionBuilder({ packId }: { packId: string }) {
   const [dragIndex, setDragIndex] = useState<number | null>(null);
   const [dropIndex, setDropIndex] = useState<number | null>(null);
   const [save, setSave] = useState<SaveState>('idle');
+  const { showToast } = useToast();
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const [pickerFor, setPickerFor] = useState<string | null>(null);
   const [fieldDrag, setFieldDrag] = useState<{ sectionId: string; index: number } | null>(null);
@@ -277,11 +279,12 @@ export function RiderSectionBuilder({ packId }: { packId: string }) {
       try {
         await Promise.all(changed.map((s) => updateSection(packId, s.id, { sort_order: s.sort_order })));
         setSave('saved');
-      } catch {
+      } catch (e) {
         setSave('error');
+        showToast(e instanceof Error ? e.message : 'Save failed', 'error');
       }
     },
-    [packId],
+    [packId, showToast],
   );
 
   const moveSection = useCallback(
@@ -309,11 +312,12 @@ export function RiderSectionBuilder({ packId }: { packId: string }) {
       try {
         await updateSection(packId, id, { title });
         setSave('saved');
-      } catch {
+      } catch (e) {
         setSave('error');
+        showToast(e instanceof Error ? e.message : 'Save failed', 'error');
       }
     },
-    [packId, sections],
+    [packId, sections, showToast],
   );
 
   const removeSection = useCallback(
@@ -326,11 +330,12 @@ export function RiderSectionBuilder({ packId }: { packId: string }) {
       try {
         await deleteSection(packId, id);
         setSave('saved');
-      } catch {
+      } catch (e) {
         setSave('error');
+        showToast(e instanceof Error ? e.message : 'Save failed', 'error');
       }
     },
-    [packId, sections],
+    [packId, sections, showToast],
   );
 
   // --- field mutations (persist via updateSection({fields})) ----------------
@@ -341,11 +346,12 @@ export function RiderSectionBuilder({ packId }: { packId: string }) {
       try {
         await updateSection(packId, sectionId, { fields });
         setSave('saved');
-      } catch {
+      } catch (e) {
         setSave('error');
+        showToast(e instanceof Error ? e.message : 'Save failed', 'error');
       }
     },
-    [packId],
+    [packId, showToast],
   );
 
   const addField = useCallback(
@@ -429,11 +435,12 @@ export function RiderSectionBuilder({ packId }: { packId: string }) {
         setSections((prev) => [...(prev ?? []), created]);
         setActiveSectionId(created.id);
         setSave('saved');
-      } catch {
+      } catch (e) {
         setSave('error');
+        showToast(e instanceof Error ? e.message : 'Save failed', 'error');
       }
     },
-    [packId],
+    [packId, showToast],
   );
 
   /* B2 — move a section between groups (metadata merge; other keys kept). */
@@ -454,11 +461,12 @@ export function RiderSectionBuilder({ packId }: { packId: string }) {
       try {
         await updateSection(packId, id, { metadata });
         setSave('saved');
-      } catch {
+      } catch (e) {
         setSave('error');
+        showToast(e instanceof Error ? e.message : 'Save failed', 'error');
       }
     },
-    [packId],
+    [packId, showToast],
   );
 
   // Single field dropped/clicked in the library → add to the active

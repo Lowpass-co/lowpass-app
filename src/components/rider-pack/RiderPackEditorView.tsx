@@ -152,6 +152,7 @@ export async function RiderPackEditorView({
   const header = (
     <RiderPackHeader
       packTitle={pack.title || 'Untitled rider'}
+      packId={pack.id}
       scope={scope}
       scopeContext={scopeContext}
       templateName={templateName}
