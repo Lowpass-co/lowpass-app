@@ -127,7 +127,25 @@ const SECTIONS=[
 ["WF-3","Show view is grouped","A rider spanning ≥2 groups shows group chips + headings in Show mode, same grammar as the builder. One-group riders: plain scroll, unchanged."],
 ["WF-4","Channel list edits without overriding","On /operations/[tour]/channel-list an INHERITED list shows the rows read-only + one button: 'Create this tour's editable copy'. Click it: the tour gets its own attached document, fully editable, artist master untouched. No override bounce."],
 ["WF-5","Tour picker is one honest list","Artist page: 'TOURS · N' header + New tour; every tour always listed (upcoming asc, PAST group below); visible Operations · Budget · Advance links per row; the previously-opened tour is highlighted, never hides the list."],
-["WF-6","Templates are deep (paste 258/259/260 first)","Rider 'Add section' menus offer 17 enriched/new templates with 12-25 fields; the advance library carries the full 17-section / ~427-field catalog; budget template gains the missing income/cost/percentage lines. Re-pasting any of the three is a no-op."]]}
+["WF-6","Templates are deep (paste 258/259/260 first)","Rider 'Add section' menus offer 17 enriched/new templates with 12-25 fields; the advance library carries the full 17-section / ~427-field catalog; budget template gains the missing income/cost/percentage lines. Re-pasting any of the three is a no-op."]]},
+{name:"Payroll — the canonical flat-seven (⚠ needs the payroll+income patch + migration 261)",where:"/operations/[tourId]/payroll",items:[
+["PAY-1","One flat rates grid","Columns: Flat day · Flat tour · Show · Travel · Rehearsal · Press/Radio · Per diem · Advance — all editable for everyone. NO Rate type column, NO '+ Add rate type'/'Manage' buttons. Zero amounts render blank, not $0.00."],
+["PAY-2","Editing is instant","Type a rate, Enter: the cursor drops to the next row IMMEDIATELY — no wait, no reclick. Tab moves right. A failed save toasts + reverts the cell."],
+["PAY-3","The math agrees","Pick a person with painted + unpainted days: the Rates grid's Days / Total fee / Total PD equal that person's matrix row totals exactly (tour-default days now count everywhere). No more US$0 against a full matrix."],
+["PAY-4","Stacking warns, still bills","Give one person BOTH a Flat day and a Show rate: a ⚠ appears by their name (hover explains); the total = flat day × worked days + show × show days (sum, not either/or)."],
+["PAY-5","The full brush palette","Brushes: Tour default · Show · Rehearsal · Travel · Promo/Radio · Off · PD · No tour. Off paints an O tile (bills the TRAVEL rate + PD). PD paints a grey PD tile (per diem only, no fee). No tour empties the cell (nothing)."],
+["PAY-6","Per diem = every assigned day","Per diem counts Show/Travel/Rehearsal/Promo/Off/PD days; a No-tour day earns nothing. Paint a PD day: Total PD ticks up, Total fee doesn't."],
+["PAY-7","Press/Radio fallback","A Promo/Radio day bills the SHOW rate while the person's Press/Radio cell is empty; enter a Press/Radio amount and the promo day bills that instead."],
+["PAY-8","Retired types stopped billing","Weekly + custom columns (e.g. 'Show Day') are gone from the grid and no longer bill — Dillon's $200 must be re-entered in the real Show column. Amounts survive in the DB (reversible), they just don't count."],
+["PAY-9","Budget salary agrees","After a rate/day edit, the Budget Salary + Per-Diem lines for that person match the payroll totals (the reconcile now counts effective days too)."]]},
+{name:"Income — the lean sheet + deal slide-over (⚠ same patch)",where:"/budget/[tourId] → Income tab",items:[
+["INC-1","One sheet, no toggle","The Projected/Actual toggle is GONE. Columns: Date · Type · Venue · City · Deal summary · Contracted · Settled · Variance. Settled + Variance are blank until a show settles."],
+["INC-2","Row opens the deal slide-over","Open a row: orange hero (date·city eyebrow, venue headline, status chip), then a Contracted | Settled | Variance KPI band. The grid's old generic row panel does NOT also open."],
+["INC-3","Deal edits save on blur","Change the guarantee in the slide-over, blur: Contracted moves in the ledger AND in the grid behind it. On a locked version, a proposed edit raises the version modal, not a silent fail."],
+["INC-4","The waterfall ledger","'Contracted — the maths' reads Guarantee → − withholding → + Overage ƒ → + Merch ƒ → + VIP ƒ → CONTRACTED, mono right-aligned. Click ƒ on a line → it becomes an editable override (OVERRIDE tag); Revert recomputes from the inputs."],
+["INC-5","Settled is walk-only","No settled figure is typeable in the grid. A settled show carries the green AUTO · SETTLEMENT chip; the slide-over's Settled card shows the settled ledger + a green 'Open the settlement walk →' button that lands on the settlement page."],
+["INC-6","Manual override is explicit","'Manual override…' opens the amber panel; entering a figure flips the chip to MANUAL. That's the ONLY manual path — no ambient actual-cell typing anywhere."],
+["INC-7","FX strip survives","A tour with foreign-currency shows still gets the FX strip (live = red count, locked-at-settlement = blue count) above the sheet."]]}
 ];
 let state={};
 const app=document.getElementById('app');
