@@ -1,5 +1,25 @@
 'use client';
 
+/* ============================================
+   LOWPASS — <PayrollRatesSpreadsheet> (canonical flat-seven, 2026-08-07)
+
+   Adam's pin: ONE flat rates surface. Every rate column is editable for every
+   person — no per-person "Rate type" selector, no relevance gating, no custom
+   type machinery. Fill in what applies; every filled rate bills independently
+   (sum), and a row carrying BOTH a Flat day rate and a specific day rate
+   (Show/Travel/Rehearsal/Press) gets a ⚠ conflict flag (it still bills — the
+   flag is a "did you mean this?" cue, not a lock).
+
+   Column run: Person · Role · Employment · [⚠] · Flat day · Flat tour · Show ·
+   Travel · Rehearsal · Press/Radio · Per diem · Advance · ‖ · Days · Total fee
+   · Total PD · Notes. The totals block reads EFFECTIVE day counts (painted +
+   tour-default inherited) via countsFor — the same counting path as the Days
+   matrix, so the two can never disagree (the pre-261 bug: this grid counted
+   only persisted paints and showed US$0 against a fully-painted matrix).
+
+   Zero amounts render blank (not $0.00 noise); cells stay editable.
+   ============================================ */
+
 import { useCallback, useMemo, useState } from 'react';
 
 import { SpreadsheetGrid } from '@/components/spreadsheet-grid/SpreadsheetGrid';
@@ -8,30 +28,15 @@ import PersonSlideOver from '@/components/entity/person/PersonSlideOver';
 import { useToast } from '@/components/ui/Toast';
 import type { PersonnelRate } from '@/types';
 import { cn } from '@/lib/utils';
-import { countDayStatuses } from '@/lib/payroll/fees';
-import { type RateTypeMeta, isTypeRelevant } from '@/lib/payroll/rateLines';
+import type { DayCounts } from '@/lib/payroll/fees';
+import { hasStackingConflict, type RateTypeMeta } from '@/lib/payroll/rateLines';
 import { amountOf, personTotals, type LineAmountMap } from './rateLinesClient';
-
-/** Per-person day counts, aggregated from payroll_entries. `weeks` feeds the
- *  per_week basis (Weekly rate type) — dropping it renders a weekly fee as 0. */
-type PersonTotals = { show: number; offTravel: number; rehearsal: number; active: number; weeks: number };
 
 const PT_OPTIONS = [
   { value: 'principal', label: 'Principal / Mgmt' },
   { value: 'band', label: 'Band' },
   { value: 'crew', label: 'Crew' },
 ];
-
-const RT_OPTIONS = [
-  { value: 'day_rate', label: 'Day rate' },
-  { value: 'split_rate', label: 'Split rate' },
-  { value: 'flat_tour', label: 'Flat tour' },
-  { value: 'weekly', label: 'Weekly' },
-  { value: 'per_diem_only', label: 'Per diem only' },
-];
-
-/** A person's rate_type, normalised (default = split). */
-const rateTypeOf = (r: PersonnelRate): string => String(r.rate_type ?? 'split_rate');
 
 const SECTION_ORDER = ['principal', 'band', 'crew', 'other'] as const;
 type GroupKey = (typeof SECTION_ORDER)[number];
@@ -55,13 +60,12 @@ const RT_COL_PREFIX = 'rt_';
 const rtColId = (typeId: string) => `${RT_COL_PREFIX}${typeId}`;
 const rtColTypeId = (colId: string) => (colId.startsWith(RT_COL_PREFIX) ? colId.slice(RT_COL_PREFIX.length) : null);
 
-/** Identity/meta columns before the dynamic rate-type columns. */
+/** Identity/meta columns before the rate columns. */
 function buildLeadColumns(canSeeCommission: boolean): GridColumn<PersonnelRate>[] {
   const cols: GridColumn<PersonnelRate>[] = [
     { id: 'person_name', header: 'Person', accessor: 'person_name', type: { kind: 'text' }, width: 160, flex: true },
     { id: 'role', header: 'Role', accessor: 'role', type: { kind: 'text' }, width: 128 },
     { id: 'person_type', header: 'Employment', accessor: 'person_type', type: { kind: 'select', options: PT_OPTIONS }, width: 144 },
-    { id: 'rate_type', header: 'Rate type', accessor: 'rate_type', type: { kind: 'select', options: RT_OPTIONS }, width: 128 },
   ];
   if (canSeeCommission) {
     cols.push({ id: 'commission', header: 'Comm. %', accessor: 'commission', type: { kind: 'percent', decimals: 2 }, align: 'right', width: 80 });
@@ -69,55 +73,72 @@ function buildLeadColumns(canSeeCommission: boolean): GridColumn<PersonnelRate>[
   return cols;
 }
 
-/** One editable currency column per rate type (fee bucket first, then per-diem;
- *  each in catalog order). Cells read/write personnel_rate_lines.amount. */
+/** One editable currency column per canonical rate type, in the catalog's
+ *  (already canonical) order. Cells read/write personnel_rate_lines.amount.
+ *  Zero renders blank — a sea of $0.00 is noise, an empty cell is a prompt. */
 function buildRateTypeColumns(rateTypes: RateTypeMeta[], amountMap: LineAmountMap, ccy: string): GridColumn<PersonnelRate>[] {
-  const ordered = [...rateTypes].sort((a, b) => {
-    if (a.bucket !== b.bucket) return a.bucket === 'per_diem' ? 1 : -1; // fee cols first
-    return a.orderIndex - b.orderIndex;
-  });
-  return ordered.map((t) => ({
-    id: rtColId(t.id),
-    header: t.name,
-    // Rate-type-driven rendering (G2-1): a cell whose type doesn't apply to the
-    // person's rate_type shows BLANK (null → '') instead of £0.00 noise, and is
-    // locked (see cellReadOnly below). A day-rate person shows only their Day
-    // rate + Per diem; a flat person only Flat tour + Per diem; etc.
-    accessor: (r: PersonnelRate) => (isTypeRelevant(rateTypeOf(r), t.id) ? amountOf(amountMap, r.id, t.id) : null),
-    type: { kind: 'currency', currency: ccy, decimals: 2 },
-    align: 'right',
-    width: 112,
-  }));
+  return [...rateTypes]
+    .sort((a, b) => a.orderIndex - b.orderIndex)
+    .map((t) => ({
+      id: rtColId(t.id),
+      header: t.name,
+      accessor: (r: PersonnelRate) => {
+        const v = amountOf(amountMap, r.id, t.id);
+        return v === 0 ? null : v;
+      },
+      type: { kind: 'currency' as const, currency: ccy, decimals: 2 },
+      align: 'right' as const,
+      width: 104,
+    }));
 }
 
-/** Read-only computed totals (days + fee + per-diem) from the rate lines. */
+/** Compact day-count summary: "9S · 4T · 2R · 1P · 3O · 2PD". */
+function daysSummary(c: DayCounts): string {
+  const bits = [
+    c.show ? `${c.show}S` : null,
+    c.offTravel ? `${c.offTravel}T` : null,
+    c.rehearsal ? `${c.rehearsal}R` : null,
+    c.promo ? `${c.promo}P` : null,
+    c.off ? `${c.off}O` : null,
+    c.pdOnly ? `${c.pdOnly}PD` : null,
+  ].filter(Boolean);
+  return bits.length ? bits.join(' · ') : '—';
+}
+
+const EMPTY_COUNTS: DayCounts = { show: 0, offTravel: 0, rehearsal: 0, promo: 0, off: 0, pdOnly: 0, active: 0, assigned: 0, weeks: 0 };
+
+/** Read-only computed totals from the EFFECTIVE day counts + the rate lines. */
 function buildTotalsColumns(
   currency: string,
   rateTypes: RateTypeMeta[],
   amountMap: LineAmountMap,
-  countsByPerson: Map<string, PersonTotals>,
+  countsFor: (personnelRateId: string) => DayCounts,
 ): GridColumn<PersonnelRate>[] {
   const ccy = currency.trim().toUpperCase() || 'GBP';
   const money = new Intl.NumberFormat('en-GB', { style: 'currency', currency: ccy, minimumFractionDigits: 0 });
-  const countsOf = (id: string): PersonTotals => countsByPerson.get(id) ?? { show: 0, offTravel: 0, rehearsal: 0, active: 0, weeks: 0 };
   return [
-    { id: 'show_days', header: 'Show days', accessor: (r) => countsOf(r.id).show, align: 'right', width: 90, type: { kind: 'computed', render: (r) => String(countsOf((r as PersonnelRate).id).show || '—') } },
-    { id: 'off_days', header: 'Off/Travel', accessor: (r) => countsOf(r.id).offTravel, align: 'right', width: 96, type: { kind: 'computed', render: (r) => String(countsOf((r as PersonnelRate).id).offTravel || '—') } },
-    { id: 'total_fee', header: 'Total fee', accessor: (r) => personTotals(amountMap, r.id, rateTypes, countsOf(r.id)).totalFee, align: 'right', width: 120, type: { kind: 'computed', render: (r) => { const row = r as PersonnelRate; return money.format(personTotals(amountMap, row.id, rateTypes, countsOf(row.id)).totalFee); } } },
-    { id: 'total_pd', header: 'Total PD', accessor: (r) => personTotals(amountMap, r.id, rateTypes, countsOf(r.id)).totalPerDiem, align: 'right', width: 110, type: { kind: 'computed', render: (r) => { const row = r as PersonnelRate; return money.format(personTotals(amountMap, row.id, rateTypes, countsOf(row.id)).totalPerDiem); } } },
+    {
+      id: 'days', header: 'Days', accessor: (r) => countsFor(r.id).assigned ?? 0, align: 'right', width: 110,
+      type: { kind: 'computed', render: (r) => daysSummary(countsFor((r as PersonnelRate).id)) },
+    },
+    {
+      id: 'total_fee', header: 'Total fee', accessor: (r) => personTotals(amountMap, r.id, rateTypes, countsFor(r.id)).totalFee, align: 'right', width: 120,
+      type: { kind: 'computed', render: (r) => { const row = r as PersonnelRate; return money.format(personTotals(amountMap, row.id, rateTypes, countsFor(row.id)).totalFee); } },
+    },
+    {
+      id: 'total_pd', header: 'Total PD', accessor: (r) => personTotals(amountMap, r.id, rateTypes, countsFor(r.id)).totalPerDiem, align: 'right', width: 110,
+      type: { kind: 'computed', render: (r) => { const row = r as PersonnelRate; return money.format(personTotals(amountMap, row.id, rateTypes, countsFor(row.id)).totalPerDiem); } },
+    },
   ];
 }
 
-/** b2 — tour personnel rate cards. Rate amounts now live in
- *  personnel_rate_lines (dynamic columns from the workspace catalog); the
- *  legacy show/off/reh/per_diem/advance columns are frozen. */
 export function PayrollRatesSpreadsheet({
   currency,
   initialRates,
   canSeeCommission,
-  payrollEntries,
   rateTypes,
   amountMap,
+  countsFor,
   onRateLineCommit,
   highlightRowId,
   finalized = false,
@@ -125,10 +146,13 @@ export function PayrollRatesSpreadsheet({
   currency: string;
   initialRates: PersonnelRate[];
   canSeeCommission?: boolean;
-  payrollEntries?: Record<string, unknown>[];
+  /** The canonical rate-type catalog (already filtered + ordered by the loader). */
   rateTypes: RateTypeMeta[];
   amountMap: LineAmountMap;
-  /** Persist one cell edit (person × type). Returns after the PATCH resolves. */
+  /** EFFECTIVE day counts per person (painted + tour-default) — the shared
+   *  counting path (usePayrollGrid.effectiveCountsFor). */
+  countsFor: (personnelRateId: string) => DayCounts;
+  /** Persist one cell edit (person × type). Optimistic upstream; may reject. */
   onRateLineCommit: (personnelRateId: string, rateTypeId: string, amount: number) => Promise<void>;
   /** PAY-09 deep-link — the rate card to flash on landing (Personnel → ?focus). */
   highlightRowId?: string | null;
@@ -140,27 +164,46 @@ export function PayrollRatesSpreadsheet({
   const [personOpen, setPersonOpen] = useState<string | null>(null);
   const ccy = currency.trim().toUpperCase() || 'GBP';
 
-  // Per-person day counts from payroll_entries (for the totals cols).
-  const countsByPerson = useMemo(() => {
-    const m = new Map<string, PersonTotals>();
-    for (const e of payrollEntries ?? []) {
-      const pid = e.personnel_id as string;
-      const c = countDayStatuses((e.day_statuses as Record<string, string>) ?? {});
-      const acc = m.get(pid) ?? { show: 0, offTravel: 0, rehearsal: 0, active: 0, weeks: 0 };
-      acc.show += c.show; acc.offTravel += c.offTravel; acc.rehearsal += c.rehearsal; acc.active += c.active;
-      acc.weeks += c.weeks ?? 0;
-      m.set(pid, acc);
-    }
-    return m;
-  }, [payrollEntries]);
+  const safeCountsFor = useCallback(
+    (id: string): DayCounts => countsFor(id) ?? EMPTY_COUNTS,
+    [countsFor],
+  );
+
+  // ⚠ Flat-day + specific-rate conflict (Adam's "warn on conflict" ruling).
+  const conflictOf = useCallback(
+    (personnelRateId: string): boolean =>
+      hasStackingConflict((typeId) => amountOf(amountMap, personnelRateId, typeId)),
+    [amountMap],
+  );
 
   const columns = useMemo(() => {
     const lead = buildLeadColumns(!!canSeeCommission);
+    const flag: GridColumn<PersonnelRate> = {
+      id: 'rate_conflict',
+      header: '',
+      accessor: (r) => (conflictOf(r.id) ? '⚠' : ''),
+      align: 'center',
+      width: 36,
+      type: {
+        kind: 'computed',
+        render: (r) =>
+          conflictOf((r as PersonnelRate).id) ? (
+            <span
+              title="Flat day AND a specific day rate are both set — both bill (they sum). Clear one if that's not intended."
+              style={{ color: 'var(--color-lp-warning)', fontStyle: 'normal', cursor: 'help' }}
+            >
+              ⚠
+            </span>
+          ) : (
+            ''
+          ),
+      },
+    };
     const rtCols = buildRateTypeColumns(rateTypes, amountMap, ccy);
-    const totals = payrollEntries ? buildTotalsColumns(currency, rateTypes, amountMap, countsByPerson) : [];
+    const totals = buildTotalsColumns(currency, rateTypes, amountMap, safeCountsFor);
     const notes: GridColumn<PersonnelRate> = { id: 'base_rate_note', header: 'Notes', accessor: 'base_rate_note', type: { kind: 'text' }, width: 192 };
-    return [...lead, ...rtCols, ...totals, notes];
-  }, [currency, ccy, canSeeCommission, payrollEntries, countsByPerson, rateTypes, amountMap]);
+    return [...lead, flag, ...rtCols, ...totals, notes];
+  }, [currency, ccy, canSeeCommission, rateTypes, amountMap, safeCountsFor, conflictOf]);
 
   // Sort rows by group; build section headers.
   const { gridRows, sectionHeaders } = useMemo(() => {
@@ -185,7 +228,7 @@ export function PayrollRatesSpreadsheet({
       const asString = (v: unknown): string => (v === null || v === undefined ? '' : String(v));
       const asNumber = (v: unknown): number => (typeof v === 'number' ? v : Number(v) || 0);
 
-      // Dynamic rate-type column → write personnel_rate_lines.amount.
+      // Rate-type column → write personnel_rate_lines.amount.
       const typeId = rtColTypeId(columnId);
       if (typeId) {
         try {
@@ -202,7 +245,6 @@ export function PayrollRatesSpreadsheet({
         case 'person_name': patch.person_name = asString(raw).trim(); break;
         case 'role': patch.role = raw === '' || raw === null ? null : asString(raw); break;
         case 'person_type': patch.person_type = asString(raw) || 'crew'; break;
-        case 'rate_type': patch.rate_type = asString(raw) || 'day_rate'; break;
         case 'commission': if (canSeeCommission) patch.commission = asNumber(raw); break;
         case 'base_rate_note': patch.base_rate_note = raw === null || raw === '' ? null : asString(raw); break;
         default: return;
@@ -252,13 +294,9 @@ export function PayrollRatesSpreadsheet({
         sectionHeaders={sectionHeaders}
         onCommitCell={onCommitCell}
         onRowOpen={onRowOpen}
-        cellReadOnly={(row, col) => {
-          if (finalized) return true; // M1-C — whole grid read-only when finalized.
-          const typeId = rtColTypeId(col.id);
-          return typeId ? !isTypeRelevant(rateTypeOf(row.data), typeId) : false;
-        }}
+        cellReadOnly={() => finalized /* M1-C — whole grid read-only when finalized. */}
         ariaLabel="Personnel rate cards"
-        columnWidthsKey="lp-cols-payroll"
+        columnWidthsKey="lp-cols-payroll-v2"
         highlightRowId={highlightRowId}
       />
       {personOpen ? <PersonSlideOver id={personOpen} onClose={() => setPersonOpen(null)} /> : null}

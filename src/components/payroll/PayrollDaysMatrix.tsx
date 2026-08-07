@@ -17,7 +17,7 @@
    ============================================ */
 
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { countDayStatuses } from '@/lib/payroll/fees';
+import type { DayCounts } from '@/lib/payroll/fees';
 import { BRUSH_TYPES, brushTypeToStatus, type BrushType } from '@/lib/payroll/effectiveDayType';
 import { colourForDayType, labelForDayType } from '@/lib/routing/dayType';
 import { getWeekStart, formatWeekLabel } from '@/lib/routing/week';
@@ -25,60 +25,65 @@ import { DEFAULT_RATE_TYPE_IDS, type RateTypeMeta } from '@/lib/payroll/rateLine
 import { amountOf, personTotals, type LineAmountMap } from './rateLinesClient';
 import type { RoutingDay, PayrollPerson } from './usePayrollGrid';
 
+/* Canonical status palette (migration 261): travel keeps the legacy
+   off_travel colour (same bucket); OFF bills the travel rate so it shares the
+   travel hue at lower strength; promo is orange (a performance-adjacent day);
+   PD (per-diem-only) is a muted grey tile — visibly assigned, clearly unpaid.
+   no_tour renders empty. */
 const STATUS_TINT: Record<string, string> = {
   show: 'color-mix(in srgb, var(--color-lp-day-show) 26%, transparent)',
   off_travel: 'color-mix(in srgb, var(--color-lp-warning) 24%, transparent)',
+  travel: 'color-mix(in srgb, var(--color-lp-warning) 24%, transparent)',
   rehearsal: 'color-mix(in srgb, var(--lp-violet) 24%, transparent)',
+  promo_radio: 'color-mix(in srgb, var(--lp-orange) 24%, transparent)',
+  off: 'color-mix(in srgb, var(--color-lp-warning) 12%, transparent)',
+  pd_only: 'color-mix(in srgb, var(--lp-text-tertiary) 14%, transparent)',
 };
 const STATUS_FG: Record<string, string> = {
   show: 'var(--color-lp-day-show)',
   off_travel: 'var(--color-lp-warning)',
+  travel: 'var(--color-lp-warning)',
   rehearsal: 'var(--lp-violet)',
+  promo_radio: 'var(--lp-orange)',
+  off: 'var(--color-lp-warning)',
+  pd_only: 'var(--lp-text-tertiary)',
 };
-const STATUS_ABBR: Record<string, string> = { show: 'S', off_travel: 'T', rehearsal: 'R', no_tour: '' };
-
-/** Per-row rate-type label for the left block (Adam's DELTA — carried beside the
- *  name so the person's type is visible while painting). */
-const RATE_TYPE_LABEL: Record<string, string> = {
-  day_rate: 'Day rate',
-  split_rate: 'Split',
-  flat_tour: 'Flat tour',
-  weekly: 'Weekly',
-  per_diem_only: 'Per diem only',
+const STATUS_ABBR: Record<string, string> = {
+  show: 'S', off_travel: 'T', travel: 'T', rehearsal: 'R', promo_radio: 'P', off: 'O', pd_only: 'PD', no_tour: '',
 };
 
-/* M1-C — inline effective rate in the left block. The matrix answers "what is this
-   cell worth" without opening the Rates disclosure. Reads the rates SSOT amountMap. */
-function effectiveRate(rateType: string, map: LineAmountMap, personnelRateId: string): number {
+/* The left-block rate summary — amount-driven now (there is no per-person
+   rate_type any more). Shows the person's primary daily figure: Flat day when
+   set, else Show, else Flat tour, else Per diem. */
+function primaryRateLabel(map: LineAmountMap, personnelRateId: string, money: Intl.NumberFormat): string | null {
   const id = DEFAULT_RATE_TYPE_IDS;
-  switch (rateType) {
-    case 'day_rate': return amountOf(map, personnelRateId, id.dayRate);
-    case 'flat_tour': return amountOf(map, personnelRateId, id.flatTour);
-    case 'weekly': return amountOf(map, personnelRateId, id.weekly);
-    case 'per_diem_only': return amountOf(map, personnelRateId, id.perDiem);
-    default: return amountOf(map, personnelRateId, id.show); // split_rate + fallback
-  }
-}
-function rateUnit(rateType: string): string {
-  switch (rateType) {
-    case 'flat_tour': return ' flat';
-    case 'weekly': return '/wk';
-    case 'per_diem_only': return '/day PD';
-    default: return '/day';
-  }
+  const flatDay = amountOf(map, personnelRateId, id.dayRate);
+  if (flatDay > 0) return `${money.format(flatDay)}/day flat`;
+  const show = amountOf(map, personnelRateId, id.show);
+  if (show > 0) return `${money.format(show)}/show`;
+  const flatTour = amountOf(map, personnelRateId, id.flatTour);
+  if (flatTour > 0) return `${money.format(flatTour)} flat tour`;
+  const pd = amountOf(map, personnelRateId, id.perDiem);
+  if (pd > 0) return `${money.format(pd)}/day PD`;
+  return null;
 }
 
-/** Rate types whose FEE moves with painted days (split by day-status, or flat per
- *  active day). For everything else — Flat tour (fixed), Weekly (per week), Per
- *  diem only (no fee) — painting days does NOT scale the fee, so worked cells
- *  render dimmed, the day count is marked (18*), and a row note explains why. */
-const FEE_MOVES_WITH_DAYS = new Set(['split_rate', 'day_rate']);
-const isFlatFee = (rateType: string) => !FEE_MOVES_WITH_DAYS.has(rateType);
-const FLAT_NOTE: Record<string, string> = {
-  flat_tour: 'days don’t change the flat fee — per diem still counts',
-  weekly: 'days set the week count — per diem still counts',
-  per_diem_only: 'per diem only — no daily fee',
-};
+/** Fee-shape flags for a person, from their amounts (replaces the retired
+ *  rate_type). When NO per-day fee is set, painting days doesn't scale the fee
+ *  — cells dim and a note explains why (flat tour / per-diem-only people). */
+function feeShapeOf(map: LineAmountMap, personnelRateId: string): { perDayFee: boolean; note: string | null } {
+  const id = DEFAULT_RATE_TYPE_IDS;
+  const perDayFee =
+    amountOf(map, personnelRateId, id.dayRate) > 0 ||
+    amountOf(map, personnelRateId, id.show) > 0 ||
+    amountOf(map, personnelRateId, id.offTravel) > 0 ||
+    amountOf(map, personnelRateId, id.rehearsal) > 0 ||
+    amountOf(map, personnelRateId, id.pressRadio) > 0;
+  if (perDayFee) return { perDayFee, note: null };
+  if (amountOf(map, personnelRateId, id.flatTour) > 0) return { perDayFee, note: 'days don’t change the flat fee — per diem still counts' };
+  if (amountOf(map, personnelRateId, id.perDiem) > 0) return { perDayFee, note: 'per diem only — no daily fee' };
+  return { perDayFee, note: null };
+}
 
 // G2-2b GRID QUALITY PASS — exact metrics from CC_G2_BUILD.md §G2-2b.
 // The left block carries identity + numbers; the matrix fills the page.
@@ -149,6 +154,7 @@ export function PayrollDaysMatrix({
   fillDays,
   rateTypes,
   amountMap,
+  effectiveCountsFor,
   focusRowId,
   finalized = false,
 }: {
@@ -165,6 +171,9 @@ export function PayrollDaysMatrix({
   fillDays: (personnelId: string, pairs: { date: string; status: string }[]) => void | Promise<void>;
   rateTypes: RateTypeMeta[];
   amountMap: LineAmountMap;
+  /** EFFECTIVE day counts (painted + tour-default) — the ONE counting path
+   *  shared with the Rates grid, so the two surfaces always agree. */
+  effectiveCountsFor: (personnelRateId: string) => DayCounts;
   /** PAY-09 deep-link — the person row (personnel_rates.id) to flash + scroll to
    *  on landing. Null clears the ring; the caller owns the fade timer. */
   focusRowId?: string | null;
@@ -172,11 +181,6 @@ export function PayrollDaysMatrix({
   finalized?: boolean;
 }) {
   const people = useMemo(() => personnelRates.map(toPerson), [personnelRates]);
-  // Per-person rate_type (for the left-block "· Day rate" label).
-  const rateTypeById = useMemo(
-    () => new Map(personnelRates.map((pr) => [pr.id as string, (pr.rate_type as string) ?? 'day_rate'])),
-    [personnelRates],
-  );
   const days = useMemo(
     () => [...routingDates].filter((r) => r.date).sort((a, b) => a.date.localeCompare(b.date)),
     [routingDates],
@@ -285,17 +289,16 @@ export function PayrollDaysMatrix({
     [people, days, isExplicit, brush, tourDayTypeOf, fillDays, finalized],
   );
 
-  // Live per-person stats from the row's own cells (same fees.ts engine as
-  // Rates / the budget reconcile) — day counts + fee + per-diem for the left block.
+  // Live per-person stats via the SHARED effective-counts path (same counts
+  // the Rates grid reads) + the same fees.ts engine — the two surfaces agree
+  // by construction.
   const statsFor = useCallback(
     (personId: string) => {
-      const statuses: Record<string, string> = {};
-      for (const d of days) statuses[d.date] = statusOf(personId, d.date);
-      const counts = countDayStatuses(statuses);
+      const counts = effectiveCountsFor(personId);
       const t = personTotals(amountMap, personId, rateTypes, counts);
       return { counts, fee: t.totalFee, pd: t.totalPerDiem };
     },
-    [days, statusOf, amountMap, rateTypes],
+    [effectiveCountsFor, amountMap, rateTypes],
   );
 
   // Aggregate totals bar (fees · per diem · total) across everyone.
@@ -424,20 +427,21 @@ export function PayrollDaysMatrix({
 
           {/* Data rows — each person is one left-block cell + N day cells. */}
           {people.map((p, r) => {
-            const rowFlat = isFlatFee(rateTypeById.get(p.id) ?? 'day_rate');
+            const shape = feeShapeOf(amountMap, p.id);
+            const rowFlat = !shape.perDayFee && shape.note !== null;
             const rowHover = hover?.r === r;
             const isFocusRow = !!focusRowId && p.id === focusRowId;
             const leftBg = rowHover ? 'color-mix(in srgb, var(--lp-orange) 6%, var(--lp-surface))' : 'var(--lp-surface)';
             const s = statsFor(p.id);
-            const rtKey = rateTypeById.get(p.id) ?? 'day_rate';
-            const rt = RATE_TYPE_LABEL[rtKey] ?? 'Day rate';
-            const flat = isFlatFee(rtKey);
-            const effRate = effectiveRate(rtKey, amountMap, p.id);
-            const effRateLabel = effRate > 0 ? `${money.format(effRate)}${rateUnit(rtKey)}` : null;
+            const flat = rowFlat;
+            const effRateLabel = primaryRateLabel(amountMap, p.id, money);
             const countBits = [
               s.counts.show ? `${s.counts.show} S` : null,
-              s.counts.offTravel ? `${s.counts.offTravel} O` : null,
+              s.counts.offTravel ? `${s.counts.offTravel} T` : null,
               s.counts.rehearsal ? `${s.counts.rehearsal} R` : null,
+              s.counts.promo ? `${s.counts.promo} P` : null,
+              s.counts.off ? `${s.counts.off} O` : null,
+              s.counts.pdOnly ? `${s.counts.pdOnly} PD` : null,
             ].filter(Boolean).join(' · ');
             return (
               <Fragment key={p.id}>
@@ -448,20 +452,20 @@ export function PayrollDaysMatrix({
                       {p.person_name || '—'}
                     </div>
                     <div style={{ fontSize: 12, color: 'var(--lp-text-tertiary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', lineHeight: 1.3 }}>
-                      {p.role ? p.role : ''}{p.role ? ' · ' : ''}{rt}
-                      {/* M1-C — effective rate (mono), so the matrix answers "what
+                      {p.role ? p.role : ''}
+                      {/* M1-C — primary rate (mono), so the matrix answers "what
                           is this worth" without opening the Rates disclosure. Folded
                           into this line to keep the 52px row height (G2-2b metric). */}
                       {effRateLabel ? (
                         <span style={{ fontFamily: 'var(--lp-font-numeric)', fontWeight: 600, color: 'var(--lp-text-secondary)' }}>
-                          {' · '}{effRateLabel}
+                          {p.role ? ' · ' : ''}{effRateLabel}
                         </span>
                       ) : null}
                     </div>
                     <div style={{ fontSize: 12, color: 'var(--lp-text-tertiary)', fontFamily: 'var(--lp-font-numeric)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', lineHeight: 1.3 }}>
                       {countBits || '—'}
-                      {flat && countBits ? <span style={{ color: 'var(--lp-orange)', fontWeight: 700 }} title={FLAT_NOTE[rtKey]}>{' *'}</span> : null}
-                      {flat ? <span style={{ fontStyle: 'italic', color: 'var(--lp-text-tertiary)', fontFamily: 'var(--font-sans)' }}>{`  — ${FLAT_NOTE[rtKey]}`}</span> : null}
+                      {flat && countBits ? <span style={{ color: 'var(--lp-orange)', fontWeight: 700 }} title={shape.note ?? undefined}>{' *'}</span> : null}
+                      {flat && shape.note ? <span style={{ fontStyle: 'italic', color: 'var(--lp-text-tertiary)', fontFamily: 'var(--font-sans)' }}>{`  — ${shape.note}`}</span> : null}
                     </div>
                   </div>
                   <div style={{ fontFamily: 'var(--lp-font-numeric)', fontWeight: 700, fontSize: 18, color: 'var(--lp-text)', whiteSpace: 'nowrap', letterSpacing: '-0.01em' }}>

@@ -1,16 +1,27 @@
 /* ============================================
-   LOWPASS — Rate-lines model (extensible payroll rates, b2 UI phase)
+   LOWPASS — Rate-lines model (canonical flat-seven, migration 261)
 
-   PURE bridge between the DB (migration 228: rate_types + personnel_rate_lines)
-   and the fee engine (fees.ts computeTotals). A person's total is computed over
-   their RateLines, each = one personnel_rate_lines row married to its rate_type's
+   PURE bridge between the DB (rate_types + personnel_rate_lines) and the fee
+   engine (fees.ts computeTotals). A person's total is computed over their
+   RateLines, each = one personnel_rate_lines row married to its rate_type's
    bucket / basis / day_statuses.
 
-   The five DEFAULT_RATE_TYPES below mirror migration 228's seed (ids a1–a5) and
-   reproduce ratesToLines() EXACTLY — that equivalence is the money gate proven in
-   reconcile.harness.ts (rate-lines totals === legacy-column totals).
+   ADAM'S CANONICAL MODEL (2026-08-07): the grid is a FLAT set of always-
+   editable rate columns — no per-person rate_type gating, no custom types.
+     Flat day (a6) · Flat tour (a7) · Show (a1) · Travel (a2) · Rehearsal (a3)
+     · Press/Radio (a9) · Per diem (a4) · Advance (a5)
+   Every filled rate bills independently (sum). Weekly (a8) and custom
+   workspace types are no longer loaded — their rows stay in the DB but do
+   not bill (see CANONICAL_RATE_TYPE_IDS + the loader filters).
 
-   No 'use client', no supabase — server + client + the node harness all import it.
+   PRESS/RADIO FALLBACK (the Dillon ruling, kept as the default): a
+   promo_radio day bills the person's Press/Radio rate when one is set,
+   otherwise their SHOW rate. resolvePersonLines() is the ONE place that
+   resolution happens — every reader (client grids, server money paths, the
+   node harness) must build lines through it.
+
+   No 'use client', no supabase — server + client + the node harness all
+   import it.
    ============================================ */
 
 import type { DayStatus, RateBucket, RateBasis, RateLine, RateLike } from './fees';
@@ -25,77 +36,57 @@ export interface RateTypeMeta {
   orderIndex: number;
 }
 
-/** The five seeded defaults (migration 228, ids a1–a5). Kept in sync with the
- *  SQL seed; the harness asserts these reproduce ratesToLines exactly. */
+/** The seeded defaults (migrations 228/229/242/261, fixed ids a1–a9). */
 export const DEFAULT_RATE_TYPE_IDS = {
   show: '00000000-0000-0000-0000-0000000000a1',
   offTravel: '00000000-0000-0000-0000-0000000000a2',
   rehearsal: '00000000-0000-0000-0000-0000000000a3',
   perDiem: '00000000-0000-0000-0000-0000000000a4',
   advance: '00000000-0000-0000-0000-0000000000a5',
-  // Migration 229 — the day_rate fork resolution: a flat per-active-day fee.
+  /** Migration 229's Day rate — renamed 'Flat day' by 261. Same id, same basis. */
   dayRate: '00000000-0000-0000-0000-0000000000a6',
-  // Migration 242 — the two remaining graded rate types (G2-1 rate-type wiring):
-  //   flatTour = one lump sum for the whole tour (flat_once);
-  //   weekly   = a per-calendar-week fee (per_week — Mon-anchored week count).
   flatTour: '00000000-0000-0000-0000-0000000000a7',
+  /** Legacy Weekly (242) — NOT in the canonical set; kept for reference only. */
   weekly: '00000000-0000-0000-0000-0000000000a8',
+  /** Press / Radio (261). */
+  pressRadio: '00000000-0000-0000-0000-0000000000a9',
 } as const;
 
+/** The canonical loadable set, in Adam's display order. Weekly (a8) and
+ *  custom workspace types are deliberately absent — filtering the catalog to
+ *  this list is what retires them (reversible: their DB rows are untouched). */
+export const CANONICAL_RATE_TYPE_IDS: string[] = [
+  DEFAULT_RATE_TYPE_IDS.dayRate,     // Flat day
+  DEFAULT_RATE_TYPE_IDS.flatTour,    // Flat tour
+  DEFAULT_RATE_TYPE_IDS.show,        // Show
+  DEFAULT_RATE_TYPE_IDS.offTravel,   // Travel
+  DEFAULT_RATE_TYPE_IDS.rehearsal,   // Rehearsal
+  DEFAULT_RATE_TYPE_IDS.pressRadio,  // Press / Radio
+  DEFAULT_RATE_TYPE_IDS.perDiem,     // Per diem
+  DEFAULT_RATE_TYPE_IDS.advance,     // Advance
+];
+
+/** Display order index for a canonical type id (grid column order). */
+export function canonicalOrderOf(typeId: string): number {
+  const i = CANONICAL_RATE_TYPE_IDS.indexOf(typeId);
+  return i === -1 ? Number.MAX_SAFE_INTEGER : i;
+}
+
+/** The canonical catalog as code (mirrors the 228/229/242/261 seeds). Used by
+ *  the harness + as the client-side fallback ordering; the DB rows are the
+ *  runtime truth. */
 export const DEFAULT_RATE_TYPES: RateTypeMeta[] = [
-  { id: DEFAULT_RATE_TYPE_IDS.show, name: 'Show', bucket: 'fee', basis: 'per_day_status', dayStatuses: ['show'], orderIndex: 0 },
-  { id: DEFAULT_RATE_TYPE_IDS.offTravel, name: 'Off / Travel', bucket: 'fee', basis: 'per_day_status', dayStatuses: ['off_travel'], orderIndex: 1 },
-  { id: DEFAULT_RATE_TYPE_IDS.rehearsal, name: 'Rehearsal', bucket: 'fee', basis: 'per_day_status', dayStatuses: ['rehearsal'], orderIndex: 2 },
-  { id: DEFAULT_RATE_TYPE_IDS.perDiem, name: 'Per diem', bucket: 'per_diem', basis: 'per_active_day', dayStatuses: [], orderIndex: 3 },
-  { id: DEFAULT_RATE_TYPE_IDS.advance, name: 'Advance', bucket: 'fee', basis: 'flat_once', dayStatuses: [], orderIndex: 4 },
-  // Day rate (migration 229): flat per engaged day — off_rate × active days. This
-  // is how a `day_rate` person is priced under the rate-lines model (their split
-  // Show/Off/Rehearsal lines are removed by 229's corrective backfill).
-  { id: DEFAULT_RATE_TYPE_IDS.dayRate, name: 'Day rate', bucket: 'fee', basis: 'per_active_day', dayStatuses: [], orderIndex: 5 },
-  // Flat tour (migration 242): one lump-sum fee for the engagement, paid once
-  // regardless of how many days are worked. Days still count for per diem.
-  { id: DEFAULT_RATE_TYPE_IDS.flatTour, name: 'Flat tour', bucket: 'fee', basis: 'flat_once', dayStatuses: [], orderIndex: 6 },
-  // Weekly (migration 242): a per-calendar-week fee — amount × number of distinct
-  // Mon-anchored weeks that contain an active day (see fees.ts countDayStatuses).
-  { id: DEFAULT_RATE_TYPE_IDS.weekly, name: 'Weekly', bucket: 'fee', basis: 'per_week', dayStatuses: [], orderIndex: 7 },
+  { id: DEFAULT_RATE_TYPE_IDS.dayRate, name: 'Flat day', bucket: 'fee', basis: 'per_active_day', dayStatuses: [], orderIndex: 0 },
+  { id: DEFAULT_RATE_TYPE_IDS.flatTour, name: 'Flat tour', bucket: 'fee', basis: 'flat_once', dayStatuses: [], orderIndex: 1 },
+  { id: DEFAULT_RATE_TYPE_IDS.show, name: 'Show', bucket: 'fee', basis: 'per_day_status', dayStatuses: ['show'], orderIndex: 2 },
+  // Travel bills travel days (both spellings) AND painted Off days — Adam:
+  // "OFF should pay travel rate". Buckets are disjoint, so no double-billing.
+  { id: DEFAULT_RATE_TYPE_IDS.offTravel, name: 'Travel', bucket: 'fee', basis: 'per_day_status', dayStatuses: ['off_travel', 'travel', 'off'], orderIndex: 3 },
+  { id: DEFAULT_RATE_TYPE_IDS.rehearsal, name: 'Rehearsal', bucket: 'fee', basis: 'per_day_status', dayStatuses: ['rehearsal'], orderIndex: 4 },
+  { id: DEFAULT_RATE_TYPE_IDS.pressRadio, name: 'Press / Radio', bucket: 'fee', basis: 'per_day_status', dayStatuses: ['promo_radio'], orderIndex: 5 },
+  { id: DEFAULT_RATE_TYPE_IDS.perDiem, name: 'Per diem', bucket: 'per_diem', basis: 'per_assigned_day', dayStatuses: [], orderIndex: 6 },
+  { id: DEFAULT_RATE_TYPE_IDS.advance, name: 'Advance', bucket: 'fee', basis: 'flat_once', dayStatuses: [], orderIndex: 7 },
 ];
-
-/** The FEE universe — the mutually-exclusive fee slices across every rate_type.
- *  A person owns exactly one slice (see ownedFeeTypeIds); every OTHER slice must
- *  not exist for them or computeTotals double-counts. Per diem (a4) + advance
- *  (a5) are NOT here — they are universal (carried by every rate_type). */
-export const FEE_UNIVERSE_IDS: string[] = [
-  DEFAULT_RATE_TYPE_IDS.show,
-  DEFAULT_RATE_TYPE_IDS.offTravel,
-  DEFAULT_RATE_TYPE_IDS.rehearsal,
-  DEFAULT_RATE_TYPE_IDS.dayRate,
-  DEFAULT_RATE_TYPE_IDS.flatTour,
-  DEFAULT_RATE_TYPE_IDS.weekly,
-];
-
-/** The fee rate-type ids a person of this `rate_type` OWNS. THE single source of
- *  truth for which fee fields a rate type carries — writeRates emits/keeps exactly
- *  these, and the Rates grid shows/edits exactly these (blanks + locks the rest,
- *  killing the "£0.00 in five irrelevant columns" noise). Flat tour / Weekly own
- *  their grid-entered line (a7/a8); per-diem-only owns no fee. */
-export function ownedFeeTypeIds(rateType: string): string[] {
-  switch (rateType) {
-    case 'day_rate': return [DEFAULT_RATE_TYPE_IDS.dayRate];
-    case 'flat_tour': return [DEFAULT_RATE_TYPE_IDS.flatTour];
-    case 'weekly': return [DEFAULT_RATE_TYPE_IDS.weekly];
-    case 'per_diem_only': return [];
-    case 'split_rate':
-    default: return [DEFAULT_RATE_TYPE_IDS.show, DEFAULT_RATE_TYPE_IDS.offTravel, DEFAULT_RATE_TYPE_IDS.rehearsal];
-  }
-}
-
-/** Is rate type `typeId` relevant to a person on `rateType`? A fee-universe type
- *  is relevant only if the person owns it; per diem / advance / custom types are
- *  universal (always shown). Used by the Rates grid to hide/lock irrelevant cells. */
-export function isTypeRelevant(rateType: string, typeId: string): boolean {
-  if (!FEE_UNIVERSE_IDS.includes(typeId)) return true;
-  return ownedFeeTypeIds(rateType).includes(typeId);
-}
 
 /** One personnel_rate_lines row: which type + the amount. */
 export interface RateLineRow {
@@ -113,22 +104,72 @@ export function toRateLine(meta: RateTypeMeta, amount: number | string | null): 
   };
 }
 
-/** Build a person's RateLines from their personnel_rate_lines rows + the rate_type
- *  catalog. Rows whose type isn't in the catalog are skipped (defensive). The
- *  order follows the catalog's orderIndex so a fee sum is deterministic. */
-export function buildRateLines(rows: RateLineRow[], types: RateTypeMeta[]): RateLine[] {
+const num = (v: unknown): number => Number(v) || 0;
+
+/** Build a person's RateLines from their personnel_rate_lines rows + the
+ *  rate_type catalog, THEN apply the per-person resolutions the canonical
+ *  model requires. This is the ONE line-assembly path — client grids, server
+ *  money readers and the node harness all come through here so they can
+ *  never disagree.
+ *
+ *  Resolutions applied:
+ *   1. PRESS/RADIO FALLBACK — when the person's Press/Radio amount is 0 (or
+ *      absent), promo_radio days bill their SHOW rate instead: the Show
+ *      line's dayStatuses gains 'promo_radio' and the empty a9 line drops.
+ *      When a Press/Radio amount IS set, the two lines stay separate.
+ *  Rows whose type isn't in the catalog are skipped (this is also what
+ *  retires Weekly + custom types once the loaders filter the catalog). */
+export function resolvePersonLines(rows: RateLineRow[], types: RateTypeMeta[]): RateLine[] {
   const metaById = new Map(types.map((t) => [t.id, t]));
   const amountByType = new Map(rows.map((r) => [r.rate_type_id, r.amount]));
+
+  const pressAmount = num(amountByType.get(DEFAULT_RATE_TYPE_IDS.pressRadio));
+  const pressFallsToShow = pressAmount === 0 && metaById.has(DEFAULT_RATE_TYPE_IDS.show);
+
   return [...types]
     .sort((a, b) => a.orderIndex - b.orderIndex)
     .filter((t) => amountByType.has(t.id))
-    .map((t) => toRateLine(metaById.get(t.id)!, amountByType.get(t.id) ?? 0));
+    .filter((t) => !(pressFallsToShow && t.id === DEFAULT_RATE_TYPE_IDS.pressRadio))
+    .map((t) => {
+      const line = toRateLine(metaById.get(t.id)!, amountByType.get(t.id) ?? 0);
+      if (pressFallsToShow && t.id === DEFAULT_RATE_TYPE_IDS.show) {
+        return { ...line, dayStatuses: [...(line.dayStatuses ?? []), 'promo_radio' as DayStatus] };
+      }
+      return line;
+    });
 }
 
-/** Reference: build the five DEFAULT lines directly from the legacy column values,
- *  in the catalog order. Used by the reconciliation gate — proving this equals
- *  ratesToLines(rate, advance) means switching the read source moves no money. */
+/** Back-compat alias — every caller now gets the resolved lines. */
+export function buildRateLines(rows: RateLineRow[], types: RateTypeMeta[]): RateLine[] {
+  return resolvePersonLines(rows, types);
+}
+
+/** Does this person have the Flat-day + specific-day-rate CONFLICT Adam asked
+ *  the grid to warn on? (Both still bill — sum — but the row gets flagged.) */
+export function hasStackingConflict(amountFor: (typeId: string) => number): boolean {
+  const flatDay = amountFor(DEFAULT_RATE_TYPE_IDS.dayRate);
+  if (flatDay === 0) return false;
+  return (
+    amountFor(DEFAULT_RATE_TYPE_IDS.show) !== 0 ||
+    amountFor(DEFAULT_RATE_TYPE_IDS.offTravel) !== 0 ||
+    amountFor(DEFAULT_RATE_TYPE_IDS.rehearsal) !== 0 ||
+    amountFor(DEFAULT_RATE_TYPE_IDS.pressRadio) !== 0
+  );
+}
+
+/** Reference: build the five DEFAULT lines directly from the legacy column
+ *  values. Used by the reconciliation gate — proving this equals
+ *  ratesToLines(rate, advance) means switching the read source moves no money.
+ *  (Uses the legacy metas: per diem per_active_day, off_travel only — this is
+ *  the LEGACY equivalence proof, deliberately frozen.) */
 export function defaultLinesFromLegacy(rate: RateLike, advanceFee: number | string | null = 0): RateLine[] {
+  const legacyMetas: RateTypeMeta[] = [
+    { id: DEFAULT_RATE_TYPE_IDS.show, name: 'Show', bucket: 'fee', basis: 'per_day_status', dayStatuses: ['show'], orderIndex: 0 },
+    { id: DEFAULT_RATE_TYPE_IDS.offTravel, name: 'Off / Travel', bucket: 'fee', basis: 'per_day_status', dayStatuses: ['off_travel'], orderIndex: 1 },
+    { id: DEFAULT_RATE_TYPE_IDS.rehearsal, name: 'Rehearsal', bucket: 'fee', basis: 'per_day_status', dayStatuses: ['rehearsal'], orderIndex: 2 },
+    { id: DEFAULT_RATE_TYPE_IDS.perDiem, name: 'Per diem', bucket: 'per_diem', basis: 'per_active_day', dayStatuses: [], orderIndex: 3 },
+    { id: DEFAULT_RATE_TYPE_IDS.advance, name: 'Advance', bucket: 'fee', basis: 'flat_once', dayStatuses: [], orderIndex: 4 },
+  ];
   const amountFor = (id: string): number | string | null => {
     switch (id) {
       case DEFAULT_RATE_TYPE_IDS.show: return rate.show_rate ?? 0;
@@ -139,6 +180,6 @@ export function defaultLinesFromLegacy(rate: RateLike, advanceFee: number | stri
       default: return 0;
     }
   };
-  const rows: RateLineRow[] = DEFAULT_RATE_TYPES.map((t) => ({ rate_type_id: t.id, amount: amountFor(t.id) }));
-  return buildRateLines(rows, DEFAULT_RATE_TYPES);
+  const rows: RateLineRow[] = legacyMetas.map((t) => ({ rate_type_id: t.id, amount: amountFor(t.id) }));
+  return resolvePersonLines(rows, legacyMetas);
 }

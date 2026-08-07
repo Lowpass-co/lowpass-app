@@ -12,12 +12,14 @@ import { NextResponse } from 'next/server';
 import { requireWrite } from '@/lib/auth/workspace-check';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 // b2 — totals now sum a person's rate lines (personnel_rate_lines × rate_types)
-// via computeTotals, instead of the legacy rate_type-branched inline math.
-import { computeTotals } from '@/lib/payroll/fees';
+// via computeTotals; day counting + the day_type→status map come from the
+// canonical SSOTs (fees.countDayStatuses / effectiveDayType.dayTypeToPayStatus)
+// so generate can never disagree with the payroll display.
+import { computeTotals, countDayStatuses } from '@/lib/payroll/fees';
+import { dayTypeToPayStatus, type PayStatus } from '@/lib/payroll/effectiveDayType';
 import { loadTourRateContext, rateLinesFor } from '@/lib/payroll/loadRateLines';
 
-type DayStatus = 'show' | 'off_travel' | 'rehearsal' | 'no_tour';
-type RoutingDayType = string;
+type DayStatus = PayStatus;
 
 /** Get Monday (week_start) for a given date in YYYY-MM-DD */
 function getWeekStart(dateStr: string): string {
@@ -26,16 +28,6 @@ function getWeekStart(dateStr: string): string {
   const diff = day === 0 ? -6 : 1 - day;
   d.setUTCDate(d.getUTCDate() + diff);
   return d.toISOString().slice(0, 10);
-}
-
-/** Map routing day_type to payroll day_status */
-function dayTypeToStatus(dayType: RoutingDayType): DayStatus {
-  const t = (dayType ?? '').toLowerCase().trim();
-  if (!t) return 'no_tour';
-  if (t === 'show' || t === 'festival') return 'show';
-  if (t === 'rehearsal') return 'rehearsal';
-  if (['off', 'travel', 'press', 'radio', 'tv'].includes(t)) return 'off_travel';
-  return 'off_travel';
 }
 
 /** All dates Mon–Sun for a given week_start */
@@ -47,21 +39,6 @@ function weekDates(weekStart: string): string[] {
     d.setUTCDate(d.getUTCDate() + 1);
   }
   return out;
-}
-
-function countDayStatuses(
-  dayStatuses: Record<string, DayStatus>
-): { show: number; offTravel: number; rehearsal: number; active: number } {
-  let show = 0;
-  let offTravel = 0;
-  let rehearsal = 0;
-  for (const v of Object.values(dayStatuses)) {
-    if (v === 'show') show++;
-    else if (v === 'off_travel') offTravel++;
-    else if (v === 'rehearsal') rehearsal++;
-  }
-  const active = show + offTravel + rehearsal;
-  return { show, offTravel, rehearsal, active };
 }
 
 export async function POST(request: Request) {
@@ -151,7 +128,7 @@ export async function POST(request: Request) {
       const dayStatuses: Record<string, DayStatus> = {};
       for (const dateStr of dates) {
         const r = routingByDate.get(dateStr);
-        dayStatuses[dateStr] = r ? dayTypeToStatus(r.day_type) : 'no_tour';
+        dayStatuses[dateStr] = r ? dayTypeToPayStatus(r.day_type) : 'no_tour';
       }
       const advanceFee = weekIndex === 0 ? advanceFeeTotal : 0;
       // Rate-lines totals: sum this person's lines over the week's day counts.

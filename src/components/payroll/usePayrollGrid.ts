@@ -13,26 +13,24 @@
 import { useCallback, useMemo, useState } from 'react';
 import { getWeekStart } from './payroll-utils';
 import { useToast } from '@/components/ui/Toast';
-import { brushTypeToStatus, type BrushType } from '@/lib/payroll/effectiveDayType';
+import { brushTypeToStatus, dayTypeToPayStatus, type BrushType } from '@/lib/payroll/effectiveDayType';
+import { countDayStatuses, type DayCounts } from '@/lib/payroll/fees';
 
-export const DAY_OPTIONS = [
-  { value: 'show', label: 'SHOW DAY' },
-  { value: 'off_travel', label: 'OFF/TRAVEL DAY' },
-  { value: 'no_tour', label: 'NO TOUR' },
-];
-
-/** routing.day_type → payroll day status (matches the week sheet + generate). */
+/** routing.day_type → payroll day status. Delegates to the canonical SSOT
+ *  (effectiveDayType.dayTypeToPayStatus) — kept as a named export for
+ *  existing call sites. */
 export function dayTypeToStatus(dayType: string | undefined): string {
-  const t = (dayType ?? '').toLowerCase();
-  if (t === 'show' || t === 'festival') return 'show';
-  if (['off', 'travel', 'press', 'radio', 'tv', 'rehearsal'].includes(t)) return 'off_travel';
-  return 'no_tour';
+  return dayTypeToPayStatus(dayType);
 }
 
 /** Token tint for a day status (replaces the hardcoded Tailwind emerald/amber). */
 export function dayStatusTint(status: string): string | undefined {
   if (status === 'show') return 'color-mix(in srgb, var(--color-lp-day-show) 18%, transparent)';
-  if (status === 'off_travel') return 'color-mix(in srgb, var(--color-lp-warning) 18%, transparent)';
+  if (status === 'off_travel' || status === 'travel') return 'color-mix(in srgb, var(--color-lp-warning) 18%, transparent)';
+  if (status === 'rehearsal') return 'color-mix(in srgb, var(--lp-violet) 18%, transparent)';
+  if (status === 'promo_radio') return 'color-mix(in srgb, var(--lp-orange) 18%, transparent)';
+  if (status === 'off') return 'color-mix(in srgb, var(--color-lp-warning) 10%, transparent)';
+  if (status === 'pd_only') return 'color-mix(in srgb, var(--lp-text-tertiary) 14%, transparent)';
   return undefined; // no_tour → no tint
 }
 
@@ -186,5 +184,21 @@ export function usePayrollGrid(
     [tourId, entryByPersonWeek, showToast],
   );
 
-  return { statusOf, saveDayStatus, saveDayType, tourDayTypeOf, isExplicit, fillDays, entries };
+  /** EFFECTIVE day counts for a person across every routing date (persisted
+   *  paint ?? tour-default). This is the ONE counting path the Rates grid, the
+   *  Days matrix and the totals bar all read, so they can never disagree —
+   *  counting only persisted entries was the "Rates totals ≠ matrix" bug. */
+  const effectiveCountsFor = useCallback(
+    (personnelId: string): DayCounts => {
+      const statuses: Record<string, string> = {};
+      for (const r of routingDates) {
+        const d = (r.date ?? '').slice(0, 10);
+        if (d) statuses[d] = statusOf(personnelId, d);
+      }
+      return countDayStatuses(statuses);
+    },
+    [routingDates, statusOf],
+  );
+
+  return { statusOf, saveDayStatus, saveDayType, tourDayTypeOf, isExplicit, fillDays, entries, effectiveCountsFor };
 }

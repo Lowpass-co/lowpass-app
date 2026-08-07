@@ -23,6 +23,7 @@ import { resolveArtistLogoUrl } from '@/lib/artists/imageUrl';
 // split for the 5 defaults and to the flat total for day_rate (a6) — proven in
 // reconcile.harness.ts. The advance stays sourced from the per-week entry below.
 import { countDayStatuses, computeTotals, type DayCounts } from '@/lib/payroll/fees';
+import { effectiveStatuses } from '@/lib/payroll/effectiveDayType';
 import { loadTourRateContext, rateLinesFor, rateAmountsFor, type TourRateContext } from '@/lib/payroll/loadRateLines';
 import type { DateRange } from '@/lib/export/template-config';
 import { resolveVenue, type RoutingVenueSource } from '@/lib/venues/resolveVenue';
@@ -86,6 +87,14 @@ export interface PayrollExportData {
 
 const num = (v: unknown): number => Number(v) || 0;
 
+/** Monday (ISO week start) of a 'YYYY-MM-DD' date — matches fees.ts/payroll-utils. */
+function weekStartOf(dateStr: string): string {
+  const d = new Date(dateStr + 'T12:00:00Z');
+  const day = d.getUTCDay();
+  d.setUTCDate(d.getUTCDate() + (day === 0 ? -6 : 1 - day));
+  return d.toISOString().slice(0, 10);
+}
+
 /** Keep only day_statuses whose date falls within [from,to] (null = open). */
 function filterStatusesByRange(statuses: Record<string, string> | null, range?: DateRange): Record<string, string> {
   const all = statuses ?? {};
@@ -109,7 +118,7 @@ export async function loadPayrollExportData(
   const currency = (tour.currency || 'GBP').toUpperCase();
   const range = opts?.range;
 
-  const [rosterRes, ratesRes, entriesRes, artistRes] = await Promise.all([
+  const [rosterRes, ratesRes, entriesRes, artistRes, routingRes] = await Promise.all([
     supabase.from('tour_personnel').select('id, person_id, role').eq('tour_id', tourId).eq('workspace_id', workspaceId),
     // EXCLUDE internal_rate from the projection — never selected, never exposed.
     supabase
@@ -123,6 +132,9 @@ export async function loadPayrollExportData(
     tour.artist_id
       ? supabase.from('artists').select('id, name, branding, spotify_id, spotify_image_url').eq('id', tour.artist_id).maybeSingle()
       : Promise.resolve({ data: null }),
+    // EFFECTIVE COUNTS (261): the routing spine, so unpainted days count at
+    // their tour-default status — exactly like the payroll display.
+    supabase.from('routing').select('date, day_type').eq('tour_id', tourId).order('date', { ascending: true }),
   ]);
 
   const roster = (rosterRes.data ?? []) as Array<{ id: string; person_id: string | null; role: string | null }>;
@@ -162,6 +174,9 @@ export async function loadPayrollExportData(
     entriesByRateId.set(e.personnel_id, arr);
   }
 
+  // The routing spine for effective counts (261).
+  const routingDays = ((routingRes.data ?? []) as Array<{ date: string; day_type?: string | null }>);
+
   // Per-day venue map (Part E — "where we were") — only when requested.
   const venueByDate = new Map<string, { city: string | null; venue: string | null }>();
   if (opts?.venuePerDay) {
@@ -191,30 +206,50 @@ export async function loadPayrollExportData(
     // A person's base (non-advance) lines don't change week-to-week; the advance
     // is applied per-entry below, so drop the flat_once line from the base set.
     const baseLines = rateLinesFor(rateCtx, rate.id).filter((l) => l.basis !== 'flat_once');
-    const agg: DayCounts = { show: 0, offTravel: 0, rehearsal: 0, active: 0 };
+    // EFFECTIVE COUNTS (261): overlay the person's painted days on the routing
+    // spine (unpainted routing days count at their tour default), then walk the
+    // union of routing weeks and entry weeks so per-week rows stay complete.
+    const painted: Record<string, string> = {};
+    for (const e of myEntries) Object.assign(painted, e.day_statuses ?? {});
+    const effective = effectiveStatuses(routingDays, painted);
+    const advByWeek = new Map(myEntries.map((e) => [e.week_start, e.advance_fee]));
+    const statusesByWeek = new Map<string, Record<string, string>>();
+    for (const [date, status] of Object.entries(effective)) {
+      const w = weekStartOf(date);
+      const m = statusesByWeek.get(w) ?? {};
+      m[date] = status;
+      statusesByWeek.set(w, m);
+    }
+    for (const e of myEntries) if (!statusesByWeek.has(e.week_start)) statusesByWeek.set(e.week_start, {});
+    const agg: DayCounts = { show: 0, offTravel: 0, rehearsal: 0, promo: 0, off: 0, pdOnly: 0, active: 0, assigned: 0 };
     let fee = 0;
     let perDiemTotal = 0;
     const weeks: PayrollWeek[] = [];
     const dayRows: PayrollDayRow[] = [];
-    for (const e of myEntries) {
-      const filtered = filterStatusesByRange(e.day_statuses, range);
+    for (const weekStart of [...statusesByWeek.keys()].sort()) {
+      const filtered = filterStatusesByRange(statusesByWeek.get(weekStart) ?? {}, range);
       const counts = countDayStatuses(filtered);
       // The one-time advance sits on the week-1 entry — drop it only if the date
       // range fully excludes that week (no in-range days). Default (no range) is
       // unchanged: the advance always applies.
-      const adv = rangeActive ? (counts.active > 0 ? e.advance_fee : 0) : e.advance_fee;
+      const advRaw = advByWeek.get(weekStart) ?? 0;
+      const adv = rangeActive ? (counts.active > 0 ? advRaw : 0) : advRaw;
       const { totalFee: baseFee, totalPerDiem: wPd } = computeTotals(baseLines, counts);
       const wFee = baseFee + num(adv);
       agg.show += counts.show;
       agg.offTravel += counts.offTravel;
       agg.rehearsal += counts.rehearsal;
+      agg.promo = (agg.promo ?? 0) + (counts.promo ?? 0);
+      agg.off = (agg.off ?? 0) + (counts.off ?? 0);
+      agg.pdOnly = (agg.pdOnly ?? 0) + (counts.pdOnly ?? 0);
       agg.active += counts.active;
+      agg.assigned = (agg.assigned ?? 0) + (counts.assigned ?? counts.active);
       fee += wFee;
       perDiemTotal += wPd;
-      if (counts.active > 0 || !rangeActive) weeks.push({ weekStart: e.week_start, counts, fee: wFee, perDiem: wPd });
+      if (counts.active > 0 || !rangeActive) weeks.push({ weekStart, counts, fee: wFee, perDiem: wPd });
       if (opts?.venuePerDay) {
         for (const [date, status] of Object.entries(filtered)) {
-          if (status !== 'show' && status !== 'off_travel' && status !== 'rehearsal') continue;
+          if (!['show', 'off_travel', 'travel', 'rehearsal', 'promo_radio', 'off', 'pd_only'].includes(status)) continue;
           const v = venueByDate.get(date);
           dayRows.push({ date, status, city: v?.city ?? null, venue: v?.venue ?? null });
         }

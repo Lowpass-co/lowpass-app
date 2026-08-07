@@ -253,7 +253,13 @@ export function SpreadsheetGrid<T>(props: SpreadsheetGridProps<T>) {
           return;
         }
       }
-      await commit(row, col, edit.draft);
+      // OPTIMISTIC COMMIT (Adam's "editing rates is slow", 2026-08-07): the
+      // single-cell save runs in the background — the editor closes and focus
+      // moves IMMEDIATELY instead of blocking cell-to-cell flow on the network
+      // round-trip. Failures still surface exactly as before (per-cell error
+      // ring via commit's parse/validate, toast on server rejection); callers
+      // with optimistic state (e.g. payroll rate lines) revert on failure.
+      void commit(row, col, edit.draft);
       edit.cancelEdit();
       if (nav === 'down') {
         const n = nextCellId(dataIdOrder, colIds, sel.focus, 1, 0);

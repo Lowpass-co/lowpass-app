@@ -31,6 +31,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 // budget too. Reconciles to legacy for the 5 defaults + day_rate — proven in
 // reconcile.harness.ts. Advance stays the rate-card single-source (flat_once ×1).
 import { countDayStatuses, computeTotals } from '@/lib/payroll/fees';
+import { effectiveStatuses } from '@/lib/payroll/effectiveDayType';
 import { loadTourRateContext, rateLinesFor } from '@/lib/payroll/loadRateLines';
 import { resolveActiveVersion } from '@/server/budget/versions';
 import { derivedUpdatePayload, derivedInsertProposed } from '@/server/budget/derivedLockPolicy';
@@ -190,26 +191,37 @@ async function computePayrollDesired(
 
   // OPS-17b — compute fees from day_statuses + the rate card via the SAME
   // shared helper the payroll sheets use, instead of trusting the persisted
-  // total_fee column (which can lag behind the rates after the OPS-17a math
-  // fix). This guarantees the budget Salary/Per-Diem == the payroll display.
-  // Day counts come from the per-week entries; the advance comes from the rate
-  // card (below) — NOT entries.advance_fee — so we no longer select it.
-  const { data: entries } = await supabase
-    .from('payroll_entries')
-    .select('personnel_id, day_statuses')
-    .eq('tour_id', tourId)
-    .eq('workspace_id', workspaceId);
+  // total_fee column. This guarantees the budget Salary/Per-Diem == the
+  // payroll display.
+  // EFFECTIVE COUNTS (261): merge each person's painted days over the tour's
+  // routing dates and fill unpainted days with their tour-default status —
+  // exactly the payroll display's counting path. Counting only the persisted
+  // entries undercounts tour-default days (the "Rates ≠ matrix" bug, server
+  // edition). The advance comes from the rate card (a5 flat_once line).
+  const [{ data: entries }, { data: routingRows }] = await Promise.all([
+    supabase
+      .from('payroll_entries')
+      .select('personnel_id, day_statuses')
+      .eq('tour_id', tourId)
+      .eq('workspace_id', workspaceId),
+    supabase
+      .from('routing')
+      .select('date, day_type')
+      .eq('tour_id', tourId),
+  ]);
 
-  const countsBy = new Map<string, { show: number; offTravel: number; rehearsal: number; active: number }>();
+  const routingDates = ((routingRows ?? []) as Array<{ date: string; day_type?: string | null }>);
+  const paintedBy = new Map<string, Record<string, string>>();
   for (const e of entries ?? []) {
     const id = e.personnel_id as string;
-    const c = countDayStatuses((e.day_statuses as Record<string, string>) ?? {});
-    const acc = countsBy.get(id) ?? { show: 0, offTravel: 0, rehearsal: 0, active: 0 };
-    acc.show += c.show;
-    acc.offTravel += c.offTravel;
-    acc.rehearsal += c.rehearsal;
-    acc.active += c.active;
-    countsBy.set(id, acc);
+    const merged = paintedBy.get(id) ?? {};
+    Object.assign(merged, (e.day_statuses as Record<string, string>) ?? {});
+    paintedBy.set(id, merged);
+  }
+  const countsBy = new Map<string, ReturnType<typeof countDayStatuses>>();
+  for (const p of persons) {
+    const id = p.id as string;
+    countsBy.set(id, countDayStatuses(effectiveStatuses(routingDates, paintedBy.get(id))));
   }
 
   const salary: Desired[] = [];
@@ -219,7 +231,7 @@ async function computePayrollDesired(
     const label = p.role
       ? `${String(p.person_name)} — ${String(p.role)}`
       : String(p.person_name);
-    const counts = countsBy.get(id) ?? { show: 0, offTravel: 0, rehearsal: 0, active: 0 };
+    const counts = countsBy.get(id) ?? countDayStatuses({});
     // PAY-04: rate-card advance is the single source (matches the payroll
     // displays + budget/summary routes; survives a day-status edit, which
     // zeroes the per-week entries.advance_fee). The advance rides its flat_once

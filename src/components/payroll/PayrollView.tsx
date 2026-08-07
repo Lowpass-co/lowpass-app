@@ -20,10 +20,9 @@ import { useRouter } from 'next/navigation';
 import { Lock, Unlock } from 'lucide-react';
 import type { PersonnelRate } from '@/types';
 import type { RateBucket, RateBasis, DayStatus } from '@/lib/payroll/fees';
-import type { RateTypeMeta } from '@/lib/payroll/rateLines';
+import { canonicalOrderOf, CANONICAL_RATE_TYPE_IDS, type RateTypeMeta } from '@/lib/payroll/rateLines';
 import { PayrollRatesSpreadsheet } from './PayrollRatesSpreadsheet';
 import { PayrollDaysMatrix } from './PayrollDaysMatrix';
-import { RateTypeToolbar } from './RateTypeToolbar';
 import { buildAmountMap, type RateLineRecord } from './rateLinesClient';
 import { usePayrollGrid, type RoutingDay } from './usePayrollGrid';
 import { AddPersonToTourButton } from '@/components/operations/personnel/AddPersonToTourButton';
@@ -51,17 +50,22 @@ interface PayrollViewProps {
   finalizedAt?: string | null;
 }
 
-function toMeta(r: RateTypeRow): RateTypeMeta {
-  return {
-    id: r.id,
-    name: r.name,
-    bucket: r.bucket as RateBucket,
-    basis: r.basis as RateBasis,
-    dayStatuses: (r.day_statuses ?? []) as DayStatus[],
-    orderIndex: r.order_index,
-  };
+/** Row → meta, CANONICAL-FILTERED (migration 261): only the flat-seven +
+ *  Advance load; Weekly and custom types are retired (rows stay in the DB).
+ *  Order is Adam's canonical column order, not raw order_index. */
+function toCanonicalMetas(rows: RateTypeRow[]): RateTypeMeta[] {
+  return rows
+    .filter((r) => CANONICAL_RATE_TYPE_IDS.includes(r.id))
+    .map((r) => ({
+      id: r.id,
+      name: r.name,
+      bucket: r.bucket as RateBucket,
+      basis: r.basis as RateBasis,
+      dayStatuses: (r.day_statuses ?? []) as DayStatus[],
+      orderIndex: canonicalOrderOf(r.id),
+    }))
+    .sort((a, b) => a.orderIndex - b.orderIndex);
 }
-const byOrder = (a: RateTypeMeta, b: RateTypeMeta) => a.orderIndex - b.orderIndex;
 
 export function PayrollView({
   tourId,
@@ -90,8 +94,8 @@ export function PayrollView({
     return () => clearTimeout(t);
   }, [focusRateId]);
 
-  // b2 — the catalog + amounts are the hub's state, shared by all grids.
-  const [types, setTypes] = useState<RateTypeMeta[]>(() => rateTypes.map(toMeta).sort(byOrder));
+  // The canonical catalog + amounts are the hub's state, shared by all grids.
+  const types = useMemo(() => toCanonicalMetas(rateTypes), [rateTypes]);
   const [lines, setLines] = useState<RateLineRecord[]>(rateLines);
   const amountMap = useMemo(() => buildAmountMap(lines), [lines]);
 
@@ -100,7 +104,7 @@ export function PayrollView({
     [rates],
   );
 
-  const { statusOf, saveDayStatus, saveDayType, tourDayTypeOf, isExplicit, fillDays, entries } = usePayrollGrid(tourId, routingDates as RoutingDay[], payrollEntries);
+  const { statusOf, saveDayStatus, saveDayType, tourDayTypeOf, isExplicit, fillDays, effectiveCountsFor } = usePayrollGrid(tourId, routingDates as RoutingDay[], payrollEntries);
 
   // Persist one rate-line cell edit; optimistic, reverts on failure.
   const onRateLineCommit = useCallback(
@@ -153,25 +157,13 @@ export function PayrollView({
         open={ratesOpen}
         onToggle={setRatesOpen}
       >
-        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
-          <RateTypeToolbar
-            tourId={tourId}
-            types={types}
-            onAdded={(t) => setTypes((prev) => [...prev, t].sort(byOrder))}
-            onChanged={(t) => setTypes((prev) => prev.map((x) => (x.id === t.id ? t : x)).sort(byOrder))}
-            onDeleted={(id) => {
-              setTypes((prev) => prev.filter((x) => x.id !== id));
-              setLines((prev) => prev.filter((l) => l.rate_type_id !== id));
-            }}
-          />
-        </div>
         <PayrollRatesSpreadsheet
           currency={currency}
           initialRates={rates as unknown as PersonnelRate[]}
-          payrollEntries={entries}
           canSeeCommission={false}
           rateTypes={types}
           amountMap={amountMap}
+          countsFor={effectiveCountsFor}
           onRateLineCommit={onRateLineCommit}
           highlightRowId={flashKey}
           finalized={finalized}
@@ -191,6 +183,7 @@ export function PayrollView({
           fillDays={fillDays}
           rateTypes={types}
           amountMap={amountMap}
+          effectiveCountsFor={effectiveCountsFor}
           focusRowId={flashKey}
           finalized={finalized}
         />

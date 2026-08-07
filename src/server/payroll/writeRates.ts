@@ -7,10 +7,16 @@
    only ever keyed one way: (tour_id, roster_personnel_id). Row-id callers pass
    cardId and it's translated to the canonical row internally.
 
-   Line layout mirrors migrations 228/229 exactly, so a read through computeTotals
-   over these lines reproduces the legacy ratesToLines() number to the penny:
-     split rate → a1 Show / a2 Off / a3 Rehearsal / a4 Per-diem / a5 Advance
-     day rate   → a6 Day-rate (= off_rate) / a4 / a5 ; a1/a2/a3 removed
+   CANONICAL MODEL (migration 261): there is no per-person rate_type gating any
+   more — every rate line bills independently (sum), so this writer no longer
+   prunes "unowned" fee lines. It writes EXACTLY the lines whose rate keys the
+   caller PROVIDED (partial edits never touch — and never resurrect — other
+   lines):
+     showRate → a1 Show · offRate → a2 Travel · rehearsalRate → a3 Rehearsal ·
+     perDiem → a4 Per diem · advanceFee → a5 Advance
+   Flat day (a6), Flat tour (a7) and Press/Radio (a9) have no legacy-column
+   source — they are entered directly in the Rates grid (→ /api/budget/
+   rate-lines) and this writer never fabricates or deletes them.
    MONEY: values written to the lines are the SAME legacy values written to the
    mirror columns — no arithmetic here, so no money can move.
 
@@ -20,7 +26,7 @@
    ============================================ */
 
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { DEFAULT_RATE_TYPE_IDS, FEE_UNIVERSE_IDS, ownedFeeTypeIds } from '@/lib/payroll/rateLines';
+import { DEFAULT_RATE_TYPE_IDS } from '@/lib/payroll/rateLines';
 
 const num = (v: unknown): number => Number(v) || 0;
 
@@ -36,13 +42,13 @@ export interface RateMirror {
   advanceFee?: number | null;
 }
 
-/** RateMirror key → legacy personnel_rates column. */
-const RATE_KEY_TO_COL: Array<[keyof RateMirror, string]> = [
-  ['showRate', 'show_rate'],
-  ['offRate', 'off_rate'],
-  ['rehearsalRate', 'rehearsal_rate'],
-  ['perDiem', 'per_diem'],
-  ['advanceFee', 'advance_fee'],
+/** RateMirror key → [legacy personnel_rates column, canonical rate_type id]. */
+const RATE_KEY_MAP: Array<[keyof RateMirror, string, string]> = [
+  ['showRate', 'show_rate', DEFAULT_RATE_TYPE_IDS.show],
+  ['offRate', 'off_rate', DEFAULT_RATE_TYPE_IDS.offTravel],
+  ['rehearsalRate', 'rehearsal_rate', DEFAULT_RATE_TYPE_IDS.rehearsal],
+  ['perDiem', 'per_diem', DEFAULT_RATE_TYPE_IDS.perDiem],
+  ['advanceFee', 'advance_fee', DEFAULT_RATE_TYPE_IDS.advance],
 ];
 
 /** Identity fields used only when CREATING a card (no-op on update unless given). */
@@ -111,11 +117,12 @@ export async function writeRates(
 
   // 2. Mirror columns (only provided rate keys) + optional identity/internal_rate.
   const patch: Record<string, unknown> = { updated_at: new Date().toISOString() };
-  for (const [k, col] of RATE_KEY_TO_COL) {
+  for (const [k, col] of RATE_KEY_MAP) {
     if (rates[k] !== undefined) patch[col] = num(rates[k]);
   }
   if (internalRate !== undefined) patch.internal_rate = internalRate === null ? null : num(internalRate);
 
+  let created = false;
   if (card) {
     if (identity) for (const [k, v] of Object.entries(identity)) if (v !== undefined) patch[k] = v;
     const { data, error } = await supabase
@@ -143,67 +150,29 @@ export async function writeRates(
     const { data, error } = await supabase.from('personnel_rates').insert(insert).select('*').maybeSingle();
     if (error || !data) return { card: null, error: error?.message ?? 'Failed to create rate card' };
     card = data as Record<string, unknown>;
+    created = true;
   }
 
-  // 3. Write the SSOT lines from the card's FINAL values, respecting rate_type.
-  //
-  //    The FEE universe = every rate type that carries a person's *fee* (not per
-  //    diem / advance, which are universal). A person's rate_type OWNS exactly one
-  //    slice of it; every other fee line MUST NOT exist for them or computeTotals
-  //    would double-count (a stale Flat-tour line on a now-Split person = phantom
-  //    lump sum). So we KEEP the owned slice and DELETE the rest of the universe.
-  //
-  //    writeRates can only *source* the legacy-column types (a1/a2/a3 = split,
-  //    a6 = day rate). Flat tour (a7) and Weekly (a8) are entered directly in the
-  //    dynamic Rates grid (→ personnel_rate_lines), so writeRates never upserts
-  //    their amount — it just refrains from deleting the owned one.
+  // 3. Write the SSOT lines — EXACTLY the provided rate keys (a create writes
+  //    all five from the insert's values). Partial edits never touch other
+  //    lines, and nothing is ever pruned: under the sum model a line the caller
+  //    didn't name is a line the caller didn't change.
   const cid = card.id as string;
-  const rateType = String(card.rate_type ?? 'split_rate');
-  const RT = DEFAULT_RATE_TYPE_IDS;
+  const provided = created ? RATE_KEY_MAP : RATE_KEY_MAP.filter(([k]) => rates[k] !== undefined);
+  const lineRows = provided.map(([k, , typeId]) => ({ rate_type_id: typeId, amount: num(rates[k]) }));
 
-  // The owned fee slice (SSOT: rateLines.ownedFeeTypeIds — shared with the Rates
-  // grid). writeRates can only SOURCE the legacy-column slices (a1/a2/a3 = split,
-  // a6 = day rate from off_rate); Flat tour (a7) / Weekly (a8) are grid-entered,
-  // so they're kept but never fabricated here.
-  const keepFeeIds = ownedFeeTypeIds(rateType);
-  const LEGACY_SOURCE: Partial<Record<string, number>> = {
-    [RT.show]: num(card.show_rate),
-    [RT.offTravel]: num(card.off_rate),
-    [RT.rehearsal]: num(card.rehearsal_rate),
-    [RT.dayRate]: num(card.off_rate),
-  };
-  const sourcedFeeLines = keepFeeIds
-    .filter((id) => LEGACY_SOURCE[id] !== undefined)
-    .map((id) => ({ rate_type_id: id, amount: LEGACY_SOURCE[id]! }));
-
-  // Per diem (a4) + advance (a5) are universal — every rate type carries them.
-  const lineRows = [
-    ...sourcedFeeLines,
-    { rate_type_id: RT.perDiem, amount: num(card.per_diem) },
-    { rate_type_id: RT.advance, amount: num(card.advance_fee) },
-  ];
-
-  const { error: lineErr } = await supabase.from('personnel_rate_lines').upsert(
-    lineRows.map((l) => ({
-      tour_id: resolvedTourId,
-      workspace_id: workspaceId,
-      personnel_rate_id: cid,
-      rate_type_id: l.rate_type_id,
-      amount: l.amount,
-    })),
-    { onConflict: 'personnel_rate_id,rate_type_id' },
-  );
-  if (lineErr) return { card, error: `Rates saved but rate lines failed: ${lineErr.message}` };
-
-  // Delete every fee line this person does NOT own (stale lines from a prior
-  // rate_type would double-count). Per diem / advance are never in this set.
-  const staleFeeIds = FEE_UNIVERSE_IDS.filter((id) => !keepFeeIds.includes(id));
-  if (staleFeeIds.length > 0) {
-    await supabase
-      .from('personnel_rate_lines')
-      .delete()
-      .eq('personnel_rate_id', cid)
-      .in('rate_type_id', staleFeeIds);
+  if (lineRows.length > 0) {
+    const { error: lineErr } = await supabase.from('personnel_rate_lines').upsert(
+      lineRows.map((l) => ({
+        tour_id: resolvedTourId,
+        workspace_id: workspaceId,
+        personnel_rate_id: cid,
+        rate_type_id: l.rate_type_id,
+        amount: l.amount,
+      })),
+      { onConflict: 'personnel_rate_id,rate_type_id' },
+    );
+    if (lineErr) return { card, error: `Rates saved but rate lines failed: ${lineErr.message}` };
   }
 
   return { card };

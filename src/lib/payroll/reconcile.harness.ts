@@ -30,10 +30,13 @@ import {
 // legacy-column path for the five defaults.
 import {
   DEFAULT_RATE_TYPES,
+  DEFAULT_RATE_TYPE_IDS,
   buildRateLines,
   defaultLinesFromLegacy,
   type RateLineRow,
 } from './rateLines.ts';
+
+const RT = DEFAULT_RATE_TYPE_IDS;
 // G2-1, Ruling A — the day-type override drives pay via the SAME single path
 // (effective status → day_statuses → countDayStatuses). One SSOT for the mapping.
 import { brushTypeToStatus, type BrushType } from './effectiveDayType.ts';
@@ -126,11 +129,11 @@ for (const c of CASES) {
   // reader would (rate_type_id → amount), through the catalog. This exercises
   // buildRateLines (the reader helper), not just the bridge.
   const rows: RateLineRow[] = [
-    { rate_type_id: DEFAULT_RATE_TYPES[0].id, amount: c.rate.show_rate ?? 0 },
-    { rate_type_id: DEFAULT_RATE_TYPES[1].id, amount: c.rate.off_rate ?? 0 },
-    { rate_type_id: DEFAULT_RATE_TYPES[2].id, amount: c.rate.rehearsal_rate ?? 0 },
-    { rate_type_id: DEFAULT_RATE_TYPES[3].id, amount: c.rate.per_diem ?? 0 },
-    { rate_type_id: DEFAULT_RATE_TYPES[4].id, amount: c.advance },
+    { rate_type_id: RT.show, amount: c.rate.show_rate ?? 0 },
+    { rate_type_id: RT.offTravel, amount: c.rate.off_rate ?? 0 },
+    { rate_type_id: RT.rehearsal, amount: c.rate.rehearsal_rate ?? 0 },
+    { rate_type_id: RT.perDiem, amount: c.rate.per_diem ?? 0 },
+    { rate_type_id: RT.advance, amount: c.advance },
   ];
   const linesTotalsB = computeTotals(buildRateLines(rows, DEFAULT_RATE_TYPES), c.counts);
 
@@ -167,9 +170,9 @@ const dayRateLegacyPerDiem = (perDiem: number, active: number): number => active
 // a6 = off_rate (per_active_day), a4 = per_diem, a5 = advance. No a1/a2/a3.
 function dayRateLines(offRate: number, perDiem: number, adv: number): RateLineRow[] {
   return [
-    { rate_type_id: DEFAULT_RATE_TYPES[5].id, amount: offRate },  // a6 Day rate
-    { rate_type_id: DEFAULT_RATE_TYPES[3].id, amount: perDiem },  // a4 Per diem
-    { rate_type_id: DEFAULT_RATE_TYPES[4].id, amount: adv },      // a5 Advance
+    { rate_type_id: RT.dayRate, amount: offRate },  // a6 Flat day (né Day rate)
+    { rate_type_id: RT.perDiem, amount: perDiem },  // a4 Per diem
+    { rate_type_id: RT.advance, amount: adv },      // a5 Advance
   ];
 }
 
@@ -221,11 +224,11 @@ const paintDays = (tourTypes: string[], brushes: BrushType[]): Record<string, st
 
 // Split-rate person: show 500 / off 300 (a1/a2 default lines).
 const splitRows: RateLineRow[] = [
-  { rate_type_id: DEFAULT_RATE_TYPES[0].id, amount: 500 }, // a1 show
-  { rate_type_id: DEFAULT_RATE_TYPES[1].id, amount: 300 }, // a2 off/travel
-  { rate_type_id: DEFAULT_RATE_TYPES[2].id, amount: 0 },
-  { rate_type_id: DEFAULT_RATE_TYPES[3].id, amount: 0 },
-  { rate_type_id: DEFAULT_RATE_TYPES[4].id, amount: 0 },
+  { rate_type_id: RT.show, amount: 500 },      // a1 show
+  { rate_type_id: RT.offTravel, amount: 300 }, // a2 travel (né off/travel)
+  { rate_type_id: RT.rehearsal, amount: 0 },
+  { rate_type_id: RT.perDiem, amount: 0 },
+  { rate_type_id: RT.advance, amount: 0 },
 ];
 const splitLines = buildRateLines(splitRows, DEFAULT_RATE_TYPES);
 // day_rate person: a6 flat off 300 per ACTIVE day (type-agnostic).
@@ -242,13 +245,84 @@ const ovRadio = paintDays(travelTour, ['promo_radio', ...allDefault.slice(1)]); 
 // Split: base 5×300 = 1500; override day1 to show → 500 + 4×300 = 1700 (+200 = show−off).
 assert.equal(feeOf(base, splitLines), 1500, `split base ${feeOf(base, splitLines)} !== 1500`);
 assert.equal(feeOf(ovShow, splitLines), 1700, `split override→show ${feeOf(ovShow, splitLines)} !== 1700`);
-// Promo/Radio on a travel day bills the SHOW rate (Adam's Dillon example).
-assert.equal(feeOf(ovRadio, splitLines), 1700, `split override→radio ${feeOf(ovRadio, splitLines)} !== 1700`);
-assert.equal(brushTypeToStatus('promo_radio', 'travel'), 'show', 'promo_radio must bill the show rate');
+// 261 — Promo/Radio persists its OWN status now; the Dillon ruling survives as
+// the DEFAULT via line resolution: with no Press/Radio amount, the Show line
+// gains 'promo_radio' (resolvePersonLines) and the radio day bills the show rate.
+assert.equal(brushTypeToStatus('promo_radio', 'travel'), 'promo_radio', 'promo_radio persists its own status (261)');
+assert.equal(feeOf(ovRadio, splitLines), 1700, `split override→radio (press unset → show rate) ${feeOf(ovRadio, splitLines)} !== 1700`);
 // day_rate: flat per ACTIVE day; the override must NOT move it (5 × 300 = 1500 both).
 assert.equal(feeOf(base, drLines), 1500, `day-rate base ${feeOf(base, drLines)} !== 1500`);
 assert.equal(feeOf(ovShow, drLines), 1500, `day-rate override ${feeOf(ovShow, drLines)} !== 1500 (flat must be type-agnostic)`);
 checks += 6;
+
+/* ── CANONICAL-MODEL GATE (migration 261 — Adam's flat-seven) ────────
+   The NEW money semantics, pinned:
+     1. Press/Radio SET → the promo day bills the press rate, not show.
+     2. OFF pays the TRAVEL rate (+ Flat day counts it as worked); the new
+        'pd_only' day is the only no-fee day on tour; 'no_tour' earns nothing.
+     3. Stacking (sum): Flat day + Show both set → both bill.
+     4. Show-only person (Show set, no Travel, no Flat day) → only shows are
+        paid; every other assigned day is PD only. No special case — the £0
+        travel line bills nothing.                                          */
+console.log('\nCanonical-model gate (261) — press · off=travel · pd_only · stacking · show-only\n');
+
+// 1. Press set: same split person + press 150. Radio day bills 150 (not 500).
+const pressRows: RateLineRow[] = [...splitRows, { rate_type_id: RT.pressRadio, amount: 150 }];
+const pressLines = buildRateLines(pressRows, DEFAULT_RATE_TYPES);
+assert.equal(feeOf(ovRadio, pressLines), 150 + 4 * 300, `press-set radio day ${feeOf(ovRadio, pressLines)} !== 1350`);
+// …and the show days are untouched by the press line.
+assert.equal(feeOf(ovShow, pressLines), 1700, `press-set show override ${feeOf(ovShow, pressLines)} !== 1700`);
+
+// 2a. OFF pays the travel rate: split person, day1 painted Off on a travel
+//     tour → identical to the all-travel base (300 × 5).
+const ovOff = paintDays(travelTour, ['off', ...allDefault.slice(1)]);
+assert.equal(feeOf(ovOff, splitLines), 1500, `off day ${feeOf(ovOff, splitLines)} !== 1500 (OFF must bill the travel rate)`);
+// 2b. Flat-day person: off is worked, pd_only is not; PD covers all assigned.
+const flatRows: RateLineRow[] = [
+  { rate_type_id: RT.dayRate, amount: 200 },
+  { rate_type_id: RT.perDiem, amount: 20 },
+];
+const flatLines = buildRateLines(flatRows, DEFAULT_RATE_TYPES);
+const dayMix = countDayStatuses({
+  '2026-04-01': 'show', '2026-04-02': 'travel', '2026-04-03': 'rehearsal',
+  '2026-04-04': 'off', '2026-04-05': 'pd_only', '2026-04-06': 'no_tour',
+});
+const flatTotals = computeTotals(flatLines, dayMix);
+assert.equal(flatTotals.totalFee, 4 * 200, `flat-day fee ${flatTotals.totalFee} !== 800 (off IS worked; pd_only/no_tour are not)`);
+assert.equal(flatTotals.totalPerDiem, 5 * 20, `PD ${flatTotals.totalPerDiem} !== 100 (pd_only earns PD; no_tour never)`);
+
+// 3. Stacking: flat day 100 + show 250 over 2 show + 1 travel → 300 + 500 = 800.
+const stackRows: RateLineRow[] = [
+  { rate_type_id: RT.dayRate, amount: 100 },
+  { rate_type_id: RT.show, amount: 250 },
+];
+const stackLines = buildRateLines(stackRows, DEFAULT_RATE_TYPES);
+const stackTotals = computeTotals(stackLines, countDayStatuses({ '2026-05-01': 'show', '2026-05-02': 'show', '2026-05-03': 'travel' }));
+assert.equal(stackTotals.totalFee, 800, `stacking ${stackTotals.totalFee} !== 800 (flat day and show must BOTH bill)`);
+
+// 4. Show-only person: show 200, travel 0, no flat day, PD 20 — over the same
+//    mixed week only the show day pays; PD covers every assigned day.
+const showOnlyRows: RateLineRow[] = [
+  { rate_type_id: RT.show, amount: 200 },
+  { rate_type_id: RT.offTravel, amount: 0 },
+  { rate_type_id: RT.perDiem, amount: 20 },
+];
+const showOnlyLines = buildRateLines(showOnlyRows, DEFAULT_RATE_TYPES);
+const showOnlyTotals = computeTotals(showOnlyLines, dayMix);
+assert.equal(showOnlyTotals.totalFee, 200, `show-only fee ${showOnlyTotals.totalFee} !== 200 (only the show day pays)`);
+assert.equal(showOnlyTotals.totalPerDiem, 100, `show-only PD ${showOnlyTotals.totalPerDiem} !== 100 (every assigned day earns PD)`);
+checks += 8;
+
+for (const [label, val, want] of [
+  ['Press SET — radio day bills press 150', feeOf(ovRadio, pressLines), 1350],
+  ['OFF paints — bills the travel rate (base holds)', feeOf(ovOff, splitLines), 1500],
+  ['Flat day — off worked (4×200), pd_only not', flatTotals.totalFee, 800],
+  ['PD — pd_only earns (5×20), no_tour never', flatTotals.totalPerDiem, 100],
+  ['Stacking — flat day + show both bill', stackTotals.totalFee, 800],
+  ['Show-only — shows pay, rest PD only', showOnlyTotals.totalFee, 200],
+] as [string, number, number][]) {
+  console.log([label.padEnd(48), val.toFixed(2).padStart(11), String(want).padStart(9), val === want ? '✓' : '✗'].join('  '));
+}
 
 console.log(['scenario'.padEnd(46), 'fee'.padStart(11), 'pinned'.padStart(9), 'ok'].join('  '));
 console.log('-'.repeat(76));
@@ -315,7 +389,8 @@ checks += 3;
 // no_tour ignored; rehearsal counts for fee + PD.
 const counts = countDayStatuses({ '2026-01-01': 'show', '2026-01-02': 'off_travel', '2026-01-03': 'rehearsal', '2026-01-04': 'no_tour' });
 // weeks: 2026-01-01..03 are Thu/Fri/Sat of the same Mon-start week ⇒ 1 week.
-assert.deepEqual(counts, { show: 1, offTravel: 1, rehearsal: 1, active: 3, weeks: 1 });
+// 261 adds promo/off/pdOnly/assigned; legacy data has none, so assigned == active.
+assert.deepEqual(counts, { show: 1, offTravel: 1, rehearsal: 1, promo: 0, off: 0, pdOnly: 0, active: 3, assigned: 3, weeks: 1 });
 assert.equal(computeTotalFee({ show_rate: 100, off_rate: 50, rehearsal_rate: 25, per_diem: 10 }, counts, 0), 175);
 assert.equal(computeTotalPerDiem({ per_diem: 10 }, counts), 30);
 checks += 3;

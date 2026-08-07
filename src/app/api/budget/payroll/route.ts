@@ -11,10 +11,11 @@ import { NextResponse } from 'next/server';
 import { requireWrite } from '@/lib/auth/workspace-check';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { countDayStatuses, computeTotals } from '@/lib/payroll/fees';
+import { effectiveStatuses, type PayStatus } from '@/lib/payroll/effectiveDayType';
 import { loadTourRateContext, rateLinesFor } from '@/lib/payroll/loadRateLines';
 import { isPayrollFinalized, PAYROLL_FINALIZED_ERROR } from '@/lib/payroll/finalize';
 
-type DayStatus = 'show' | 'off_travel' | 'rehearsal' | 'no_tour';
+type DayStatus = PayStatus;
 
 export async function GET(request: Request) {
   const supabase = await createServerSupabaseClient();
@@ -165,8 +166,22 @@ export async function POST(request: Request) {
   // Rates SSOT — fee/per-diem from personnel_rate_lines via computeTotals. This
   // week's advance comes from the request body (a per-week override), so the
   // card's flat_once advance line is dropped from the base and the body advance
-  // is added once. Reproduces the legacy per-day-type math for split + day_rate.
-  const counts = countDayStatuses(dayStatuses);
+  // is added once.
+  // EFFECTIVE COUNTS (261): the persisted map holds only PAINTED days — the
+  // totals must also count this week's unpainted routing days at their
+  // tour-default status, exactly like the display does, or the persisted
+  // total_fee/total_per_diem undercount tour-default days.
+  const weekEnd = new Date(`${week_start}T12:00:00Z`);
+  weekEnd.setUTCDate(weekEnd.getUTCDate() + 6);
+  const weekEndStr = weekEnd.toISOString().slice(0, 10);
+  const { data: weekRouting } = await supabase
+    .from('routing')
+    .select('date, day_type')
+    .eq('tour_id', tour_id)
+    .gte('date', week_start)
+    .lte('date', weekEndStr);
+  const weekDays = ((weekRouting ?? []) as Array<{ date: string; day_type?: string | null }>);
+  const counts = countDayStatuses(effectiveStatuses(weekDays, dayStatuses));
   const rateCtx = await loadTourRateContext(supabase, tour_id, profile.workspace_id as string);
   const lines = rateLinesFor(rateCtx, personnel.id as string);
   const base = computeTotals(lines.filter((l) => l.basis !== 'flat_once'), counts);

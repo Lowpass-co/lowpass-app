@@ -87,6 +87,7 @@ const UNGUARDED: Record<string, string> = {
   '/public/advance-intake/[token]/tech-pack': /* POST */ 'PERMANENT — public. Same token grant as the intake submit above.',
   '/public/advance-packet/[token]': /* POST */ 'PERMANENT — public. Venue opens a packet with no account; the token is the grant.',
   '/public/rider/[token]': /* POST */ 'PERMANENT — public. Tokenised rider view for people outside the workspace.',
+  '/public/show-link/[token]': /* POST */ 'PERMANENT — public. Tokenised show view (migration 257 show_links); the unguessable token (+ optional password in the body) IS the grant — the viewer has no session.',
 
   /* ── S1 D-1 — gear documents (read-only) ── */
   '/gear/export/manifest/pdf': /* POST */ 'PERMANENT — read-only POST. Writes nothing; renders the gear manifest from a config body. READ CHECK: authenticated session, then every gear/space/container row is loaded .eq(workspace_id, profile.workspace_id) by loadGearExportData.',

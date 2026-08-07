@@ -3,38 +3,60 @@
 
    Used by every surface that computes a payroll total so they can never
    disagree (OPS-17a/b):
-     - <PayrollSummary>            (display)
-     - <PayrollWeekSheet>          (weekly display)
-     - POST /api/budget/payroll    (persists total_fee / total_per_diem)
-     - reconcileDerivedBudgetLines (budget Salary / Per-Diem section)
+     - <PayrollDaysMatrix> / Rates grid  (display)
+     - POST /api/budget/payroll          (persists total_fee / total_per_diem)
+     - reconcileDerivedBudgetLines       (budget Salary / Per-Diem section)
+     - payroll exports
 
    ─────────────────────────────────────────────────────────────────────
-   EXTENSIBLE RATE MODEL (b2, migration 228)
+   CANONICAL RATE MODEL (Adam's flat-seven, migration 261 — 2026-08-07)
    ─────────────────────────────────────────────────────────────────────
-   The totals are now a sum over a person's RATE LINES, each of which has:
+   The totals are a sum over a person's RATE LINES, each of which has:
      - bucket : 'fee'      → contributes to total_fee
                'per_diem'  → contributes to total_per_diem (kept separate)
-     - basis  : 'per_day_status' → amount × (days whose status ∈ dayStatuses)
-               'per_active_day'  → amount × active days (every engaged day)
-               'flat_once'       → amount × 1 (the advance rule)
+     - basis  : 'per_day_status'   → amount × (days whose status ∈ dayStatuses,
+                                     de-duped by COUNT BUCKET — a type listing
+                                     both 'off_travel' and 'travel' bills each
+                                     travel day exactly once)
+               'per_active_day'    → amount × WORKED days (show/travel/
+                                     rehearsal/promo — the Flat day rate)
+               'per_assigned_day'  → amount × ASSIGNED days (worked + off —
+                                     everything except no_tour; per diem)
+               'flat_once'         → amount × 1 (Flat tour, Advance)
+               'per_week'          → amount × distinct active Mon-weeks
+                                     (legacy Weekly — no longer loaded)
 
-   The four legacy hardcoded rates map onto five default lines:
-     show_rate      → fee   / per_day_status ['show']
-     off_rate       → fee   / per_day_status ['off_travel']   (the travel rate)
-     rehearsal_rate → fee   / per_day_status ['rehearsal']
-     per_diem       → per_diem / per_active_day
-     advance_fee    → fee   / flat_once
+   DAY STATUSES (payroll_entries.day_statuses values):
+     'show'        — bills Show (+ Flat day) · per diem
+     'travel'      — bills Travel (+ Flat day) · per diem
+     'off_travel'  — LEGACY value for travel; identical billing, never rewritten
+     'rehearsal'   — bills Rehearsal (+ Flat day) · per diem
+     'promo_radio' — bills Press/Radio when set, else Show (Dillon ruling;
+                     resolved in rateLines.resolvePersonLines) (+ Flat day) · PD
+     'off'         — on tour, day off: bills the TRAVEL rate (Adam: "OFF should
+                     pay travel rate") and counts as a worked day for Flat day
+                     · per diem
+     'pd_only'     — the ONE no-fee day on tour: per diem only, no fee, not a
+                     worked day (Adam: "a PD type that only pays pd")
+     'no_tour'     — not on the tour that day: nothing (the ONLY no-PD day)
 
-   THE MONEY INVARIANT: the legacy computeTotalFee / computeTotalPerDiem
-   below now DELEGATE to the new engine via ratesToLines(). The arithmetic
-   is byte-for-byte the same operations in the same order, so the redesign
-   moves no money — proven by src/lib/payroll/reconcile.harness.ts against
-   the fees.test.ts numbers.
+   Show-only people need no special case: with Show set and Travel/Flat day
+   blank, travel/off days bill a £0 travel line — only shows pay, every
+   assigned day still earns PD. Pinned in reconcile.harness.ts.
 
-   There is NO "use show_rate when off_rate is 0" fallback — travel days
-   bill at the travel (off) rate exactly. So show_rate 300 with off_rate 0
-   over 21 show + 10 travel days = £6,300 (NOT £9,300). Pure module (no
-   'use client', no imports) so server + client both import it.
+   STACKING (Adam's ruling): every filled rate bills independently — Flat day
+   sums WITH Show/Travel/Rehearsal/Press when both are set. The grid warns on
+   that combination; the engine never silently drops a line.
+
+   THE MONEY INVARIANT: for legacy data (statuses only show/off_travel/
+   rehearsal/no_tour, promo painted as 'show', no 'off' days) every number is
+   unchanged: travel bills the same, per diem's assigned == active, and the
+   legacy computeTotalFee / computeTotalPerDiem delegate to the same engine —
+   proven by src/lib/payroll/reconcile.harness.ts + fees.test.ts.
+
+   There is NO "use show_rate when the travel rate is 0" fallback — travel
+   days bill at the travel rate exactly. Pure module (no 'use client', no
+   imports) so server + client both import it.
    ============================================ */
 
 export interface RateLike {
@@ -46,22 +68,33 @@ export interface RateLike {
 
 export interface DayCounts {
   show: number;
+  /** Travel days — counts BOTH the legacy 'off_travel' value and 'travel'. */
   offTravel: number;
   rehearsal: number;
-  /** show + offTravel + rehearsal (every day the person is engaged). */
+  /** Promo / radio days ('promo_radio'). Legacy promo paints are stored as
+   *  'show' and count there — indistinguishable by design (Ruling A era). */
+  promo?: number;
+  /** Painted 'off' days — on tour, day off. Bills the Travel rate + Flat day
+   *  (its own bucket only so the matrix can show O separately from T). */
+  off?: number;
+  /** Painted 'pd_only' days — per diem only, no fee, not worked. */
+  pdOnly?: number;
+  /** WORKED days: show + travel + rehearsal + promo + off. (Flat day bills
+   *  these — an Off day pays like a travel day, per Adam's ruling.) */
   active: number;
-  /** G2-1 — distinct Monday-start weeks among the active days, for `per_week`
-   *  (Weekly) rates. Optional so existing DayCounts literals still typecheck;
-   *  absent ⇒ 0 weeks (no per_week line can bill without it). */
+  /** ASSIGNED days: active + pdOnly — everything except no_tour. (Per diem.) */
+  assigned?: number;
+  /** Distinct Monday-start weeks among the active days, for `per_week`
+   *  (legacy Weekly). Absent ⇒ 0 weeks. */
   weeks?: number;
 }
 
-/** The three day statuses a `per_day_status` line can bill. */
-export type DayStatus = 'show' | 'off_travel' | 'rehearsal';
+/** The day statuses a `per_day_status` line can bill. 'off_travel' and
+ *  'travel' are the same bucket (legacy + canonical spelling); 'off' is its
+ *  own bucket that the Travel type ALSO lists (off pays the travel rate). */
+export type DayStatus = 'show' | 'off_travel' | 'travel' | 'rehearsal' | 'promo_radio' | 'off' | 'pd_only';
 export type RateBucket = 'fee' | 'per_diem';
-/** G2-1 adds `per_week` (Weekly rate). `flat_once` doubles as the Flat-tour fee.
- *  Per-diem-only is just a per_diem bucket line with no fee lines — no new basis. */
-export type RateBasis = 'per_day_status' | 'per_active_day' | 'flat_once' | 'per_week';
+export type RateBasis = 'per_day_status' | 'per_active_day' | 'per_assigned_day' | 'flat_once' | 'per_week';
 
 /** One priced line for a person on a tour (a personnel_rate_lines row +
  *  its rate_type's bucket/basis/day_statuses). */
@@ -90,30 +123,53 @@ function mondayOf(date: string): string {
   return d.toISOString().slice(0, 10);
 }
 
-/** Tally a payroll_entries.day_statuses map into per-type day counts + the
- *  distinct active weeks. ('no_tour' and anything unknown are ignored.) */
+/** Tally a payroll_entries.day_statuses map into per-type day counts.
+ *  ('no_tour' and anything unknown are ignored — no fee, no per diem.) */
 export function countDayStatuses(
   statuses: Record<string, string> | null | undefined,
 ): DayCounts {
   let show = 0;
   let offTravel = 0;
   let rehearsal = 0;
+  let promo = 0;
+  let off = 0;
+  let pdOnly = 0;
   const activeWeeks = new Set<string>();
   for (const [date, v] of Object.entries(statuses ?? {})) {
-    let active = false;
-    if (v === 'show') { show++; active = true; }
-    else if (v === 'off_travel') { offTravel++; active = true; }
-    else if (v === 'rehearsal') { rehearsal++; active = true; }
-    if (active) activeWeeks.add(mondayOf(date));
+    let worked = false;
+    if (v === 'show') { show++; worked = true; }
+    else if (v === 'off_travel' || v === 'travel') { offTravel++; worked = true; }
+    else if (v === 'rehearsal') { rehearsal++; worked = true; }
+    else if (v === 'promo_radio') { promo++; worked = true; }
+    else if (v === 'off') { off++; worked = true; } // off pays like travel — a worked day
+    else if (v === 'pd_only') { pdOnly++; }
+    if (worked) activeWeeks.add(mondayOf(date));
   }
-  return { show, offTravel, rehearsal, active: show + offTravel + rehearsal, weeks: activeWeeks.size };
+  const active = show + offTravel + rehearsal + promo + off;
+  return { show, offTravel, rehearsal, promo, off, pdOnly, active, assigned: active + pdOnly, weeks: activeWeeks.size };
 }
 
-/** Days a status covers, from the counts. */
-function daysForStatus(status: DayStatus, counts: DayCounts): number {
-  if (status === 'show') return counts.show;
-  if (status === 'off_travel') return counts.offTravel;
-  if (status === 'rehearsal') return counts.rehearsal;
+/** A status → its COUNT BUCKET. Lines listing several spellings of the same
+ *  bucket (e.g. ['off_travel','travel']) bill each day exactly once; disjoint
+ *  buckets on one line (e.g. Travel's ['off_travel','travel','off']) sum. */
+type CountBucket = 'show' | 'offTravel' | 'rehearsal' | 'promo' | 'off' | 'pdOnly';
+function statusBucket(status: DayStatus): CountBucket | null {
+  if (status === 'show') return 'show';
+  if (status === 'off_travel' || status === 'travel') return 'offTravel';
+  if (status === 'rehearsal') return 'rehearsal';
+  if (status === 'promo_radio') return 'promo';
+  if (status === 'off') return 'off';
+  if (status === 'pd_only') return 'pdOnly';
+  return null;
+}
+
+function bucketCount(bucket: CountBucket, counts: DayCounts): number {
+  if (bucket === 'show') return counts.show;
+  if (bucket === 'offTravel') return counts.offTravel;
+  if (bucket === 'rehearsal') return counts.rehearsal;
+  if (bucket === 'promo') return counts.promo ?? 0;
+  if (bucket === 'off') return counts.off ?? 0;
+  if (bucket === 'pdOnly') return counts.pdOnly ?? 0;
   return 0;
 }
 
@@ -122,12 +178,19 @@ export function computeLineAmount(line: RateLine, counts: DayCounts): number {
   const amount = num(line.amount);
   switch (line.basis) {
     case 'per_day_status': {
+      const buckets = new Set<CountBucket>();
+      for (const s of line.dayStatuses ?? []) {
+        const b = statusBucket(s);
+        if (b) buckets.add(b);
+      }
       let days = 0;
-      for (const s of line.dayStatuses ?? []) days += daysForStatus(s, counts);
+      for (const b of buckets) days += bucketCount(b, counts);
       return amount * days;
     }
     case 'per_active_day':
       return amount * counts.active;
+    case 'per_assigned_day':
+      return amount * (counts.assigned ?? counts.active);
     case 'flat_once':
       return amount * 1;
     case 'per_week':
@@ -154,7 +217,8 @@ export function computeTotals(lines: RateLine[], counts: DayCounts): PayrollTota
  * Map the four legacy hardcoded rates (+ advance) onto the five default
  * rate lines, in the order that reproduces the legacy sum exactly. This is
  * the bridge that lets every existing caller keep the same numbers while
- * the engine becomes extensible.
+ * the engine stays extensible. (Per diem keeps per_active_day here — legacy
+ * data has no 'off' days, so active == assigned and nothing moves.)
  */
 export function ratesToLines(
   rate: RateLike,

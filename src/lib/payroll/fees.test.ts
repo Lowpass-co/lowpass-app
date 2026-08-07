@@ -62,9 +62,9 @@ checks++;
 
 // no_tour days pay nothing + earn no per diem; rehearsal counts for fee + PD (D3).
 const counts = countDayStatuses({ '2026-01-01': 'show', '2026-01-02': 'off_travel', '2026-01-03': 'rehearsal', '2026-01-04': 'no_tour' });
-// G2-1 — countDayStatuses now also returns `weeks` (distinct active weeks); the
-// three active days here fall in one Mon-start week.
-assert.deepEqual(counts, { show: 1, offTravel: 1, rehearsal: 1, active: 3, weeks: 1 });
+// 261 — countDayStatuses also returns promo/off/pdOnly/assigned; legacy data
+// has none, so assigned == active and nothing moves.
+assert.deepEqual(counts, { show: 1, offTravel: 1, rehearsal: 1, promo: 0, off: 0, pdOnly: 0, active: 3, assigned: 3, weeks: 1 });
 checks++;
 assert.equal(
   computeTotalFee({ show_rate: 100, off_rate: 50, rehearsal_rate: 25, per_diem: 10 }, counts, 0),
@@ -116,5 +116,84 @@ const dRate = { show_rate: 401.65, off_rate: 200.83, per_diem: 0 };
 assert.equal(computeTotalFee(dRate, dCounts, 0), computeTotals(ratesToLines(dRate, 0), dCounts).totalFee);
 assert.equal(computeTotalFee(dRate, dCounts, 0), 1606.62);
 checks += 2;
+
+// ── Canonical model (migration 261, Adam's flat-seven) ───────────────
+
+// 'travel' and legacy 'off_travel' are the SAME bucket; a line listing both
+// spellings bills each travel day exactly ONCE (bucket de-dupe).
+const mixed = countDayStatuses({ '2026-02-02': 'travel', '2026-02-03': 'off_travel', '2026-02-04': 'show' });
+assert.equal(mixed.offTravel, 2);
+assert.equal(
+  computeLineAmount(
+    { bucket: 'fee', basis: 'per_day_status', dayStatuses: ['off_travel', 'travel'], amount: 100 },
+    mixed,
+  ),
+  200, // 2 travel days × 100 — NOT 400
+);
+checks += 2;
+
+// 'off' = on tour, day off: bills like TRAVEL (Adam: "OFF should pay travel
+// rate") and counts as worked; 'pd_only' earns PD only; 'no_tour' earns
+// nothing (Adam: "NO TOUR is the only day not paid a PD").
+const withOff = countDayStatuses({
+  '2026-02-02': 'show', '2026-02-03': 'travel', '2026-02-04': 'off',
+  '2026-02-05': 'pd_only', '2026-02-06': 'no_tour',
+});
+assert.deepEqual(
+  { active: withOff.active, assigned: withOff.assigned, off: withOff.off, pdOnly: withOff.pdOnly },
+  { active: 3, assigned: 4, off: 1, pdOnly: 1 },
+);
+// Flat day (per_active_day) bills worked days INCLUDING off; never pd_only/no_tour.
+assert.equal(computeLineAmount({ bucket: 'fee', basis: 'per_active_day', amount: 200 }, withOff), 600);
+// The Travel line bills travel + off days (canonical dayStatuses list).
+assert.equal(
+  computeLineAmount({ bucket: 'fee', basis: 'per_day_status', dayStatuses: ['off_travel', 'travel', 'off'], amount: 300 }, withOff),
+  600, // 1 travel + 1 off — the show/pd_only/no_tour days don't bill it
+);
+// Per diem (per_assigned_day) bills the pd_only day too — but never no_tour.
+assert.equal(computeLineAmount({ bucket: 'per_diem', basis: 'per_assigned_day', amount: 20 }, withOff), 80);
+checks += 4;
+
+// Show-only person (Adam: "if there is a show rate, no travel rate and no flat
+// rate — only shows are paid, other days are PD only"). No special case: the
+// £0 travel line bills nothing, PD covers every assigned day.
+const showOnly = computeTotals(
+  [
+    { bucket: 'fee', basis: 'per_day_status', dayStatuses: ['show'], amount: 200 },
+    { bucket: 'fee', basis: 'per_day_status', dayStatuses: ['off_travel', 'travel', 'off'], amount: 0 },
+    { bucket: 'per_diem', basis: 'per_assigned_day', amount: 20 },
+  ],
+  withOff, // 1 show + 1 travel + 1 off + 1 pd_only
+);
+assert.equal(showOnly.totalFee, 200);      // the show day only
+assert.equal(showOnly.totalPerDiem, 80);   // all 4 assigned days
+checks += 2;
+
+// promo_radio is its own count bucket; a Press/Radio line bills it directly.
+const withPromo = countDayStatuses({ '2026-02-02': 'show', '2026-02-03': 'promo_radio' });
+assert.equal(withPromo.promo, 1);
+assert.equal(
+  computeLineAmount({ bucket: 'fee', basis: 'per_day_status', dayStatuses: ['promo_radio'], amount: 150 }, withPromo),
+  150,
+);
+// The Dillon-ruling fallback (press amount unset → promo bills SHOW rate) is a
+// LINE-RESOLUTION concern: a Show line whose dayStatuses gained 'promo_radio'
+// bills show + promo days at the show rate.
+assert.equal(
+  computeLineAmount({ bucket: 'fee', basis: 'per_day_status', dayStatuses: ['show', 'promo_radio'], amount: 300 }, withPromo),
+  600,
+);
+checks += 3;
+
+// STACKING (Adam's sum ruling): Flat day + Show both set → both bill.
+const stacked = computeTotals(
+  [
+    { bucket: 'fee', basis: 'per_active_day', amount: 100 }, // flat day
+    { bucket: 'fee', basis: 'per_day_status', dayStatuses: ['show'], amount: 250 }, // show
+  ],
+  { show: 2, offTravel: 1, rehearsal: 0, active: 3, assigned: 3 },
+);
+assert.equal(stacked.totalFee, 100 * 3 + 250 * 2);
+checks++;
 
 console.log(`payroll fees: ${checks} checks passed`);

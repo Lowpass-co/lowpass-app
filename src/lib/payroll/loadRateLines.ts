@@ -15,7 +15,14 @@
    ============================================ */
 
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { buildRateLines, DEFAULT_RATE_TYPE_IDS, type RateTypeMeta, type RateLineRow } from './rateLines';
+import {
+  buildRateLines,
+  canonicalOrderOf,
+  CANONICAL_RATE_TYPE_IDS,
+  DEFAULT_RATE_TYPE_IDS,
+  type RateTypeMeta,
+  type RateLineRow,
+} from './rateLines';
 import { ratesToLines, type RateLike, type RateLine, type DayStatus, type RateBucket, type RateBasis } from './fees';
 
 /** A card's legacy rate columns — the ONLY place they're read for the fallback. */
@@ -38,16 +45,23 @@ function assembleRateContext(
   linesData: unknown,
   legacyData: unknown,
 ): TourRateContext {
+  // CANONICAL FILTER (migration 261 / Adam's ruling): only the flat-seven
+  // (+ Advance) load. Weekly (a8) and custom workspace types are retired here —
+  // their rows + amounts stay in the DB but no longer bill or render.
+  // Display order = Adam's canonical order, not raw order_index.
   const types: RateTypeMeta[] = ((typesData ?? []) as Array<{
     id: string; name: string; bucket: string; basis: string; day_statuses: string[] | null; order_index: number;
-  }>).map((t) => ({
-    id: t.id,
-    name: t.name,
-    bucket: t.bucket as RateBucket,
-    basis: t.basis as RateBasis,
-    dayStatuses: (t.day_statuses ?? []) as DayStatus[],
-    orderIndex: t.order_index,
-  }));
+  }>)
+    .filter((t) => CANONICAL_RATE_TYPE_IDS.includes(t.id))
+    .map((t) => ({
+      id: t.id,
+      name: t.name,
+      bucket: t.bucket as RateBucket,
+      basis: t.basis as RateBasis,
+      dayStatuses: (t.day_statuses ?? []) as DayStatus[],
+      orderIndex: canonicalOrderOf(t.id),
+    }))
+    .sort((a, b) => a.orderIndex - b.orderIndex);
 
   const linesByRateId = new Map<string, RateLineRow[]>();
   for (const r of (linesData ?? []) as Array<{ personnel_rate_id: string; rate_type_id: string; amount: number | string | null }>) {
