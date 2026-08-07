@@ -44,6 +44,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import {
   GripVertical,
   ChevronDown,
@@ -229,6 +230,11 @@ export function RiderSectionBuilder({ packId }: { packId: string }) {
   const [activeGroup, setActiveGroup] = useState<string>(DEFAULT_GROUP_ID);
   const [addedGroups, setAddedGroups] = useState<Set<string>>(new Set());
   const [addMenuOpen, setAddMenuOpen] = useState(false);
+  // 2026-08-07 — the add-section menu renders through a PORTAL at a fixed
+  // position (Adam: "stuck under a small canvas so the drop down doesn't drop
+  // correctly") — the rail's scroll container was clipping it.
+  const addBtnRef = useRef<HTMLButtonElement>(null);
+  const [addMenuPos, setAddMenuPos] = useState<{ top: number; left: number } | null>(null);
   const [groupMenuOpen, setGroupMenuOpen] = useState(false);
   const [templates, setTemplates] = useState<TemplateLite[] | null>(null);
   /* 2026-08-06 (Adam) — "I don't want to insert all 15 fields if I only want
@@ -744,7 +750,14 @@ export function RiderSectionBuilder({ packId }: { packId: string }) {
           <span style={{ position: 'relative', marginTop: 6 }}>
             <button
               type="button"
+              ref={addBtnRef}
               onClick={() => {
+                const r = addBtnRef.current?.getBoundingClientRect();
+                if (r) {
+                  // Open above the button when the viewport below is tight.
+                  const below = window.innerHeight - r.bottom;
+                  setAddMenuPos({ top: below < 300 ? Math.max(12, r.top - 292) : r.bottom + 4, left: r.left });
+                }
                 setAddMenuOpen((v) => !v);
                 setPickingTemplate(null);
                 void loadTemplates();
@@ -755,9 +768,10 @@ export function RiderSectionBuilder({ packId }: { packId: string }) {
               <Plus className="h-3.5 w-3.5" />
               Add section
             </button>
-            {addMenuOpen ? (
+            {addMenuOpen && addMenuPos ? (
+              createPortal(
               <div
-                style={{ position: 'absolute', top: '110%', left: 0, zIndex: 30, width: 220, maxHeight: 280, overflowY: 'auto', borderRadius: 8, border: '1px solid var(--lp-border-strong)', background: 'var(--lp-surface)', boxShadow: 'var(--lp-shadow-lg, 0 8px 24px rgba(0,0,0,0.35))', padding: 4 }}
+                style={{ position: 'fixed', top: addMenuPos.top, left: addMenuPos.left, zIndex: 90, width: 260, maxHeight: 288, overflowY: 'auto', borderRadius: 8, border: '1px solid var(--lp-border-strong)', background: 'var(--lp-surface)', boxShadow: 'var(--lp-shadow-lg, 0 8px 24px rgba(0,0,0,0.35))', padding: 4 }}
               >
                 {templates === null ? (
                   <p style={{ padding: '8px 10px', fontSize: 'var(--lp-text-xs)', color: 'var(--lp-text-tertiary)' }}>Loading templates…</p>
@@ -862,7 +876,8 @@ export function RiderSectionBuilder({ packId }: { packId: string }) {
                     </button>
                   </>
                 )}
-              </div>
+              </div>,
+              document.body)
             ) : null}
           </span>
         </aside>
@@ -1104,7 +1119,11 @@ function FieldList(props: SectionCardProps) {
           No fields yet.
         </p>
       ) : (
-        <ul className="flex flex-col gap-1">
+        /* 2026-08-07 (Adam: "we stack every rider item even though we could
+           fit some of them side by side") — compact fields flow 2-up on wide
+           canvases; long-form fields span the full row (FieldRow sets its own
+           gridColumn). */
+        <ul style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', gap: 10, listStyle: 'none', margin: 0, padding: 0 }}>
           {fields.map((f, idx) => (
             <FieldRow
               key={f.key}
