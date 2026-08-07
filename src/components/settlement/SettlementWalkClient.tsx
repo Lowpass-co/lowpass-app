@@ -1,16 +1,27 @@
 'use client';
 
 /* ============================================
-   LOWPASS — <SettlementWalkClient> (M1-B, the arena flip)
+   LOWPASS — <SettlementWalkClient> (ATOM-bar redesign, 2026-08-07)
 
-   Left: the shows list / catch-up queue (past shows not Full & Final are flagged).
-   Right: the selected show's WALK — Guarantee → deductions → Adjusted gross →
-   expenses → Show net → +overage +merch → Artist total → −deposit → Balance due →
-   −payments → Outstanding. Mono numerics, 18px key totals, 11px caps labels,
-   negatives red (hue budget). Itemized rows persist via /api/budget/settlement/lines;
-   guarantee/overage/merch/deposit + Full & Final via /api/budget/settlement. On any
-   deductions change we push Σ into reconciled_deductions so the income cascade
-   carries it unchanged.
+   Adam: "Lowpass looks like a late 90s website comparably [to ATOM's
+   settlement sheet]." Rebuilt in the app's money grammar (same language as
+   the income deal slide-over):
+
+     - KPI STRIP up top (spec §3, all client-derivable): Outstanding ·
+       Settled · Not settled · Awaiting payment · Unsettled N of M.
+     - SHOWS RAIL: card rows with venue + date + guarantee + a status chip
+       (SETTLED green / DUE amber / open) — the catch-up queue readable at a
+       glance.
+     - THE WALK as ledger cards: "The walk" (guarantee → itemized deductions
+       → adjusted gross → expenses → show net → +overage +merch → ARTIST
+       TOTAL) and "Settle & pay" (−deposit → BALANCE DUE → payments log →
+       OUTSTANDING emphatic). Mono tabular numerals, hairline rules, ruled
+       totals, negatives red. Hue = green (settled money domain); orange is
+       reserved for the one number that still moves: Outstanding.
+
+   LOGIC UNCHANGED: same computeWalk, same /api/budget/settlement +
+   /lines endpoints, same Σ(deductions) → reconciled_deductions push, same
+   Full & Final semantics, same PDF export (data-testid preserved).
    ============================================ */
 
 import { useMemo, useState, useTransition } from 'react';
@@ -21,6 +32,10 @@ import type { ShowWalk } from '@/lib/settlement/loadWalk';
 const DEDUCTION_KINDS = ['withholding', 'tax', 'venue_cost', 'commission', 'other'] as const;
 const PAYMENT_METHODS = ['wire', 'check', 'cash', 'ach'] as const;
 
+const HUE_SETTLED = 'var(--color-lp-status-complete)';
+const HUE_DUE = 'var(--color-lp-warning)';
+const HUE_OUT = 'var(--lp-orange)';
+
 export function SettlementWalkClient({
   tourId,
   currency,
@@ -30,6 +45,7 @@ export function SettlementWalkClient({
   currency: string;
   shows: ShowWalk[];
 }) {
+  void tourId;
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [busy, setBusy] = useState(false);
@@ -41,6 +57,24 @@ export function SettlementWalkClient({
     () => new Intl.NumberFormat('en-GB', { style: 'currency', currency: currency || 'GBP', maximumFractionDigits: 0 }),
     [currency],
   );
+
+  // ── KPI strip (spec §3) — all derivable from the loaded walks ──
+  const kpi = useMemo(() => {
+    let outstanding = 0;
+    let settledCount = 0;
+    let notSettled = 0;
+    let awaitingPayment = 0;
+    for (const s of shows) {
+      if (s.settlementId) outstanding += s.walk.outstanding;
+      if (s.fullAndFinal) {
+        settledCount++;
+        if (s.walk.outstanding > 0) awaitingPayment++;
+      } else if (s.date != null && s.date < today) {
+        notSettled++;
+      }
+    }
+    return { outstanding, settledCount, notSettled, awaitingPayment, total: shows.length };
+  }, [shows, today]);
 
   const refresh = () => startTransition(() => router.refresh());
 
@@ -89,65 +123,81 @@ export function SettlementWalkClient({
   }
 
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: 'minmax(240px, 320px) 1fr', gap: 'var(--lp-space-4)', minHeight: 0 }}>
-      {/* Shows list / catch-up queue */}
-      <aside style={{ display: 'flex', flexDirection: 'column', gap: 6, minWidth: 0 }}>
-        <div className="lp-label-caps" style={{ fontSize: 'var(--lp-text-2xs)', color: 'var(--lp-text-tertiary)', padding: '0 2px 2px' }}>
-          Shows
-        </div>
-        {shows.length === 0 ? (
-          <p style={{ fontSize: 'var(--lp-text-sm)', color: 'var(--lp-text-tertiary)' }}>No shows to settle yet.</p>
-        ) : (
-          shows.map((s) => {
-            const isSel = s.routingId === selectedId;
-            const unsettled = s.date != null && s.date < today && !s.fullAndFinal;
-            return (
-              <button
-                key={s.routingId}
-                type="button"
-                onClick={() => setSelectedId(s.routingId)}
-                className="btn-transition flex items-center justify-between"
-                style={{
-                  gap: 8,
-                  padding: '8px 10px',
-                  textAlign: 'left',
-                  background: isSel ? 'color-mix(in srgb, var(--color-lp-orange) 10%, transparent)' : 'var(--lp-surface)',
-                  border: `1px solid ${isSel ? 'var(--color-lp-orange)' : unsettled ? 'color-mix(in srgb, var(--color-lp-warning) 40%, transparent)' : 'var(--lp-border-subtle)'}`,
-                  borderRadius: 'var(--lp-radius-md)',
-                  cursor: 'pointer',
-                }}
-              >
-                <span style={{ minWidth: 0 }}>
-                  <span style={{ display: 'block', fontSize: 'var(--lp-text-sm)', color: 'var(--lp-text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {s.city || s.venue_name || 'Show'}
-                  </span>
-                  <span className="lp-mono" style={{ fontSize: 'var(--lp-text-2xs)', color: 'var(--lp-text-tertiary)' }}>{s.date ?? '—'}</span>
-                </span>
-                {s.fullAndFinal ? (
-                  <span className="lp-label-caps" style={{ fontSize: 9, color: 'var(--color-lp-status-complete)' }}>Settled</span>
-                ) : unsettled ? (
-                  <span className="lp-label-caps" style={{ fontSize: 9, color: 'var(--color-lp-warning)' }}>Due</span>
-                ) : null}
-              </button>
-            );
-          })
-        )}
-      </aside>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 14, minHeight: 0 }}>
+      {/* ── KPI strip ── */}
+      <div style={{ display: 'flex', borderRadius: 'var(--lp-radius-lg)', border: '1px solid var(--lp-border)', background: 'var(--lp-panel)', overflow: 'hidden', flexWrap: 'wrap' }}>
+        <Kpi label="Outstanding" value={fmt.format(kpi.outstanding)} hue={kpi.outstanding > 0 ? HUE_OUT : 'var(--lp-text-tertiary)'} />
+        <Kpi label="Settled" value={String(kpi.settledCount)} hue={HUE_SETTLED} divider />
+        <Kpi label="Not settled" value={String(kpi.notSettled)} hue={kpi.notSettled > 0 ? HUE_DUE : 'var(--lp-text-tertiary)'} divider />
+        <Kpi label="Awaiting payment" value={String(kpi.awaitingPayment)} hue={kpi.awaitingPayment > 0 ? HUE_OUT : 'var(--lp-text-tertiary)'} divider />
+        <Kpi label="Unsettled shows" value={`${kpi.total - kpi.settledCount} of ${kpi.total}`} hue="var(--lp-text-secondary)" divider />
+      </div>
 
-      {/* Walk panel */}
-      {selected ? (
-        <WalkPanel
-          key={selected.routingId}
-          show={selected}
-          fmt={fmt}
-          busy={busy || pending}
-          onSaveGrain={(patch) => void saveGrain(selected, patch)}
-          onAddLine={(type, fields) => void addLine(selected, type, fields)}
-          onRemoveLine={(type, id) => void removeLine(selected, type, id)}
-        />
-      ) : (
-        <div style={{ color: 'var(--lp-text-tertiary)', fontSize: 'var(--lp-text-sm)' }}>Select a show to settle.</div>
-      )}
+      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(250px, 330px) 1fr', gap: 'var(--lp-space-4)', minHeight: 0 }}>
+        {/* ── Shows rail ── */}
+        <aside style={{ display: 'flex', flexDirection: 'column', gap: 6, minWidth: 0 }}>
+          <div className="lp-label-caps" style={{ fontSize: 'var(--lp-text-2xs)', color: 'var(--lp-text-tertiary)', padding: '0 2px 2px', display: 'flex', justifyContent: 'space-between' }}>
+            <span>Shows</span>
+            {kpi.notSettled > 0 ? <span style={{ color: HUE_DUE }}>{kpi.notSettled} due</span> : null}
+          </div>
+          {shows.length === 0 ? (
+            <p style={{ fontSize: 'var(--lp-text-sm)', color: 'var(--lp-text-tertiary)' }}>
+              No shows to settle yet — routing dates become settleable shows automatically.
+            </p>
+          ) : (
+            shows.map((s) => {
+              const isSel = s.routingId === selectedId;
+              const unsettled = s.date != null && s.date < today && !s.fullAndFinal;
+              const hue = s.fullAndFinal ? HUE_SETTLED : unsettled ? HUE_DUE : 'var(--lp-border-subtle)';
+              return (
+                <button
+                  key={s.routingId}
+                  type="button"
+                  onClick={() => setSelectedId(s.routingId)}
+                  className="btn-transition"
+                  style={{
+                    display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8,
+                    padding: '9px 12px', textAlign: 'left', cursor: 'pointer', minWidth: 0,
+                    background: isSel ? 'color-mix(in srgb, var(--lp-orange) 8%, var(--lp-surface))' : 'var(--lp-surface)',
+                    border: `1px solid ${isSel ? 'var(--lp-orange)' : 'var(--lp-border-subtle)'}`,
+                    borderLeft: `3px solid ${isSel ? 'var(--lp-orange)' : hue}`,
+                    borderRadius: 'var(--lp-radius-md)',
+                  }}
+                >
+                  <span style={{ minWidth: 0 }}>
+                    <span style={{ display: 'block', fontSize: 'var(--lp-text-sm)', fontWeight: 600, color: 'var(--lp-text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {s.city || s.venue_name || 'Show'}
+                    </span>
+                    <span className="lp-mono" style={{ fontSize: 'var(--lp-text-2xs)', color: 'var(--lp-text-tertiary)' }}>
+                      {s.date ?? '—'}{s.guarantee ? ` · ${fmt.format(s.guarantee)} gtd` : ''}
+                    </span>
+                  </span>
+                  {s.fullAndFinal ? (
+                    <Chip label="SETTLED" hue={HUE_SETTLED} />
+                  ) : unsettled ? (
+                    <Chip label="DUE" hue={HUE_DUE} />
+                  ) : null}
+                </button>
+              );
+            })
+          )}
+        </aside>
+
+        {/* ── Walk panel ── */}
+        {selected ? (
+          <WalkPanel
+            key={selected.routingId}
+            show={selected}
+            fmt={fmt}
+            busy={busy || pending}
+            onSaveGrain={(patch) => void saveGrain(selected, patch)}
+            onAddLine={(type, fields) => void addLine(selected, type, fields)}
+            onRemoveLine={(type, id) => void removeLine(selected, type, id)}
+          />
+        ) : (
+          <div style={{ color: 'var(--lp-text-tertiary)', fontSize: 'var(--lp-text-sm)' }}>Select a show to settle.</div>
+        )}
+      </div>
     </div>
   );
 }
@@ -178,96 +228,123 @@ function WalkPanel({
     payments: show.payments,
   });
 
+  const statusChip = show.fullAndFinal
+    ? { label: 'SETTLED · FULL & FINAL', hue: HUE_SETTLED }
+    : { label: 'OPEN', hue: 'var(--lp-text-tertiary)' };
+
   return (
-    <section
-      style={{
-        border: '1px solid var(--lp-border-strong)',
-        borderRadius: 'var(--lp-radius-lg)',
-        background: 'var(--lp-panel)',
-        padding: 'var(--lp-space-4)',
-        display: 'flex',
-        flexDirection: 'column',
-        gap: 'var(--lp-space-2)',
-      }}
-    >
-      <header className="flex items-center justify-between" style={{ marginBottom: 6 }}>
-        <div>
-          <div style={{ fontSize: 'var(--lp-text-base)', fontWeight: 'var(--lp-weight-semibold)', color: 'var(--lp-text)' }}>
-            {show.city || show.venue_name || 'Show'}
+    <section style={{ display: 'flex', flexDirection: 'column', gap: 12, minWidth: 0 }}>
+      {/* HERO — identity + status + actions */}
+      <div
+        style={{
+          borderRadius: 'var(--lp-radius-lg)', border: '1px solid var(--lp-border)',
+          background: `linear-gradient(180deg, color-mix(in srgb, ${show.fullAndFinal ? HUE_SETTLED : HUE_OUT} 8%, var(--lp-surface)) 0%, var(--lp-surface) 100%)`,
+          padding: '16px 20px',
+        }}
+      >
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10, flexWrap: 'wrap' }}>
+          <div style={{ minWidth: 0 }}>
+            <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--lp-text-tertiary)', marginBottom: 2 }}>
+              {show.date ?? '—'}{show.venue_name && show.city ? ` · ${show.venue_name}` : ''}
+            </div>
+            <div style={{ fontSize: 19, fontWeight: 750, letterSpacing: '-0.01em', color: 'var(--lp-text)' }}>
+              {show.city || show.venue_name || 'Show'}
+            </div>
           </div>
-          <div className="lp-mono" style={{ fontSize: 'var(--lp-text-2xs)', color: 'var(--lp-text-tertiary)' }}>{show.date ?? '—'}</div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+            <Chip label={statusChip.label} hue={statusChip.hue} />
+            <button
+              type="button"
+              data-testid="settlement-export-pdf"
+              data-routing-id={show.routingId}
+              onClick={() => void exportPdf(show.routingId, show.city || show.venue_name || 'Show')}
+              className="btn-transition"
+              style={{ padding: '5px 12px', fontSize: 'var(--lp-text-xs)', fontWeight: 600, color: 'var(--lp-text-secondary)', background: 'transparent', border: '1px solid var(--lp-border-strong)', borderRadius: 'var(--lp-radius-md)', cursor: 'pointer' }}
+              title="Download this show's settlement as a PDF"
+            >
+              Export PDF
+            </button>
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => onSaveGrain({ full_and_final: !show.fullAndFinal, status: 'reconciled' })}
+              className="btn-transition"
+              title={show.fullAndFinal ? 'Reopen this settlement' : 'Mark this settlement Full & Final'}
+              style={{
+                padding: '5px 12px', fontSize: 'var(--lp-text-xs)', fontWeight: 700, cursor: 'pointer',
+                borderRadius: 'var(--lp-radius-md)',
+                border: `1px solid ${show.fullAndFinal ? HUE_SETTLED : 'var(--lp-border-strong)'}`,
+                background: show.fullAndFinal ? HUE_SETTLED : 'transparent',
+                color: show.fullAndFinal ? 'var(--lp-text-inverse, #fff)' : 'var(--lp-text)',
+              }}
+            >
+              {show.fullAndFinal ? '✓ Full & Final' : 'Mark Full & Final'}
+            </button>
+          </div>
         </div>
-        <div className="flex items-center" style={{ gap: 'var(--lp-space-3)' }}>
-          <button
-            type="button"
-            data-testid="settlement-export-pdf"
-            data-routing-id={show.routingId}
-            onClick={() => void exportPdf(show.routingId, show.city || show.venue_name || 'Show')}
-            className="btn-transition"
-            style={{ padding: '4px 10px', fontSize: 'var(--lp-text-xs)', color: 'var(--lp-text-secondary)', background: 'transparent', border: '1px solid var(--lp-border-strong)', borderRadius: 'var(--lp-radius-md)', cursor: 'pointer' }}
-            title="Download this show's settlement as a PDF"
-          >
-            Export PDF
-          </button>
-          <label className="flex items-center" style={{ gap: 6, fontSize: 'var(--lp-text-sm)', color: 'var(--lp-text)', cursor: 'pointer' }}>
-            <input type="checkbox" checked={show.fullAndFinal} disabled={busy} onChange={(e) => onSaveGrain({ full_and_final: e.target.checked, status: 'reconciled' })} />
-            Full &amp; Final
-          </label>
+        {/* At-a-glance triplet */}
+        <div style={{ display: 'flex', marginTop: 12, borderRadius: 'var(--lp-radius-md)', border: '1px solid var(--lp-border)', background: 'var(--lp-panel)', overflow: 'hidden' }}>
+          <Kpi label="Artist total" value={fmt.format(walk.artistTotal)} hue="var(--lp-text)" />
+          <Kpi label="Balance due" value={fmt.format(walk.balanceDue)} hue="var(--lp-text)" divider />
+          <Kpi label="Outstanding" value={fmt.format(walk.outstanding)} hue={walk.outstanding > 0 ? HUE_OUT : HUE_SETTLED} divider />
         </div>
-      </header>
+      </div>
 
-      {/* Guarantee */}
-      <MoneyInput label="Guarantee" value={show.guarantee} fmt={fmt} disabled={busy} onCommit={(v) => onSaveGrain({ reconciled_guarantee: v })} />
+      {/* CARD 1 — the walk */}
+      <Card title="The walk" hue={HUE_SETTLED}>
+        <LedgerInput label="Guarantee" value={show.guarantee} disabled={busy} onCommit={(v) => onSaveGrain({ reconciled_guarantee: v })} />
 
-      {/* Deductions */}
-      <LineGroup
-        label="Deductions"
-        rows={show.deductions.map((d) => ({ id: d.id, left: kindLabel(d.kind) + (d.label ? ` · ${d.label}` : ''), amount: -d.amount }))}
-        legacyNote={show.deductionsAreLegacy ? 'Legacy value — add itemized lines to break it out' : undefined}
-        fmt={fmt}
-        busy={busy}
-        onRemove={(id) => onRemoveLine('deduction', id)}
-        adder={<DeductionAdder busy={busy} onAdd={(f) => onAddLine('deduction', f)} />}
-      />
-      <Subtotal label="Adjusted gross" value={walk.adjustedGross} fmt={fmt} />
+        <LineGroup
+          label="Deductions"
+          rows={show.deductions.map((d) => ({ id: d.id, left: kindLabel(d.kind) + (d.label ? ` · ${d.label}` : ''), amount: -d.amount }))}
+          legacyNote={show.deductionsAreLegacy ? 'Legacy single value — add itemized lines to break it out' : undefined}
+          emptyNote="No deductions yet — withholding, taxes, venue costs and commissions itemize here."
+          fmt={fmt}
+          busy={busy}
+          onRemove={(id) => onRemoveLine('deduction', id)}
+          adder={<DeductionAdder busy={busy} onAdd={(f) => onAddLine('deduction', f)} />}
+        />
+        <Rule label="Adjusted gross" value={walk.adjustedGross} fmt={fmt} />
 
-      {/* Expenses */}
-      <LineGroup
-        label="Show expenses"
-        rows={show.expenses.map((e) => ({ id: e.id, left: e.label || 'Expense', amount: -e.amount }))}
-        fmt={fmt}
-        busy={busy}
-        onRemove={(id) => onRemoveLine('expense', id)}
-        adder={<LabelAmountAdder busy={busy} placeholder="Expense" onAdd={(f) => onAddLine('expense', f)} />}
-      />
-      <Subtotal label="Show net" value={walk.showNet} fmt={fmt} />
+        <LineGroup
+          label="Show expenses"
+          rows={show.expenses.map((e) => ({ id: e.id, left: e.label || 'Expense', amount: -e.amount }))}
+          emptyNote="No show expenses logged against the settlement."
+          fmt={fmt}
+          busy={busy}
+          onRemove={(id) => onRemoveLine('expense', id)}
+          adder={<LabelAmountAdder busy={busy} placeholder="Expense" onAdd={(f) => onAddLine('expense', f)} />}
+        />
+        <Rule label="Show net" value={walk.showNet} fmt={fmt} />
 
-      <MoneyInput label="Overage / bonus" value={show.overage} fmt={fmt} disabled={busy} onCommit={(v) => onSaveGrain({ reconciled_overage: v })} sign="+" />
-      <MoneyInput label="Merch" value={show.merch} fmt={fmt} disabled={busy} onCommit={(v) => onSaveGrain({ reconciled_merch: v })} sign="+" />
-      <Total label="Artist total" value={walk.artistTotal} fmt={fmt} />
+        <LedgerInput label="＋ Overage / bonus" value={show.overage} disabled={busy} onCommit={(v) => onSaveGrain({ reconciled_overage: v })} />
+        <LedgerInput label="＋ Merch" value={show.merch} disabled={busy} onCommit={(v) => onSaveGrain({ reconciled_merch: v })} />
+        <RuledTotal label="Artist total" value={walk.artistTotal} fmt={fmt} hue={HUE_SETTLED} />
+      </Card>
 
-      <MoneyInput label="Deposit received" value={show.depositReceived} fmt={fmt} disabled={busy} onCommit={(v) => onSaveGrain({ deposit_received: v })} sign="−" />
-      <Total label="Balance due" value={walk.balanceDue} fmt={fmt} />
+      {/* CARD 2 — settle & pay */}
+      <Card title="Settle & pay" hue={HUE_OUT}>
+        <LedgerInput label="− Deposit received" value={show.depositReceived} disabled={busy} onCommit={(v) => onSaveGrain({ deposit_received: v })} />
+        <Rule label="Balance due" value={walk.balanceDue} fmt={fmt} />
 
-      {/* Payments */}
-      <LineGroup
-        label="Payments"
-        rows={show.payments.map((p) => ({ id: p.id, left: methodLabel(p.method) + (p.paid_on ? ` · ${p.paid_on}` : ''), amount: -p.amount }))}
-        fmt={fmt}
-        busy={busy}
-        onRemove={(id) => onRemoveLine('payment', id)}
-        adder={<PaymentAdder busy={busy} onAdd={(f) => onAddLine('payment', f)} />}
-      />
-      <Total label="Outstanding" value={walk.outstanding} fmt={fmt} emphatic />
+        <LineGroup
+          label="Payments"
+          rows={show.payments.map((p) => ({ id: p.id, left: methodLabel(p.method) + (p.paid_on ? ` · ${p.paid_on}` : ''), amount: -p.amount }))}
+          emptyNote="Nothing logged yet — wires, checks and cash land here as they arrive."
+          fmt={fmt}
+          busy={busy}
+          onRemove={(id) => onRemoveLine('payment', id)}
+          adder={<PaymentAdder busy={busy} onAdd={(f) => onAddLine('payment', f)} />}
+        />
+        <RuledTotal label="Outstanding" value={walk.outstanding} fmt={fmt} hue={walk.outstanding > 0 ? HUE_OUT : HUE_SETTLED} />
+      </Card>
     </section>
   );
 }
 
-/* -------- primitives -------- */
+/* -------- primitives (the app's money grammar) -------- */
 
 function walkLegacy(show: ShowWalk): number {
-  // The synthetic legacy deduction amount = artistTotal-implied; recomputed here
-  // only for the local pre-refresh walk (loadWalk supplies the real value server-side).
   return show.walk.deductionsTotal;
 }
 
@@ -275,66 +352,101 @@ function money(fmt: Intl.NumberFormat, n: number) {
   return fmt.format(Math.abs(n));
 }
 
-function RowShell({ label, right, strong }: { label: React.ReactNode; right: React.ReactNode; strong?: boolean }) {
+function Kpi({ label, value, hue, divider }: { label: string; value: string; hue: string; divider?: boolean }) {
   return (
-    <div className="flex items-center justify-between" style={{ padding: '3px 0', borderTop: strong ? '1px solid var(--lp-border-subtle)' : undefined }}>
-      <span className="lp-label-caps" style={{ fontSize: 11, color: 'var(--lp-text-secondary)' }}>{label}</span>
-      {right}
+    <div style={{ flex: '1 1 110px', padding: '10px 16px', borderLeft: divider ? '1px solid var(--lp-border)' : 'none', minWidth: 0 }}>
+      <div style={{ fontSize: 9.5, fontWeight: 800, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--lp-text-tertiary)', whiteSpace: 'nowrap' }}>{label}</div>
+      <div style={{ fontSize: 18, fontWeight: 750, fontFamily: 'var(--lp-font-numeric)', fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.01em', color: hue, marginTop: 2, whiteSpace: 'nowrap' }}>{value}</div>
     </div>
   );
 }
 
-function MoneyInput({ label, value, fmt, disabled, onCommit, sign }: { label: string; value: number; fmt: Intl.NumberFormat; disabled: boolean; onCommit: (v: number) => void; sign?: '+' | '−' }) {
+function Chip({ label, hue }: { label: string; hue: string }) {
+  return (
+    <span
+      style={{
+        fontSize: 9.5, fontWeight: 800, letterSpacing: '0.07em', padding: '4px 9px', whiteSpace: 'nowrap',
+        borderRadius: 'var(--lp-radius-full)', color: hue,
+        border: `1px solid color-mix(in srgb, ${hue} 45%, transparent)`,
+        background: `color-mix(in srgb, ${hue} 10%, transparent)`,
+      }}
+    >
+      {label}
+    </span>
+  );
+}
+
+function Card({ title, hue, children }: { title: string; hue: string; children: React.ReactNode }) {
+  return (
+    <section
+      style={{
+        borderRadius: 'var(--lp-radius-lg)', border: '1px solid var(--lp-border)', background: 'var(--lp-panel)',
+        borderLeft: `3px solid color-mix(in srgb, ${hue} 65%, transparent)`, padding: '12px 18px 14px',
+      }}
+    >
+      <h3 style={{ margin: '0 0 8px', fontSize: 10.5, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--lp-text-secondary)' }}>{title}</h3>
+      {children}
+    </section>
+  );
+}
+
+/** A ledger line whose figure is an INPUT (mono, right, saves on blur). */
+function LedgerInput({ label, value, disabled, onCommit }: { label: string; value: number; disabled: boolean; onCommit: (v: number) => void }) {
   const [v, setV] = useState(String(value || ''));
   return (
-    <RowShell
-      label={sign ? `${sign} ${label}` : label}
-      right={
-        <input
-          value={v}
-          disabled={disabled}
-          inputMode="decimal"
-          onChange={(e) => setV(e.target.value)}
-          onBlur={() => { const n = Number(v) || 0; if (n !== value) onCommit(n); }}
-          className="lp-mono"
-          style={{ width: 130, textAlign: 'right', fontSize: 14, background: 'var(--lp-surface)', border: '1px solid var(--lp-border-strong)', borderRadius: 6, padding: '3px 8px', color: 'var(--lp-text)', fontVariantNumeric: 'tabular-nums' }}
-          placeholder={fmt.format(0)}
-        />
-      }
-    />
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, padding: '4.5px 0', borderBottom: '1px solid var(--lp-border-subtle, var(--lp-border))' }}>
+      <span style={{ fontSize: 12, color: 'var(--lp-text-secondary)' }}>{label}</span>
+      <input
+        value={v}
+        disabled={disabled}
+        inputMode="decimal"
+        onChange={(e) => setV(e.target.value)}
+        onBlur={() => { const n = Number(v) || 0; if (n !== value) onCommit(n); }}
+        onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
+        className="lp-mono"
+        style={{ width: 130, textAlign: 'right', fontSize: 13.5, background: 'var(--lp-bg)', border: '1px solid var(--lp-border)', borderRadius: 'var(--lp-radius-md)', padding: '5px 9px', color: 'var(--lp-text)', fontVariantNumeric: 'tabular-nums' }}
+        placeholder="—"
+      />
+    </div>
   );
 }
 
-function Subtotal({ label, value, fmt }: { label: string; value: number; fmt: Intl.NumberFormat }) {
+/** A computed subtotal with a hairline rule. */
+function Rule({ label, value, fmt }: { label: string; value: number; fmt: Intl.NumberFormat }) {
   return (
-    <RowShell
-      strong
-      label={label}
-      right={<span className="lp-mono" style={{ fontSize: 14, color: value < 0 ? 'var(--color-lp-error)' : 'var(--lp-text)', fontVariantNumeric: 'tabular-nums' }}>{value < 0 ? '−' : ''}{money(fmt, value)}</span>}
-    />
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, padding: '6px 0', borderBottom: '1px solid var(--lp-border-subtle, var(--lp-border))' }}>
+      <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase', color: 'var(--lp-text-secondary)' }}>{label}</span>
+      <span className="lp-mono" style={{ fontSize: 14, fontWeight: 600, color: value < 0 ? 'var(--color-lp-error)' : 'var(--lp-text)', fontVariantNumeric: 'tabular-nums' }}>
+        {value < 0 ? '−' : ''}{money(fmt, value)}
+      </span>
+    </div>
   );
 }
 
-function Total({ label, value, fmt, emphatic }: { label: string; value: number; fmt: Intl.NumberFormat; emphatic?: boolean }) {
+/** The emphatic ruled total that closes a card. */
+function RuledTotal({ label, value, fmt, hue }: { label: string; value: number; fmt: Intl.NumberFormat; hue: string }) {
   return (
-    <RowShell
-      strong
-      label={<span style={{ fontWeight: 'var(--lp-weight-bold)', color: 'var(--lp-text)' }}>{label}</span>}
-      right={<span className="lp-mono" style={{ fontSize: 18, fontWeight: 'var(--lp-weight-bold)', color: value < 0 ? 'var(--color-lp-error)' : emphatic ? 'var(--color-lp-orange)' : 'var(--lp-text)', fontVariantNumeric: 'tabular-nums' }}>{value < 0 ? '−' : ''}{money(fmt, value)}</span>}
-    />
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, padding: '8px 0 2px', borderTop: `2px solid color-mix(in srgb, ${hue} 55%, transparent)`, marginTop: 2 }}>
+      <span style={{ fontSize: 11, fontWeight: 800, letterSpacing: '0.07em', textTransform: 'uppercase', color: hue }}>{label}</span>
+      <span className="lp-mono" style={{ fontSize: 19, fontWeight: 750, letterSpacing: '-0.01em', color: value < 0 ? 'var(--color-lp-error)' : hue, fontVariantNumeric: 'tabular-nums' }}>
+        {value < 0 ? '−' : ''}{money(fmt, value)}
+      </span>
+    </div>
   );
 }
 
-function LineGroup({ label, rows, legacyNote, fmt, busy, onRemove, adder }: { label: string; rows: { id: string; left: string; amount: number }[]; legacyNote?: string; fmt: Intl.NumberFormat; busy: boolean; onRemove: (id: string) => void; adder: React.ReactNode }) {
+function LineGroup({ label, rows, legacyNote, emptyNote, fmt, busy, onRemove, adder }: { label: string; rows: { id: string; left: string; amount: number }[]; legacyNote?: string; emptyNote?: string; fmt: Intl.NumberFormat; busy: boolean; onRemove: (id: string) => void; adder: React.ReactNode }) {
   return (
-    <div style={{ padding: '2px 0' }}>
-      <div className="lp-label-caps" style={{ fontSize: 11, color: 'var(--lp-text-tertiary)', marginBottom: 2 }}>{label}</div>
-      {rows.length === 0 && !legacyNote ? null : null}
+    <div style={{ padding: '6px 0 4px' }}>
+      <div className="lp-label-caps" style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: '0.06em', color: 'var(--lp-text-tertiary)', marginBottom: 3 }}>{label}</div>
       {legacyNote ? <div style={{ fontSize: 'var(--lp-text-2xs)', color: 'var(--lp-text-tertiary)', fontStyle: 'italic', marginBottom: 2 }}>{legacyNote}</div> : null}
+      {rows.length === 0 && !legacyNote && emptyNote ? (
+        <div style={{ fontSize: 11.5, color: 'var(--lp-text-tertiary)', marginBottom: 3 }}>{emptyNote}</div>
+      ) : null}
       {rows.map((r) => (
-        <div key={r.id} className="flex items-center justify-between" style={{ padding: '2px 0' }}>
+        <div key={r.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '2.5px 0' }}>
           <span style={{ fontSize: 'var(--lp-text-sm)', color: 'var(--lp-text-secondary)', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.left}</span>
-          <span className="flex items-center" style={{ gap: 8 }}>
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
             <span className="lp-mono" style={{ fontSize: 13, color: 'var(--color-lp-error)', fontVariantNumeric: 'tabular-nums' }}>−{money(fmt, r.amount)}</span>
             <button type="button" disabled={busy} onClick={() => onRemove(r.id)} title="Remove" style={{ border: 0, background: 'transparent', color: 'var(--lp-text-tertiary)', cursor: 'pointer', fontSize: 14, lineHeight: 1 }}>×</button>
           </span>
@@ -345,8 +457,8 @@ function LineGroup({ label, rows, legacyNote, fmt, busy, onRemove, adder }: { la
   );
 }
 
-const addBtnStyle: React.CSSProperties = { fontSize: 'var(--lp-text-xs)', color: 'var(--color-lp-orange)', background: 'transparent', border: 0, cursor: 'pointer', padding: 0 };
-const inputStyle: React.CSSProperties = { fontSize: 13, background: 'var(--lp-surface)', border: '1px solid var(--lp-border-strong)', borderRadius: 6, padding: '3px 8px', color: 'var(--lp-text)' };
+const addBtnStyle: React.CSSProperties = { fontSize: 'var(--lp-text-xs)', fontWeight: 600, color: 'var(--color-lp-orange)', background: 'transparent', border: 0, cursor: 'pointer', padding: 0 };
+const inputStyle: React.CSSProperties = { fontSize: 13, background: 'var(--lp-bg)', border: '1px solid var(--lp-border)', borderRadius: 'var(--lp-radius-md)', padding: '5px 9px', color: 'var(--lp-text)' };
 
 function DeductionAdder({ busy, onAdd }: { busy: boolean; onAdd: (f: Record<string, unknown>) => void }) {
   const [open, setOpen] = useState(false);
