@@ -24,6 +24,7 @@ import {
   type KeyContactCard,
 } from '@/lib/advance/key-info';
 import { sliceFor, type TourRole, type RoleSlice, type DayBlock } from '@/lib/roles/slices';
+import { signedUrlForAsset } from '@/lib/rider-packs/assets';
 
 /** One row in the merged day timeline, tagged with where it came from. */
 export interface ScheduleItem {
@@ -59,6 +60,20 @@ export interface DayFlight {
   departAt: string;
   arriveAt: string;
   notes: string | null;
+  /** Passenger names when the model links people (passenger_ids → persons);
+   *  falls back to the compat person_name. Optional so hand-built fixtures
+   *  (daysheet-pdf.test.ts) stay valid. */
+  passengers?: string[];
+  confirmation?: string | null;
+}
+
+/** A file pinned to THIS routing row (show-scoped rider asset or a
+ *  file_reference with linked_to_type='routing'). `url` is a short-lived
+ *  signed URL when the storage provider could sign; null renders unlinked. */
+export interface DayFile {
+  name: string;
+  url: string | null;
+  kind: 'pdf' | 'image' | 'other';
 }
 
 export interface DayContact {
@@ -98,6 +113,7 @@ export interface DayObject {
   hotels?: DayHotel[] | null;
   flights?: DayFlight[] | null;
   contacts?: DayContact[] | null;
+  files?: DayFile[] | null;
   notes?: string | null;
   pnl?: DayPnl | null;
 }
@@ -111,6 +127,15 @@ function str(v: unknown): string | null {
   if (v == null) return null;
   const s = String(v).trim();
   return s === '' ? null : s;
+}
+
+/** File-type glyph bucket from a mime hint and/or the filename extension. */
+function fileKind(name: string, mime: string | null): DayFile['kind'] {
+  const m = (mime ?? '').toLowerCase();
+  const n = name.toLowerCase();
+  if (m.includes('pdf') || n.endsWith('.pdf')) return 'pdf';
+  if (m.startsWith('image/') || /\.(png|jpe?g|webp|gif|svg)$/.test(n)) return 'image';
+  return 'other';
 }
 
 /** Pull time-typed advance fields into schedule items (load-in / soundcheck /
@@ -272,26 +297,61 @@ export async function loadDay(
       : null;
   }
 
-  // Flights touching the date (linked to the show). Header renders as "Flights"
-  // — there is no ground-transport table, so the block is scoped, not incomplete.
+  // Flights touching the date. Most flights are entered on the budget grid with
+  // NO show link, so a flight is "on the day" when it is pinned to this routing
+  // row OR its departure/arrival DATE is the day's date for this tour. Header
+  // renders as "Flights" — there is no ground-transport table, so the block is
+  // scoped, not incomplete.
   if (has('flights')) {
-    const { data: flights } = await supabase
+    const { data: flightRows } = await supabase
       .from('flights')
-      .select('airline, flight_number, pnr, origin_airport, destination_airport, depart_at, arrive_at, person_name, notes')
-      .eq('show_id', routingId)
+      .select('airline, flight_number, pnr, confirmation, origin_airport, destination_airport, depart_at, arrive_at, person_name, passenger_ids, notes, show_id')
+      .eq('workspace_id', workspaceId)
+      .eq('tour_id', tourId)
       .order('depart_at', { ascending: true });
-    day.flights = (flights ?? []).length
-      ? (flights ?? []).map((f) => ({
-          who: str(f.person_name),
-          airline: str(f.airline),
-          flightNumber: str(f.flight_number),
-          pnr: str(f.pnr),
-          from: (f.origin_airport as string) ?? '',
-          to: (f.destination_airport as string) ?? '',
-          departAt: (f.depart_at as string) ?? '',
-          arriveAt: (f.arrive_at as string) ?? '',
-          notes: str(f.notes),
-        }))
+    const onDay = (flightRows ?? []).filter((f) => {
+      if ((f.show_id as string | null) === routingId) return true;
+      if (!day.date) return false;
+      const dep = str(f.depart_at)?.slice(0, 10);
+      const arr = str(f.arrive_at)?.slice(0, 10);
+      return dep === day.date || arr === day.date;
+    });
+    // Resolve passenger names where the model links people (passenger_ids →
+    // persons); flights without links fall back to the compat person_name.
+    const passengerIds = [...new Set(onDay.flatMap((f) => (f.passenger_ids as string[] | null) ?? []))];
+    const nameById = new Map<string, string>();
+    if (passengerIds.length) {
+      const { data: people } = await supabase
+        .from('persons')
+        .select('id, full_name, preferred_name')
+        .eq('workspace_id', workspaceId)
+        .in('id', passengerIds);
+      for (const p of people ?? []) {
+        const name = str(p.preferred_name) ?? str(p.full_name);
+        if (name) nameById.set(p.id as string, name);
+      }
+    }
+    day.flights = onDay.length
+      ? onDay.map((f) => {
+          const passengers = (((f.passenger_ids as string[] | null) ?? [])
+            .map((id) => nameById.get(id))
+            .filter((n): n is string => Boolean(n)));
+          const who = str(f.person_name);
+          if (passengers.length === 0 && who) passengers.push(who);
+          return {
+            who,
+            airline: str(f.airline),
+            flightNumber: str(f.flight_number),
+            pnr: str(f.pnr),
+            confirmation: str(f.confirmation),
+            from: (f.origin_airport as string) ?? '',
+            to: (f.destination_airport as string) ?? '',
+            departAt: (f.depart_at as string) ?? '',
+            arriveAt: (f.arrive_at as string) ?? '',
+            passengers,
+            notes: str(f.notes),
+          };
+        })
       : null;
   }
 
@@ -319,6 +379,60 @@ export async function loadDay(
       contacts.push({ name, role: 'Promoter', phone: str(m.promoter_phone), email: str(m.promoter_email), source: 'deal_memo' });
     }
     day.contacts = contacts.length ? contacts : null;
+  }
+
+  // Files pinned to THIS routing row — the model has a real day linkage
+  // (rider_assets.routing_id + file_references.linked_to_type='routing'), so
+  // the Day shows the day's documents, never a tour-wide dump. Rides with the
+  // `contacts` block (tm / production / crew / band / management — the
+  // driver/accountant slices don't carry day documents); no new block in
+  // slices.ts. Best-effort like every block: a failed sign yields url null,
+  // a failed load yields null.
+  if (has('contacts')) {
+    try {
+      const [{ data: assets }, { data: refs }] = await Promise.all([
+        supabase
+          .from('rider_assets')
+          .select('label, asset_type, storage_path, external_url, meta')
+          .eq('workspace_id', workspaceId)
+          .eq('tour_id', tourId)
+          .eq('routing_id', routingId),
+        supabase
+          .from('file_references')
+          .select('file_name, file_type, storage_provider, provider_file_id')
+          .eq('workspace_id', workspaceId)
+          .eq('linked_to_type', 'routing')
+          .eq('linked_to_id', routingId),
+      ]);
+      const files: DayFile[] = [];
+      for (const a of assets ?? []) {
+        const meta = (a.meta as Record<string, unknown> | null) ?? {};
+        const mime = typeof meta.mime_type === 'string' ? meta.mime_type : null;
+        const url = await signedUrlForAsset(supabase, {
+          asset_type: (a.asset_type as string) ?? '',
+          storage_path: (a.storage_path as string | null) ?? null,
+          external_url: (a.external_url as string | null) ?? null,
+        });
+        const name = str(a.label) ?? 'Untitled file';
+        files.push({ name, url, kind: fileKind(name, mime) });
+      }
+      for (const r of refs ?? []) {
+        const name = str(r.file_name) ?? 'Untitled file';
+        let url: string | null = null;
+        // Only the Supabase `tour-files` bucket can be signed here; other
+        // providers (google_drive) have no preview path yet — render unlinked.
+        if ((r.storage_provider as string | null) === 'tour-files' && r.provider_file_id) {
+          const { data: signed } = await supabase.storage
+            .from('tour-files')
+            .createSignedUrl(r.provider_file_id as string, 60 * 60);
+          url = signed?.signedUrl ?? null;
+        }
+        files.push({ name, url, kind: fileKind(name, str(r.file_type)) });
+      }
+      day.files = files.length ? files : null;
+    } catch {
+      day.files = null;
+    }
   }
 
   // Notes — the internal routing note (gated: tm / production / accountant).

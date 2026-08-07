@@ -97,10 +97,10 @@ export function buildDaySheetBodyHtml(day: DayObject, config: TemplateConfig): s
     const rows =
       (day.flights ?? []).length > 0
         ? (day.flights ?? [])
-            .map(
-              (f) =>
-                `<tr><td class="tm">${fmtTime(f.departAt)}</td><td><strong>${esc(f.from)} → ${esc(f.to)}</strong>${f.who ? ` <span style="color:#888">· ${esc(f.who)}</span>` : ''}<div class="lp-ds-meta">${[[f.airline, f.flightNumber].filter(Boolean).join(' '), f.pnr ? `PNR ${esc(f.pnr)}` : null, f.arriveAt ? `arr ${fmtTime(f.arriveAt)}` : null].filter(Boolean).map((x) => esc(String(x))).join(' · ')}</div></td></tr>`,
-            )
+            .map((f) => {
+              const who = f.passengers && f.passengers.length > 0 ? f.passengers.join(', ') : f.who;
+              return `<tr><td class="tm">${fmtTime(f.departAt)}</td><td><strong>${esc(f.from)} → ${esc(f.to)}</strong>${who ? ` <span style="color:#888">· ${esc(who)}</span>` : ''}<div class="lp-ds-meta">${[[f.airline, f.flightNumber].filter(Boolean).join(' '), f.confirmation ? `Conf ${f.confirmation}` : f.pnr ? `PNR ${f.pnr}` : null, f.arriveAt ? `arr ${fmtTime(f.arriveAt)}` : null].filter(Boolean).map((x) => esc(String(x))).join(' · ')}</div></td></tr>`;
+            })
             .join('')
         : `<tr><td colspan="2" class="lp-ds-empty">No flights on this date.</td></tr>`;
     parts.push(`<div class="lp-ds-sec"><h3>Flights</h3><table class="lp-ds-t">${rows}</table></div>`);
