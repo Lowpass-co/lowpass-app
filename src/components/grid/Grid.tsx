@@ -726,9 +726,16 @@ export const Grid = forwardRef<GridHandle, GridProps>(function Grid({
   const openSlide = useCallback(
     (sIdx: number, rIdx: number) => {
       if (sIdx < 0 || rIdx < 0) return;
+      // Income-lean (2026-08-07): a caller-provided onOpenRow REPLACES the
+      // generic GridSlideOver — the caller owns the row surface (e.g. the
+      // income deal slide-over). No consumer passes onOpenRow AND wants the
+      // generic slide; grep before changing this contract.
+      if (onOpenRow) {
+        onOpenRow(sIdx, rIdx);
+        return;
+      }
       slideRef.current = { si: sIdx, ri: rIdx };
       render();
-      onOpenRow?.(sIdx, rIdx);
     },
     [render, onOpenRow],
   );

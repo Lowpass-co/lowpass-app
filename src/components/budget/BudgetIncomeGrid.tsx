@@ -1,88 +1,42 @@
 'use client';
 
 /* ============================================
-   LOWPASS — <BudgetIncomeGrid> (Income on the canonical <Grid>)
+   LOWPASS — <BudgetIncomeGrid> (the LEAN income sheet, 2026-08-07)
 
-   Migrates the bespoke BudgetIncomeTab onto the same <Grid> as Expenses.
-   Rows = the tour's shows (routing-anchored — populated from the GET's
-   income + routing_only merge; NO add/delete → allowAddRows={false}). A
-   segmented Projected/Actual toggle swaps the column set (re-key by view).
+   Adam's income ruling: the Projected/Actual TOGGLE dies. One stable grid,
+   ATOM's grammar — every show row reads:
 
-   THE BRIDGE (must not move): the income field names, the
-   post_tax = pre_tax × (1 − wh/100) rule, and the /api/budget/income upsert
-   stay identical — so computeBudgetPnl's income_gross is unchanged. This file
-   only changes how the cells render. (BUD-50..54.)
+     Date · Type · Venue · City | Deal (summary) | Contracted | Settled |
+     Variance  (+ AUTO/Manual provenance chip on the venue)
+
+   The 17 deal/projection input columns moved to <IncomeDealSlideOver> (row
+   open) — the sheet behaves like every other sheet: stable columns, no view
+   morphing, no ambient editing of settled figures. SETTLED is walk-authored
+   only (per-show Manual override lives in the slide-over as the one escape
+   hatch), so the three-homes actuals refereeing can retire.
+
+   THE BRIDGE (must not move): field names + the post_tax rule + the
+   /api/budget/income upsert stay identical (saves happen in the slide-over,
+   same POST). computeBudgetPnl's income_gross is untouched — this file only
+   changes how rows render. Version locking still guards proposed edits (423 →
+   the same VersionLockModal).
    ============================================ */
 
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { Grid, type GridHandle } from '@/components/grid/Grid';
+import { Grid } from '@/components/grid/Grid';
 import type { Column, GridFx, Row, Section } from '@/components/grid/types';
 import { convertVia } from '@/lib/budget/fxRates';
-import { projectIncome } from '@/lib/budget/incomeProjection';
 import { toIncomeRows, type IncomeRow } from '@/lib/budget/income';
 import { labelForDayType } from '@/lib/routing/dayType';
 import { useToast } from '@/components/ui/Toast';
 import { VersionLockModal } from '@/components/budget/versioning/VersionLockModal';
 import type { VersionStatus, BudgetVersionVm } from '@/components/budget/versioning/versionApi';
-
-// State-fix B1 — the editable PROPOSED columns (projected view). When the viewed
-// version is locked these fire the Unlock/New-version modal on an edit attempt
-// (via the Grid's versionLockedCols). The Actual view passes [] so actuals never
-// lock (settled figures stay editable on any version).
-const INCOME_PROPOSED_COLS = [
-  'currency', 'cap', 'sellthru', 'face', 'deal', 'dealpct', 'dealthr', 'dealabove',
-  'guarantee', 'wh', 'overage', 'perhead', 'feepct', 'merch', 'viptix', 'vipprice', 'vip',
-];
+import { IncomeDealSlideOver } from './IncomeDealSlideOver';
 
 const CUR_SYMBOL: Record<string, string> = { GBP: '£', USD: '$', EUR: '€', CAD: 'C$', AUD: 'A$', JPY: '¥' };
 const CURRENCIES = ['GBP', 'USD', 'EUR', 'CAD', 'AUD', 'JPY'];
-// #4 — the per-show currency picker offers a STANDARD list (not just rates that
-// already exist), so you can set a EUR show before any FX rate is configured. A
-// currency with no rate converts 1:1 (Phase-2 toTourCurrency) + nudges to Settings.
 const STD_CURRENCIES = ['GBP', 'USD', 'EUR', 'CAD', 'AUD', 'JPY', 'CHF', 'SEK', 'NOK', 'DKK', 'PLN', 'CZK', 'NZD', 'MXN'];
-// Phase 3 — deal types. VS auto-projects overage; PLUS is manual; FLAT = no backend.
-const DEAL_TYPES = ['VS', 'PLUS', 'FLAT'];
-// Editing any of these projection inputs re-runs the engine server-side; we patch
-// the materialised overage / merch / VIP back in place (no remount → no cursor jump).
-const PROJECTION_INPUT_COLS = new Set([
-  'cap', 'sellthru', 'face', 'deal', 'dealpct', 'dealthr', 'dealabove',
-  'perhead', 'feepct', 'viptix', 'vipprice', 'guarantee', 'wh',
-]);
-// #2 — projected OUTPUT cells the engine materialises (vs hand-entered inputs);
-// their headers carry a small ƒ + "computed" tooltip.
-const PROJECTED_OUTPUT_COLS = new Set(['overage', 'merch', 'vip']);
-// #5 — plain-English header tooltips: what each projection input feeds.
-const HEADER_TIP: Record<string, string> = {
-  currency: 'The show’s native currency. Converted to the tour currency in the P&L.',
-  cap: 'Venue capacity (tickets available).',
-  sellthru: 'Estimated % of capacity sold. Blank → tour default (Settings).',
-  face: 'Ticket face value, in the show’s currency.',
-  deal: 'Deal type. VS auto-projects overage; PLUS is manual; FLAT has no backend.',
-  dealpct: 'Base deal percentage of net box office.',
-  dealthr: 'Tiered VS: ticket count above which the higher rate applies.',
-  dealabove: 'Tiered VS: the escalated rate on tickets above the threshold.',
-  wh: 'Withholding tax %. Applied to guarantee + overage in the P&L.',
-  posttax: 'Guarantee after withholding (pre_tax × (1 − WH%)). Computed.',
-  overage: 'ƒ Computed (read-only) for VS deals, pre-withholding. Blank until the inputs are complete. Right-click → Override formula to hand-enter (e.g. a PLUS/one-off deal).',
-  perhead: 'Net merch spend per head. Blank inherits the tour default (Settings → Projection defaults); type a value to override this show.',
-  feepct: 'Average merch fee %. Blank inherits the tour default (Settings → Projection defaults); type a value to override this show.',
-  merch: 'ƒ Computed (read-only): Cap × Sell-thru × $/head × Fee%. Blank until the inputs are complete. Right-click → Override formula to hand-enter.',
-  viptix: 'Number of VIP tickets.',
-  vipprice: 'VIP ticket price, in the show’s currency.',
-  vip: 'ƒ Computed (read-only): VIP tickets × price. Blank until both are set. Right-click → Override formula to hand-enter.',
-  guarantee: 'Pre-tax guaranteed fee for the show.',
-  // #24 — Actual-view real-context columns.
-  acap: 'Real settled capacity (sellable cap after kills/holds). Drives Sell% — hand-entered (settlement doesn’t carry it).',
-  tickets: 'Real paid attendance (settlement-fed when reconciled, else hand-entered).',
-  sellpct: 'Real sell-through = tickets ÷ settled capacity. Compare to the projected Sell %.',
-  gross: 'Real gross box office (settlement-fed when reconciled, else hand-entered). Informational — never changes the P&L.',
-  fovref: 'ƒ Reference only (read-only): the overage the engine would produce from the REAL tickets/gross + this row’s projected deal terms. Never written — settlement stays authoritative.',
-};
-
-// #24 — Actual-view real-context inputs that drive Sell% + the formula-overage
-// reference (so editing one re-derives those read-only cells in place).
-const ACTUAL_CONTEXT_COLS = new Set(['acap', 'tickets', 'gross']);
 
 const num = (v: unknown): number => {
   const x = Number(v);
@@ -91,48 +45,47 @@ const num = (v: unknown): number => {
 const clamp = (x: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, x));
 const postTax = (pre: number, wh: number) => pre * (1 - clamp(wh, 0, 100) / 100);
 
-// #24 — read-only "formula overage" at REAL attendance (D2). Feeds the REAL
-// tickets + REAL gross + the row's PROJECTED deal terms into the SAME projection
-// engine. Pure read; NEVER written; never a second source of truth — a reporting
-// reference answering "what should the overage have been at this real attendance?".
-// VS-only (engine rule: PLUS is manual, FLAT has no backend → null = blank "—").
-function formulaOverageRef(r: IncomeRow, cfg: { haircut: number; taxPct: number }): number | null {
-  const tickets = r.actual_tickets_sold;
-  const gross = r.actual_gross;
-  if (r.deal_type !== 'VS' || tickets == null || tickets <= 0 || gross == null) return null;
-  const out = projectIncome(
-    {
-      capacity: tickets, // real attendance → engine tickets = round(tickets × 1)
-      sellThru: 1,
-      faceValue: gross / tickets, // real per-ticket gross
-      dealType: 'VS',
-      dealPct: r.deal_pct != null ? r.deal_pct / 100 : null,
-      dealThreshold: r.deal_threshold,
-      dealPctAbove: r.deal_pct_above != null ? r.deal_pct_above / 100 : null,
-      dollarsPerHead: null,
-      merchFeePct: null,
-      vipTickets: null,
-      vipPrice: null,
-      preTaxGuarantee: r.pre_tax_guarantee,
-    },
-    cfg,
+/** Contracted = the deal's forecast total (post-tax gtd + post-tax overage +
+ *  merch + VIP) — byte-identical to the old grid's projected Total calc. */
+function contractedOf(r: IncomeRow): number {
+  return (
+    postTax(num(r.pre_tax_guarantee), num(r.withholding_pct)) +
+    postTax(num(r.pre_tax_overage), num(r.withholding_pct)) +
+    num(r.merch_income) +
+    num(r.vip_income)
   );
-  return out.preTaxOverage;
-}
-// #24 — real sell-through display string ("86%"); blank until cap + tickets exist.
-function actualSellPctStr(r: { actual_tickets_sold: number | null; actual_capacity: number | null }): string {
-  if (r.actual_tickets_sold == null || r.actual_capacity == null || r.actual_capacity <= 0) return '—';
-  return `${Math.round((r.actual_tickets_sold / r.actual_capacity) * 100)}%`;
 }
 
-/** INC-01 — read-only routing-context fields (Date · Type · Venue · City),
- *  from the routing each income row already carries. Display-only. */
-const routingFields = (r: IncomeRow) => ({
-  date: r.date ? r.date.slice(5) : '',
-  daytype: r.day_type ? labelForDayType(r.day_type) || r.day_type : '—',
-  venue: r.venue_name ?? '',
-  city: r.city ?? '',
-});
+/** Settled net (g + o + m + v − deductions) — null until anything settled. */
+function settledOf(r: IncomeRow): number | null {
+  const any =
+    r.actual_guarantee != null || r.actual_overage != null || r.actual_merch != null ||
+    r.actual_vip != null || r.actual_deductions != null;
+  if (!any) return null;
+  return num(r.actual_guarantee) + num(r.actual_overage) + num(r.actual_merch) + num(r.actual_vip) - num(r.actual_deductions);
+}
+
+/** One-line deal summary for the sheet ("VS 85% · 1,200 cap · £15k gtd"). */
+function dealSummary(r: IncomeRow, sym: string): string {
+  const bits: string[] = [];
+  if (r.deal_type) bits.push(r.deal_pct != null ? `${r.deal_type} ${r.deal_pct}%` : r.deal_type);
+  if (r.capacity != null) bits.push(`${r.capacity.toLocaleString('en-US')} cap`);
+  if (r.pre_tax_guarantee != null) bits.push(`${sym}${Math.round(r.pre_tax_guarantee).toLocaleString('en-US')} gtd`);
+  return bits.length ? bits.join(' · ') : '— set the deal';
+}
+
+/** The IncomeRow fields a server merge may update (numeric/deal fields only —
+ *  routing context never merges). Keeps the merge shape explicit. */
+const MERGE_FIELDS = [
+  'currency', 'deal_type', 'deal_pct', 'deal_threshold', 'deal_pct_above',
+  'capacity', 'est_sell_thru', 'face_value', 'pre_tax_guarantee', 'withholding_pct',
+  'pre_tax_overage', 'dollars_per_head', 'merch_fee_pct', 'merch_income',
+  'vip_tickets', 'vip_price', 'vip_income',
+  'overage_is_override', 'merch_is_override', 'vip_is_override',
+  'actual_guarantee', 'actual_overage', 'actual_merch', 'actual_vip',
+  'actual_deductions', 'actual_tickets_sold', 'actual_gross', 'actual_capacity',
+  'actuals_source', 'locked_fx_rate',
+] as const;
 
 export function BudgetIncomeGrid({
   tourId,
@@ -150,72 +103,35 @@ export function BudgetIncomeGrid({
   tourId: string;
   tourCurrency: string;
   initialRows: IncomeRow[];
-  /** B2 — viewed version is non-draft → projected (proposed) income cells lock. */
   versionLocked?: boolean;
-  /** State-fix B1 — the viewed version + its status, for the lock modal (parity
-   *  with Expenses: edit a locked proposed cell → the modal, not a toast). */
   lockedVersionId?: string | null;
   canApprove?: boolean;
   viewedStatus?: VersionStatus;
-  /** The editable draft head (for "switch to draft" on a historical version). */
   draftVersionId?: string | null;
-  /** B2 — the full version list, for the historical lock modal's rollback path. */
   versions?: BudgetVersionVm[];
-  /** Phase 2 — per-tour FX map; its keys are the selectable foreign currencies. */
   fxRates?: Record<string, number>;
-  /** PROJECTION-FIX — the tour's projection defaults (Settings, FRACTIONS), so the
-   *  grid knows whether merch/overage are computable (→ value vs blank "—") and can
-   *  signal that a blank $/head / fee% inherits the default. */
+  /** Kept for prop-compat with the page (the engine runs server-side). */
   projectionDefaults?: {
     sellThru: number | null;
     dollarsPerHead: number | null;
     merchFeePct: number | null;
-    // #24 — overage haircut + box-office tax (FRACTIONS) for the read-only
-    // formula-overage reference. Null → engine defaults (0.65 / 0.08).
     haircut?: number | null;
     taxPct?: number | null;
   };
 }) {
+  void projectionDefaults; // engine-side; the lean sheet doesn't recompute locally
   const { showToast } = useToast();
   const [lockModalOpen, setLockModalOpen] = useState(false);
-  const defSellThru = projectionDefaults?.sellThru ?? null;
-  const defPerHead = projectionDefaults?.dollarsPerHead ?? null;
-  const defFeePct = projectionDefaults?.merchFeePct ?? null;
-  // #24 — config for the formula-overage reference (engine defaults when unset).
-  const projCfg = useMemo(
-    () => ({ haircut: projectionDefaults?.haircut ?? 0.65, taxPct: projectionDefaults?.taxPct ?? 0.08 }),
-    [projectionDefaults?.haircut, projectionDefaults?.taxPct],
-  );
-  // PROJECTION-FIX — is each output computable from this row's inputs (+ tour
-  // defaults)? A not-computable output renders blank "—", never a stray 0.
-  const overageComputable = useCallback(
-    (r: IncomeRow) =>
-      r.deal_type === 'VS' && r.capacity != null && (r.est_sell_thru != null || defSellThru != null) && r.face_value != null && r.deal_pct != null,
-    [defSellThru],
-  );
-  const merchComputable = useCallback(
-    (r: IncomeRow) =>
-      r.capacity != null && (r.est_sell_thru != null || defSellThru != null) && (r.dollars_per_head != null || defPerHead != null) && (r.merch_fee_pct != null || defFeePct != null),
-    [defSellThru, defPerHead, defFeePct],
-  );
-  const vipComputable = useCallback((r: IncomeRow) => r.vip_tickets != null && r.vip_price != null, []);
+  const [rows, setRows] = useState<IncomeRow[]>(initialRows);
+  const [openRowId, setOpenRowId] = useState<string | null>(null);
   const searchParams = useSearchParams();
   const native = (tourCurrency || 'GBP').toUpperCase();
-  // #4 — the picker offers the tour currency + a standard ISO list + any currency
-  // that already has an FX rate. No more chicken-and-egg "only GBP" when the tour
-  // has no rates configured.
+  const display = (searchParams.get('display') ?? native).toUpperCase();
+
   const currencyOptions = useMemo(
     () => Array.from(new Set([native, ...STD_CURRENCIES, ...Object.keys(fxRates)])),
     [native, fxRates],
   );
-  // #3 — imperative handle so engine-materialised cells update in place (no remount).
-  const gridRef = useRef<GridHandle | null>(null);
-  const display = (searchParams.get('display') ?? native).toUpperCase();
-  // Prop-fed (server-fetched) → synchronous render, no client-fetch loading gate
-  // that could get stuck (BUD-50). The client GET stays ONLY for the post-edit
-  // failure resync below.
-  const [rows, setRows] = useState<IncomeRow[]>(initialRows);
-  const [view, setView] = useState<'projected' | 'actual'>('projected');
 
   const fx: GridFx = useMemo(
     () => ({
@@ -225,410 +141,80 @@ export function BudgetIncomeGrid({
       symbol: (c) => CUR_SYMBOL[(c || display).toUpperCase()] ?? `${(c || display).toUpperCase()} `,
       formatDisplay: (amount) => (CUR_SYMBOL[display] ?? `${display} `) + Math.round(num(amount)).toLocaleString('en-US'),
     }),
-    [display, native],
+    [display, native, fxRates],
   );
 
-  // Re-fetch on a failed save only (the initial render is prop-fed). Uses the
-  // shared mapping so it can't drift from the server load.
+  // Post-failure resync only (initial render is prop-fed — BUD-50).
   const load = useCallback(async () => {
     try {
       const res = await fetch(`/api/budget/income?tour_id=${encodeURIComponent(tourId)}`);
       if (!res.ok) return;
       setRows(toIncomeRows(await res.json()));
     } catch {
-      /* leave the optimistic rows in place */
+      /* keep optimistic rows */
     }
   }, [tourId]);
+  void load; // reserved for slide-over error paths that want a full resync
+  void showToast;
 
-  // Grid column id → income field, by view. Returns null for non-persisting
-  // columns (idx/show/posttax/total). Keeps the field names byte-identical.
-  const patchFor = useCallback(
-    (columnId: string, value: number): Partial<IncomeRow> | null => {
-      if (view === 'projected') {
-        if (columnId === 'guarantee') return { pre_tax_guarantee: value };
-        if (columnId === 'wh') return { withholding_pct: clamp(value, 0, 100) };
-        if (columnId === 'overage') return { pre_tax_overage: value };
-        if (columnId === 'merch') return { merch_income: value };
-        if (columnId === 'vip') return { vip_income: value };
-        // Phase 3 — projection inputs (drive the engine; materialise the values above).
-        if (columnId === 'cap') return { capacity: value };
-        if (columnId === 'sellthru') return { est_sell_thru: clamp(value, 0, 100) };
-        if (columnId === 'face') return { face_value: value };
-        if (columnId === 'dealpct') return { deal_pct: clamp(value, 0, 100) };
-        if (columnId === 'dealthr') return { deal_threshold: value };
-        if (columnId === 'dealabove') return { deal_pct_above: clamp(value, 0, 100) };
-        if (columnId === 'perhead') return { dollars_per_head: value };
-        if (columnId === 'feepct') return { merch_fee_pct: clamp(value, 0, 100) };
-        if (columnId === 'viptix') return { vip_tickets: value };
-        if (columnId === 'vipprice') return { vip_price: value };
-        return null;
-      }
-      if (columnId === 'guarantee') return { actual_guarantee: value };
-      if (columnId === 'overage') return { actual_overage: value };
-      if (columnId === 'merch') return { actual_merch: value };
-      if (columnId === 'vip') return { actual_vip: value };
-      // #24 — real attendance + gross + settled cap (informational; never P&L).
-      if (columnId === 'tickets') return { actual_tickets_sold: value };
-      if (columnId === 'gross') return { actual_gross: value };
-      if (columnId === 'acap') return { actual_capacity: value };
-      return null;
-    },
-    [view],
-  );
-
-  const onEdit = useCallback(
-    (routingId: string, columnId: string, value: unknown) => {
-      // Phase 2/3 — currency + deal type are STRING dropdowns, not numbers. The
-      // tour currency clears to null. Everything else routes through patchFor.
-      let patch: Partial<IncomeRow> | null;
-      if (columnId === 'currency') {
-        const picked = String(value).toUpperCase();
-        const newCur = picked === native ? null : picked;
-        // #4 — frictionless: a currency with no rate yet converts 1:1; nudge to Settings.
-        if (newCur && fxRates[newCur] === undefined) {
-          showToast(`${newCur} has no FX rate — converting 1:1. Add one in Settings → FX rates.`);
-        }
-        patch = { currency: newCur };
-      } else if (columnId === 'deal') {
-        patch = { deal_type: String(value).toUpperCase() || null };
-      } else {
-        patch = patchFor(columnId, num(value));
-      }
-      if (!patch) return; // show / posttax / total — not persisted
-      setRows((prev) => prev?.map((r) => (r.routing_id === routingId ? { ...r, ...patch } : r)) ?? prev);
-      void fetch('/api/budget/income', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ routing_id: routingId, ...patch }),
-      })
-        .then(async (res) => {
-          if (res.status === 423) {
-            // Backstop — a locked proposed edit normally fires the modal on the
-            // edit ATTEMPT (Grid versionLockedCols → onLockedEdit) before this
-            // POST; if one slips through, show the modal too, not a toast.
-            setLockModalOpen(true);
-            void load();
-          } else if (!res.ok) {
-            showToast('Could not save income', 'error');
-            void load();
-          } else if (PROJECTION_INPUT_COLS.has(columnId)) {
-            // #3 — patch the engine-materialised overage / merch / VIP back in
-            // place (imperative, by routing_id) so they update with NO cursor
-            // jump or full-grid flash. The Grid is ref-sourced post-mount.
-            const updated = (await res.json().catch(() => null)) as Record<string, unknown> | null;
-            if (updated) {
-              const u = updated as unknown as IncomeRow;
-              // Patch the cell to the computed value, or null → "—" when the row
-              // isn't computable (matches the data-mapping blank logic — no stray 0).
-              // #28 — an OVERRIDDEN output is hand-entered: never blank it, never
-              // overwrite with a recompute (the route already left it untouched).
-              const overage = u.overage_is_override || overageComputable(u) ? num(updated.pre_tax_overage) : null;
-              const merch = u.merch_is_override || merchComputable(u) ? num(updated.merch_income) : null;
-              const vip = u.vip_is_override || vipComputable(u) ? num(updated.vip_income) : null;
-              gridRef.current?.updateRowCells(routingId, { overage, merch, vip });
-              // keep React state coherent for the next legitimate remount (view switch).
-              setRows((prev) => prev?.map((r) => (r.routing_id === routingId
-                ? { ...r, pre_tax_overage: num(updated.pre_tax_overage), merch_income: num(updated.merch_income), vip_income: num(updated.vip_income) }
-                : r)) ?? prev);
-            }
-          } else if (ACTUAL_CONTEXT_COLS.has(columnId)) {
-            // #24 — a real tickets/gross/cap edit re-derives the read-only Sell% +
-            // formula-overage reference in place (the route returns the merged row).
-            const updated = (await res.json().catch(() => null)) as Record<string, unknown> | null;
-            if (updated) {
-              const u = updated as unknown as IncomeRow;
-              gridRef.current?.updateRowCells(routingId, {
-                sellpct: actualSellPctStr(u),
-                fovref: formulaOverageRef(u, projCfg),
-              });
-              setRows((prev) => prev?.map((r) => (r.routing_id === routingId
-                ? { ...r, actual_tickets_sold: u.actual_tickets_sold ?? null, actual_gross: u.actual_gross ?? null, actual_capacity: u.actual_capacity ?? null }
-                : r)) ?? prev);
-            }
-          }
-        })
-        .catch(() => {
-          showToast('Could not save income', 'error');
-          void load();
-        });
-    },
-    [patchFor, showToast, load, native, fxRates, overageComputable, merchComputable, vipComputable, projCfg],
-  );
-
-  // #28 — manual override of a computed output. The grid column id → its override
-  // FLAG column + the materialised VALUE column (the value lives in that column —
-  // computeBudgetPnl reads it unchanged; the flag just gates the route's recompute).
-  const isComputable = useCallback(
-    (colId: string, r: IncomeRow) =>
-      colId === 'overage' ? overageComputable(r) : colId === 'merch' ? merchComputable(r) : vipComputable(r),
-    [overageComputable, merchComputable, vipComputable],
-  );
-  const isOutputOverridden = useCallback(
-    (routingId: string, colId: string) => {
-      const r = rows.find((x) => x.routing_id === routingId);
-      if (!r) return false;
-      return colId === 'overage' ? r.overage_is_override : colId === 'merch' ? r.merch_is_override : colId === 'vip' ? r.vip_is_override : false;
-    },
-    [rows],
-  );
-  // POST a single override-flag change; share the lock/error handling with onEdit.
-  const postOverrideFlag = useCallback(
-    (routingId: string, flagField: 'overage_is_override' | 'merch_is_override' | 'vip_is_override', value: boolean) =>
-      fetch('/api/budget/income', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ routing_id: routingId, [flagField]: value }),
-      }),
-    [],
-  );
-  const setOverride = useCallback(
-    (routingId: string, colId: string) => {
-      const flagField = colId === 'overage' ? 'overage_is_override' : colId === 'merch' ? 'merch_is_override' : 'vip_is_override';
-      const valueField = colId === 'overage' ? 'pre_tax_overage' : colId === 'merch' ? 'merch_income' : 'vip_income';
-      // Optimistic: flag the row + surface the stored value in the (now editable)
-      // cell so the user types over a real basis (a PLUS row's overage was "—").
-      let stored = 0;
-      setRows((prev) => prev.map((r) => {
+  /** The slide-over's saves come back as the server's merged row — fold the
+   *  known fields into our copy so the sheet re-renders live. */
+  const onRowMerged = useCallback((routingId: string, merged: Partial<IncomeRow>) => {
+    setRows((prev) =>
+      prev.map((r) => {
         if (r.routing_id !== routingId) return r;
-        stored = num(r[valueField]);
-        return { ...r, [flagField]: true };
-      }));
-      gridRef.current?.updateRowCells(routingId, { [colId]: stored });
-      void postOverrideFlag(routingId, flagField, true).then((res) => {
-        if (res.status === 423) { setLockModalOpen(true); void load(); }
-        else if (!res.ok) { showToast('Could not override', 'error'); void load(); }
-      });
-    },
-    [postOverrideFlag, load, showToast],
-  );
-  const clearOverride = useCallback(
-    (routingId: string, colId: string) => {
-      const flagField = colId === 'overage' ? 'overage_is_override' : colId === 'merch' ? 'merch_is_override' : 'vip_is_override';
-      const valueField = colId === 'overage' ? 'pre_tax_overage' : colId === 'merch' ? 'merch_income' : 'vip_income';
-      setRows((prev) => prev.map((r) => (r.routing_id === routingId ? { ...r, [flagField]: false } : r)));
-      // Clearing the flag → the route recomputes from the inputs and returns the
-      // fresh value; patch the cell to it (or "—" when the row isn't computable).
-      void postOverrideFlag(routingId, flagField, false).then(async (res) => {
-        if (res.status === 423) { setLockModalOpen(true); void load(); return; }
-        if (!res.ok) { showToast('Could not revert', 'error'); void load(); return; }
-        const updated = (await res.json().catch(() => null)) as Record<string, unknown> | null;
-        if (!updated) return;
-        const u = updated as unknown as IncomeRow;
-        const val = isComputable(colId, u) ? num(updated[valueField]) : null;
-        gridRef.current?.updateRowCells(routingId, { [colId]: val });
-        setRows((prev) => prev.map((r) => (r.routing_id === routingId
-          ? { ...r, pre_tax_overage: num(updated.pre_tax_overage), merch_income: num(updated.merch_income), vip_income: num(updated.vip_income) }
-          : r)) ?? prev);
-      });
-    },
-    [postOverrideFlag, load, showToast, isComputable],
-  );
+        const next = { ...r };
+        for (const f of MERGE_FIELDS) {
+          if (f in merged) (next as Record<string, unknown>)[f] = (merged as Record<string, unknown>)[f];
+        }
+        return next;
+      }),
+    );
+  }, []);
 
-  const columns: Column[] = useMemo(() => {
-    const idx: Column = { id: 'idx', label: '#', type: 'idx', w: 46, min: 40, resize: false };
-    // INC-01 — read-only routing context (mirrors the matrices' day headers).
-    const routingCols: Column[] = [
+  const columns: Column[] = useMemo(
+    () => [
+      { id: 'idx', label: '#', type: 'idx', w: 46, min: 40, resize: false },
       { id: 'date', label: 'Date', type: 'text', ro: true, w: 74, min: 60, resize: true },
       { id: 'daytype', label: 'Type', type: 'text', ro: true, w: 80, min: 58, resize: true },
       { id: 'venue', label: 'Venue', type: 'text', ro: true, w: 188, min: 124, resize: true },
       { id: 'city', label: 'City', type: 'text', ro: true, w: 128, min: 90, resize: true },
-    ];
-    // #1 — per-show currency is the FIRST editable column, right after the frozen
-    // routing reference block. State-fix B1 — the version-lock is applied by the
-    // Grid (versionLockedCols, PROJECTED view only) so a locked proposed edit fires
-    // the modal; in the Actual view currency is the live settlement ccy → editable.
-    const currency: Column = { id: 'currency', label: 'Currency', type: 'dropdown', options: currencyOptions, w: 96, min: 76, resize: true };
-    const money = (id: string, label: string): Column => ({ id, label, type: 'money', w: 120, min: 90, resize: true });
-    if (view === 'projected') {
-      // B2/state-fix — proposed cells are normal columns; the Grid locks them
-      // (versionLockedCols) when the viewed version is non-draft → the modal fires
-      // on an edit attempt. The Actual view (below) never locks.
-      const pMoney = money;
-      // Phase 3 — projection INPUT cell (number).
-      const pNum = (id: string, label: string, w = 72, min = 56): Column =>
-        ({ id, label, type: 'number', w, min, resize: true });
-      // PROJECTION-FIX — computed OUTPUT cell: read-only (computed-locked, ƒ
-      // header). The engine drives it; a stray value can never suppress the
-      // formula. (Deliberate override is #28.)
-      const cMoney = (id: string, label: string): Column => ({ ...money(id, label), ro: true });
-      return [
-        idx,
-        ...routingCols,
-        currency,
-        // ── box-office inputs ──
-        pNum('cap', 'Cap'),
-        pNum('sellthru', 'Sell %'),
-        pMoney('face', 'Face'),
-        // ── deal (VS auto-projects overage; PLUS manual; FLAT none) ──
-        { id: 'deal', label: 'Deal type', type: 'dropdown', options: DEAL_TYPES, w: 92, min: 72, resize: true },
-        pNum('dealpct', 'Deal %', 78, 60),
-        pNum('dealthr', 'Tier @ (tix)', 98, 74),
-        pNum('dealabove', 'Tier rate %', 96, 74),
-        // ── guarantee block ──
-        pMoney('guarantee', 'Guarantee'),
-        pNum('wh', 'Withhold %', 96, 76),
-        { id: 'posttax', label: 'Post-tax', type: 'calc', w: 120, min: 90, resize: true, calc: (r: Row) => postTax(num(r.guarantee), num(r.wh)) },
-        // Overage — engine-computed for VS (read-only); blank "—" until computable.
-        cMoney('overage', 'Overage'),
-        // ── merch inputs → merch (computed) ──
-        pMoney('perhead', '$/Head'),
-        pNum('feepct', 'Fee %'),
-        cMoney('merch', 'Merch'),
-        // ── VIP inputs → VIP (computed) ──
-        pNum('viptix', 'VIP Tix'),
-        pMoney('vipprice', 'VIP £'),
-        cMoney('vip', 'VIP'),
-        {
-          id: 'total',
-          label: 'Total',
-          type: 'calc',
-          w: 130,
-          min: 100,
-          resize: true,
-          calc: (r: Row) => postTax(num(r.guarantee), num(r.wh)) + postTax(num(r.overage), num(r.wh)) + num(r.merch) + num(r.vip),
-        },
-      ];
-    }
-    // #24 — Actual real-context: editable Cap / Tickets / Gross, a read-only
-    // Sell% (tickets ÷ cap), and a read-only ƒ overage REFERENCE beside the
-    // settled Overage. The reference + Sell% are presentation-only (precomputed +
-    // patched in place); none of these feed income_gross.
-    const aNum = (id: string, label: string, w = 78, min = 60): Column =>
-      ({ id, label, type: 'number', w, min, resize: true });
-    const refMoney = (id: string, label: string): Column => ({ ...money(id, label), ro: true });
-    return [
-      idx,
-      ...routingCols,
-      currency,
-      // ── real attendance block ──
-      aNum('acap', 'Cap'),
-      aNum('tickets', 'Tickets', 90, 70),
-      { id: 'sellpct', label: 'Sell%', type: 'text', ro: true, w: 70, min: 54, resize: true },
-      money('gross', 'Gross'),
-      // ── settled money (settlement-authoritative) ──
-      money('guarantee', 'Guarantee'),
-      money('overage', 'Overage'),
-      // ƒ reference — what the engine implies at the REAL attendance (read-only).
-      refMoney('fovref', 'ƒ Overage'),
-      money('merch', 'Merch'),
-      money('vip', 'VIP'),
-      // Phase 1 — settlement-fed deductions (read-only; reduces the actual total).
-      { id: 'deductions', label: 'Deductions', type: 'money', w: 120, min: 90, resize: true, ro: true },
-      // Actuals total IS net (guarantee + overage + merch + vip − deductions) —
-      // labelled "Net" to match settlement's reconciled_net. Projected stays "Total".
-      // (Tickets/Gross/Cap/Sell%/ƒOverage are excluded — Net is unchanged.)
-      { id: 'total', label: 'Net', type: 'calc', w: 130, min: 100, resize: true, calc: (r: Row) => num(r.guarantee) + num(r.overage) + num(r.merch) + num(r.vip) - num(r.deductions) },
-    ];
-  }, [view, currencyOptions]);
-
-  // State-fix B1 — the version-lock applies to the PROPOSED columns in the
-  // PROJECTED view only; the Actual view passes [] so settled actuals never lock.
-  const versionLockedCols = useMemo(
-    () => (view === 'projected' ? INCOME_PROPOSED_COLS : []),
-    [view],
-  );
-
-  // #24 — projected-vs-actual variance, aggregated in the DISPLAY currency.
-  // Presentation-only: read from the same rows the grid shows; computeBudgetPnl
-  // is NOT involved and income_gross is untouched.
-  const variance = useMemo(() => {
-    if (view !== 'actual') return null;
-    const toD = (a: number, cur: string | null) => fx.toDisplay(a, cur || native);
-    let projTickets = 0, actTickets = 0, projCap = 0, actCap = 0;
-    let projGross = 0, actGross = 0, projOver = 0, actOver = 0, projMerch = 0, actMerch = 0, projVip = 0, actVip = 0;
-    let anyActual = false;
-    for (const r of rows) {
-      const cur = r.currency;
-      const st = r.est_sell_thru != null ? r.est_sell_thru / 100 : defSellThru;
-      if (r.capacity != null) projCap += r.capacity;
-      if (r.capacity != null && st != null) {
-        projTickets += Math.round(r.capacity * st);
-        if (r.face_value != null) projGross += toD(r.capacity * st * r.face_value, cur);
-      }
-      projOver += toD(postTax(num(r.pre_tax_overage), num(r.withholding_pct)), cur);
-      projMerch += toD(num(r.merch_income), cur);
-      projVip += toD(num(r.vip_income), cur);
-      if (r.actual_capacity != null) actCap += r.actual_capacity;
-      if (r.actual_tickets_sold != null) { actTickets += r.actual_tickets_sold; anyActual = true; }
-      if (r.actual_gross != null) { actGross += toD(r.actual_gross, cur); anyActual = true; }
-      actOver += toD(num(r.actual_overage), cur);
-      actMerch += toD(num(r.actual_merch), cur);
-      actVip += toD(num(r.actual_vip), cur);
-    }
-    const projST = projCap > 0 ? projTickets / projCap : null;
-    const actST = actCap > 0 ? actTickets / actCap : null;
-    return { projTickets, actTickets, projST, actST, projGross, actGross, projOver, actOver, projMerch, actMerch, projVip, actVip, anyActual };
-  }, [view, rows, fx, native, defSellThru]);
-
-  // #5 — human-readable header tooltips; #2 — a small ƒ on engine-materialised
-  // outputs (overage/merch/VIP) so it's clear they're computed-but-editable.
-  const labelById = useMemo(
-    () => Object.fromEntries(columns.map((c) => [c.id, c.label])) as Record<string, string>,
-    [columns],
-  );
-  const headerFor = useCallback(
-    (colId: string) => {
-      const label = labelById[colId] ?? colId;
-      const tip = HEADER_TIP[colId];
-      // ƒ glyph: projected computed outputs, AND the Actual-view formula-overage
-      // reference (#24 — read-only, "what the engine implies at real attendance").
-      const computed = (view === 'projected' && PROJECTED_OUTPUT_COLS.has(colId)) || (view === 'actual' && colId === 'fovref');
-      return (
-        <span title={tip} style={tip ? { cursor: 'help' } : undefined}>
-          {label}
-          {computed ? (
-            <span aria-hidden style={{ marginLeft: 3, color: 'var(--lp-orange)', fontWeight: 700, fontStyle: 'italic' }}>
-              ƒ
-            </span>
-          ) : null}
-        </span>
-      );
-    },
-    [labelById, view],
+      // The whole deal in one glanceable read-only cell; open the row to edit.
+      { id: 'deal', label: 'Deal', type: 'text', ro: true, w: 210, min: 140, resize: true },
+      { id: 'contracted', label: 'Contracted', type: 'money', ro: true, w: 124, min: 96, resize: true },
+      { id: 'settled', label: 'Settled', type: 'money', ro: true, w: 124, min: 96, resize: true },
+      { id: 'variance', label: 'Variance', type: 'money', ro: true, w: 116, min: 90, resize: true },
+    ],
+    [],
   );
 
   const data: Section[] = useMemo(() => {
-    // Phase 2 — `cur` = the row's native currency drives the money cells' source
-    // display (€1000 ≈ £…); `currency` is the picker cell value.
-    const gridRows: Row[] = (rows ?? []).map((r) => {
+    const gridRows: Row[] = rows.map((r) => {
       const rowCur = r.currency || native;
-      return view === 'projected'
-        ? {
-            _uid: r.routing_id, cur: rowCur, currency: rowCur, ...routingFields(r),
-            guarantee: r.pre_tax_guarantee, wh: r.withholding_pct,
-            // PROJECTION-FIX — computed outputs: the value when computable, else
-            // null → the grid renders "—" (NOT a literal 0). Kills the persistent 0.
-            // #28 — an OVERRIDDEN output is a real hand-entered value; always show
-            // it (never blank), regardless of whether the inputs are complete.
-            overage: r.overage_is_override || overageComputable(r) ? r.pre_tax_overage : null,
-            merch: r.merch_is_override || merchComputable(r) ? r.merch_income : null,
-            vip: r.vip_is_override || vipComputable(r) ? r.vip_income : null,
-            // Phase 3 — projection inputs (null → blank cell, falls back to tour default).
-            cap: r.capacity, sellthru: r.est_sell_thru, face: r.face_value,
-            deal: r.deal_type ?? '', dealpct: r.deal_pct, dealthr: r.deal_threshold, dealabove: r.deal_pct_above,
-            perhead: r.dollars_per_head, feepct: r.merch_fee_pct, viptix: r.vip_tickets, vipprice: r.vip_price,
-          }
-        : {
-            _uid: r.routing_id, cur: rowCur, currency: rowCur, ...routingFields(r),
-            guarantee: r.actual_guarantee, overage: r.actual_overage, merch: r.actual_merch, vip: r.actual_vip, deductions: r.actual_deductions,
-            // #24 — real attendance + gross + settled cap (editable). NULL → blank.
-            acap: r.actual_capacity, tickets: r.actual_tickets_sold, gross: r.actual_gross,
-            // read-only derived: sell-through string + the formula-overage reference
-            // (recomputed in place on edit via updateRowCells).
-            sellpct: actualSellPctStr(r), fovref: formulaOverageRef(r, projCfg),
-            // M1-A — actuals provenance chip: 'settlement' → Auto, 'manual' → Manual,
-            // null → no chip. FX-lock chip when the row's rate froze at settlement.
-            _provenance: r.actuals_source === 'settlement' ? 'auto' : r.actuals_source === 'manual' ? 'manual' : undefined,
-            _provenanceSource: r.actuals_source === 'settlement' ? 'Settlement' : undefined,
-            _fxLocked: r.locked_fx_rate != null,
-          };
+      const sym = CUR_SYMBOL[rowCur.toUpperCase()] ?? `${rowCur.toUpperCase()} `;
+      const contracted = contractedOf(r);
+      const settled = settledOf(r);
+      return {
+        _uid: r.routing_id,
+        cur: rowCur,
+        date: r.date ? r.date.slice(5) : '',
+        daytype: r.day_type ? labelForDayType(r.day_type) || r.day_type : '—',
+        venue: r.venue_name ?? '',
+        city: r.city ?? '',
+        deal: dealSummary(r, sym),
+        contracted,
+        settled,           // null → blank "—" (not settled yet)
+        variance: settled != null ? settled - contracted : null,
+        // AUTO/Manual provenance + FX-lock chips (Grid renders these on chipCol).
+        _provenance: r.actuals_source === 'settlement' ? 'auto' : r.actuals_source === 'manual' ? 'manual' : undefined,
+        _provenanceSource: r.actuals_source === 'settlement' ? 'Settlement' : undefined,
+        _fxLocked: r.locked_fx_rate != null,
+      };
     });
     return [{ name: 'Shows', kind: 'normal', _uid: 'income', rows: gridRows }];
-  }, [rows, view, native, overageComputable, merchComputable, vipComputable, projCfg]);
+  }, [rows, native]);
 
-  // Live FX (#currency 2.5) — per-currency rate state across the shows. While a show
-  // is PROJECTED it converts at the LIVE rate (red); once it SETTLES the rate LOCKS
-  // (blue). A foreign currency with no configured rate shows 1:1 (never 0).
+  // Live FX strip — unchanged semantics (projected = live rate, settled = locked).
   const fxSummary = useMemo(() => {
     const nat = native.toUpperCase();
     const byCcy = new Map<string, { ccy: string; live: number | null; projected: number; settled: number }>();
@@ -643,89 +229,34 @@ export function BudgetIncomeGrid({
     return Array.from(byCcy.values()).sort((a, b) => a.ccy.localeCompare(b.ccy));
   }, [rows, native, fxRates]);
 
-  // #2 — make the active view unmistakable: a one-line context cue + a per-view
-  // accent so a glance tells you whether you're looking at forecast or settled
-  // numbers. Projected = orange (forecast); Actual = green (settled/real).
-  const isProjected = view === 'projected';
-  const viewAccent = isProjected ? 'var(--lp-orange)' : 'var(--color-lp-status-complete)';
-  const viewCue = isProjected
-    ? 'Projected — forecast from the deal inputs. Overage, Merch & VIP (ƒ) are computed read-only; blank "—" = inputs incomplete.'
-    : 'Actual — settled figures from reconciliation; deductions reduce the net. Enter real Cap / Tickets / Gross for Sell% + variance; the ƒ Overage is a read-only reference (the P&L is unchanged by them).';
+  const openRow = openRowId ? rows.find((r) => r.routing_id === openRowId) ?? null : null;
 
   return (
     <section style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-      {/* #2 — loud Projected / Actual toggle + context cue */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-        <div
-          role="tablist"
-          aria-label="Income view"
-          style={{ display: 'inline-flex', gap: 2, border: '1px solid var(--lp-border)', borderRadius: 'var(--lp-radius-full)', padding: 3, background: 'var(--lp-panel)' }}
-        >
-          {(['projected', 'actual'] as const).map((v) => {
-            const on = view === v;
-            const accent = v === 'projected' ? 'var(--lp-orange)' : 'var(--color-lp-status-complete)';
-            return (
-              <button
-                key={v}
-                type="button"
-                role="tab"
-                aria-selected={on}
-                onClick={() => setView(v)}
-                style={{
-                  border: 0, cursor: 'pointer', borderRadius: 'var(--lp-radius-full)', padding: '6px 18px',
-                  fontSize: 13, fontWeight: 700, textTransform: 'capitalize',
-                  background: on ? accent : 'transparent',
-                  color: on ? 'var(--lp-text-inverse)' : 'var(--lp-text-secondary)',
-                  boxShadow: on ? 'var(--lp-shadow-sm)' : 'none',
-                  transition: 'background 0.16s ease, color 0.16s ease',
-                }}
-              >
-                {v}
-              </button>
-            );
-          })}
-        </div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
         <span
           style={{
             display: 'inline-flex', alignItems: 'center', gap: 7, borderRadius: 'var(--lp-radius-md)',
             padding: '5px 12px', fontSize: 'var(--lp-text-xs)', fontWeight: 500,
             color: 'var(--lp-text-secondary)',
-            background: `color-mix(in srgb, ${viewAccent} 9%, transparent)`,
-            border: `1px solid color-mix(in srgb, ${viewAccent} 28%, transparent)`,
+            background: 'color-mix(in srgb, var(--lp-orange) 7%, transparent)',
+            border: '1px solid color-mix(in srgb, var(--lp-orange) 24%, transparent)',
           }}
         >
-          <span aria-hidden style={{ width: 7, height: 7, borderRadius: '50%', background: viewAccent }} />
-          {viewCue}
+          <span aria-hidden style={{ width: 7, height: 7, borderRadius: '50%', background: 'var(--lp-orange)' }} />
+          Open a row to edit its deal. Settled figures come from the settlement walk (chip: Auto / Manual).
         </span>
       </div>
 
-      {/* Live FX (#currency 2.5) — per-currency rate strip. Red = projected (live
-          rate, still moving); blue = settled (rate locked at settlement). */}
       {fxSummary.length > 0 ? (
-        <div
-          style={{
-            display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center',
-            padding: '8px 12px', borderRadius: 'var(--lp-radius-md)',
-            border: '1px solid var(--lp-border)', background: 'var(--lp-panel)',
-          }}
-        >
-          <span style={{ fontSize: 'var(--lp-text-xs)', fontWeight: 700, color: 'var(--lp-text-secondary)', textTransform: 'uppercase', letterSpacing: 0.4 }}>
-            FX
-          </span>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', padding: '8px 12px', borderRadius: 'var(--lp-radius-md)', border: '1px solid var(--lp-border)', background: 'var(--lp-panel)' }}>
+          <span style={{ fontSize: 'var(--lp-text-xs)', fontWeight: 700, color: 'var(--lp-text-secondary)', textTransform: 'uppercase', letterSpacing: 0.4 }}>FX</span>
           {fxSummary.map((f) => {
             const sym = CUR_SYMBOL[f.ccy] ?? `${f.ccy} `;
             const natSym = CUR_SYMBOL[native.toUpperCase()] ?? `${native.toUpperCase()} `;
             const liveLabel = f.live != null ? `1${sym}=${natSym}${f.live}` : '1:1 (no rate)';
             return (
-              <span
-                key={f.ccy}
-                title={`${f.ccy}: ${f.projected} projected at the live rate, ${f.settled} locked at settlement`}
-                style={{
-                  display: 'inline-flex', alignItems: 'center', gap: 7, fontSize: 'var(--lp-text-xs)',
-                  padding: '3px 10px', borderRadius: 'var(--lp-radius-full)',
-                  border: '1px solid var(--lp-border)', background: 'var(--lp-surface)',
-                }}
-              >
+              <span key={f.ccy} title={`${f.ccy}: ${f.projected} projected at the live rate, ${f.settled} locked at settlement`} style={{ display: 'inline-flex', alignItems: 'center', gap: 7, fontSize: 'var(--lp-text-xs)', padding: '3px 10px', borderRadius: 'var(--lp-radius-full)', border: '1px solid var(--lp-border)', background: 'var(--lp-surface)' }}>
                 <span style={{ fontWeight: 700, color: 'var(--lp-text)' }}>{f.ccy}</span>
                 {f.projected > 0 ? (
                   <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, color: 'var(--color-lp-error)' }}>
@@ -745,87 +276,40 @@ export function BudgetIncomeGrid({
         </div>
       ) : null}
 
-      {/* #24 — projected-vs-actual variance strip (Actual view, read-only). */}
-      {variance && variance.anyActual ? (
-        <div
-          style={{
-            display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center',
-            padding: '8px 12px', borderRadius: 'var(--lp-radius-md)',
-            border: '1px solid var(--lp-border)', background: 'var(--lp-panel)',
-          }}
-        >
-          <span style={{ fontSize: 'var(--lp-text-xs)', fontWeight: 700, color: 'var(--lp-text-secondary)', textTransform: 'uppercase', letterSpacing: 0.4 }}>
-            Variance
-          </span>
-          {([
-            { label: 'Sell-through', proj: variance.projST != null ? `${Math.round(variance.projST * 100)}%` : '—', act: variance.actST != null ? `${Math.round(variance.actST * 100)}%` : '—', good: (variance.actST ?? 0) >= (variance.projST ?? 0) },
-            { label: 'Gross', proj: fx.formatDisplay(variance.projGross), act: fx.formatDisplay(variance.actGross), good: variance.actGross >= variance.projGross },
-            { label: 'Overage', proj: fx.formatDisplay(variance.projOver), act: fx.formatDisplay(variance.actOver), good: variance.actOver >= variance.projOver },
-            { label: 'Merch', proj: fx.formatDisplay(variance.projMerch), act: fx.formatDisplay(variance.actMerch), good: variance.actMerch >= variance.projMerch },
-            { label: 'VIP', proj: fx.formatDisplay(variance.projVip), act: fx.formatDisplay(variance.actVip), good: variance.actVip >= variance.projVip },
-          ] as const).map((c) => (
-            <span
-              key={c.label}
-              style={{
-                display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 'var(--lp-text-xs)',
-                padding: '3px 9px', borderRadius: 'var(--lp-radius-full)',
-                background: `color-mix(in srgb, ${c.good ? 'var(--color-lp-status-complete)' : 'var(--color-lp-error)'} 9%, transparent)`,
-                border: `1px solid color-mix(in srgb, ${c.good ? 'var(--color-lp-status-complete)' : 'var(--color-lp-error)'} 26%, transparent)`,
-              }}
-            >
-              <span style={{ color: 'var(--lp-text-tertiary)', fontWeight: 600 }}>{c.label}</span>
-              <span style={{ color: 'var(--lp-text-secondary)' }}>{c.proj}</span>
-              <span aria-hidden style={{ color: 'var(--lp-text-tertiary)' }}>→</span>
-              <span style={{ color: c.good ? 'var(--color-lp-status-complete)' : 'var(--color-lp-error)', fontWeight: 700 }}>{c.act}</span>
-            </span>
-          ))}
-        </div>
-      ) : null}
-
       {rows.length === 0 ? (
         <div style={{ borderRadius: 'var(--lp-radius-lg)', border: '1px solid var(--lp-border-strong)', background: 'var(--lp-bg)', color: 'var(--lp-text-tertiary)', fontSize: 13, padding: '32px 16px', textAlign: 'center' }}>
           No shows on this tour yet — add routing dates to enter income.
         </div>
       ) : (
-        // #2 — subtle per-view tint: a left accent rail so the whole grid reads
-        // as forecast (orange) or settled (green) at a glance.
-        <div style={{ borderLeft: `3px solid ${viewAccent}`, borderRadius: 'var(--lp-radius-md)', paddingLeft: 8, background: `color-mix(in srgb, ${viewAccent} 3%, transparent)` }}>
-          <Grid
-            ref={gridRef}
-            key={`income:${tourId}:${view}:${rows.length}:${versionLocked ? 'locked' : 'draft'}`}
-            initialColumns={columns}
-            initialData={data}
-            fx={fx}
-            onEdit={onEdit}
-            headerFor={headerFor}
-            chipCol="venue"
-            referenceCols={['idx', 'date', 'daytype', 'venue', 'city']}
-            columnPrefsKey={`income-cols:${tourId}`}
-            cellOverride={
-              view === 'projected'
-                ? {
-                    cols: ['overage', 'merch', 'vip'],
-                    isOverridden: isOutputOverridden,
-                    onSet: setOverride,
-                    onClear: clearOverride,
-                    warnBody:
-                      'This output will stop tracking the formula — the P&L will use the number you type. Enter the pre-withholding value; revert any time to recompute.',
-                    inputHint: 'Pre-withholding value',
-                  }
-                : undefined
-            }
-            versionLocked={versionLocked}
-            versionLockedCols={versionLockedCols}
-            onLockedEdit={() => setLockModalOpen(true)}
-            allowAddRows={false}
-            fillHandle
-            plainEditableMoney
-          />
-        </div>
+        <Grid
+          key={`income:${tourId}:${rows.length}`}
+          initialColumns={columns}
+          initialData={data}
+          fx={fx}
+          onOpenRow={(si, ri) => {
+            const r = rows[ri];
+            if (r) setOpenRowId(r.routing_id);
+          }}
+          chipCol="venue"
+          referenceCols={['idx', 'date', 'daytype', 'venue', 'city']}
+          columnPrefsKey={`income-cols-lean:${tourId}`}
+          allowAddRows={false}
+        />
       )}
 
-      {/* State-fix B1 — parity with Expenses: a locked proposed-income edit raises
-          the Unlock/New-version modal (status-aware), not a bottom toast. */}
+      {openRow ? (
+        <IncomeDealSlideOver
+          tourId={tourId}
+          row={openRow}
+          currencyOptions={currencyOptions}
+          nativeCurrency={native}
+          versionLocked={versionLocked}
+          onLockedEdit={() => setLockModalOpen(true)}
+          onRowMerged={onRowMerged}
+          onClose={() => setOpenRowId(null)}
+        />
+      ) : null}
+
       <VersionLockModal
         open={lockModalOpen}
         versionId={lockedVersionId}
