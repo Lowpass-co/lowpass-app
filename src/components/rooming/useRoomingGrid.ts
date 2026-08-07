@@ -11,6 +11,7 @@
    ============================================ */
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { useToast } from '@/components/ui/Toast';
 
 export const ROOM_OPTIONS = [
@@ -78,6 +79,15 @@ export function useRoomingGrid(
   assumedRate: number,
 ) {
   const { showToast } = useToast();
+  // ROOT CAUSE (Adam's "rooms don't show on the Nights tab"): Matrix + Cards
+  // read LIVE data (this hook's GET /api/budget/rooming), but the Nights view
+  // renders the `hotels` prop the SERVER component loaded at page render.
+  // Grid writes (POST/DELETE below) never invalidated that RSC snapshot, so
+  // hotels/rooms created from the grid — including the auto placeholder
+  // hotels — stayed invisible on Nights until a full browser reload.
+  // Fix: router.refresh() after every successful write re-fetches the server
+  // payload in place (client state, incl. the selected tab, is preserved).
+  const router = useRouter();
   const [gridByPerson, setGridByPerson] = useState<GridPerson[]>([]);
   const [loading, setLoading] = useState(true);
   const [overrides, setOverrides] = useState<Map<string, string>>(new Map());
@@ -142,12 +152,14 @@ export function useRoomingGrid(
           }),
         });
         if (!res.ok) throw new Error('Save failed');
+        // Keep the server-rendered Nights view in sync (see ROOT CAUSE above).
+        router.refresh();
       } catch {
         setOverrides((o) => new Map(o).set(key, prev));
         showToast('Could not save room assignment', 'error');
       }
     },
-    [tourId, cellMap, assumedRate, showToast],
+    [tourId, cellMap, assumedRate, showToast, router],
   );
 
   const deleteOffRoster = useCallback(
@@ -166,11 +178,13 @@ export function useRoomingGrid(
         );
         showToast(`Removed ${personName}'s room assignments.`);
         fetchGrid();
+        // Keep the server-rendered Nights view in sync (see ROOT CAUSE above).
+        router.refresh();
       } catch {
         showToast('Could not remove assignments', 'error');
       }
     },
-    [assignmentIdsByPerson, fetchGrid, showToast],
+    [assignmentIdsByPerson, fetchGrid, showToast, router],
   );
 
   const rosterPersonIdSet = useMemo(

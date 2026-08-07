@@ -35,6 +35,7 @@ import { effectiveStatuses } from '@/lib/payroll/effectiveDayType';
 import { loadTourRateContext, rateLinesFor } from '@/lib/payroll/loadRateLines';
 import { resolveActiveVersion } from '@/server/budget/versions';
 import { derivedUpdatePayload, derivedInsertProposed } from '@/server/budget/derivedLockPolicy';
+import { PLACEHOLDER_HOTEL_PREFIX } from '@/lib/rooming/nightsSummary';
 
 /** Versioning context for one reconcile pass (§3a): when the active version is
  *  APPROVED the derived feeds flow to ACTUALS only (the locked proposed baseline
@@ -89,7 +90,7 @@ async function computeHotelDesired(
 ): Promise<Desired[]> {
   const { data: hotels } = await supabase
     .from('hotels')
-    .select('id, name')
+    .select('id, name, city, check_in_at')
     .eq('tour_id', tourId)
     .eq('workspace_id', workspaceId);
   if (!hotels?.length) return [];
@@ -106,15 +107,16 @@ async function computeHotelDesired(
   );
   const roomIds = (rooms ?? []).map((r) => r.id as string);
 
-  // Distinct room types per hotel, for an informative line label
-  // (OPS-04 — "Hotel — SGL, DBL" rather than a bare, unnamed-looking row).
-  const typesByHotel = new Map<string, Set<string>>();
+  // Distinct REAL rooms per hotel ('-' is the grid's no-room sentinel) — the
+  // "# rooms" the derived line label advertises (Adam's bug: the old
+  // room-TYPES label read 'Unassigned Hotel — SGL, DBL' for every grid
+  // placeholder, so the budget flooded with indistinguishable lines).
+  const roomCountByHotel = new Map<string, number>();
   for (const r of rooms ?? []) {
     const type = String((r as { room_type?: string | null }).room_type ?? '').trim();
     if (!type || type === '-') continue;
     const hid = (r as { hotel_id: string }).hotel_id;
-    if (!typesByHotel.has(hid)) typesByHotel.set(hid, new Set());
-    typesByHotel.get(hid)!.add(type);
+    roomCountByHotel.set(hid, (roomCountByHotel.get(hid) ?? 0) + 1);
   }
 
   const totalByHotel = new Map<string, number>();
@@ -160,10 +162,22 @@ async function computeHotelDesired(
   return hotels.map((h) => {
     const hid = h.id as string;
     const name = String(h.name ?? 'Hotel');
-    const types = Array.from(typesByHotel.get(hid) ?? []).sort();
+    const city = String((h as { city?: string | null }).city ?? '').trim();
+    const checkIn = String((h as { check_in_at?: string | null }).check_in_at ?? '').slice(0, 10);
+    const nRooms = roomCountByHotel.get(hid) ?? 0;
+    // Label = `{hotel} — {city} · {check-in date} · {N rooms}` (multi-night
+    // stays show the check-in date). Grid-made placeholders are ALREADY named
+    // 'Hotel — {city} · {date}' (placeholderHotelName), so for those only the
+    // room count is appended — no repeated city/date. sourceId stays the hotel
+    // id, so the reconcile UPDATES each existing line's label in place
+    // (derivedUpdatePayload writes `label` when the version is a draft) rather
+    // than duplicating lines. Labels are NOT part of line identity.
+    const base = name.startsWith(PLACEHOLDER_HOTEL_PREFIX)
+      ? name
+      : `${city ? `${name} — ${city}` : name}${checkIn ? ` · ${checkIn}` : ''}`;
     return {
       sourceId: hid,
-      label: types.length ? `${name} — ${types.join(', ')}` : name,
+      label: nRooms > 0 ? `${base} · ${nRooms} room${nRooms === 1 ? '' : 's'}` : base,
       total: totalByHotel.get(hid) ?? 0,
       hotelId: hid,
     };

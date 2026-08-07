@@ -11,6 +11,7 @@
    ============================================ */
 
 import { escapeHtml as esc } from '@/lib/export/shell';
+import { isPlaceholderHotelName } from '@/lib/rooming/nightsSummary';
 import type { RoomingExportData, RoomingHotel } from '@/lib/export/rooming-data';
 import type { TemplateConfig } from '@/lib/export/template-config';
 
@@ -41,9 +42,11 @@ function hotelBlock(h: RoomingHotel): string {
     ? `${h.rows.length} guest${h.rows.length === 1 ? '' : 's'} · ${totalNights} night${totalNights === 1 ? '' : 's'}${span ? ` · ${esc(span)}` : ''}`
     : 'No guests assigned';
 
-  // Heading: the hotel name, but for an unnamed/"Unassigned" hotel fall back to
-  // city/country (Part E) so the block still reads as a place.
-  const named = h.name && h.name.trim() && h.name.trim().toLowerCase() !== 'unassigned hotel';
+  // Heading: the hotel name, but for an unnamed / auto-placeholder hotel
+  // (legacy 'Unassigned Hotel' OR the grid's 'Hotel — {city} · {date}' —
+  // shared name-marker, see isPlaceholderHotelName) fall back to city/country
+  // (Part E) so the block still reads as a place.
+  const named = Boolean(h.name && h.name.trim()) && !isPlaceholderHotelName(h.name);
   const heading = named ? esc(h.name) : place || 'Hotel';
 
   // Branded hotel header band (orange left accent + contact + summary).

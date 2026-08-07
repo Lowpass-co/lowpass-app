@@ -8,6 +8,13 @@
    grouping assignments by room_id so a shared room is counted + costed ONCE —
    the same collapse reconcileDerivedLines uses, so this scans the same numbers
    the derived Accommodation budget lines show. Read-only.
+
+   Freshness: unlike Matrix/Cards (live client fetch via useRoomingGrid), this
+   view renders the server-loaded `hotels` prop — grid writes call
+   router.refresh() (see useRoomingGrid ROOT CAUSE note) so hotels/rooms
+   created from the grid appear here without a manual reload. Every hotel row
+   renders (no nights filter); a same-day stay range counts as ONE night via
+   nightsSummary effectiveStay (#8).
    ============================================ */
 
 import { useMemo } from 'react';

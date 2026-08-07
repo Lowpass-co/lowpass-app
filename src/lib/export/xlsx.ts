@@ -12,6 +12,7 @@
 import ExcelJS from 'exceljs';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { convertToTour } from '@/lib/budget/fxRates';
+import { isPlaceholderHotelName } from '@/lib/rooming/nightsSummary';
 import { loadBudgetExportData } from '@/lib/export/budget-data';
 import { loadRoomingExportData } from '@/lib/export/rooming-data';
 import { loadPayrollExportData } from '@/lib/export/payroll-data';
@@ -144,7 +145,9 @@ function budgetSheet(data: BudgetExportData): SheetSpec {
 function roomingSheet(data: RoomingExportData): SheetSpec {
   const rows = data.hotels.flatMap((h) => {
     const place = [h.city, h.country].filter(Boolean).join(', ');
-    const named = h.name && h.name.trim() && h.name.trim().toLowerCase() !== 'unassigned hotel';
+    // Auto-placeholder hotels (legacy 'Unassigned Hotel' OR the grid's
+    // 'Hotel — {city} · {date}' name-marker) fall back to the place label.
+    const named = Boolean(h.name && h.name.trim()) && !isPlaceholderHotelName(h.name);
     const hotelLabel = named ? h.name : place || '—';
     return h.rows.map((r) => ({
       hotel: hotelLabel,

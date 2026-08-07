@@ -5,6 +5,15 @@
 import { NextResponse } from 'next/server';
 import { requireWrite } from '@/lib/auth/workspace-check';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
+import { placeholderHotelName } from '@/lib/rooming/nightsSummary';
+
+/** The day after `date` (YYYY-MM-DD), UTC-safe. */
+function nextDayIso(date: string): string {
+  const d = new Date(`${date}T00:00:00Z`);
+  if (Number.isNaN(d.getTime())) return date;
+  d.setUTCDate(d.getUTCDate() + 1);
+  return d.toISOString().slice(0, 10);
+}
 
 export async function GET(request: Request) {
   const supabase = await createServerSupabaseClient();
@@ -209,7 +218,7 @@ export async function POST(request: Request) {
     const personName = entry.person_name.trim();
     const { data: routing } = await supabase
       .from('routing')
-      .select('id, date')
+      .select('id, date, city')
       .eq('id', entry.routing_id)
       .eq('tour_id', entry.tour_id)
       .maybeSingle();
@@ -226,34 +235,67 @@ export async function POST(request: Request) {
     if (!personId) continue;
 
     const routingDate = (routing as { date: string }).date;
+    const routingCity = ((routing as { city?: string | null }).city ?? '').trim() || null;
     const dateIso = `${routingDate}T12:00:00`;
 
     const { data: hotels } = await supabase
       .from('hotels')
-      .select('id, check_in_at, check_out_at')
+      .select('id, name, check_in_at, check_out_at')
       .eq('workspace_id', profile.workspace_id)
       .eq('tour_id', entry.tour_id)
       .order('check_in_at', { ascending: true, nullsFirst: true });
 
-    let targetHotelId =
-      (hotels ?? []).find((h) => {
-        const start = (h as { check_in_at?: string | null }).check_in_at;
-        const end = (h as { check_out_at?: string | null }).check_out_at;
-        const s = start ? new Date(start).getTime() : Number.NEGATIVE_INFINITY;
-        const e = end ? new Date(end).getTime() : Number.POSITIVE_INFINITY;
-        const d = new Date(dateIso).getTime();
-        return d >= s && d <= e;
-      })?.id ?? null;
+    // REUSE any existing hotel whose stay window covers this night — including
+    // previously auto-created placeholders — so re-running the grid never
+    // stacks duplicate placeholder hotels for the same date.
+    const coveringHotel = (hotels ?? []).find((h) => {
+      const start = (h as { check_in_at?: string | null }).check_in_at;
+      const end = (h as { check_out_at?: string | null }).check_out_at;
+      const s = start ? new Date(start).getTime() : Number.NEGATIVE_INFINITY;
+      const e = end ? new Date(end).getTime() : Number.POSITIVE_INFINITY;
+      const d = new Date(dateIso).getTime();
+      return d >= s && d <= e;
+    }) as { id: string; name?: string | null; check_in_at?: string | null; check_out_at?: string | null } | undefined;
+    let targetHotelId = coveringHotel?.id ?? null;
 
-    if (!targetHotelId) {
+    if (coveringHotel) {
+      // Heal a LEGACY auto-placeholder in place: rename 'Unassigned Hotel' to
+      // the honest 'Hotel — {city} · {date}' and stretch its same-day
+      // 00:00→23:59 window to next-day 00:00 so the stay reads as ONE night.
+      // Only the exact auto-created shape (legacy name + both timestamps on
+      // this routing date) is touched — user-edited hotels are never renamed.
+      const legacyName = String(coveringHotel.name ?? '').trim().toLowerCase() === 'unassigned hotel';
+      const sameDay =
+        String(coveringHotel.check_in_at ?? '').slice(0, 10) === routingDate &&
+        String(coveringHotel.check_out_at ?? '').slice(0, 10) === routingDate;
+      if (legacyName && sameDay) {
+        await supabase
+          .from('hotels')
+          .update({
+            name: placeholderHotelName(routingCity, routingDate),
+            city: routingCity,
+            check_out_at: `${nextDayIso(routingDate)}T00:00:00Z`,
+          })
+          .eq('id', coveringHotel.id)
+          .eq('workspace_id', profile.workspace_id);
+      }
+    } else {
+      // No covering hotel → create ONE placeholder for this night, named
+      // honestly from what's known ('Hotel — {city} · {date}'; see
+      // placeholderHotelName — the name IS the placeholder marker, the hotels
+      // table has no metadata column). check_out = next day 00:00 so the range
+      // is a true ONE-night stay; the noon-probe coverage check above still
+      // matches this date only (next date 12:00 > next date 00:00), so every
+      // uncovered night keeps its own placeholder.
       const { data: createdHotel } = await supabase
         .from('hotels')
         .insert({
           workspace_id: profile.workspace_id,
           tour_id: entry.tour_id,
-          name: 'Unassigned Hotel',
+          name: placeholderHotelName(routingCity, routingDate),
+          city: routingCity,
           check_in_at: `${routingDate}T00:00:00Z`,
-          check_out_at: `${routingDate}T23:59:59Z`,
+          check_out_at: `${nextDayIso(routingDate)}T00:00:00Z`,
         })
         .select('id')
         .single();

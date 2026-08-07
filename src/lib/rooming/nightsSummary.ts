@@ -49,6 +49,31 @@ export interface StayRow {
   cost: number;
 }
 
+/* ---- Auto-created placeholder hotels (rooming-grid POST) ----------------
+   When a grid room is saved on a night with no covering hotel, the API
+   (src/app/api/budget/rooming/route.ts) creates a one-night placeholder
+   hotel. The hotels table has NO metadata/flag column (migration
+   051_room_canonical.sql), so the marker is the NAME — either the legacy
+   literal 'Unassigned Hotel' or the honest 'Hotel — {city} · {date}' /
+   'Hotel — {date}' form. Builder + detector live together here so they can't
+   drift; exports (rooming-pdf / xlsx) and the API route import BOTH from this
+   pure module. Known fragility (documented trade-off): a user-typed hotel
+   literally named 'Hotel — …' would also be detected as a placeholder. */
+export const PLACEHOLDER_HOTEL_PREFIX = 'Hotel — ';
+
+/** The honest placeholder name: 'Hotel — {city} · {YYYY-MM-DD}' (city known)
+ *  or 'Hotel — {YYYY-MM-DD}'. ISO date keeps it locale-free + sortable. */
+export function placeholderHotelName(city: string | null | undefined, dateIso: string): string {
+  const c = (city ?? '').trim();
+  return c ? `${PLACEHOLDER_HOTEL_PREFIX}${c} · ${dateIso}` : `${PLACEHOLDER_HOTEL_PREFIX}${dateIso}`;
+}
+
+/** True for auto-created placeholder hotels (legacy or current naming). */
+export function isPlaceholderHotelName(name: string | null | undefined): boolean {
+  const n = (name ?? '').trim().toLowerCase();
+  return n === 'unassigned hotel' || n.startsWith(PLACEHOLDER_HOTEL_PREFIX.toLowerCase());
+}
+
 export function nightsBetween(start?: string | null, end?: string | null): number {
   if (!start || !end) return 0;
   const ms = new Date(`${end}T12:00:00`).getTime() - new Date(`${start}T12:00:00`).getTime();
