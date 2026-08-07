@@ -26,11 +26,25 @@
 
 import { useMemo, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import { computeWalk } from '@/lib/settlement/walk';
+import { BO_FEE_KINDS, computeBoxOffice, computeWalk } from '@/lib/settlement/walk';
 import type { ShowWalk } from '@/lib/settlement/loadWalk';
 
-const DEDUCTION_KINDS = ['withholding', 'tax', 'venue_cost', 'commission', 'other'] as const;
+// Migration 262 — the DeductionAdder offers the BO fee kinds too; those lines
+// render in the box-office waterfall, not the guarantee-side Deductions group.
+const DEDUCTION_KINDS = ['withholding', 'tax', 'venue_cost', 'commission', 'other', 'facility_fee', 'ticket_fees', 'cc_fees'] as const;
 const PAYMENT_METHODS = ['wire', 'check', 'cash', 'ach'] as const;
+const isBoFeeKind = (k: string) => (BO_FEE_KINDS as readonly string[]).includes(k);
+
+// Deal type vocabulary (migration 262) — '' renders as — / clears to null.
+const DEAL_TYPES = ['', 'guarantee', 'guarantee_plus', 'door_deal', 'flat', 'festival'] as const;
+const DEAL_TYPE_LABELS: Record<string, string> = {
+  '': '—',
+  guarantee: 'Guarantee',
+  guarantee_plus: 'Guarantee + bonus',
+  door_deal: 'Door deal',
+  flat: 'Flat',
+  festival: 'Festival',
+};
 
 const HUE_SETTLED = 'var(--color-lp-status-complete)';
 const HUE_DUE = 'var(--color-lp-warning)';
@@ -116,7 +130,11 @@ export function SettlementWalkClient({
   }
 
   /** Push Σ(itemized deductions) into reconciled_deductions so the income cascade
-   *  carries the itemized total unchanged. `excludeId` drops a just-removed row. */
+   *  carries the itemized total unchanged. `excludeId` drops a just-removed row.
+   *  MONEY INVARIANT (migration 262): this Σ sums ALL deduction kinds — including
+   *  the BO fee kinds (facility_fee / ticket_fees / cc_fees) that RENDER in the
+   *  box-office waterfall instead of the Deductions group. The split is display
+   *  only; the income cascade total must not move. */
   async function pushDeductionSum(show: ShowWalk, _sid: string, excludeId?: string) {
     const sum = show.deductions.filter((d) => d.id !== excludeId).reduce((n, d) => n + d.amount, 0);
     await post('/api/budget/settlement', { routing_id: show.routingId, reconciled_deductions: sum });
@@ -132,6 +150,15 @@ export function SettlementWalkClient({
         <Kpi label="Awaiting payment" value={String(kpi.awaitingPayment)} hue={kpi.awaitingPayment > 0 ? HUE_OUT : 'var(--lp-text-tertiary)'} divider />
         <Kpi label="Unsettled shows" value={`${kpi.total - kpi.settledCount} of ${kpi.total}`} hue="var(--lp-text-secondary)" divider />
       </div>
+
+      {/* ── Catch-up batch (spec §3) — settle the backlog at the contracted number ── */}
+      {kpi.notSettled > 0 ? (
+        <CatchUpPanel
+          shows={shows.filter((s) => s.date != null && s.date < today && !s.fullAndFinal)}
+          fmt={fmt}
+          onDone={refresh}
+        />
+      ) : null}
 
       <div style={{ display: 'grid', gridTemplateColumns: 'minmax(250px, 330px) 1fr', gap: 'var(--lp-space-4)', minHeight: 0 }}>
         {/* ── Shows rail ── */}
@@ -228,6 +255,28 @@ function WalkPanel({
     payments: show.payments,
   });
 
+  // Migration 262 — the deduction lines SPLIT for display: BO fee kinds render
+  // in the box-office waterfall, the rest stay in the Deductions group. The
+  // walk maths above and Σ → reconciled_deductions still use ALL of them.
+  const boFees = show.deductions.filter((d) => isBoFeeKind(d.kind));
+  const walkDeductions = show.deductions.filter((d) => !isBoFeeKind(d.kind));
+  const bo = computeBoxOffice(
+    {
+      dealType: show.dealType,
+      dealPct: show.dealPct,
+      bonusThreshold: show.bonusThreshold,
+      bonusPct: show.bonusPct,
+      ticketPrice: show.ticketPrice,
+      ticketCapacity: show.ticketCapacity,
+      comps: show.comps,
+      ticketsSold: show.ticketsSold,
+      grossBO: show.grossBO,
+    },
+    boFees,
+    walk.expensesTotal,
+    show.guarantee,
+  );
+
   const statusChip = show.fullAndFinal
     ? { label: 'SETTLED · FULL & FINAL', hue: HUE_SETTLED }
     : { label: 'OPEN', hue: 'var(--lp-text-tertiary)' };
@@ -290,13 +339,95 @@ function WalkPanel({
         </div>
       </div>
 
+      {/* CARD 0 — deal & box office (migration 262). Terms + BO waterfall; the
+          suggested overage is APPLIED only by the explicit button below. */}
+      <Card title="Deal & box office" hue="var(--lp-orange)">
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px 14px' }}>
+          <Sel
+            label="Deal type"
+            value={show.dealType ?? ''}
+            options={[...DEAL_TYPES]}
+            labels={DEAL_TYPE_LABELS}
+            disabled={busy}
+            onPick={(v) => onSaveGrain({ deal_type: v || null })}
+          />
+          <Num label="Deal %" value={show.dealPct} disabled={busy} onCommit={(v) => onSaveGrain({ deal_pct: v })} />
+          <Num label="Bonus @ (tix)" value={show.bonusThreshold} disabled={busy} onCommit={(v) => onSaveGrain({ bonus_threshold: v })} />
+          <Num label="Bonus %" value={show.bonusPct} disabled={busy} onCommit={(v) => onSaveGrain({ bonus_pct: v })} />
+          <Num label="Ticket price" value={show.ticketPrice} disabled={busy} onCommit={(v) => onSaveGrain({ ticket_price: v })} />
+          <Num label="Capacity" value={show.ticketCapacity} disabled={busy} onCommit={(v) => onSaveGrain({ ticket_capacity: v })} />
+          <Num label="Comps" value={show.comps} disabled={busy} onCommit={(v) => onSaveGrain({ comps: v })} />
+          <Num label="Tickets sold" value={show.ticketsSold} disabled={busy} onCommit={(v) => onSaveGrain({ reconciled_tickets_sold: v })} />
+          <Num label="Gross box office" value={show.grossBO} disabled={busy} onCommit={(v) => onSaveGrain({ reconciled_gross: v })} />
+        </div>
+
+        {bo ? (
+          <div style={{ marginTop: 12 }}>
+            <Rule label="Gross box office" value={bo.grossBO} fmt={fmt} />
+            {/* BO fee lines (facility / ticket / CC) — these kinds live HERE,
+                not in the guarantee-side Deductions group. */}
+            {boFees.map((d) => (
+              <div key={d.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '2.5px 0' }}>
+                <span style={{ fontSize: 'var(--lp-text-sm)', color: 'var(--lp-text-secondary)', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {kindLabel(d.kind)}{d.label ? ` · ${d.label}` : ''}
+                </span>
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+                  <span className="lp-mono" style={{ fontSize: 13, color: 'var(--color-lp-error)', fontVariantNumeric: 'tabular-nums' }}>−{money(fmt, d.amount)}</span>
+                  <button type="button" disabled={busy} onClick={() => onRemoveLine('deduction', d.id)} title="Remove" style={{ border: 0, background: 'transparent', color: 'var(--lp-text-tertiary)', cursor: 'pointer', fontSize: 14, lineHeight: 1 }}>×</button>
+                </span>
+              </div>
+            ))}
+            {boFees.length === 0 ? (
+              <div style={{ fontSize: 11.5, color: 'var(--lp-text-tertiary)', padding: '2.5px 0' }}>
+                No box-office fees yet — add Facility fee / Ticket fees / CC fees in the deductions adder below.
+              </div>
+            ) : null}
+            <Rule label="Net box office" value={bo.netBO} fmt={fmt} />
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '2.5px 0' }}>
+              <span style={{ fontSize: 'var(--lp-text-sm)', color: 'var(--lp-text-secondary)' }}>− Show expenses</span>
+              <span className="lp-mono" style={{ fontSize: 13, color: 'var(--color-lp-error)', fontVariantNumeric: 'tabular-nums' }}>−{money(fmt, walk.expensesTotal)}</span>
+            </div>
+            <Rule label="Split pool" value={bo.splitPool} fmt={fmt} />
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '2.5px 0' }}>
+              <span style={{ fontSize: 'var(--lp-text-sm)', color: 'var(--lp-text-secondary)' }}>Artist share @ {show.dealPct}%</span>
+              <span className="lp-mono" style={{ fontSize: 13, color: 'var(--lp-text)', fontVariantNumeric: 'tabular-nums' }}>{money(fmt, bo.artistShare)}</span>
+            </div>
+            {bo.bonus > 0 ? (
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '2.5px 0' }}>
+                <span style={{ fontSize: 'var(--lp-text-sm)', color: 'var(--lp-text-secondary)' }}>＋ Bonus @ {show.bonusPct}% above {show.bonusThreshold} tix</span>
+                <span className="lp-mono" style={{ fontSize: 13, color: 'var(--lp-text)', fontVariantNumeric: 'tabular-nums' }}>{money(fmt, bo.bonus)}</span>
+              </div>
+            ) : null}
+            <RuledTotal label="Suggested overage" value={bo.resolvedOverage} fmt={fmt} hue={HUE_OUT} />
+            {/* NEVER auto-written — this click is the consent that moves money. */}
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => onSaveGrain({ reconciled_overage: bo.resolvedOverage })}
+              className="btn-transition"
+              style={{
+                marginTop: 8, padding: '6px 14px', fontSize: 'var(--lp-text-xs)', fontWeight: 700, cursor: 'pointer',
+                borderRadius: 'var(--lp-radius-md)', border: `1px solid ${HUE_OUT}`,
+                background: `color-mix(in srgb, ${HUE_OUT} 10%, transparent)`, color: HUE_OUT,
+              }}
+            >
+              Apply {fmt.format(bo.resolvedOverage)} to Overage
+            </button>
+          </div>
+        ) : (
+          <p style={{ margin: '10px 0 0', fontSize: 11.5, color: 'var(--lp-text-tertiary)' }}>
+            Enter a percentage deal + tickets/gross to compute the waterfall.
+          </p>
+        )}
+      </Card>
+
       {/* CARD 1 — the walk */}
       <Card title="The walk" hue={HUE_SETTLED}>
         <LedgerInput label="Guarantee" value={show.guarantee} disabled={busy} onCommit={(v) => onSaveGrain({ reconciled_guarantee: v })} />
 
         <LineGroup
           label="Deductions"
-          rows={show.deductions.map((d) => ({ id: d.id, left: kindLabel(d.kind) + (d.label ? ` · ${d.label}` : ''), amount: -d.amount }))}
+          rows={walkDeductions.map((d) => ({ id: d.id, left: kindLabel(d.kind) + (d.label ? ` · ${d.label}` : ''), amount: -d.amount }))}
           legacyNote={show.deductionsAreLegacy ? 'Legacy single value — add itemized lines to break it out' : undefined}
           emptyNote="No deductions yet — withholding, taxes, venue costs and commissions itemize here."
           fmt={fmt}
@@ -460,6 +591,160 @@ function LineGroup({ label, rows, legacyNote, emptyNote, fmt, busy, onRemove, ad
 const addBtnStyle: React.CSSProperties = { fontSize: 'var(--lp-text-xs)', fontWeight: 600, color: 'var(--color-lp-orange)', background: 'transparent', border: 0, cursor: 'pointer', padding: 0 };
 const inputStyle: React.CSSProperties = { fontSize: 13, background: 'var(--lp-bg)', border: '1px solid var(--lp-border)', borderRadius: 'var(--lp-radius-md)', padding: '5px 9px', color: 'var(--lp-text)' };
 
+/* Field components (migration 262) — labels above inputs, same grammar as the
+   income deal slide-over's Sel/Num. Blank commits null (clears the field). */
+
+const fieldLabelStyle: React.CSSProperties = { fontSize: 10.5, fontWeight: 600, letterSpacing: '0.03em', color: 'var(--lp-text-tertiary)' };
+const fieldInputStyle: React.CSSProperties = { ...inputStyle, width: '100%', fontFamily: 'var(--lp-font-numeric)', textAlign: 'right' };
+
+function Num({ label, value, disabled, onCommit }: { label: string; value: number | null; disabled: boolean; onCommit: (v: number | null) => void }) {
+  return (
+    <label style={{ display: 'flex', flexDirection: 'column', gap: 3, minWidth: 0 }}>
+      <span style={fieldLabelStyle}>{label}</span>
+      <input
+        key={`${label}:${value ?? ''}`}
+        type="number"
+        inputMode="decimal"
+        defaultValue={value ?? ''}
+        disabled={disabled}
+        placeholder="—"
+        onBlur={(e) => {
+          if (e.target.value === String(value ?? '')) return;
+          onCommit(e.target.value.trim() === '' ? null : Number(e.target.value) || 0);
+        }}
+        onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
+        style={fieldInputStyle}
+      />
+    </label>
+  );
+}
+
+function Sel({ label, value, options, labels, disabled, onPick }: { label: string; value: string; options: string[]; labels?: Record<string, string>; disabled: boolean; onPick: (v: string) => void }) {
+  return (
+    <label style={{ display: 'flex', flexDirection: 'column', gap: 3, minWidth: 0 }}>
+      <span style={fieldLabelStyle}>{label}</span>
+      <select value={value} disabled={disabled} onChange={(e) => onPick(e.target.value)} style={{ ...fieldInputStyle, textAlign: 'left', fontFamily: 'inherit' }}>
+        {options.map((o) => <option key={o} value={o}>{labels?.[o] ?? o}</option>)}
+      </select>
+    </label>
+  );
+}
+
+/* Catch-up batch (spec §3) — settle the backlog of past-unsettled shows at
+   their CONTRACTED guarantee via the EXISTING settlement endpoint, one POST per
+   show, SEQUENTIALLY — so the income cascade runs per show with zero new money
+   code. Nothing is written until the explicit "Settle N shows" click. */
+function CatchUpPanel({ shows, fmt, onDone }: { shows: ShowWalk[]; fmt: Intl.NumberFormat; onDone: () => void }) {
+  const [open, setOpen] = useState(false);
+  const [checked, setChecked] = useState<Set<string>>(() => new Set());
+  const [fullFinal, setFullFinal] = useState(true); // default ON
+  const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
+
+  const allChecked = shows.length > 0 && shows.every((s) => checked.has(s.routingId));
+  const toggle = (id: string) =>
+    setChecked((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  const running = progress != null;
+  const n = checked.size;
+
+  async function run() {
+    const targets = shows.filter((s) => checked.has(s.routingId));
+    if (targets.length === 0) return;
+    setProgress({ done: 0, total: targets.length });
+    try {
+      // SEQUENTIAL on purpose: the route's income cascade runs per show.
+      for (let i = 0; i < targets.length; i++) {
+        const s = targets[i];
+        await fetch('/api/budget/settlement', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            routing_id: s.routingId,
+            reconciled_guarantee: s.contractedGuarantee ?? 0,
+            status: 'reconciled',
+            ...(fullFinal ? { full_and_final: true } : {}),
+          }),
+        });
+        setProgress({ done: i + 1, total: targets.length });
+      }
+    } finally {
+      setProgress(null);
+      setChecked(new Set());
+      onDone();
+    }
+  }
+
+  return (
+    <div style={{ borderRadius: 'var(--lp-radius-lg)', border: `1px solid color-mix(in srgb, ${HUE_DUE} 40%, var(--lp-border))`, background: 'var(--lp-panel)', overflow: 'hidden' }}>
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', padding: '10px 16px', background: 'transparent', border: 0, cursor: 'pointer', textAlign: 'left' }}
+      >
+        <span style={{ fontSize: 'var(--lp-text-sm)', fontWeight: 700, color: 'var(--lp-text)' }}>
+          Catch up — {shows.length} past show{shows.length === 1 ? '' : 's'} not settled
+        </span>
+        <span style={{ fontSize: 'var(--lp-text-xs)', color: 'var(--lp-text-tertiary)' }}>{open ? 'Hide ▴' : 'Settle at contracted ▾'}</span>
+      </button>
+      {open ? (
+        <div style={{ padding: '0 16px 14px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 'var(--lp-text-xs)', fontWeight: 600, color: 'var(--lp-text-secondary)', cursor: 'pointer' }}>
+            <input
+              type="checkbox"
+              checked={allChecked}
+              disabled={running}
+              onChange={() => setChecked(allChecked ? new Set() : new Set(shows.map((s) => s.routingId)))}
+              style={{ accentColor: 'var(--lp-orange)' }}
+            />
+            Select all
+          </label>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 2, maxHeight: 220, overflowY: 'auto' }}>
+            {shows.map((s) => (
+              <label key={s.routingId} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '3px 0', fontSize: 'var(--lp-text-sm)', color: 'var(--lp-text-secondary)', cursor: 'pointer' }}>
+                <input
+                  type="checkbox"
+                  checked={checked.has(s.routingId)}
+                  disabled={running}
+                  onChange={() => toggle(s.routingId)}
+                  style={{ accentColor: 'var(--lp-orange)' }}
+                />
+                <span className="lp-mono" style={{ fontSize: 'var(--lp-text-2xs)', color: 'var(--lp-text-tertiary)' }}>{s.date ?? '—'}</span>
+                <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.city || s.venue_name || 'Show'}</span>
+                <span className="lp-mono" style={{ marginLeft: 'auto', fontVariantNumeric: 'tabular-nums', color: 'var(--lp-text)' }}>
+                  {fmt.format(s.contractedGuarantee ?? 0)} gtd
+                </span>
+              </label>
+            ))}
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 'var(--lp-text-xs)', fontWeight: 600, color: 'var(--lp-text-secondary)', cursor: 'pointer' }}>
+              <input type="checkbox" checked={fullFinal} disabled={running} onChange={(e) => setFullFinal(e.target.checked)} style={{ accentColor: 'var(--lp-orange)' }} />
+              mark Full &amp; Final
+            </label>
+            <button
+              type="button"
+              disabled={running || n === 0}
+              onClick={() => void run()}
+              className="btn-transition"
+              style={{
+                padding: '6px 14px', fontSize: 'var(--lp-text-xs)', fontWeight: 700, cursor: running || n === 0 ? 'default' : 'pointer',
+                borderRadius: 'var(--lp-radius-md)', border: `1px solid ${HUE_DUE}`,
+                background: n > 0 && !running ? HUE_DUE : 'transparent',
+                color: n > 0 && !running ? 'var(--lp-text-inverse, #fff)' : 'var(--lp-text-tertiary)',
+              }}
+            >
+              {progress ? `Settling ${progress.done}/${progress.total}…` : `Settle ${n} show${n === 1 ? '' : 's'}`}
+            </button>
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 function DeductionAdder({ busy, onAdd }: { busy: boolean; onAdd: (f: Record<string, unknown>) => void }) {
   const [open, setOpen] = useState(false);
   const [kind, setKind] = useState<string>('withholding');
@@ -532,7 +817,7 @@ async function exportPdf(routingId: string, label: string) {
 }
 
 function kindLabel(k: string): string {
-  return ({ withholding: 'Withholding', tax: 'Tax', venue_cost: 'Venue cost', commission: 'Commission', other: 'Other' } as Record<string, string>)[k] ?? k;
+  return ({ withholding: 'Withholding', tax: 'Tax', venue_cost: 'Venue cost', commission: 'Commission', other: 'Other', facility_fee: 'Facility fee', ticket_fees: 'Ticket fees', cc_fees: 'CC fees' } as Record<string, string>)[k] ?? k;
 }
 function methodLabel(m: string): string {
   return ({ wire: 'Wire', check: 'Check', cash: 'Cash', ach: 'ACH' } as Record<string, string>)[m] ?? m;

@@ -408,7 +408,10 @@ function Sel({
   return (
     <label title={hint} style={{ display: 'flex', flexDirection: 'column', gap: 3, minWidth: 0 }}>
       <span style={{ fontSize: 10.5, fontWeight: 600, letterSpacing: '0.03em', color: 'var(--lp-text-tertiary)', cursor: hint ? 'help' : undefined }}>{label}</span>
-      <select value={value} onChange={(e) => onPick(e.target.value.toUpperCase())} style={{ ...inputStyle, textAlign: 'left', fontFamily: 'inherit' }}>
+      {/* 2026-08-07 native control kill: .lp-select supplies background-color,
+          padding (with chevron clearance) and the chevron itself — inputStyle's
+          `background` shorthand / `padding` are dropped so they can't wipe it. */}
+      <select value={value} onChange={(e) => onPick(e.target.value.toUpperCase())} className="lp-select" style={{ ...inputStyle, background: undefined, padding: undefined, textAlign: 'left', fontFamily: 'inherit' }}>
         {options.map((o) => <option key={o} value={o}>{labels?.[o] ?? o}</option>)}
       </select>
     </label>

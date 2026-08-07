@@ -901,8 +901,11 @@ export function RiderSectionBuilder({ packId }: { packId: string }) {
                   value={activeGroup}
                   onChange={(e) => void setSectionGroup(activeSection.id, e.target.value)}
                   title="Move this section to another group"
-                  className="shrink-0"
-                  style={{ fontSize: '11px', padding: '2px 6px', borderRadius: 6, border: '1px solid var(--lp-border)', background: 'var(--lp-surface)', color: 'var(--lp-text-tertiary)', cursor: 'pointer' }}
+                  className="lp-select shrink-0"
+                  // 2026-08-07 native control kill: backgroundColor (not the `background`
+                  // shorthand, which would wipe the .lp-select chevron background-image);
+                  // extra right padding clears the chevron now appearance is none.
+                  style={{ fontSize: '11px', padding: '2px 24px 2px 6px', borderRadius: 6, border: '1px solid var(--lp-border)', backgroundColor: 'var(--lp-surface)', color: 'var(--lp-text-tertiary)', cursor: 'pointer' }}
                 >
                   {RIDER_GROUPS.filter((g) => g.fixed || addedGroups.has(g.id)).map((g) => (
                     <option key={g.id} value={g.id}>{g.label}</option>

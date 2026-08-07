@@ -65,6 +65,11 @@ const TEMPLATE_GROUP: Record<string, string> = {
   catering: 'catering',
   merch: 'merch',
   labour: 'local_crew',
+  /* Migration 263 — rider-centric re-seed's new platform types. */
+  dressing_rooms: 'hospitality',
+  towels_laundry: 'hospitality',
+  bus_stock: 'hospitality',
+  guest_list: 'production',
 };
 
 /** The group a template belongs under, or null = offer it in every group. */

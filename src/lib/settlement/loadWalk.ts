@@ -45,6 +45,22 @@ export interface SettlementWalkData {
   merch: number;
   depositReceived: number;
   fullAndFinal: boolean;
+  /** Deal & box office grain (migration 262) — all null on a legacy
+   *  flat-guarantee settlement, which keeps today's walk bit-identical. */
+  dealType: string | null;
+  dealPct: number | null;
+  bonusThreshold: number | null;
+  bonusPct: number | null;
+  ticketPrice: number | null;
+  ticketCapacity: number | null;
+  comps: number | null;
+  /** reconciled_tickets_sold ?? day_of_tickets_sold. */
+  ticketsSold: number | null;
+  /** reconciled_gross ?? day_of_gross. */
+  grossBO: number | null;
+  /** Contracted guarantee (budget_income.pre_tax_guarantee) — 0 when unset.
+   *  Powers the catch-up batch's "settle at the contracted number". */
+  contractedGuarantee: number;
   /** True when the deductions below are the legacy single value (not itemized yet). */
   deductionsAreLegacy: boolean;
   deductions: SettlementDeduction[];
@@ -54,6 +70,7 @@ export interface SettlementWalkData {
 }
 
 const num = (v: unknown): number => (Number(v) || 0);
+const numOrNull = (v: unknown): number | null => (v == null ? null : Number(v) || 0);
 
 export async function loadSettlementWalk(
   supabase: SupabaseClient,
@@ -66,11 +83,20 @@ export async function loadSettlementWalk(
   const { data: settlement } = await supabase
     .from('settlement')
     .select(
-      'id, routing_id, day_of_guarantee, reconciled_guarantee, day_of_overage, reconciled_overage, day_of_merch, reconciled_merch, day_of_deductions, reconciled_deductions, deposit_received, full_and_final',
+      'id, routing_id, day_of_guarantee, reconciled_guarantee, day_of_overage, reconciled_overage, day_of_merch, reconciled_merch, day_of_deductions, reconciled_deductions, deposit_received, full_and_final, deal_type, deal_pct, bonus_threshold, bonus_pct, ticket_price, ticket_capacity, comps, reconciled_tickets_sold, day_of_tickets_sold, reconciled_gross, day_of_gross',
     )
     .eq('routing_id', routingId)
     .eq('workspace_id', workspaceId)
     .maybeSingle();
+
+  // Contracted guarantee (budget_income) — the catch-up settle-at-contract number.
+  const { data: incomeRow } = await supabase
+    .from('budget_income')
+    .select('routing_id, pre_tax_guarantee')
+    .eq('routing_id', routingId)
+    .eq('workspace_id', workspaceId)
+    .maybeSingle();
+  const contractedGuarantee = num(incomeRow?.pre_tax_guarantee);
 
   const settlementId = (settlement?.id as string | undefined) ?? null;
 
@@ -93,6 +119,15 @@ export async function loadSettlementWalk(
   const merch = num(settlement?.reconciled_merch ?? settlement?.day_of_merch);
   const depositReceived = num(settlement?.deposit_received);
   const fullAndFinal = Boolean(settlement?.full_and_final);
+  const dealType = (settlement?.deal_type as string | null) ?? null;
+  const dealPct = numOrNull(settlement?.deal_pct);
+  const bonusThreshold = numOrNull(settlement?.bonus_threshold);
+  const bonusPct = numOrNull(settlement?.bonus_pct);
+  const ticketPrice = numOrNull(settlement?.ticket_price);
+  const ticketCapacity = numOrNull(settlement?.ticket_capacity);
+  const comps = numOrNull(settlement?.comps);
+  const ticketsSold = numOrNull(settlement?.reconciled_tickets_sold ?? settlement?.day_of_tickets_sold);
+  const grossBO = numOrNull(settlement?.reconciled_gross ?? settlement?.day_of_gross);
 
   // Fall back to the legacy single deductions value when nothing is itemized yet.
   const legacyDeductions = num(settlement?.reconciled_deductions ?? settlement?.day_of_deductions);
@@ -118,6 +153,16 @@ export async function loadSettlementWalk(
     merch,
     depositReceived,
     fullAndFinal,
+    dealType,
+    dealPct,
+    bonusThreshold,
+    bonusPct,
+    ticketPrice,
+    ticketCapacity,
+    comps,
+    ticketsSold,
+    grossBO,
+    contractedGuarantee,
     deductionsAreLegacy,
     deductions,
     expenses,
@@ -169,7 +214,7 @@ export async function loadTourSettlementWalks(
   const { data: settlementRows } = await supabase
     .from('settlement')
     .select(
-      'id, routing_id, day_of_guarantee, reconciled_guarantee, day_of_overage, reconciled_overage, day_of_merch, reconciled_merch, day_of_deductions, reconciled_deductions, deposit_received, full_and_final',
+      'id, routing_id, day_of_guarantee, reconciled_guarantee, day_of_overage, reconciled_overage, day_of_merch, reconciled_merch, day_of_deductions, reconciled_deductions, deposit_received, full_and_final, deal_type, deal_pct, bonus_threshold, bonus_pct, ticket_price, ticket_capacity, comps, reconciled_tickets_sold, day_of_tickets_sold, reconciled_gross, day_of_gross',
     )
     .eq('workspace_id', workspaceId)
     .in('routing_id', routingIds);
@@ -193,6 +238,20 @@ export async function loadTourSettlementWalks(
     linesByType('settlement_payments'),
   ]);
 
+  // Contracted guarantees (budget_income) — one query for the tour, mapped per
+  // show. Powers the catch-up batch's "settle at the contracted number".
+  const { data: incomeRows } = await supabase
+    .from('budget_income')
+    .select('routing_id, pre_tax_guarantee')
+    .eq('workspace_id', workspaceId)
+    .in('routing_id', routingIds);
+  const contractedByRouting = new Map(
+    ((incomeRows ?? []) as Array<{ routing_id: string; pre_tax_guarantee: number | null }>).map((r) => [
+      r.routing_id,
+      num(r.pre_tax_guarantee),
+    ]),
+  );
+
   return shows.map((show) => {
     const s = settlementByRouting.get(show.id);
     const sid = (s?.id as string | undefined) ?? null;
@@ -211,6 +270,16 @@ export async function loadTourSettlementWalks(
     const merch = num(s?.reconciled_merch ?? s?.day_of_merch);
     const depositReceived = num(s?.deposit_received);
     const fullAndFinal = Boolean(s?.full_and_final);
+    const dealType = (s?.deal_type as string | null) ?? null;
+    const dealPct = numOrNull(s?.deal_pct);
+    const bonusThreshold = numOrNull(s?.bonus_threshold);
+    const bonusPct = numOrNull(s?.bonus_pct);
+    const ticketPrice = numOrNull(s?.ticket_price);
+    const ticketCapacity = numOrNull(s?.ticket_capacity);
+    const comps = numOrNull(s?.comps);
+    const ticketsSold = numOrNull(s?.reconciled_tickets_sold ?? s?.day_of_tickets_sold);
+    const grossBO = numOrNull(s?.reconciled_gross ?? s?.day_of_gross);
+    const contractedGuarantee = contractedByRouting.get(show.id) ?? 0;
     const legacyDeductions = num(s?.reconciled_deductions ?? s?.day_of_deductions);
     const deductionsAreLegacy = deductions.length === 0 && legacyDeductions !== 0;
     const walkDeductions = deductions.length > 0 ? deductions : deductionsAreLegacy ? [{ amount: legacyDeductions }] : [];
@@ -226,6 +295,8 @@ export async function loadTourSettlementWalks(
       day_type: show.day_type,
       currency: ccy,
       guarantee, overage, merch, depositReceived, fullAndFinal,
+      dealType, dealPct, bonusThreshold, bonusPct, ticketPrice, ticketCapacity, comps,
+      ticketsSold, grossBO, contractedGuarantee,
       deductionsAreLegacy, deductions, expenses, payments, walk,
     };
   });

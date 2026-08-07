@@ -10,6 +10,7 @@
 import { notFound } from 'next/navigation';
 import { ChannelListTourEditor } from '@/components/channel-list/ChannelListTourEditor';
 import { ChannelListEmptyState } from '@/components/channel-list/ChannelListEmptyState';
+import { NewChannelListButton } from '@/components/channel-list/NewChannelListButton';
 import { ExportButton } from '@/components/export/ExportButton';
 import { PageTitle } from '@/components/ui/PageHeader';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
@@ -29,7 +30,7 @@ export default async function OperationsTourChannelListPage({
 
   const { data: tour, error } = await supabase
     .from('tours')
-    .select('id, name, currency')
+    .select('id, name, currency, artist_id')
     .eq('id', tourId)
     .single();
 
@@ -99,7 +100,21 @@ export default async function OperationsTourChannelListPage({
               not the old hand-rolled sentence-case <h1>. */}
           <PageTitle style={{ fontSize: 22 }}>{`${tour.name ?? tourId} — Channel list`}</PageTitle>
         </div>
-        {resolvedSection ? <ExportButton surface="channel-list" tourId={tour.id} title="Export the channel / input list (PDF or Excel)" /> : null}
+        {resolvedSection ? (
+          <div className="flex flex-wrap items-start justify-end gap-3">
+            {/* Adam 2026-08-07 — compact "fresh list" affordance lives here too,
+                so replacing the list never requires a trip to Riders. */}
+            {tour.artist_id ? (
+              <NewChannelListButton
+                tourId={tour.id}
+                artistId={tour.artist_id}
+                tourName={tour.name ?? 'Tour'}
+                variant="compact"
+              />
+            ) : null}
+            <ExportButton surface="channel-list" tourId={tour.id} title="Export the channel / input list (PDF or Excel)" />
+          </div>
+        ) : null}
       </header>
 
       {resolveError && !resolvedSection ? (
@@ -140,9 +155,14 @@ export default async function OperationsTourChannelListPage({
         />
       ) : (
         !resolveError && (
-          /* B1 — create path: POST a channel_list section to the tour's most-recent
-             rider pack (endpoint seeds 16 blank rows), or prompt to create a pack. */
-          <ChannelListEmptyState tourId={tour.id} packId={(packs?.[0]?.id as string | undefined) ?? null} />
+          /* Adam 2026-08-07 — standalone create path: the empty state builds a
+             channel_list document pack + section and attaches it tour-wide.
+             No rider pack needed anymore. */
+          <ChannelListEmptyState
+            tourId={tour.id}
+            artistId={tour.artist_id ?? null}
+            tourName={tour.name ?? 'Tour'}
+          />
         )
       )}
     </div>
