@@ -7,6 +7,7 @@ import dynamic from 'next/dynamic';
 import { Plus, Pencil, Info } from 'lucide-react';
 import { DataTable } from '@/components/data-table/DataTable';
 import { ContextMenu } from '@/components/ui/ContextMenu';
+import { AccountAvatar } from '@/components/ui/AccountAvatar';
 import type { ColumnDef } from '@/components/data-table/types';
 import { useToast } from '@/components/ui/Toast';
 import type { RiderPackRowVm } from './rider-pack-rows';
@@ -63,12 +64,6 @@ export function RiderPacksTourClient({
     }
   };
 
-  const recipients = useMemo(() => {
-    const s = new Set<string>();
-    for (const r of rows) s.add(r.recipientLabel);
-    return [...s].sort((a, b) => a.localeCompare(b));
-  }, [rows]);
-
   const columns = useMemo<ColumnDef<RiderPackRowVm>[]>(
     () => [
       {
@@ -106,12 +101,28 @@ export function RiderPacksTourClient({
         },
         cell: (value) => <StatusPill status={value as RiderPackRowVm['status']} />,
       },
+      /* R-F — the Recipient column is GONE. It filtered .eq('tour_id', tour.id)
+         and artist-scope packs have tour_id IS NULL (034:55), so it could only
+         ever print one of two strings. Its width goes to Author. */
       {
-        id: 'recipient',
+        id: 'author',
         width: 180,
-        header: 'Recipient',
-        accessor: (r) => r.recipientLabel,
-        filter: { kind: 'select', options: recipients.map((x) => ({ value: x, label: x })) },
+        header: 'Created by',
+        accessor: (r) => r.authorName ?? '',
+        cell: (_, row) =>
+          row.authorName ? (
+            <span className="flex min-w-0 items-center gap-2">
+              <AccountAvatar
+                user={{ name: row.authorName, email: '', avatarUrl: row.authorAvatarUrl }}
+                size={20}
+              />
+              <span className="truncate text-lp-text-secondary">{row.authorName}</span>
+            </span>
+          ) : (
+            /* created_by is nullable and older rows may predate it. An explicit
+               dash beats a blank cell that reads as a loading state. */
+            <span className="text-lp-text-tertiary">—</span>
+          ),
       },
       {
         id: 'lastSent',
@@ -157,7 +168,7 @@ export function RiderPacksTourClient({
         ),
       },
     ],
-    [recipients, router]
+    [router]
   );
 
   return (

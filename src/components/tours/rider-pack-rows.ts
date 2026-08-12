@@ -13,7 +13,13 @@ export type RiderPackRowVm = {
   id: string;
   title: string | null;
   status: 'draft' | 'sent' | 'signed';
+  /* KEPT for RiderPackDetailsSlideOver, which uses it as the panel subtitle
+     (RiderPackDetailsSlideOver.tsx:97). R-F removes the list COLUMN, not the
+     field — changing another surface's subtitle was not in scope. */
   recipientLabel: string;
+  /* R-D — who made it. created_by has existed since 034:52; it was never read. */
+  authorName: string | null;
+  authorAvatarUrl: string | null;
   artistName: string;
   scope: string;
   lastSentRelative: string;
@@ -44,10 +50,12 @@ export function riderPackRowsFromServer(
     title: string | null;
     scope: string;
     updated_at: string;
+    created_by?: string | null;
     artists?: { name: string | null } | null;
     rider_pack_exports?: Array<{ exported_at: string; export_type: string }> | null;
   }>,
   artistFallback: Map<string, string>,
+  authorLookup?: Map<string, { name: string | null; avatarUrl: string | null }>,
 ): RiderPackRowVm[] {
   return packs.map((p) => {
     const exports = [...(p.rider_pack_exports ?? [])].sort(
@@ -64,12 +72,17 @@ export function riderPackRowsFromServer(
       (p.artists as { name?: string | null } | undefined)?.name ??
       (artistId ? artistFallback.get(artistId) : undefined) ??
       'Artist';
+    /* R-F — recipientLabel DELETED. The page filters .eq('tour_id', tour.id),
+       and artist-scope packs have tour_id IS NULL by the CHECK at 034:55, so
+       this could only ever render one of two strings and carried no
+       information. The width is better spent on author. */
     const recipientLabel =
       p.scope === 'show'
         ? 'Production / show-level'
         : p.scope === 'tour'
           ? `${artistName} (tour)`
           : `${artistName} (artist)`;
+    const author = p.created_by ? authorLookup?.get(p.created_by) : undefined;
     const lastSent = exports.reduce<string | null>(
       (acc, e) =>
         acc == null || new Date(e.exported_at).getTime() > new Date(acc).getTime() ? e.exported_at : acc,
@@ -80,6 +93,8 @@ export function riderPackRowsFromServer(
       title: p.title,
       status,
       recipientLabel,
+      authorName: author?.name ?? null,
+      authorAvatarUrl: author?.avatarUrl ?? null,
       artistName,
       scope: p.scope,
       // LT-02 (G1-B #18) — "never sent" reads clearer than a bare em-dash.
