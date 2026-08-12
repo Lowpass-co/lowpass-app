@@ -49,9 +49,6 @@ jobs:
       - name: Typecheck
         run: npm run typecheck
 
-      - name: Lint
-        run: npm run lint
-
       # Includes the route-guard ratchet. If this step fails with
       # "NO MUTATING ROUTE IS BOTH UNGUARDED AND UNLISTED", a new write endpoint
       # was added without requireWrite — add the guard, do not add it to the
@@ -76,6 +73,40 @@ jobs:
 
       - name: Money harness — settlement reconciliation
         run: node --experimental-strip-types src/lib/settlement/reconcile.harness.ts
+
+  # ── LINT IS ITS OWN JOB, AND IT RATCHETS ──────────────────────────────────
+  # Separate from `verify` on purpose. Repo-wide lint has NEVER run here — every
+  # check in this project's history was `npx eslint <subdir>`, which is how 50
+  # errors across 50 files stayed invisible while the baseline was reported as
+  # 6 warnings. Putting it in `verify` would have made every push red from day
+  # one and buried the signals that matter: the route-guard ratchet and the
+  # money harnesses, both of which pass today and have never been enforced.
+  #
+  # This is NOT continue-on-error and NOT a scoped path. The lint runs over the
+  # whole repo and FAILS on any increase — see scripts/lint-ratchet.mjs. The 50
+  # existing errors are pinned in scripts/lint-baseline.json and the pin only
+  # moves down; `--write` refuses an increase. So a new error fails the build
+  # immediately, which is the leak closed, while the backlog burns down in
+  # reviewable per-rule banks instead of one 50-file behavioural rewrite.
+  #
+  # Why not just fix all 50 now: 44 are react-hooks/set-state-in-effect, a
+  # React-Compiler-era rule flagging a pattern that is frequently legitimate
+  # (syncing external state, deriving from props). Rewriting 44 effect bodies
+  # blind, in a week that produced two production incidents from unexercised
+  # changes, would be the same class of mistake.
+  lint:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: 'npm'
+      - name: Install
+        run: npm ci
+      - name: Lint ratchet (errors may only go down)
+        run: node scripts/lint-ratchet.mjs
 
 # ── TWO OMISSIONS, both argued rather than overlooked ────────────────────────
 #

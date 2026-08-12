@@ -14,7 +14,13 @@ export function hotelRateDenominatorNights(stayNights: number | null, totalAssig
 }
 
 /** Actual is treated as "confirmed" when strictly positive (shows actual-based rate). */
-export function useActualForHotelRate(actualCost: number | null | undefined): boolean {
+/* NOT A HOOK, despite the old name. It is a pure predicate over a number — no
+   state, no effects, no React at all. The `use` prefix made eslint's
+   rules-of-hooks treat every call site as a hook call, which is why calling it
+   from the plain function below was reported as an error: the name was the
+   defect, not the code. Renamed rather than suppressed, because the old name
+   also told every reader they could not call this outside a component. */
+export function shouldUseActualHotelCost(actualCost: number | null | undefined): boolean {
   return Number(actualCost ?? 0) > 0;
 }
 
@@ -25,7 +31,7 @@ export function impliedRatePerNight(
   denomNights: number
 ): number | null {
   if (denomNights <= 0) return null;
-  const useActual = useActualForHotelRate(actualCost);
+  const useActual = shouldUseActualHotelCost(actualCost);
   const total = useActual ? Number(actualCost ?? 0) : Number(proposedCost ?? 0);
   return total / denomNights;
 }
