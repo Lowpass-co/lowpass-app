@@ -1,0 +1,95 @@
+# ============================================================================
+# LOWPASS — CI
+#
+# THIS FILE IS THE POINT OF THE GH BANK. Before it existed there was no CI of
+# any kind: `lint`, `typecheck` and `test` were in package.json and nothing but
+# a human ever invoked them.
+#
+# THE RATCHET IS WHY THIS MATTERS MOST. src/lib/auth/route-guard-coverage.test.tsx
+# is documented as "a NEW mutating route with no guard fails CI immediately" —
+# that is the entire mechanism this project relies on to stop unguarded write
+# routes regrowing across 191 endpoints. It could not fail CI, because there was
+# no CI. It failed only when someone remembered to run vitest. The same was true
+# of the three money harnesses that every prompt in docs/handover/ treats as a
+# hard gate. This workflow is what finally arms both.
+#
+# WHAT THIS DOES NOT CATCH, stated so nobody reads green here as "production is
+# fine". Every check below is STATIC. Both incidents on 2026-08-09 — the
+# getClaims() swap that served empty documents on every signed-in page, and the
+# query against a profiles column that does not exist — passed tsc at 0, eslint
+# at 0, a green build and 538 tests. They were dynamic failures: a real session
+# and a real schema. `smoke.yml` is the job that looks for those.
+# ============================================================================
+
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          # Matches the dev environment (v24.14.1). The money harnesses run via
+          # `node --experimental-strip-types`, which needs a Node that can strip
+          # TypeScript natively — this is not a free choice.
+          node-version: '24'
+          cache: 'npm'
+
+      - name: Install
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      # Includes the route-guard ratchet. If this step fails with
+      # "NO MUTATING ROUTE IS BOTH UNGUARDED AND UNLISTED", a new write endpoint
+      # was added without requireWrite — add the guard, do not add it to the
+      # allow-list to go green. See the header of route-guard-coverage.test.tsx.
+      #
+      # NO RETRY, deliberately — see the note at the bottom of this file.
+      - name: Tests
+        run: npm test
+
+      # The three money harnesses. They are NOT vitest suites: .test.ts is
+      # reserved in this repo for node --experimental-strip-types harnesses, and
+      # vitest does not pick them up. Run explicitly or they run nowhere.
+      #
+      # Counts observed 2026-08-09: 72 / 27 / 40. Each harness exits non-zero on
+      # a mismatch, so the step fails on drift without asserting the count here —
+      # pinning the number in YAML would just be a second place to update.
+      - name: Money harness — payroll reconciliation
+        run: node --experimental-strip-types src/lib/payroll/reconcile.harness.ts
+
+      - name: Money harness — payroll fees
+        run: node --experimental-strip-types src/lib/payroll/fees.test.ts
+
+      - name: Money harness — settlement reconciliation
+        run: node --experimental-strip-types src/lib/settlement/reconcile.harness.ts
+
+# ── TWO OMISSIONS, both argued rather than overlooked ────────────────────────
+#
+# 1. NO `next build`. It is part of the local floor and it belongs here
+#    eventually, but `next build` reads NEXT_PUBLIC_SUPABASE_URL and friends at
+#    build time, and those are not in CI yet. Adding it blind would produce a red
+#    first run for an INFRASTRUCTURAL reason — missing env — which is exactly the
+#    signal this bank is trying to keep clean. A red run should mean the code is
+#    wrong. Add it in the same bank as the build-time secrets.
+#
+# 2. NO `--retry` ON TESTS, despite the known flake in the RoutingEditor and
+#    pdfProbe suites. A retry hides a flake before CI has ever observed it fail
+#    even once, and we would then be tuning a mitigation against a failure mode
+#    we have only seen locally. Let the first runs tell us the real rate. IF it
+#    flakes here, add `--retry=1` — capped at one, never higher — and leave this
+#    comment in place explaining why the retry exists, so the next person does
+#    not read it as a default.

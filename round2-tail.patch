@@ -1,0 +1,663 @@
+From d634045efdc309d1f098e8e765c1e7cea7e90b1c Mon Sep 17 00:00:00 2001
+From: Adam Rowley <adamgrowley@gmail.com>
+Date: Sat, 8 Aug 2026 02:19:37 +0000
+Subject: [PATCH 1/3] =?UTF-8?q?docs(smoke):=20walk=202026-08-08=20?=
+ =?UTF-8?q?=E2=80=94=2025=20passed=20items=20cleared,=20PF-3=20kept=20open?=
+ =?UTF-8?q?=20with=20diagnostic,=20RB/CL/CAT/UI/SET/DV/RM=20added=20(79=20?=
+ =?UTF-8?q?items)?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+PF-3 note carries the finding: /api/tours + /api/artists POST are BOTH
+requireWrite-guarded and no client-side insert bypasses them — first check
+hello@'s workspace_members.role in Supabase (query in the item) before
+treating it as a route bypass.
+
+Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_014d3AoWFQevqQHtrWLX5Tki
+---
+ .../smoke-tests/SMOKE_SESSION_2026-08-05.html | 98 +------------------
+ 1 file changed, 2 insertions(+), 96 deletions(-)
+
+diff --git a/docs/smoke-tests/SMOKE_SESSION_2026-08-05.html b/docs/smoke-tests/SMOKE_SESSION_2026-08-05.html
+index ab4f39b..964214e 100644
+--- a/docs/smoke-tests/SMOKE_SESSION_2026-08-05.html
++++ b/docs/smoke-tests/SMOKE_SESSION_2026-08-05.html
+@@ -45,107 +45,13 @@ h2{font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--oran
+   <button onclick="copyResults()">Copy results for Claude</button>
+ </header>
+ <main>
+-<div class="note"><b>How to use:</b> walk the deployed app top to bottom. ✓ = works, ✕ = broken (a note box appears — say what you saw). State lives in this page only, so finish a section before closing. When done — or when you hit a wall — hit <b>Copy results for Claude</b> and paste it into our chat. Items marked ⚠ need migration 256 pasted into Supabase first.</div>
++<div class="note"><b>How to use:</b> walk the deployed app top to bottom. 2026-08-08: the 25 items you passed are removed; PF-3 stays (failed, diagnostic inside); new sections RB/CL/CAT/UI/SET/DV/RM cover the 5-commit batch. ✓ = works, ✕ = broken (a note box appears — say what you saw). State lives in this page only, so finish a section before closing. When done — or when you hit a wall — hit <b>Copy results for Claude</b> and paste it into our chat. Items marked ⚠ need migration 256 pasted into Supabase first.</div>
+ <div id="app"></div>
+ </main>
+ <div id="out">Results preview appears here as you go.</div>
+ <script>
+ const SECTIONS=[
+-{name:"App shell — one nav everywhere (S-3b)",where:"Any page after login",items:[
+-["SH-1","Workspace tier has the left rail","/artists shows WORKSPACE rail (Artists · Personnel pool · Equipment & rentals · Venues); old tab strip gone; real workspace name in the top bar."],
+-["SH-2","You scope is shelled","/settings, /settings/members, /profile, /bugs each show the YOU rail with the right item lit; Billing dimmed with a 'no page yet' hover."],
+-["SH-3","Tourless landings grey the bar, keep the rail","/operations with no tour: workspace rail fully usable, mode pill visible but greyed, picker live, prompt below. Picking a tour brings the pill alive."],
+-["SH-4","Workspace switcher on every tier","Top-right, left of the avatar, on a tour page AND on /artists. Single workspace = plain label."],
+-["SH-5","Nothing double-renders","Walk /artists → artist → tour → /budget/[tour] → /settings: exactly one top bar + one rail everywhere; ⌘K still opens."]]},
+-{name:"Live navigation — the highlight follows you",where:"Any tour",items:[
+-["NAV-1","Highlight moves on every click","Routing → Crew → Files: the left rail highlight follows each navigation without a reload."],
+-["NAV-2","The whole rail swaps across modes","From Routing click Money: rail becomes the MONEY rail, head says MONEY, pill updates — same when clicking Payroll from the money rail."],
+-["NAV-3","Budget tabs move the highlight","Inside /budget/[tour]: Summary → Expenses → Receipts via the rail — the lit item tracks the ?tab= changes."],
+-["NAV-4","Deep links still land right","Hard-refresh on /budget/[tour]/settlement: Money mode + Settlements lit on first paint."]]},
+-{name:"Budget — one toolbar",where:"/budget/[tourId]",items:[
+-["BU-1","Exactly one bar above content","Version selector · burn meter · density · export in ONE sticky row. No empty tab strip, no second burn-bar row."],
+-["BU-2","Summary hides the meter","On Summary the meter yields (dashboard owns money display); controls stay. Other tabs show Remaining · fill · vs Committed inline."],
+-["BU-3","Conditional layers only when real","FX banner only when a rate is missing; phase strip only when phases tracked; data-health only on Summary."],
+-["BU-4","Nothing lost in the merge","Version switching, density toggle and Export all work from the new bar."]]},
+-{name:"Speed — the perf pass",where:"Deployed app",items:[
+-["PF-1","Navigation feels materially faster","Cold load then click around 5+ pages. Gut check vs yesterday."],
+-["PF-2","Auth still solid","Log out/in, expired-tab refresh: no redirect loops, no flash of wrong user."],
+-["PF-3","Admin/settings gates intact","/bugs 404s for non-admins; settings admin cards show only for admins."]]},
+-{name:"Tour builder — keyboard + search",where:"Routing ledger + tour-create grid",items:[
+-["TB-1","Tab never walks a list","Open the day-type popup, click a pill, press Tab: focus lands on the venue cell, not the next pill. Same in the venue dropdown."],
+-["TB-2","Enter selects + advances","Type in day-type filter → Enter: type set (replaced, not added), popup closed, focus on venue. Venue: highlight a result → Enter: filled + focus on city."],
+-["TB-3","Enter is never dead","Type a made-up venue, hit Enter fast: free text commits, focus advances."],
+-["TB-4","Venue search actually searches","Thin library: typing a real venue shows Google rows (labelled) with NO 'create new venue' step. Picking one fills address/city/coords."],
+-["TB-5","Library still wins","A venue already in your library shows first with the orange ◆; picking it links (chain icon) without Google billing."],
+-["TB-6","Address search on a day off","Day-off row → expand → Venue address: typing searches addresses; picking fills address + city/coords; venue name untouched. Also works in the tour-create grid's Address column."]]},
+-{name:"Rider decouple — phase A (migration 256 CONFIRMED live in prod)",where:"Migration already pasted — Cowork verified the attachments table + lineage columns directly",items:[
+-["RD-1","Migration pastes clean","256_document_versions_and_attachments.sql runs without error; re-running it is a no-op."],
+-["RD-2","Save a version (API)","POST /api/rider-packs/{channelListPackId}/save-version {\"label\":\"Saturday — with keys\"} returns an id; the new pack has every channel row copied."],
+-["RD-3","Attach to the tour","POST /api/rider-pack-attachments {document_pack_id, tour_id}: /operations/[tour]/channel-list now shows THAT version — fully editable, no override wall."],
+-["RD-4","Saturday differs","Attach a different version to one show (routing_id): that show's advance packet lists the Saturday version; other shows keep the tour default."],
+-["RD-5","Edits hit everywhere","Edit rows on an attached version: every place it's attached shows the change; other versions untouched."],
+-["RD-6","Nothing broke pre-attachment","A tour with NO attachments behaves exactly as before (legacy scan)."]]},
+-{name:"Rider decouple — B1 · version/attach controls (tour surfaces)",where:"/operations/[tourId]/channel-list and /operations/[tourId]/stage-plot",items:[
+-["VC-1","Version picker shows the family","Channel-list surface: the Version select lists the original (marked '(original)') + every saved version of the shown document."],
+-["VC-2","Picking a version ATTACHES it","Select a different version: toast 'Tour channel list switched', page re-resolves to that version's rows, and Detach appears. This is the design — the picker answers 'which version is this tour using'."],
+-["VC-3","Save as version… doesn't switch","Name one inline (Enter saves, Escape cancels): toast, new entry in the picker, but the tour STAYS on the current version — you attach it where it belongs yourself."],
+-["VC-4","Attach to show… overrides one show only","Pick a routing row: toast names the city/date. That show's advance packet lists this version; the tour default and other shows are untouched."],
+-["VC-5","Detach is honest","A tour resolving via the LEGACY scan shows no Detach. An attached tour shows it; detaching toasts and falls back to the legacy scan. Detach must never appear for a document the surface isn't actually showing."],
+-["VC-6","Stage plot has the same row","Above the open plot editor (immediately on a 1-plot tour): same Version / Save as version / Attach to show / Detach controls; Detach only when the OPEN plot is the tour-attached one."]]},
+-{name:"Rider decouple — B1 · the rider's tech section",where:"Rider editor on a RIDER pack that has a channel_list section",items:[
+-["RS-1","Owned legacy section is read-only + Convert","The embedded channel list renders as a read-only sheet with the 'lives INSIDE the rider (legacy)' banner and a Convert button — no editable grid, no edit link."],
+-["RS-2","Convert works end-to-end","Click Convert: toast, the section flips to 'Attached document' with a preview + 'Edit channel list ↗'. The new standalone doc exists (with every row copied), the original rows are still in the DB, and the doc is its own family root (no version label)."],
+-["RS-3","Attached mode: Change… / Detach / Edit ↗","Change… lists channel-list documents on the tour + artist scope; picking one replaces the attachment. Edit ↗ opens the standalone editor (full grid). Detach returns to the legacy state."],
+-["RS-4","Inherited sections untouched","An artist-inherited channel list still shows the tested override wall/flow — Convert is NOT offered there (its rows live on the parent pack; API refuses with a message saying to convert at the owning scope)."],
+-["RS-5","Standalone channel-list docs unaffected","Opening a channel_list PACK (from /rider-packs or Edit ↗) still gives the FULL editor — grid, dropdowns, stage boxes, patch grid."]]},
+-{name:"Rider builder — B2 · fixed groups",where:"/rider-packs/[id]?mode=edit on a plain rider pack",items:[
+-["GB-1","Four fixed tabs, legacy lands in Production","Production · Technical · Hospitality · Travel tabs with section counts; every pre-existing section sits under Production; the old accordion + left template library + drop zone are gone."],
+-["GB-2","Rail selects, canvas shows ONE section","The left rail lists the active group's sections; clicking one puts it on the canvas, open, no collapse chevron. Fields edit exactly as before (add, drag-reorder, delete)."],
+-["GB-3","Add section is group-aware","In Technical the menu offers Audio/FOH, Monitors/IEMs, Lighting, Backline, Risers/Stage (+ Blank); in Production, Contacts + Schedule. A section added from a tab STAYS in that tab after a reload."],
+-["GB-4","+ Add group is curated only","The menu offers exactly Security, Merch, Press & Promo, Parking & Access, Catering, Local Crew — no freeform input anywhere. Adding one opens its tab; templates for it (e.g. Security) appear in ITS add menu."],
+-["GB-5","Move to group persists","The select in the section card header moves the section; tab counts update; the move survives a hard reload (metadata.group)."],
+-["GB-6","Rail drag reorders within the group","Drag a rail row above another: order changes, persists on reload, and sections in OTHER groups keep their relative order."],
+-["GB-7","Properties rail still wired","Click a field on the canvas: the right panel opens; editing label/type updates the field; delete from the panel removes it."],
+-["GB-8","Empty added group is session-local","Add a group, put nothing in it, reload: the tab is gone (by design — it returns when a section lands in it). No error."]]},
+-{name:"Venue read view — B3 · grouped",where:"/r/[token] (rider web link) — needs a pack whose sections span ≥2 groups",items:[
+-["RV-1","Single-group packs unchanged","A legacy all-Production rider's public page looks exactly as before: no group chips, no left list, same flat flow."],
+-["RV-2","Multi-group packs get the nav","Move a section to Technical in the builder, reopen the web link: sticky group chips up top + a left section list (desktop), group headings in the body; chips + list scroll-to the right anchors."],
+-["RV-3","Print stays a linear document","Print preview (or the PDF): no chips, no side list — cover, TOC, then sections with group headings; page breaks sane."],
+-["RV-4","PDF group headings","Download the rider PDF for the same multi-group pack: uppercase group headings above each group's sections; a single-group pack's PDF is unchanged."]]},
+-{name:"One show link — B4 ⚠ paste migration 257 first",where:"database/migrations/257_show_links.sql → then /advance/[tour]/[routing] packet page",items:[
+-["SL-1","Migration 257 pastes clean","Runs without error; re-running is a no-op."],
+-["SL-2","Copy show link mints once","Packet page → Public share → 'Copy show link': URL /s/[token] lands on the clipboard. Click it again: SAME URL (mint-or-reuse, no link mill)."],
+-["SL-3","/s/[token] opens logged-out","Open in a private window: header shows artist · tour · date · venue/city (venue via the resolver, never raw routing columns) + the five tabs. No login bounce."],
+-["SL-4","Advance tab embeds the intake form","With a live venue-intake link for the show: the form renders in-page + 'Open in its own tab ↗'. Without one: a plain 'not opened yet' message, not an error."],
+-["SL-5","Rider + Channel list tabs read grouped","Rider tab renders the show's riders with the B3 grouped read view; Channel list tab shows the attached (or fallback) list's grid. Empty states name what's missing."],
+-["SL-6","Stage plot renders inline","The attached (or newest tour) plot draws as SVG in the tab; no plot → a clean empty state."],
+-["SL-7","Downloads: bundled PDF via the show token","The download button produces the packet PDF using the /s/ token (no packet link needed). Old /a/ packet links still download fine."],
+-["SL-8","Old doors still open","Existing /r/, /a/, /advance-intake/, /share/advance links all still work; /settings and /signup still bounce to login (the /s/ prefix swallowed nothing)."]]},
+-{name:"Walk-feedback fixes — 2026-08-06 ⚠ paste 258+259+260 for the template items",where:"Rider editor · tour channel-list · artist page",items:[
+-["WF-1","Builder reads as a builder","Group tabs are big with a hard orange underline; the section rail is a real panel; the active section is unmistakable. Not subtle."],
+-["WF-2","Riders delete from the editor","The editor header has Delete (confirm → back to the tour riders list / artist page). Lists still delete as before."],
+-["WF-3","Show view is grouped","A rider spanning ≥2 groups shows group chips + headings in Show mode, same grammar as the builder. One-group riders: plain scroll, unchanged."],
+-["WF-4","Channel list edits without overriding","On /operations/[tour]/channel-list an INHERITED list shows the rows read-only + one button: 'Create this tour's editable copy'. Click it: the tour gets its own attached document, fully editable, artist master untouched. No override bounce."],
+-["WF-5","Tour picker is one honest list","Artist page: 'TOURS · N' header + New tour; every tour always listed (upcoming asc, PAST group below); visible Operations · Budget · Advance links per row; the previously-opened tour is highlighted, never hides the list."],
+-["WF-6","Templates are deep (paste 258/259/260 first)","Rider 'Add section' menus offer 17 enriched/new templates with 12-25 fields; the advance library carries the full 17-section / ~427-field catalog; budget template gains the missing income/cost/percentage lines. Re-pasting any of the three is a no-op."]]},
+-{name:"Payroll — the canonical flat-seven (⚠ needs the payroll+income patch + migration 261)",where:"/operations/[tourId]/payroll",items:[
+-["PAY-1","One flat rates grid","Columns: Flat day · Flat tour · Show · Travel · Rehearsal · Press/Radio · Per diem · Advance — all editable for everyone. NO Rate type column, NO '+ Add rate type'/'Manage' buttons. Zero amounts render blank, not $0.00."],
+-["PAY-2","Editing is instant","Type a rate, Enter: the cursor drops to the next row IMMEDIATELY — no wait, no reclick. Tab moves right. A failed save toasts + reverts the cell."],
+-["PAY-3","The math agrees","Pick a person with painted + unpainted days: the Rates grid's Days / Total fee / Total PD equal that person's matrix row totals exactly (tour-default days now count everywhere). No more US$0 against a full matrix."],
+-["PAY-4","Stacking warns, still bills","Give one person BOTH a Flat day and a Show rate: a ⚠ appears by their name (hover explains); the total = flat day × worked days + show × show days (sum, not either/or)."],
+-["PAY-5","The full brush palette","Brushes: Tour default · Show · Rehearsal · Travel · Promo/Radio · Off · PD · No tour. Off paints an O tile (bills the TRAVEL rate + PD). PD paints a grey PD tile (per diem only, no fee). No tour empties the cell (nothing)."],
+-["PAY-6","Per diem = every assigned day","Per diem counts Show/Travel/Rehearsal/Promo/Off/PD days; a No-tour day earns nothing. Paint a PD day: Total PD ticks up, Total fee doesn't."],
+-["PAY-7","Press/Radio fallback","A Promo/Radio day bills the SHOW rate while the person's Press/Radio cell is empty; enter a Press/Radio amount and the promo day bills that instead."],
+-["PAY-8","Retired types stopped billing","Weekly + custom columns (e.g. 'Show Day') are gone from the grid and no longer bill — Dillon's $200 must be re-entered in the real Show column. Amounts survive in the DB (reversible), they just don't count."],
+-["PAY-9","Budget salary agrees","After a rate/day edit, the Budget Salary + Per-Diem lines for that person match the payroll totals (the reconcile now counts effective days too)."]]},
+-{name:"Income — the lean sheet + deal slide-over (⚠ same patch)",where:"/budget/[tourId] → Income tab",items:[
+-["INC-1","One sheet, no toggle","The Projected/Actual toggle is GONE. Columns: Date · Type · Venue · City · Deal summary · Contracted · Settled · Variance. Settled + Variance are blank until a show settles."],
+-["INC-2","Row opens the deal slide-over","Open a row: orange hero (date·city eyebrow, venue headline, status chip), then a Contracted | Settled | Variance KPI band. The grid's old generic row panel does NOT also open."],
+-["INC-3","Deal edits save on blur","Change the guarantee in the slide-over, blur: Contracted moves in the ledger AND in the grid behind it. On a locked version, a proposed edit raises the version modal, not a silent fail."],
+-["INC-4","The waterfall ledger","'Contracted — the maths' reads Guarantee → − withholding → + Overage ƒ → + Merch ƒ → + VIP ƒ → CONTRACTED, mono right-aligned. Click ƒ on a line → it becomes an editable override (OVERRIDE tag); Revert recomputes from the inputs."],
+-["INC-5","Settled is walk-only","No settled figure is typeable in the grid. A settled show carries the green AUTO · SETTLEMENT chip; the slide-over's Settled card shows the settled ledger + a green 'Open the settlement walk →' button that lands on the settlement page."],
+-["INC-6","Manual override is explicit","'Manual override…' opens the amber panel; entering a figure flips the chip to MANUAL. That's the ONLY manual path — no ambient actual-cell typing anywhere."],
+-["INC-7","FX strip survives","A tour with foreign-currency shows still gets the FX strip (live = red count, locked-at-settlement = blue count) above the sheet."]]}
++{"name":"Speed — the perf pass","where":"Deployed app","items":[["PF-3","FAILED 05/08 — readonly gate (retest after diagnosis)","hello@ (readonly) could create tours/artists. Code path IS guarded (requireWrite on /api/tours + /api/artists; readonly → 403). FIRST CHECK the account's actual role — Supabase SQL: select role, status from workspace_members wm join profiles p on p.id=wm.user_id where p.email='hello@...'; If role is not 'readonly', that's the whole bug — fix the row and retest. If it IS readonly and creation still succeeds, capture the request URL from devtools Network and report it."]]},{"name":"Rider decouple — phase A (migration 256 CONFIRMED live in prod)","where":"Migration already pasted — Cowork verified the attachments table + lineage columns directly","items":[["RD-4","Saturday differs","Attach a different version to one show (routing_id): that show's advance packet lists the Saturday version; other shows keep the tour default."],["RD-5","Edits hit everywhere","Edit rows on an attached version: every place it's attached shows the change; other versions untouched."]]},{"name":"Rider decouple — B1 · version/attach controls (tour surfaces)","where":"/operations/[tourId]/channel-list and /operations/[tourId]/stage-plot","items":[["VC-1","Version picker shows the family","Channel-list surface: the Version select lists the original (marked '(original)') + every saved version of the shown document."],["VC-2","Picking a version ATTACHES it","Select a different version: toast 'Tour channel list switched', page re-resolves to that version's rows, and Detach appears. This is the design — the picker answers 'which version is this tour using'."],["VC-3","Save as version… doesn't switch","Name one inline (Enter saves, Escape cancels): toast, new entry in the picker, but the tour STAYS on the current version — you attach it where it belongs yourself."],["VC-4","Attach to show… overrides one show only","Pick a routing row: toast names the city/date. That show's advance packet lists this version; the tour default and other shows are untouched."],["VC-5","Detach is honest","A tour resolving via the LEGACY scan shows no Detach. An attached tour shows it; detaching toasts and falls back to the legacy scan. Detach must never appear for a document the surface isn't actually showing."],["VC-6","Stage plot has the same row","Above the open plot editor (immediately on a 1-plot tour): same Version / Save as version / Attach to show / Detach controls; Detach only when the OPEN plot is the tour-attached one."]]},{"name":"Rider decouple — B1 · the rider's tech section","where":"Rider editor on a RIDER pack that has a channel_list section","items":[["RS-1","Owned legacy section is read-only + Convert","The embedded channel list renders as a read-only sheet with the 'lives INSIDE the rider (legacy)' banner and a Convert button — no editable grid, no edit link."],["RS-2","Convert works end-to-end","Click Convert: toast, the section flips to 'Attached document' with a preview + 'Edit channel list ↗'. The new standalone doc exists (with every row copied), the original rows are still in the DB, and the doc is its own family root (no version label)."],["RS-3","Attached mode: Change… / Detach / Edit ↗","Change… lists channel-list documents on the tour + artist scope; picking one replaces the attachment. Edit ↗ opens the standalone editor (full grid). Detach returns to the legacy state."],["RS-4","Inherited sections untouched","An artist-inherited channel list still shows the tested override wall/flow — Convert is NOT offered there (its rows live on the parent pack; API refuses with a message saying to convert at the owning scope)."],["RS-5","Standalone channel-list docs unaffected","Opening a channel_list PACK (from /rider-packs or Edit ↗) still gives the FULL editor — grid, dropdowns, stage boxes, patch grid."]]},{"name":"Rider builder — B2 · fixed groups","where":"/rider-packs/[id]?mode=edit on a plain rider pack","items":[["GB-1","Four fixed tabs, legacy lands in Production","Production · Technical · Hospitality · Travel tabs with section counts; every pre-existing section sits under Production; the old accordion + left template library + drop zone are gone."],["GB-2","Rail selects, canvas shows ONE section","The left rail lists the active group's sections; clicking one puts it on the canvas, open, no collapse chevron. Fields edit exactly as before (add, drag-reorder, delete)."],["GB-3","Add section is group-aware","In Technical the menu offers Audio/FOH, Monitors/IEMs, Lighting, Backline, Risers/Stage (+ Blank); in Production, Contacts + Schedule. A section added from a tab STAYS in that tab after a reload."],["GB-4","+ Add group is curated only","The menu offers exactly Security, Merch, Press & Promo, Parking & Access, Catering, Local Crew — no freeform input anywhere. Adding one opens its tab; templates for it (e.g. Security) appear in ITS add menu."],["GB-5","Move to group persists","The select in the section card header moves the section; tab counts update; the move survives a hard reload (metadata.group)."],["GB-6","Rail drag reorders within the group","Drag a rail row above another: order changes, persists on reload, and sections in OTHER groups keep their relative order."],["GB-7","Properties rail still wired","Click a field on the canvas: the right panel opens; editing label/type updates the field; delete from the panel removes it."],["GB-8","Empty added group is session-local","Add a group, put nothing in it, reload: the tab is gone (by design — it returns when a section lands in it). No error."]]},{"name":"Venue read view — B3 · grouped","where":"/r/[token] (rider web link) — needs a pack whose sections span ≥2 groups","items":[["RV-1","Single-group packs unchanged","A legacy all-Production rider's public page looks exactly as before: no group chips, no left list, same flat flow."],["RV-2","Multi-group packs get the nav","Move a section to Technical in the builder, reopen the web link: sticky group chips up top + a left section list (desktop), group headings in the body; chips + list scroll-to the right anchors."],["RV-3","Print stays a linear document","Print preview (or the PDF): no chips, no side list — cover, TOC, then sections with group headings; page breaks sane."],["RV-4","PDF group headings","Download the rider PDF for the same multi-group pack: uppercase group headings above each group's sections; a single-group pack's PDF is unchanged."]]},{"name":"One show link — B4 ⚠ paste migration 257 first","where":"database/migrations/257_show_links.sql → then /advance/[tour]/[routing] packet page","items":[["SL-1","Migration 257 pastes clean","Runs without error; re-running is a no-op."],["SL-2","Copy show link mints once","Packet page → Public share → 'Copy show link': URL /s/[token] lands on the clipboard. Click it again: SAME URL (mint-or-reuse, no link mill)."],["SL-3","/s/[token] opens logged-out","Open in a private window: header shows artist · tour · date · venue/city (venue via the resolver, never raw routing columns) + the five tabs. No login bounce."],["SL-4","Advance tab embeds the intake form","With a live venue-intake link for the show: the form renders in-page + 'Open in its own tab ↗'. Without one: a plain 'not opened yet' message, not an error."],["SL-5","Rider + Channel list tabs read grouped","Rider tab renders the show's riders with the B3 grouped read view; Channel list tab shows the attached (or fallback) list's grid. Empty states name what's missing."],["SL-6","Stage plot renders inline","The attached (or newest tour) plot draws as SVG in the tab; no plot → a clean empty state."],["SL-7","Downloads: bundled PDF via the show token","The download button produces the packet PDF using the /s/ token (no packet link needed). Old /a/ packet links still download fine."],["SL-8","Old doors still open","Existing /r/, /a/, /advance-intake/, /share/advance links all still work; /settings and /signup still bounce to login (the /s/ prefix swallowed nothing)."]]},{"name":"Walk-feedback fixes — 2026-08-06 ⚠ paste 258+259+260 for the template items","where":"Rider editor · tour channel-list · artist page","items":[["WF-1","Builder reads as a builder","Group tabs are big with a hard orange underline; the section rail is a real panel; the active section is unmistakable. Not subtle."],["WF-2","Riders delete from the editor","The editor header has Delete (confirm → back to the tour riders list / artist page). Lists still delete as before."],["WF-3","Show view is grouped","A rider spanning ≥2 groups shows group chips + headings in Show mode, same grammar as the builder. One-group riders: plain scroll, unchanged."],["WF-4","Channel list edits without overriding","On /operations/[tour]/channel-list an INHERITED list shows the rows read-only + one button: 'Create this tour's editable copy'. Click it: the tour gets its own attached document, fully editable, artist master untouched. No override bounce."],["WF-5","Tour picker is one honest list","Artist page: 'TOURS · N' header + New tour; every tour always listed (upcoming asc, PAST group below); visible Operations · Budget · Advance links per row; the previously-opened tour is highlighted, never hides the list."],["WF-6","Templates are deep (paste 258/259/260 first)","Rider 'Add section' menus offer 17 enriched/new templates with 12-25 fields; the advance library carries the full 17-section / ~427-field catalog; budget template gains the missing income/cost/percentage lines. Re-pasting any of the three is a no-op."]]},{"name":"Payroll — the canonical flat-seven (⚠ needs the payroll+income patch + migration 261)","where":"/operations/[tourId]/payroll","items":[["PAY-1","One flat rates grid","Columns: Flat day · Flat tour · Show · Travel · Rehearsal · Press/Radio · Per diem · Advance — all editable for everyone. NO Rate type column, NO '+ Add rate type'/'Manage' buttons. Zero amounts render blank, not $0.00."],["PAY-2","Editing is instant","Type a rate, Enter: the cursor drops to the next row IMMEDIATELY — no wait, no reclick. Tab moves right. A failed save toasts + reverts the cell."],["PAY-3","The math agrees","Pick a person with painted + unpainted days: the Rates grid's Days / Total fee / Total PD equal that person's matrix row totals exactly (tour-default days now count everywhere). No more US$0 against a full matrix."],["PAY-4","Stacking warns, still bills","Give one person BOTH a Flat day and a Show rate: a ⚠ appears by their name (hover explains); the total = flat day × worked days + show × show days (sum, not either/or)."],["PAY-5","The full brush palette","Brushes: Tour default · Show · Rehearsal · Travel · Promo/Radio · Off · PD · No tour. Off paints an O tile (bills the TRAVEL rate + PD). PD paints a grey PD tile (per diem only, no fee). No tour empties the cell (nothing)."],["PAY-6","Per diem = every assigned day","Per diem counts Show/Travel/Rehearsal/Promo/Off/PD days; a No-tour day earns nothing. Paint a PD day: Total PD ticks up, Total fee doesn't."],["PAY-7","Press/Radio fallback","A Promo/Radio day bills the SHOW rate while the person's Press/Radio cell is empty; enter a Press/Radio amount and the promo day bills that instead."],["PAY-8","Retired types stopped billing","Weekly + custom columns (e.g. 'Show Day') are gone from the grid and no longer bill — Dillon's $200 must be re-entered in the real Show column. Amounts survive in the DB (reversible), they just don't count."],["PAY-9","Budget salary agrees","After a rate/day edit, the Budget Salary + Per-Diem lines for that person match the payroll totals (the reconcile now counts effective days too)."]]},{"name":"Income — the lean sheet + deal slide-over (⚠ same patch)","where":"/budget/[tourId] → Income tab","items":[["INC-1","One sheet, no toggle","The Projected/Actual toggle is GONE. Columns: Date · Type · Venue · City · Deal summary · Contracted · Settled · Variance. Settled + Variance are blank until a show settles."],["INC-2","Row opens the deal slide-over","Open a row: orange hero (date·city eyebrow, venue headline, status chip), then a Contracted | Settled | Variance KPI band. The grid's old generic row panel does NOT also open."],["INC-3","Deal edits save on blur","Change the guarantee in the slide-over, blur: Contracted moves in the ledger AND in the grid behind it. On a locked version, a proposed edit raises the version modal, not a silent fail."],["INC-4","The waterfall ledger","'Contracted — the maths' reads Guarantee → − withholding → + Overage ƒ → + Merch ƒ → + VIP ƒ → CONTRACTED, mono right-aligned. Click ƒ on a line → it becomes an editable override (OVERRIDE tag); Revert recomputes from the inputs."],["INC-5","Settled is walk-only","No settled figure is typeable in the grid. A settled show carries the green AUTO · SETTLEMENT chip; the slide-over's Settled card shows the settled ledger + a green 'Open the settlement walk →' button that lands on the settlement page."],["INC-6","Manual override is explicit","'Manual override…' opens the amber panel; entering a figure flips the chip to MANUAL. That's the ONLY manual path — no ambient actual-cell typing anywhere."],["INC-7","FX strip survives","A tour with foreign-currency shows still gets the FX strip (live = red count, locked-at-settlement = blue count) above the sheet."]]},{"name":"Rider fixes — rename · menu · layout (batch 5c)","where":"Any rider builder","items":[["RB-1","Rider renames from the title","Click the rider title in the builder hero (pencil shows): input in place, Enter/blur saves, name updates everywhere. Empty input keeps the old name."],["RB-2","Save failures speak","Force a failing edit (e.g. edit while logged out in another tab): a toast names the server error — not just the tiny save chip."],["RB-3","Add-section menu floats free","At the bottom of a long section rail, open Add section: the menu overlays (portal), never clipped by the rail; flips above when the viewport below is tight."],["RB-4","Fields flow 2-up","A section with many compact fields lays them out side by side on a wide canvas instead of one giant stack."]]},{"name":"Channel list — created where it lives","where":"/operations/[tourId]/channel-list","items":[["CL-1","Create button on the page","With no channel list: a New channel list button (plus a compact header action when one exists). No detour through Riders."],["CL-2","Tour-wide + honest banner","Creating it shows: 'Assigned to every show on this tour — it will appear in the tour's rider automatically.' The list is immediately editable; the tour's rider shows it."]]},{"name":"Rider catalog — artist demands (⚠ paste 263; do NOT re-paste 258 after)","where":"Rider builder → Add section","items":[["CAT-1","Rider-centric templates","Menus offer Hospitality Rider, Dressing Rooms, Catering/Buyout, Backline, Audio/PA, Lighting, Security & Barricade, Merch, Parking & Access, Towels & Laundry, Bus Stock, Guest List & Passes. 'Production & Amenities / Wi-Fi available' is gone (now Production Office)."],["CAT-2","Content reads as demands","Open Hospitality Rider: still/sparkling water, local beer, fresh fruit, towels count etc — artist asks, not venue answers. Your own custom templates untouched."]]},{"name":"Native controls — killed site-wide","where":"Anywhere","items":[["UI-1","No white checkboxes","Every checkbox/radio renders orange-accented and theme-correct (payroll catch-up, rider field lists, batch panels)."],["UI-2","Selects match the app","Dropdowns show token colors + custom chevron (no OS grey arrow); select POPUPS render dark in dark mode (color-scheme). Light mode unaffected."]]},{"name":"Settlement — the full process (⚠ paste 262 first)","where":"/budget/[tourId]/settlement","items":[["SET-1","KPI strip + rail","Outstanding · Settled · Not settled · Awaiting payment · Unsettled N of M up top; show cards carry SETTLED/DUE chips and status-hued rails."],["SET-2","Catch-up batch","With played-unsettled shows: the panel lists them with contracted guarantees; Select all; 'Settle N shows' runs sequentially with n/N progress; Full & Final toggle (default on). Each show's income cascades exactly like a manual settle."],["SET-3","Deal & box office card","Set Door deal 80%, tickets 1000, gross 40000: the waterfall renders Gross → BO fees → Net BO → expenses → Split pool → Artist share → Suggested overage."],["SET-4","Apply is the consent","Nothing writes until you click 'Apply … to Overage' — then reconciled_overage lands in the walk and the income row updates. Guarantee-only shows: quiet hint, numbers unchanged to the penny."],["SET-5","BO fees split honestly","Add a Facility fee deduction: it renders in the waterfall, NOT the guarantee-side Deductions group — but the income cascade total still includes it (check the income row's deductions)."]]},{"name":"Day view — the Tour Book standard","where":"/operations/[tourId]/day/[routingId]","items":[["DV-1","Hero + fact strip","Day-type-tinted hero: date·artist·tour eyebrow, city headline, venue subline, day-type chip, facts (N schedule · first call · hotel · N flights · Day P&L)."],["DV-2","Flights land on the day","A flight departing/arriving that date shows in the Flights card (mono times, JFK → ATL, passenger chips, conf). This NEVER worked before — flights were keyed to a field the grid doesn't set."],["DV-3","Files on the day","Show-scoped rider assets + routing-linked files render with open links. Driver/accountant slices don't see them."],["DV-4","Day sheet PDF, one click","The direct 'Day sheet PDF' button downloads: schedule, venue, contacts, lodging, flights+passengers, notes."],["DV-5","Crew view stays clean","View as crew/token link: money + notes still absent (not hidden — absent)."]]},{"name":"Rooming — the Unassigned Hotel flood ends","where":"/operations/[tourId]/rooming + /budget","items":[["RM-1","One honest line per hotel","Add a room on a date with no hotel: budget shows ONE line 'Hotel — {city} · {date} · N rooms' — not a pile of 'Unassigned Hotel' lines."],["RM-2","Placeholders reuse + heal","More rooms on the same date reuse the same placeholder; existing 'Unassigned Hotel' junk renames itself as you edit that date. Real hotels label as '{name} — {city} · {check-in} · N rooms'."],["RM-3","Nights tab is live","Paint a room in the grid, flip to Nights WITHOUT reloading: it's there (was: stale until hard refresh). Same-day placeholder counts as 1 night."]]}
+ ];
+ let state={};
+ const app=document.getElementById('app');
+-- 
+2.43.0
+
+
+From eb923599edf9baf56cb268c05c6fdd15bb93cb0b Mon Sep 17 00:00:00 2001
+From: Adam Rowley <adamgrowley@gmail.com>
+Date: Sat, 8 Aug 2026 04:29:10 +0000
+Subject: [PATCH 2/3] fix(nav+keys): the spine morph fires from the Day rail's
+ Routing toggle; the TB keyboard grammar carries to every surface
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+- Day → Routing now folds (Adam: 'why doesn't the slide over routing work
+  on the day views?'): DayRail's Routing toggle was a plain <Link> that
+  bypassed useSpineNavigate — the rail's day ENTRIES morphed, the toggle
+  didn't. Same trigger, same modified-click guards.
+- The tour-builder keyboard contract (Tab never walks a list · Enter
+  commits + advances · arrows move the highlight · Enter is never dead)
+  enforced everywhere it was missing:
+  · BrandedSelect: Tab inside the open menu committed nothing and walked
+    options — now commits the focused option and moves on (Shift+Tab back).
+  · PositionPicker: Tab walked filter → every slot → Clear → Manage — now
+    commits and advances; filter Tab commits the first free filtered slot.
+  · Mic/DI combobox: Enter picked but never advanced; Enter with no
+    highlight was dead — both fixed (onEnterCommit seam, keyboard-only).
+  · ChannelListEditor: the missing advanceFrom('mic') wired.
+  · EntityRefEditor (payroll/flights/commissions grids): arrows now move a
+    real highlight, Enter picks it, Tab picks then commits-and-moves-right
+    instead of committing a stale draft.
+  · Settlement adders: Enter in amount/label/date fields submits (was dead).
+Gates: tsc 0 · eslint 0 · vitest 538/538.
+
+Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_014d3AoWFQevqQHtrWLX5Tki
+---
+ src/components/day/DayRail.tsx                | 13 +++
+ .../rider-pack/ChannelListEditor.tsx          |  2 +
+ src/components/rider-pack/PositionPicker.tsx  | 79 +++++++++++++++----
+ .../channel-list-cells/MicDiSelectCell.tsx    | 28 ++++++-
+ .../settlement/SettlementWalkClient.tsx       | 39 ++++++---
+ .../cell-editors/EntityRefEditor.tsx          | 48 +++++++++--
+ src/components/ui/BrandedSelect.tsx           | 17 ++++
+ 7 files changed, 193 insertions(+), 33 deletions(-)
+
+diff --git a/src/components/day/DayRail.tsx b/src/components/day/DayRail.tsx
+index a18cdb4..2563de2 100644
+--- a/src/components/day/DayRail.tsx
++++ b/src/components/day/DayRail.tsx
+@@ -25,6 +25,7 @@
+ import { useMemo, useState } from 'react';
+ import Link from 'next/link';
+ import { RoutingRail, type RailEntry } from '@/components/routing/RoutingRail';
++import { useSpineNavigate } from '@/lib/nav/viewTransitionNav';
+ import { labelForDayType } from '@/lib/routing/dayType';
+ 
+ /** One day in the Day surface's rail. Server-composed; see loadDay(). */
+@@ -49,6 +50,12 @@ export function DayRail({
+   routingHref?: string;
+ }) {
+   const [q, setQ] = useState('');
++  // 2026-08-08 (Adam: "why doesn't the slide over routing work on the day
++  // views?") — the rail's DAY entries morph via RoutingRail's own
++  // spineNavigate, but this wrapper's Routing TOGGLE was a plain <Link>, so
++  // Day → Routing hard-navigated with no spine fold. Same trigger, same
++  // guards (plain left-click only; modified clicks keep native behaviour).
++  const spineNavigate = useSpineNavigate();
+ 
+   const filtered = useMemo(() => {
+     const s = q.trim().toLowerCase();
+@@ -156,6 +163,12 @@ export function DayRail({
+         {routingHref ? (
+           <Link
+             href={routingHref}
++            onClick={(e) => {
++              if (e.button === 0 && !e.metaKey && !e.ctrlKey && !e.shiftKey && !e.altKey) {
++                e.preventDefault();
++                spineNavigate(routingHref);
++              }
++            }}
+             style={{
+               flex: 1,
+               textAlign: 'center',
+diff --git a/src/components/rider-pack/ChannelListEditor.tsx b/src/components/rider-pack/ChannelListEditor.tsx
+index 4527bdb..df3e747 100644
+--- a/src/components/rider-pack/ChannelListEditor.tsx
++++ b/src/components/rider-pack/ChannelListEditor.tsx
+@@ -1229,6 +1229,8 @@ function ChannelBlock({
+                 ariaLabel={`Mic or DI for channel ${row.row_index}`}
+                 workspaceId={workspaceId}
+                 onMicCreated={onMicCreated}
++                /* TB grammar: Enter commits + advances. */
++                onEnterCommit={() => advanceFrom('mic')}
+               />
+             </div>
+             {gearId ? (
+diff --git a/src/components/rider-pack/PositionPicker.tsx b/src/components/rider-pack/PositionPicker.tsx
+index 5731643..f7bdc50 100644
+--- a/src/components/rider-pack/PositionPicker.tsx
++++ b/src/components/rider-pack/PositionPicker.tsx
+@@ -89,6 +89,29 @@ export default function PositionPicker({
+   const usedCountFor = (eid: string) =>
+     (usedPositions[eid]?.size ?? 0) + (eid === entityId && position != null ? 1 : 0);
+ 
++  /* Commit the first free slot in the filtered view (the Enter-in-filter
++     behaviour, shared with Tab — TB grammar: Enter commits + advances).
++     Returns false when nothing matches / everything is taken. */
++  const commitFirstFreeSlot = (): boolean => {
++    for (const ent of entities) {
++      const cap = Math.max(1, Math.min(64, ent.capacity));
++      const labelHit = !!needle && ent.label.toLowerCase().includes(needle);
++      for (let pos = 1; pos <= cap; pos += 1) {
++        const isThisRow = ent.id === entityId && pos === position;
++        const blocked = (usedPositions[ent.id]?.has(pos) ?? false) && !isThisRow;
++        const hit =
++          !needle || labelHit || formatLabel(ent.label, pos).toLowerCase().includes(needle);
++        if (hit && !blocked) {
++          onChange(ent.id, pos);
++          setOpen(false);
++          onEnterCommit?.();
++          return true;
++        }
++      }
++    }
++    return false;
++  };
++
+   /* §8b4 keyboard-contract parity with the mic picker. The popover is
+      NOT portaled, so its keydowns bubble on into the channel grid's
+      NavCell wrapper — every branch that acts must preventDefault /
+@@ -103,6 +126,41 @@ export default function PositionPicker({
+     const menu = menuRef.current;
+     if (!menu) return;
+     const inFilter = e.target === filterRef.current;
++    if (e.key === 'Tab') {
++      /* TB grammar: Tab never walks a dropdown's option list — it commits
++         the highlighted value and moves on to the next cell. */
++      e.stopPropagation();
++      if (e.shiftKey) {
++        /* Backwards: close without committing; focus lands on the trigger
++           so the browser's default Shift+Tab moves to the previous cell
++           (the popover renders after the trigger, so it's out of the
++           backward path). */
++        setOpen(false);
++        triggerRef.current?.focus();
++        return;
++      }
++      e.preventDefault();
++      const active = document.activeElement;
++      if (
++        active instanceof HTMLButtonElement &&
++        menu.contains(active) &&
++        !active.disabled &&
++        active.dataset.pickerCommit != null
++      ) {
++        /* Focused slot / Clear row: commit it. click() is keyboard-
++           activated (detail 0), so the row's own handler advances via
++           onEnterCommit. */
++        active.click();
++        return;
++      }
++      if (inFilter && commitFirstFreeSlot()) return;
++      /* Nothing committable (manage row focused / no match): close and
++         move on so Tab is never trapped in the popover. */
++      setOpen(false);
++      if (onEnterCommit) onEnterCommit();
++      else triggerRef.current?.focus();
++      return;
++    }
+     if (e.key === 'Escape') {
+       e.stopPropagation();
+       setOpen(false);
+@@ -202,22 +260,7 @@ export default function PositionPicker({
+                   e.preventDefault();
+                   /* Pick the first free slot in the filtered view,
+                      then advance (§8b4 Enter-commit-advance). */
+-                  for (const ent of entities) {
+-                    const cap = Math.max(1, Math.min(64, ent.capacity));
+-                    const labelHit = !!needle && ent.label.toLowerCase().includes(needle);
+-                    for (let pos = 1; pos <= cap; pos += 1) {
+-                      const isThisRow = ent.id === entityId && pos === position;
+-                      const blocked = (usedPositions[ent.id]?.has(pos) ?? false) && !isThisRow;
+-                      const hit =
+-                        !needle || labelHit || formatLabel(ent.label, pos).toLowerCase().includes(needle);
+-                      if (hit && !blocked) {
+-                        onChange(ent.id, pos);
+-                        setOpen(false);
+-                        onEnterCommit?.();
+-                        return;
+-                      }
+-                    }
+-                  }
++                  commitFirstFreeSlot();
+                 }
+               }}
+               placeholder="Filter…"
+@@ -256,6 +299,9 @@ export default function PositionPicker({
+                         key={pos}
+                         type="button"
+                         disabled={blockedByOther}
++                        /* Marks rows Tab may commit (TB grammar: Tab
++                           commits the highlighted value + moves on). */
++                        data-picker-commit=""
+                         title={title}
+                         className={`flex w-full items-center gap-2 rounded px-1.5 py-0.5 text-left text-[11px] ${
+                           blockedByOther
+@@ -293,6 +339,7 @@ export default function PositionPicker({
+           <div className="border-t border-lp-border px-2 py-1">
+             <button
+               type="button"
++              data-picker-commit=""
+               className="w-full rounded px-1.5 py-1.5 text-left text-[11px] text-lp-text-secondary hover:bg-lp-surface-hover"
+               onClick={(e) => {
+                 onChange(null, null);
+diff --git a/src/components/rider-pack/channel-list-cells/MicDiSelectCell.tsx b/src/components/rider-pack/channel-list-cells/MicDiSelectCell.tsx
+index ad28581..c74f7aa 100644
+--- a/src/components/rider-pack/channel-list-cells/MicDiSelectCell.tsx
++++ b/src/components/rider-pack/channel-list-cells/MicDiSelectCell.tsx
+@@ -59,6 +59,11 @@ interface MicDiSelectCellProps {
+   workspaceId: string;
+   /** Parent appends the freshly-created mic to its library list. */
+   onMicCreated: (entry: MicLibraryEntry) => void;
++  /** Fired after a keyboard ENTER commit (mouse picks don't fire it) so
++   *  the channel grid can advance focus to the next cell — TB grammar:
++   *  Enter commits + advances (§8b4 keyboard-contract parity with the
++   *  other select cells). */
++  onEnterCommit?: () => void;
+ }
+ 
+ export function MicDiSelectCell({
+@@ -68,6 +73,7 @@ export function MicDiSelectCell({
+   ariaLabel,
+   workspaceId,
+   onMicCreated,
++  onEnterCommit,
+ }: MicDiSelectCellProps) {
+   /* inputValue mirrors the committed `value` until the operator
+      types to filter. On close-without-select we snap it back so
+@@ -120,9 +126,13 @@ export function MicDiSelectCell({
+       // resets downshift emits on open/close/select.
+       if (type === useCombobox.stateChangeTypes.InputChange) setInputValue(v ?? '');
+     },
+-    onSelectedItemChange: ({ selectedItem }) => {
++    onSelectedItemChange: ({ selectedItem, type }) => {
+       if (!selectedItem) return;
+       justSelectedRef.current = true;
++      /* TB grammar: Enter commits + advances — keyboard Enter picks the
++         highlighted item AND hops to the next cell. Mouse picks and
++         Tab-blur commits don't advance (Tab's own focus move handles it). */
++      const viaEnter = type === useCombobox.stateChangeTypes.InputKeyDownEnter;
+       if (selectedItem.kind === 'add') {
+         setModalOpen(true);
+         return;
+@@ -130,10 +140,12 @@ export function MicDiSelectCell({
+       if (selectedItem.kind === 'clear') {
+         onPick(null, '');
+         setInputValue('');
++        if (viaEnter) onEnterCommit?.();
+         return;
+       }
+       onPick(selectedItem.entry, selectedItem.entry.name);
+       setInputValue(selectedItem.entry.name);
++      if (viaEnter) onEnterCommit?.();
+     },
+     onIsOpenChange: ({ isOpen: open }) => {
+       if (!open) {
+@@ -199,6 +211,20 @@ export function MicDiSelectCell({
+               onFocus: () => {
+                 if (!isOpen) openMenu();
+               },
++              onKeyDown: (e) => {
++                /* TB grammar: Enter is never dead — with the menu open and
++                   nothing highlighted there's nothing to pick, so Enter
++                   just advances to the next cell (downshift closes the
++                   menu and the snap-back restores the committed value). */
++                if (
++                  e.key === 'Enter' &&
++                  isOpen &&
++                  highlightedIndex < 0 &&
++                  !e.nativeEvent.isComposing
++                ) {
++                  onEnterCommit?.();
++                }
++              },
+             })}
+             className="h-8 w-full min-w-0 rounded-lg border border-lp-border bg-lp-bg-secondary pl-2 pr-6 text-xs text-lp-text outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--color-lp-orange)]"
+           />
+diff --git a/src/components/settlement/SettlementWalkClient.tsx b/src/components/settlement/SettlementWalkClient.tsx
+index 20bedb8..2e02471 100644
+--- a/src/components/settlement/SettlementWalkClient.tsx
++++ b/src/components/settlement/SettlementWalkClient.tsx
+@@ -750,15 +750,22 @@ function DeductionAdder({ busy, onAdd }: { busy: boolean; onAdd: (f: Record<stri
+   const [kind, setKind] = useState<string>('withholding');
+   const [label, setLabel] = useState('');
+   const [amount, setAmount] = useState('');
++  const submit = () => {
++    if (busy || !Number(amount)) return;
++    onAdd({ kind, label: label.trim() || null, amount: Number(amount) });
++    setOpen(false); setLabel(''); setAmount('');
++  };
++  // TB grammar: Enter commits + advances — Enter in the fields triggers Add, it is never dead.
++  const onEnter = (e: React.KeyboardEvent) => { if (e.key === 'Enter') { e.preventDefault(); submit(); } };
+   if (!open) return <button type="button" style={addBtnStyle} onClick={() => setOpen(true)}>+ Add deduction</button>;
+   return (
+     <div className="flex flex-wrap items-center" style={{ gap: 6 }}>
+       <select value={kind} onChange={(e) => setKind(e.target.value)} style={inputStyle}>
+         {DEDUCTION_KINDS.map((k) => <option key={k} value={k}>{kindLabel(k)}</option>)}
+       </select>
+-      <input value={label} onChange={(e) => setLabel(e.target.value)} placeholder="Label" style={{ ...inputStyle, width: 120 }} />
+-      <input value={amount} inputMode="decimal" onChange={(e) => setAmount(e.target.value)} placeholder="Amount" style={{ ...inputStyle, width: 90, textAlign: 'right' }} />
+-      <button type="button" disabled={busy || !Number(amount)} style={addBtnStyle} onClick={() => { onAdd({ kind, label: label.trim() || null, amount: Number(amount) }); setOpen(false); setLabel(''); setAmount(''); }}>Add</button>
++      <input value={label} onChange={(e) => setLabel(e.target.value)} onKeyDown={onEnter} placeholder="Label" style={{ ...inputStyle, width: 120 }} />
++      <input value={amount} inputMode="decimal" onChange={(e) => setAmount(e.target.value)} onKeyDown={onEnter} placeholder="Amount" style={{ ...inputStyle, width: 90, textAlign: 'right' }} />
++      <button type="button" disabled={busy || !Number(amount)} style={addBtnStyle} onClick={submit}>Add</button>
+       <button type="button" style={{ ...addBtnStyle, color: 'var(--lp-text-tertiary)' }} onClick={() => setOpen(false)}>Cancel</button>
+     </div>
+   );
+@@ -768,12 +775,19 @@ function LabelAmountAdder({ busy, placeholder, onAdd }: { busy: boolean; placeho
+   const [open, setOpen] = useState(false);
+   const [label, setLabel] = useState('');
+   const [amount, setAmount] = useState('');
++  const submit = () => {
++    if (busy || !Number(amount)) return;
++    onAdd({ label: label.trim() || null, amount: Number(amount) });
++    setOpen(false); setLabel(''); setAmount('');
++  };
++  // TB grammar: Enter commits + advances — Enter in the fields triggers Add, it is never dead.
++  const onEnter = (e: React.KeyboardEvent) => { if (e.key === 'Enter') { e.preventDefault(); submit(); } };
+   if (!open) return <button type="button" style={addBtnStyle} onClick={() => setOpen(true)}>+ Add {placeholder.toLowerCase()}</button>;
+   return (
+     <div className="flex flex-wrap items-center" style={{ gap: 6 }}>
+-      <input value={label} onChange={(e) => setLabel(e.target.value)} placeholder={placeholder} style={{ ...inputStyle, width: 140 }} />
+-      <input value={amount} inputMode="decimal" onChange={(e) => setAmount(e.target.value)} placeholder="Amount" style={{ ...inputStyle, width: 90, textAlign: 'right' }} />
+-      <button type="button" disabled={busy || !Number(amount)} style={addBtnStyle} onClick={() => { onAdd({ label: label.trim() || null, amount: Number(amount) }); setOpen(false); setLabel(''); setAmount(''); }}>Add</button>
++      <input value={label} onChange={(e) => setLabel(e.target.value)} onKeyDown={onEnter} placeholder={placeholder} style={{ ...inputStyle, width: 140 }} />
++      <input value={amount} inputMode="decimal" onChange={(e) => setAmount(e.target.value)} onKeyDown={onEnter} placeholder="Amount" style={{ ...inputStyle, width: 90, textAlign: 'right' }} />
++      <button type="button" disabled={busy || !Number(amount)} style={addBtnStyle} onClick={submit}>Add</button>
+       <button type="button" style={{ ...addBtnStyle, color: 'var(--lp-text-tertiary)' }} onClick={() => setOpen(false)}>Cancel</button>
+     </div>
+   );
+@@ -784,15 +798,22 @@ function PaymentAdder({ busy, onAdd }: { busy: boolean; onAdd: (f: Record<string
+   const [method, setMethod] = useState<string>('wire');
+   const [amount, setAmount] = useState('');
+   const [paidOn, setPaidOn] = useState('');
++  const submit = () => {
++    if (busy || !Number(amount)) return;
++    onAdd({ method, amount: Number(amount), paid_on: paidOn || null });
++    setOpen(false); setAmount(''); setPaidOn('');
++  };
++  // TB grammar: Enter commits + advances — Enter in the fields triggers Add, it is never dead.
++  const onEnter = (e: React.KeyboardEvent) => { if (e.key === 'Enter') { e.preventDefault(); submit(); } };
+   if (!open) return <button type="button" style={addBtnStyle} onClick={() => setOpen(true)}>+ Log payment</button>;
+   return (
+     <div className="flex flex-wrap items-center" style={{ gap: 6 }}>
+       <select value={method} onChange={(e) => setMethod(e.target.value)} style={inputStyle}>
+         {PAYMENT_METHODS.map((m) => <option key={m} value={m}>{methodLabel(m)}</option>)}
+       </select>
+-      <input value={amount} inputMode="decimal" onChange={(e) => setAmount(e.target.value)} placeholder="Amount" style={{ ...inputStyle, width: 90, textAlign: 'right' }} />
+-      <input type="date" value={paidOn} onChange={(e) => setPaidOn(e.target.value)} style={inputStyle} />
+-      <button type="button" disabled={busy || !Number(amount)} style={addBtnStyle} onClick={() => { onAdd({ method, amount: Number(amount), paid_on: paidOn || null }); setOpen(false); setAmount(''); setPaidOn(''); }}>Add</button>
++      <input value={amount} inputMode="decimal" onChange={(e) => setAmount(e.target.value)} onKeyDown={onEnter} placeholder="Amount" style={{ ...inputStyle, width: 90, textAlign: 'right' }} />
++      <input type="date" value={paidOn} onChange={(e) => setPaidOn(e.target.value)} onKeyDown={onEnter} style={inputStyle} />
++      <button type="button" disabled={busy || !Number(amount)} style={addBtnStyle} onClick={submit}>Add</button>
+       <button type="button" style={{ ...addBtnStyle, color: 'var(--lp-text-tertiary)' }} onClick={() => setOpen(false)}>Cancel</button>
+     </div>
+   );
+diff --git a/src/components/spreadsheet-grid/cell-editors/EntityRefEditor.tsx b/src/components/spreadsheet-grid/cell-editors/EntityRefEditor.tsx
+index 14677f4..c5d4178 100644
+--- a/src/components/spreadsheet-grid/cell-editors/EntityRefEditor.tsx
++++ b/src/components/spreadsheet-grid/cell-editors/EntityRefEditor.tsx
+@@ -26,6 +26,10 @@ export function EntityRefEditor({
+   const [rows, setRows] = useState<{ id: string; label: string; sub?: string }[]>([]);
+   const [loading, setLoading] = useState(false);
+   const seq = useRef(0);
++  /* TB grammar: arrows move the highlight inside the open dropdown.
++     Raw index clamped at render so a shrinking result set can't strand it. */
++  const [hiRaw, setHiRaw] = useState(0);
++  const hi = Math.max(0, Math.min(hiRaw, rows.length - 1));
+ 
+   useEffect(() => {
+     ref.current?.focus();
+@@ -65,15 +69,24 @@ export function EntityRefEditor({
+   }, [q, runSearch]);
+ 
+   const pick = useCallback(
+-    (id: string) => {
++    (id: string, nav: { key: 'Enter' | 'Tab'; shiftKey?: boolean } = { key: 'Enter' }) => {
+       flushSync(() => {
+         onChange(id);
+       });
+       setOpen(false);
+       setQ('');
+       requestAnimationFrame(() => {
++        /* Re-dispatch the committing key so the grid's own handler runs the
++           matching move: Enter → commit + down, Tab → commit + right (TB
++           grammar: Enter commits + advances; Tab commits + moves on). */
+         ref.current?.dispatchEvent(
+-          new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', bubbles: true, cancelable: true })
++          new KeyboardEvent('keydown', {
++            key: nav.key,
++            code: nav.key,
++            shiftKey: nav.shiftKey ?? false,
++            bubbles: true,
++            cancelable: true,
++          })
+         );
+       });
+     },
+@@ -88,15 +101,32 @@ export function EntityRefEditor({
+         style={{ color: 'var(--lp-text)' }}
+         value={q}
+         placeholder={value ? `Replace (current id)…` : 'Search…'}
+-        onChange={e => setQ(e.target.value)}
++        onChange={e => {
++          setQ(e.target.value);
++          setHiRaw(0);
++        }}
+         onKeyDown={e => {
+           if (e.key === 'Escape') {
+             onKeyDown(e);
+             return;
+           }
+-          if (e.key === 'Enter' && rows[0]) {
++          /* TB grammar: arrows move the highlight inside the open dropdown. */
++          if (open && rows.length > 0 && (e.key === 'ArrowDown' || e.key === 'ArrowUp')) {
++            e.preventDefault();
++            setHiRaw(e.key === 'ArrowDown' ? Math.min(hi + 1, rows.length - 1) : Math.max(hi - 1, 0));
++            return;
++          }
++          if (e.key === 'Enter' && rows[hi]) {
++            e.preventDefault();
++            pick(rows[hi].id);
++            return;
++          }
++          /* TB grammar: Tab from the open search commits the highlighted
++             match and moves on — it never drops a typed query. (Without a
++             query Tab falls through to the grid's plain commit-and-move.) */
++          if (e.key === 'Tab' && q.trim() !== '' && rows[hi]) {
+             e.preventDefault();
+-            pick(rows[0].id);
++            pick(rows[hi].id, { key: 'Tab', shiftKey: e.shiftKey });
+             return;
+           }
+           onKeyDown(e);
+@@ -124,12 +154,16 @@ export function EntityRefEditor({
+               No matches
+             </div>
+           )}
+-          {rows.map(r => (
++          {rows.map((r, i) => (
+             <button
+               key={r.id}
+               type="button"
+               className="flex w-full flex-col items-start px-2 py-1.5 text-left text-sm hover:opacity-90"
+-              style={{ color: 'var(--lp-text)' }}
++              /* TB grammar: the arrow-keyed highlight is the row Enter/Tab commit. */
++              style={{
++                color: 'var(--lp-text)',
++                background: i === hi ? 'var(--lp-surface-hover)' : undefined,
++              }}
+               onClick={() => pick(r.id)}
+             >
+               <span className="font-medium">{r.label}</span>
+diff --git a/src/components/ui/BrandedSelect.tsx b/src/components/ui/BrandedSelect.tsx
+index 74fb0c2..25af8ed 100644
+--- a/src/components/ui/BrandedSelect.tsx
++++ b/src/components/ui/BrandedSelect.tsx
+@@ -215,6 +215,23 @@ export function BrandedSelect({
+         active.click();
+         onEnterCommit?.();
+       }
++    } else if (e.key === 'Tab') {
++      /* TB grammar: Tab never walks a dropdown's option list — it commits
++         the highlighted (focused) option and moves on to the next cell.
++         Forward Tab advances via onEnterCommit when a grid cell wired it;
++         otherwise focus returns to the trigger and the browser's default
++         Tab takes over (the portaled menu sits at body end, outside the
++         cell tab path, so default Tab can't re-enter the option list). */
++      const active = document.activeElement;
++      if (active instanceof HTMLButtonElement && menuRef.current.contains(active)) {
++        active.click(); // same commit path as a mouse pick; also closes
++      }
++      if (!e.shiftKey && onEnterCommit) {
++        e.preventDefault();
++        onEnterCommit();
++      } else {
++        wrapRef.current?.querySelector('button')?.focus();
++      }
+     } else if (filterable) {
+       /* Sprint 12 §8b4 — filter capture. Single-character
+          printable keys append to the filter; Backspace chops
+-- 
+2.43.0
+
+
+From 79e87aa8a7f5f8c9abf483698388ff1611e02c5a Mon Sep 17 00:00:00 2001
+From: Adam Rowley <adamgrowley@gmail.com>
+Date: Sun, 9 Aug 2026 22:13:59 +0000
+Subject: [PATCH 3/3] =?UTF-8?q?docs(smoke):=20SP/KEY=20section=20=E2=80=94?=
+ =?UTF-8?q?=20the=20day-rail=20spine=20fold=20+=20the=20keyboard-grammar?=
+ =?UTF-8?q?=20sweep=20join=20the=20walk=20(85=20items)?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_014d3AoWFQevqQHtrWLX5Tki
+---
+ docs/smoke-tests/SMOKE_SESSION_2026-08-05.html | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/docs/smoke-tests/SMOKE_SESSION_2026-08-05.html b/docs/smoke-tests/SMOKE_SESSION_2026-08-05.html
+index 964214e..0ebd339 100644
+--- a/docs/smoke-tests/SMOKE_SESSION_2026-08-05.html
++++ b/docs/smoke-tests/SMOKE_SESSION_2026-08-05.html
+@@ -51,7 +51,7 @@ h2{font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--oran
+ <div id="out">Results preview appears here as you go.</div>
+ <script>
+ const SECTIONS=[
+-{"name":"Speed — the perf pass","where":"Deployed app","items":[["PF-3","FAILED 05/08 — readonly gate (retest after diagnosis)","hello@ (readonly) could create tours/artists. Code path IS guarded (requireWrite on /api/tours + /api/artists; readonly → 403). FIRST CHECK the account's actual role — Supabase SQL: select role, status from workspace_members wm join profiles p on p.id=wm.user_id where p.email='hello@...'; If role is not 'readonly', that's the whole bug — fix the row and retest. If it IS readonly and creation still succeeds, capture the request URL from devtools Network and report it."]]},{"name":"Rider decouple — phase A (migration 256 CONFIRMED live in prod)","where":"Migration already pasted — Cowork verified the attachments table + lineage columns directly","items":[["RD-4","Saturday differs","Attach a different version to one show (routing_id): that show's advance packet lists the Saturday version; other shows keep the tour default."],["RD-5","Edits hit everywhere","Edit rows on an attached version: every place it's attached shows the change; other versions untouched."]]},{"name":"Rider decouple — B1 · version/attach controls (tour surfaces)","where":"/operations/[tourId]/channel-list and /operations/[tourId]/stage-plot","items":[["VC-1","Version picker shows the family","Channel-list surface: the Version select lists the original (marked '(original)') + every saved version of the shown document."],["VC-2","Picking a version ATTACHES it","Select a different version: toast 'Tour channel list switched', page re-resolves to that version's rows, and Detach appears. This is the design — the picker answers 'which version is this tour using'."],["VC-3","Save as version… doesn't switch","Name one inline (Enter saves, Escape cancels): toast, new entry in the picker, but the tour STAYS on the current version — you attach it where it belongs yourself."],["VC-4","Attach to show… overrides one show only","Pick a routing row: toast names the city/date. That show's advance packet lists this version; the tour default and other shows are untouched."],["VC-5","Detach is honest","A tour resolving via the LEGACY scan shows no Detach. An attached tour shows it; detaching toasts and falls back to the legacy scan. Detach must never appear for a document the surface isn't actually showing."],["VC-6","Stage plot has the same row","Above the open plot editor (immediately on a 1-plot tour): same Version / Save as version / Attach to show / Detach controls; Detach only when the OPEN plot is the tour-attached one."]]},{"name":"Rider decouple — B1 · the rider's tech section","where":"Rider editor on a RIDER pack that has a channel_list section","items":[["RS-1","Owned legacy section is read-only + Convert","The embedded channel list renders as a read-only sheet with the 'lives INSIDE the rider (legacy)' banner and a Convert button — no editable grid, no edit link."],["RS-2","Convert works end-to-end","Click Convert: toast, the section flips to 'Attached document' with a preview + 'Edit channel list ↗'. The new standalone doc exists (with every row copied), the original rows are still in the DB, and the doc is its own family root (no version label)."],["RS-3","Attached mode: Change… / Detach / Edit ↗","Change… lists channel-list documents on the tour + artist scope; picking one replaces the attachment. Edit ↗ opens the standalone editor (full grid). Detach returns to the legacy state."],["RS-4","Inherited sections untouched","An artist-inherited channel list still shows the tested override wall/flow — Convert is NOT offered there (its rows live on the parent pack; API refuses with a message saying to convert at the owning scope)."],["RS-5","Standalone channel-list docs unaffected","Opening a channel_list PACK (from /rider-packs or Edit ↗) still gives the FULL editor — grid, dropdowns, stage boxes, patch grid."]]},{"name":"Rider builder — B2 · fixed groups","where":"/rider-packs/[id]?mode=edit on a plain rider pack","items":[["GB-1","Four fixed tabs, legacy lands in Production","Production · Technical · Hospitality · Travel tabs with section counts; every pre-existing section sits under Production; the old accordion + left template library + drop zone are gone."],["GB-2","Rail selects, canvas shows ONE section","The left rail lists the active group's sections; clicking one puts it on the canvas, open, no collapse chevron. Fields edit exactly as before (add, drag-reorder, delete)."],["GB-3","Add section is group-aware","In Technical the menu offers Audio/FOH, Monitors/IEMs, Lighting, Backline, Risers/Stage (+ Blank); in Production, Contacts + Schedule. A section added from a tab STAYS in that tab after a reload."],["GB-4","+ Add group is curated only","The menu offers exactly Security, Merch, Press & Promo, Parking & Access, Catering, Local Crew — no freeform input anywhere. Adding one opens its tab; templates for it (e.g. Security) appear in ITS add menu."],["GB-5","Move to group persists","The select in the section card header moves the section; tab counts update; the move survives a hard reload (metadata.group)."],["GB-6","Rail drag reorders within the group","Drag a rail row above another: order changes, persists on reload, and sections in OTHER groups keep their relative order."],["GB-7","Properties rail still wired","Click a field on the canvas: the right panel opens; editing label/type updates the field; delete from the panel removes it."],["GB-8","Empty added group is session-local","Add a group, put nothing in it, reload: the tab is gone (by design — it returns when a section lands in it). No error."]]},{"name":"Venue read view — B3 · grouped","where":"/r/[token] (rider web link) — needs a pack whose sections span ≥2 groups","items":[["RV-1","Single-group packs unchanged","A legacy all-Production rider's public page looks exactly as before: no group chips, no left list, same flat flow."],["RV-2","Multi-group packs get the nav","Move a section to Technical in the builder, reopen the web link: sticky group chips up top + a left section list (desktop), group headings in the body; chips + list scroll-to the right anchors."],["RV-3","Print stays a linear document","Print preview (or the PDF): no chips, no side list — cover, TOC, then sections with group headings; page breaks sane."],["RV-4","PDF group headings","Download the rider PDF for the same multi-group pack: uppercase group headings above each group's sections; a single-group pack's PDF is unchanged."]]},{"name":"One show link — B4 ⚠ paste migration 257 first","where":"database/migrations/257_show_links.sql → then /advance/[tour]/[routing] packet page","items":[["SL-1","Migration 257 pastes clean","Runs without error; re-running is a no-op."],["SL-2","Copy show link mints once","Packet page → Public share → 'Copy show link': URL /s/[token] lands on the clipboard. Click it again: SAME URL (mint-or-reuse, no link mill)."],["SL-3","/s/[token] opens logged-out","Open in a private window: header shows artist · tour · date · venue/city (venue via the resolver, never raw routing columns) + the five tabs. No login bounce."],["SL-4","Advance tab embeds the intake form","With a live venue-intake link for the show: the form renders in-page + 'Open in its own tab ↗'. Without one: a plain 'not opened yet' message, not an error."],["SL-5","Rider + Channel list tabs read grouped","Rider tab renders the show's riders with the B3 grouped read view; Channel list tab shows the attached (or fallback) list's grid. Empty states name what's missing."],["SL-6","Stage plot renders inline","The attached (or newest tour) plot draws as SVG in the tab; no plot → a clean empty state."],["SL-7","Downloads: bundled PDF via the show token","The download button produces the packet PDF using the /s/ token (no packet link needed). Old /a/ packet links still download fine."],["SL-8","Old doors still open","Existing /r/, /a/, /advance-intake/, /share/advance links all still work; /settings and /signup still bounce to login (the /s/ prefix swallowed nothing)."]]},{"name":"Walk-feedback fixes — 2026-08-06 ⚠ paste 258+259+260 for the template items","where":"Rider editor · tour channel-list · artist page","items":[["WF-1","Builder reads as a builder","Group tabs are big with a hard orange underline; the section rail is a real panel; the active section is unmistakable. Not subtle."],["WF-2","Riders delete from the editor","The editor header has Delete (confirm → back to the tour riders list / artist page). Lists still delete as before."],["WF-3","Show view is grouped","A rider spanning ≥2 groups shows group chips + headings in Show mode, same grammar as the builder. One-group riders: plain scroll, unchanged."],["WF-4","Channel list edits without overriding","On /operations/[tour]/channel-list an INHERITED list shows the rows read-only + one button: 'Create this tour's editable copy'. Click it: the tour gets its own attached document, fully editable, artist master untouched. No override bounce."],["WF-5","Tour picker is one honest list","Artist page: 'TOURS · N' header + New tour; every tour always listed (upcoming asc, PAST group below); visible Operations · Budget · Advance links per row; the previously-opened tour is highlighted, never hides the list."],["WF-6","Templates are deep (paste 258/259/260 first)","Rider 'Add section' menus offer 17 enriched/new templates with 12-25 fields; the advance library carries the full 17-section / ~427-field catalog; budget template gains the missing income/cost/percentage lines. Re-pasting any of the three is a no-op."]]},{"name":"Payroll — the canonical flat-seven (⚠ needs the payroll+income patch + migration 261)","where":"/operations/[tourId]/payroll","items":[["PAY-1","One flat rates grid","Columns: Flat day · Flat tour · Show · Travel · Rehearsal · Press/Radio · Per diem · Advance — all editable for everyone. NO Rate type column, NO '+ Add rate type'/'Manage' buttons. Zero amounts render blank, not $0.00."],["PAY-2","Editing is instant","Type a rate, Enter: the cursor drops to the next row IMMEDIATELY — no wait, no reclick. Tab moves right. A failed save toasts + reverts the cell."],["PAY-3","The math agrees","Pick a person with painted + unpainted days: the Rates grid's Days / Total fee / Total PD equal that person's matrix row totals exactly (tour-default days now count everywhere). No more US$0 against a full matrix."],["PAY-4","Stacking warns, still bills","Give one person BOTH a Flat day and a Show rate: a ⚠ appears by their name (hover explains); the total = flat day × worked days + show × show days (sum, not either/or)."],["PAY-5","The full brush palette","Brushes: Tour default · Show · Rehearsal · Travel · Promo/Radio · Off · PD · No tour. Off paints an O tile (bills the TRAVEL rate + PD). PD paints a grey PD tile (per diem only, no fee). No tour empties the cell (nothing)."],["PAY-6","Per diem = every assigned day","Per diem counts Show/Travel/Rehearsal/Promo/Off/PD days; a No-tour day earns nothing. Paint a PD day: Total PD ticks up, Total fee doesn't."],["PAY-7","Press/Radio fallback","A Promo/Radio day bills the SHOW rate while the person's Press/Radio cell is empty; enter a Press/Radio amount and the promo day bills that instead."],["PAY-8","Retired types stopped billing","Weekly + custom columns (e.g. 'Show Day') are gone from the grid and no longer bill — Dillon's $200 must be re-entered in the real Show column. Amounts survive in the DB (reversible), they just don't count."],["PAY-9","Budget salary agrees","After a rate/day edit, the Budget Salary + Per-Diem lines for that person match the payroll totals (the reconcile now counts effective days too)."]]},{"name":"Income — the lean sheet + deal slide-over (⚠ same patch)","where":"/budget/[tourId] → Income tab","items":[["INC-1","One sheet, no toggle","The Projected/Actual toggle is GONE. Columns: Date · Type · Venue · City · Deal summary · Contracted · Settled · Variance. Settled + Variance are blank until a show settles."],["INC-2","Row opens the deal slide-over","Open a row: orange hero (date·city eyebrow, venue headline, status chip), then a Contracted | Settled | Variance KPI band. The grid's old generic row panel does NOT also open."],["INC-3","Deal edits save on blur","Change the guarantee in the slide-over, blur: Contracted moves in the ledger AND in the grid behind it. On a locked version, a proposed edit raises the version modal, not a silent fail."],["INC-4","The waterfall ledger","'Contracted — the maths' reads Guarantee → − withholding → + Overage ƒ → + Merch ƒ → + VIP ƒ → CONTRACTED, mono right-aligned. Click ƒ on a line → it becomes an editable override (OVERRIDE tag); Revert recomputes from the inputs."],["INC-5","Settled is walk-only","No settled figure is typeable in the grid. A settled show carries the green AUTO · SETTLEMENT chip; the slide-over's Settled card shows the settled ledger + a green 'Open the settlement walk →' button that lands on the settlement page."],["INC-6","Manual override is explicit","'Manual override…' opens the amber panel; entering a figure flips the chip to MANUAL. That's the ONLY manual path — no ambient actual-cell typing anywhere."],["INC-7","FX strip survives","A tour with foreign-currency shows still gets the FX strip (live = red count, locked-at-settlement = blue count) above the sheet."]]},{"name":"Rider fixes — rename · menu · layout (batch 5c)","where":"Any rider builder","items":[["RB-1","Rider renames from the title","Click the rider title in the builder hero (pencil shows): input in place, Enter/blur saves, name updates everywhere. Empty input keeps the old name."],["RB-2","Save failures speak","Force a failing edit (e.g. edit while logged out in another tab): a toast names the server error — not just the tiny save chip."],["RB-3","Add-section menu floats free","At the bottom of a long section rail, open Add section: the menu overlays (portal), never clipped by the rail; flips above when the viewport below is tight."],["RB-4","Fields flow 2-up","A section with many compact fields lays them out side by side on a wide canvas instead of one giant stack."]]},{"name":"Channel list — created where it lives","where":"/operations/[tourId]/channel-list","items":[["CL-1","Create button on the page","With no channel list: a New channel list button (plus a compact header action when one exists). No detour through Riders."],["CL-2","Tour-wide + honest banner","Creating it shows: 'Assigned to every show on this tour — it will appear in the tour's rider automatically.' The list is immediately editable; the tour's rider shows it."]]},{"name":"Rider catalog — artist demands (⚠ paste 263; do NOT re-paste 258 after)","where":"Rider builder → Add section","items":[["CAT-1","Rider-centric templates","Menus offer Hospitality Rider, Dressing Rooms, Catering/Buyout, Backline, Audio/PA, Lighting, Security & Barricade, Merch, Parking & Access, Towels & Laundry, Bus Stock, Guest List & Passes. 'Production & Amenities / Wi-Fi available' is gone (now Production Office)."],["CAT-2","Content reads as demands","Open Hospitality Rider: still/sparkling water, local beer, fresh fruit, towels count etc — artist asks, not venue answers. Your own custom templates untouched."]]},{"name":"Native controls — killed site-wide","where":"Anywhere","items":[["UI-1","No white checkboxes","Every checkbox/radio renders orange-accented and theme-correct (payroll catch-up, rider field lists, batch panels)."],["UI-2","Selects match the app","Dropdowns show token colors + custom chevron (no OS grey arrow); select POPUPS render dark in dark mode (color-scheme). Light mode unaffected."]]},{"name":"Settlement — the full process (⚠ paste 262 first)","where":"/budget/[tourId]/settlement","items":[["SET-1","KPI strip + rail","Outstanding · Settled · Not settled · Awaiting payment · Unsettled N of M up top; show cards carry SETTLED/DUE chips and status-hued rails."],["SET-2","Catch-up batch","With played-unsettled shows: the panel lists them with contracted guarantees; Select all; 'Settle N shows' runs sequentially with n/N progress; Full & Final toggle (default on). Each show's income cascades exactly like a manual settle."],["SET-3","Deal & box office card","Set Door deal 80%, tickets 1000, gross 40000: the waterfall renders Gross → BO fees → Net BO → expenses → Split pool → Artist share → Suggested overage."],["SET-4","Apply is the consent","Nothing writes until you click 'Apply … to Overage' — then reconciled_overage lands in the walk and the income row updates. Guarantee-only shows: quiet hint, numbers unchanged to the penny."],["SET-5","BO fees split honestly","Add a Facility fee deduction: it renders in the waterfall, NOT the guarantee-side Deductions group — but the income cascade total still includes it (check the income row's deductions)."]]},{"name":"Day view — the Tour Book standard","where":"/operations/[tourId]/day/[routingId]","items":[["DV-1","Hero + fact strip","Day-type-tinted hero: date·artist·tour eyebrow, city headline, venue subline, day-type chip, facts (N schedule · first call · hotel · N flights · Day P&L)."],["DV-2","Flights land on the day","A flight departing/arriving that date shows in the Flights card (mono times, JFK → ATL, passenger chips, conf). This NEVER worked before — flights were keyed to a field the grid doesn't set."],["DV-3","Files on the day","Show-scoped rider assets + routing-linked files render with open links. Driver/accountant slices don't see them."],["DV-4","Day sheet PDF, one click","The direct 'Day sheet PDF' button downloads: schedule, venue, contacts, lodging, flights+passengers, notes."],["DV-5","Crew view stays clean","View as crew/token link: money + notes still absent (not hidden — absent)."]]},{"name":"Rooming — the Unassigned Hotel flood ends","where":"/operations/[tourId]/rooming + /budget","items":[["RM-1","One honest line per hotel","Add a room on a date with no hotel: budget shows ONE line 'Hotel — {city} · {date} · N rooms' — not a pile of 'Unassigned Hotel' lines."],["RM-2","Placeholders reuse + heal","More rooms on the same date reuse the same placeholder; existing 'Unassigned Hotel' junk renames itself as you edit that date. Real hotels label as '{name} — {city} · {check-in} · N rooms'."],["RM-3","Nights tab is live","Paint a room in the grid, flip to Nights WITHOUT reloading: it's there (was: stale until hard refresh). Same-day placeholder counts as 1 night."]]}
++{"name":"Speed — the perf pass","where":"Deployed app","items":[["PF-3","FAILED 05/08 — readonly gate (retest after diagnosis)","hello@ (readonly) could create tours/artists. Code path IS guarded (requireWrite on /api/tours + /api/artists; readonly → 403). FIRST CHECK the account's actual role — Supabase SQL: select role, status from workspace_members wm join profiles p on p.id=wm.user_id where p.email='hello@...'; If role is not 'readonly', that's the whole bug — fix the row and retest. If it IS readonly and creation still succeeds, capture the request URL from devtools Network and report it."]]},{"name":"Rider decouple — phase A (migration 256 CONFIRMED live in prod)","where":"Migration already pasted — Cowork verified the attachments table + lineage columns directly","items":[["RD-4","Saturday differs","Attach a different version to one show (routing_id): that show's advance packet lists the Saturday version; other shows keep the tour default."],["RD-5","Edits hit everywhere","Edit rows on an attached version: every place it's attached shows the change; other versions untouched."]]},{"name":"Rider decouple — B1 · version/attach controls (tour surfaces)","where":"/operations/[tourId]/channel-list and /operations/[tourId]/stage-plot","items":[["VC-1","Version picker shows the family","Channel-list surface: the Version select lists the original (marked '(original)') + every saved version of the shown document."],["VC-2","Picking a version ATTACHES it","Select a different version: toast 'Tour channel list switched', page re-resolves to that version's rows, and Detach appears. This is the design — the picker answers 'which version is this tour using'."],["VC-3","Save as version… doesn't switch","Name one inline (Enter saves, Escape cancels): toast, new entry in the picker, but the tour STAYS on the current version — you attach it where it belongs yourself."],["VC-4","Attach to show… overrides one show only","Pick a routing row: toast names the city/date. That show's advance packet lists this version; the tour default and other shows are untouched."],["VC-5","Detach is honest","A tour resolving via the LEGACY scan shows no Detach. An attached tour shows it; detaching toasts and falls back to the legacy scan. Detach must never appear for a document the surface isn't actually showing."],["VC-6","Stage plot has the same row","Above the open plot editor (immediately on a 1-plot tour): same Version / Save as version / Attach to show / Detach controls; Detach only when the OPEN plot is the tour-attached one."]]},{"name":"Rider decouple — B1 · the rider's tech section","where":"Rider editor on a RIDER pack that has a channel_list section","items":[["RS-1","Owned legacy section is read-only + Convert","The embedded channel list renders as a read-only sheet with the 'lives INSIDE the rider (legacy)' banner and a Convert button — no editable grid, no edit link."],["RS-2","Convert works end-to-end","Click Convert: toast, the section flips to 'Attached document' with a preview + 'Edit channel list ↗'. The new standalone doc exists (with every row copied), the original rows are still in the DB, and the doc is its own family root (no version label)."],["RS-3","Attached mode: Change… / Detach / Edit ↗","Change… lists channel-list documents on the tour + artist scope; picking one replaces the attachment. Edit ↗ opens the standalone editor (full grid). Detach returns to the legacy state."],["RS-4","Inherited sections untouched","An artist-inherited channel list still shows the tested override wall/flow — Convert is NOT offered there (its rows live on the parent pack; API refuses with a message saying to convert at the owning scope)."],["RS-5","Standalone channel-list docs unaffected","Opening a channel_list PACK (from /rider-packs or Edit ↗) still gives the FULL editor — grid, dropdowns, stage boxes, patch grid."]]},{"name":"Rider builder — B2 · fixed groups","where":"/rider-packs/[id]?mode=edit on a plain rider pack","items":[["GB-1","Four fixed tabs, legacy lands in Production","Production · Technical · Hospitality · Travel tabs with section counts; every pre-existing section sits under Production; the old accordion + left template library + drop zone are gone."],["GB-2","Rail selects, canvas shows ONE section","The left rail lists the active group's sections; clicking one puts it on the canvas, open, no collapse chevron. Fields edit exactly as before (add, drag-reorder, delete)."],["GB-3","Add section is group-aware","In Technical the menu offers Audio/FOH, Monitors/IEMs, Lighting, Backline, Risers/Stage (+ Blank); in Production, Contacts + Schedule. A section added from a tab STAYS in that tab after a reload."],["GB-4","+ Add group is curated only","The menu offers exactly Security, Merch, Press & Promo, Parking & Access, Catering, Local Crew — no freeform input anywhere. Adding one opens its tab; templates for it (e.g. Security) appear in ITS add menu."],["GB-5","Move to group persists","The select in the section card header moves the section; tab counts update; the move survives a hard reload (metadata.group)."],["GB-6","Rail drag reorders within the group","Drag a rail row above another: order changes, persists on reload, and sections in OTHER groups keep their relative order."],["GB-7","Properties rail still wired","Click a field on the canvas: the right panel opens; editing label/type updates the field; delete from the panel removes it."],["GB-8","Empty added group is session-local","Add a group, put nothing in it, reload: the tab is gone (by design — it returns when a section lands in it). No error."]]},{"name":"Venue read view — B3 · grouped","where":"/r/[token] (rider web link) — needs a pack whose sections span ≥2 groups","items":[["RV-1","Single-group packs unchanged","A legacy all-Production rider's public page looks exactly as before: no group chips, no left list, same flat flow."],["RV-2","Multi-group packs get the nav","Move a section to Technical in the builder, reopen the web link: sticky group chips up top + a left section list (desktop), group headings in the body; chips + list scroll-to the right anchors."],["RV-3","Print stays a linear document","Print preview (or the PDF): no chips, no side list — cover, TOC, then sections with group headings; page breaks sane."],["RV-4","PDF group headings","Download the rider PDF for the same multi-group pack: uppercase group headings above each group's sections; a single-group pack's PDF is unchanged."]]},{"name":"One show link — B4 ⚠ paste migration 257 first","where":"database/migrations/257_show_links.sql → then /advance/[tour]/[routing] packet page","items":[["SL-1","Migration 257 pastes clean","Runs without error; re-running is a no-op."],["SL-2","Copy show link mints once","Packet page → Public share → 'Copy show link': URL /s/[token] lands on the clipboard. Click it again: SAME URL (mint-or-reuse, no link mill)."],["SL-3","/s/[token] opens logged-out","Open in a private window: header shows artist · tour · date · venue/city (venue via the resolver, never raw routing columns) + the five tabs. No login bounce."],["SL-4","Advance tab embeds the intake form","With a live venue-intake link for the show: the form renders in-page + 'Open in its own tab ↗'. Without one: a plain 'not opened yet' message, not an error."],["SL-5","Rider + Channel list tabs read grouped","Rider tab renders the show's riders with the B3 grouped read view; Channel list tab shows the attached (or fallback) list's grid. Empty states name what's missing."],["SL-6","Stage plot renders inline","The attached (or newest tour) plot draws as SVG in the tab; no plot → a clean empty state."],["SL-7","Downloads: bundled PDF via the show token","The download button produces the packet PDF using the /s/ token (no packet link needed). Old /a/ packet links still download fine."],["SL-8","Old doors still open","Existing /r/, /a/, /advance-intake/, /share/advance links all still work; /settings and /signup still bounce to login (the /s/ prefix swallowed nothing)."]]},{"name":"Walk-feedback fixes — 2026-08-06 ⚠ paste 258+259+260 for the template items","where":"Rider editor · tour channel-list · artist page","items":[["WF-1","Builder reads as a builder","Group tabs are big with a hard orange underline; the section rail is a real panel; the active section is unmistakable. Not subtle."],["WF-2","Riders delete from the editor","The editor header has Delete (confirm → back to the tour riders list / artist page). Lists still delete as before."],["WF-3","Show view is grouped","A rider spanning ≥2 groups shows group chips + headings in Show mode, same grammar as the builder. One-group riders: plain scroll, unchanged."],["WF-4","Channel list edits without overriding","On /operations/[tour]/channel-list an INHERITED list shows the rows read-only + one button: 'Create this tour's editable copy'. Click it: the tour gets its own attached document, fully editable, artist master untouched. No override bounce."],["WF-5","Tour picker is one honest list","Artist page: 'TOURS · N' header + New tour; every tour always listed (upcoming asc, PAST group below); visible Operations · Budget · Advance links per row; the previously-opened tour is highlighted, never hides the list."],["WF-6","Templates are deep (paste 258/259/260 first)","Rider 'Add section' menus offer 17 enriched/new templates with 12-25 fields; the advance library carries the full 17-section / ~427-field catalog; budget template gains the missing income/cost/percentage lines. Re-pasting any of the three is a no-op."]]},{"name":"Payroll — the canonical flat-seven (⚠ needs the payroll+income patch + migration 261)","where":"/operations/[tourId]/payroll","items":[["PAY-1","One flat rates grid","Columns: Flat day · Flat tour · Show · Travel · Rehearsal · Press/Radio · Per diem · Advance — all editable for everyone. NO Rate type column, NO '+ Add rate type'/'Manage' buttons. Zero amounts render blank, not $0.00."],["PAY-2","Editing is instant","Type a rate, Enter: the cursor drops to the next row IMMEDIATELY — no wait, no reclick. Tab moves right. A failed save toasts + reverts the cell."],["PAY-3","The math agrees","Pick a person with painted + unpainted days: the Rates grid's Days / Total fee / Total PD equal that person's matrix row totals exactly (tour-default days now count everywhere). No more US$0 against a full matrix."],["PAY-4","Stacking warns, still bills","Give one person BOTH a Flat day and a Show rate: a ⚠ appears by their name (hover explains); the total = flat day × worked days + show × show days (sum, not either/or)."],["PAY-5","The full brush palette","Brushes: Tour default · Show · Rehearsal · Travel · Promo/Radio · Off · PD · No tour. Off paints an O tile (bills the TRAVEL rate + PD). PD paints a grey PD tile (per diem only, no fee). No tour empties the cell (nothing)."],["PAY-6","Per diem = every assigned day","Per diem counts Show/Travel/Rehearsal/Promo/Off/PD days; a No-tour day earns nothing. Paint a PD day: Total PD ticks up, Total fee doesn't."],["PAY-7","Press/Radio fallback","A Promo/Radio day bills the SHOW rate while the person's Press/Radio cell is empty; enter a Press/Radio amount and the promo day bills that instead."],["PAY-8","Retired types stopped billing","Weekly + custom columns (e.g. 'Show Day') are gone from the grid and no longer bill — Dillon's $200 must be re-entered in the real Show column. Amounts survive in the DB (reversible), they just don't count."],["PAY-9","Budget salary agrees","After a rate/day edit, the Budget Salary + Per-Diem lines for that person match the payroll totals (the reconcile now counts effective days too)."]]},{"name":"Income — the lean sheet + deal slide-over (⚠ same patch)","where":"/budget/[tourId] → Income tab","items":[["INC-1","One sheet, no toggle","The Projected/Actual toggle is GONE. Columns: Date · Type · Venue · City · Deal summary · Contracted · Settled · Variance. Settled + Variance are blank until a show settles."],["INC-2","Row opens the deal slide-over","Open a row: orange hero (date·city eyebrow, venue headline, status chip), then a Contracted | Settled | Variance KPI band. The grid's old generic row panel does NOT also open."],["INC-3","Deal edits save on blur","Change the guarantee in the slide-over, blur: Contracted moves in the ledger AND in the grid behind it. On a locked version, a proposed edit raises the version modal, not a silent fail."],["INC-4","The waterfall ledger","'Contracted — the maths' reads Guarantee → − withholding → + Overage ƒ → + Merch ƒ → + VIP ƒ → CONTRACTED, mono right-aligned. Click ƒ on a line → it becomes an editable override (OVERRIDE tag); Revert recomputes from the inputs."],["INC-5","Settled is walk-only","No settled figure is typeable in the grid. A settled show carries the green AUTO · SETTLEMENT chip; the slide-over's Settled card shows the settled ledger + a green 'Open the settlement walk →' button that lands on the settlement page."],["INC-6","Manual override is explicit","'Manual override…' opens the amber panel; entering a figure flips the chip to MANUAL. That's the ONLY manual path — no ambient actual-cell typing anywhere."],["INC-7","FX strip survives","A tour with foreign-currency shows still gets the FX strip (live = red count, locked-at-settlement = blue count) above the sheet."]]},{"name":"Rider fixes — rename · menu · layout (batch 5c)","where":"Any rider builder","items":[["RB-1","Rider renames from the title","Click the rider title in the builder hero (pencil shows): input in place, Enter/blur saves, name updates everywhere. Empty input keeps the old name."],["RB-2","Save failures speak","Force a failing edit (e.g. edit while logged out in another tab): a toast names the server error — not just the tiny save chip."],["RB-3","Add-section menu floats free","At the bottom of a long section rail, open Add section: the menu overlays (portal), never clipped by the rail; flips above when the viewport below is tight."],["RB-4","Fields flow 2-up","A section with many compact fields lays them out side by side on a wide canvas instead of one giant stack."]]},{"name":"Channel list — created where it lives","where":"/operations/[tourId]/channel-list","items":[["CL-1","Create button on the page","With no channel list: a New channel list button (plus a compact header action when one exists). No detour through Riders."],["CL-2","Tour-wide + honest banner","Creating it shows: 'Assigned to every show on this tour — it will appear in the tour's rider automatically.' The list is immediately editable; the tour's rider shows it."]]},{"name":"Rider catalog — artist demands (⚠ paste 263; do NOT re-paste 258 after)","where":"Rider builder → Add section","items":[["CAT-1","Rider-centric templates","Menus offer Hospitality Rider, Dressing Rooms, Catering/Buyout, Backline, Audio/PA, Lighting, Security & Barricade, Merch, Parking & Access, Towels & Laundry, Bus Stock, Guest List & Passes. 'Production & Amenities / Wi-Fi available' is gone (now Production Office)."],["CAT-2","Content reads as demands","Open Hospitality Rider: still/sparkling water, local beer, fresh fruit, towels count etc — artist asks, not venue answers. Your own custom templates untouched."]]},{"name":"Native controls — killed site-wide","where":"Anywhere","items":[["UI-1","No white checkboxes","Every checkbox/radio renders orange-accented and theme-correct (payroll catch-up, rider field lists, batch panels)."],["UI-2","Selects match the app","Dropdowns show token colors + custom chevron (no OS grey arrow); select POPUPS render dark in dark mode (color-scheme). Light mode unaffected."]]},{"name":"Settlement — the full process (⚠ paste 262 first)","where":"/budget/[tourId]/settlement","items":[["SET-1","KPI strip + rail","Outstanding · Settled · Not settled · Awaiting payment · Unsettled N of M up top; show cards carry SETTLED/DUE chips and status-hued rails."],["SET-2","Catch-up batch","With played-unsettled shows: the panel lists them with contracted guarantees; Select all; 'Settle N shows' runs sequentially with n/N progress; Full & Final toggle (default on). Each show's income cascades exactly like a manual settle."],["SET-3","Deal & box office card","Set Door deal 80%, tickets 1000, gross 40000: the waterfall renders Gross → BO fees → Net BO → expenses → Split pool → Artist share → Suggested overage."],["SET-4","Apply is the consent","Nothing writes until you click 'Apply … to Overage' — then reconciled_overage lands in the walk and the income row updates. Guarantee-only shows: quiet hint, numbers unchanged to the penny."],["SET-5","BO fees split honestly","Add a Facility fee deduction: it renders in the waterfall, NOT the guarantee-side Deductions group — but the income cascade total still includes it (check the income row's deductions)."]]},{"name":"Day view — the Tour Book standard","where":"/operations/[tourId]/day/[routingId]","items":[["DV-1","Hero + fact strip","Day-type-tinted hero: date·artist·tour eyebrow, city headline, venue subline, day-type chip, facts (N schedule · first call · hotel · N flights · Day P&L)."],["DV-2","Flights land on the day","A flight departing/arriving that date shows in the Flights card (mono times, JFK → ATL, passenger chips, conf). This NEVER worked before — flights were keyed to a field the grid doesn't set."],["DV-3","Files on the day","Show-scoped rider assets + routing-linked files render with open links. Driver/accountant slices don't see them."],["DV-4","Day sheet PDF, one click","The direct 'Day sheet PDF' button downloads: schedule, venue, contacts, lodging, flights+passengers, notes."],["DV-5","Crew view stays clean","View as crew/token link: money + notes still absent (not hidden — absent)."]]},{"name":"Rooming — the Unassigned Hotel flood ends","where":"/operations/[tourId]/rooming + /budget","items":[["RM-1","One honest line per hotel","Add a room on a date with no hotel: budget shows ONE line 'Hotel — {city} · {date} · N rooms' — not a pile of 'Unassigned Hotel' lines."],["RM-2","Placeholders reuse + heal","More rooms on the same date reuse the same placeholder; existing 'Unassigned Hotel' junk renames itself as you edit that date. Real hotels label as '{name} — {city} · {check-in} · N rooms'."],["RM-3","Nights tab is live","Paint a room in the grid, flip to Nights WITHOUT reloading: it's there (was: stale until hard refresh). Same-day placeholder counts as 1 night."]]},{"name":"Spine & keyboard — round-2 additions","where":"Day view · channel strip · money grids","items":[["SP-1","Day → Routing folds","On a day view, hit the rail's Routing toggle (bottom left): the compact day list unfolds into the routing ledger in one morph — no hard cut. Cmd-click still opens a new tab normally."],["KEY-1","Selects: Tab commits, never walks","Channel strip Position/Cable/Stand/Provider (and any BrandedSelect): open the menu, press Tab — the highlighted option commits and focus moves to the NEXT cell. Shift+Tab commits and goes back. Tab never cycles options."],["KEY-2","Stage-box picker obeys too","Open the position picker: Tab commits the focused slot (or the first matching slot from the filter) and advances — it no longer crawls filter → every slot → Clear → Manage."],["KEY-3","Mic cell Enter advances","Type to filter mics, Enter on the highlight: it fills AND focus moves on. Enter with nothing highlighted advances instead of dying."],["KEY-4","Entity cells get a highlight","Payroll/flights/commissions grids' entity search: arrows move a visible highlight, Enter picks it, Tab picks then moves right — typed text is never dropped for a stale draft."],["KEY-5","Settlement adders submit on Enter","In Add deduction / expense / Log payment: Enter in the amount (or label/date) field adds the line — same guard as the Add button."]]}
+ ];
+ let state={};
+ const app=document.getElementById('app');
+-- 
+2.43.0
+
