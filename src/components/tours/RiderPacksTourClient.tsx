@@ -4,8 +4,9 @@ import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import dynamic from 'next/dynamic';
-import { Plus } from 'lucide-react';
+import { Plus, Pencil, Info } from 'lucide-react';
 import { DataTable } from '@/components/data-table/DataTable';
+import { ContextMenu } from '@/components/ui/ContextMenu';
 import type { ColumnDef } from '@/components/data-table/types';
 import { useToast } from '@/components/ui/Toast';
 import type { RiderPackRowVm } from './rider-pack-rows';
@@ -76,15 +77,23 @@ export function RiderPacksTourClient({
         accessor: (r) => r.title ?? '',
         sortable: true,
         frozen: true,
+        flex: true,
+        /* Two lines, not an inline-flex row. Every <td> carries max-w-0
+           (DataTableRow.tsx:161) so cells are fully shrinkable; an inline-flex
+           WRAPS under pressure where a block truncates. That is why Pack was
+           the only column that ever wrapped. */
         cell: (value, row) => (
-          <span className="inline-flex items-center gap-2">
-            <span className="font-medium text-lp-text">{String(value || 'Untitled')}</span>
-            <ScopePill scope={row.scope} />
-          </span>
+          <div className="min-w-0">
+            <div className="truncate font-medium text-lp-text">{String(value || 'Untitled')}</div>
+            <div className="mt-0.5">
+              <ScopePill scope={row.scope} />
+            </div>
+          </div>
         ),
       },
       {
         id: 'status',
+        width: 120,
         header: 'Status',
         accessor: 'status',
         filter: {
@@ -99,12 +108,14 @@ export function RiderPacksTourClient({
       },
       {
         id: 'recipient',
+        width: 180,
         header: 'Recipient',
         accessor: (r) => r.recipientLabel,
         filter: { kind: 'select', options: recipients.map((x) => ({ value: x, label: x })) },
       },
       {
         id: 'lastSent',
+        width: 132,
         header: 'Last sent',
         accessor: (r) => r.lastSentRelative,
         className: 'whitespace-nowrap',
@@ -112,6 +123,7 @@ export function RiderPacksTourClient({
       },
       {
         id: 'updated',
+        width: 132,
         header: 'Updated',
         accessor: (r) => r.updatedRelative,
         className: 'whitespace-nowrap',
@@ -119,28 +131,41 @@ export function RiderPacksTourClient({
       },
       {
         id: 'details',
+        width: 48,
         header: '',
         accessor: (r) => r.id,
         align: 'right',
+        /* R-A: was a lone "..." button that opened the slide-over — it looked
+           like a menu and was not one. Copy link is deliberately NOT here yet:
+           it needs the newest-unrevoked-link join and a create path, which is
+           R-E. Adding a dead entry now would be worse than an absent one. */
         cell: (_, row) => (
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              setDetailsId(row.id);
-            }}
-            className="rounded border border-lp-border px-2 py-1 text-xs hover:bg-lp-bg-tertiary"
-          >
-            ...
-          </button>
+          <ContextMenu
+            items={[
+              {
+                label: 'Edit pack',
+                icon: Pencil,
+                onClick: () => router.push(`/rider-packs/${row.id}`),
+              },
+              {
+                label: 'Details',
+                icon: Info,
+                onClick: () => setDetailsId(row.id),
+              },
+            ]}
+          />
         ),
       },
     ],
-    [recipients]
+    [recipients, router]
   );
 
   return (
-    <div className="mx-auto flex min-h-0 max-w-5xl flex-1 flex-col space-y-5 pb-12">
+    /* R-A: was max-w-5xl — a 1024px cap on a surface viewed at ~1900. DataTable
+       caps itself at 1600 (DataTable.tsx:350), so this one only ever squeezed
+       the table, and Pack — the single column the layout algorithm could
+       shrink — absorbed all the wrapping. */
+    <div className="mx-auto flex min-h-0 max-w-[1600px] flex-1 flex-col space-y-5 pb-12">
       <div className="flex items-start justify-between gap-4">
         <div>
           <p className="text-xs uppercase tracking-wide text-lp-text-tertiary">
@@ -175,6 +200,12 @@ export function RiderPacksTourClient({
         rows={rows}
         rowKey={(row) => row.id}
         flat
+        /* R-A: this is what switches the table to tableLayout:'fixed' and turns
+           on persisted drag-resize. Without it resizable is false and the
+           browser uses auto-layout, which is the other half of why Pack
+           collapsed. Keyed per tour so widths do not leak between tours.
+           House pattern: AdvanceOverview.tsx:596. */
+        columnWidthsKey={`lp-cols-riders:${tourId}`}
         searchPlaceholder="Search rider packs…"
         emptyState="No rider packs for this tour."
         onRowClick={(row) => {
