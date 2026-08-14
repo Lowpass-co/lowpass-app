@@ -1,0 +1,55 @@
+# ============================================================================
+# LOWPASS — post-deploy authenticated smoke.
+#
+# The static gates in ci.yml cannot see the failures that actually took
+# production down on 2026-08-09: a 200 with an empty document, and a query
+# against a column that does not exist. Both passed tsc, eslint, build and 538
+# tests. This job signs in as a real user and asserts on rendered CONTENT.
+#
+# workflow_dispatch, deliberately, as the first cut. Wiring this to Vercel's
+# deployment event needs either a Vercel webhook into repository_dispatch or the
+# deployment_status event, and both need setup on the Vercel side that I cannot
+# do or verify from here. A manual trigger that WORKS beats an automatic one
+# that silently never fires — which is the failure mode this whole exercise is
+# about. Promote it to automatic once someone confirms the event arrives.
+#
+# SECRETS ADAM MUST ADD (Settings → Secrets and variables → Actions):
+#   SMOKE_EMAIL     — the smoke user's email address
+#   SMOKE_PASSWORD  — its password
+#   SMOKE_ORIGIN    — default origin, e.g. https://<prod-domain>
+#                     (the run input overrides this, for previews)
+#
+# THE SMOKE USER IS NOT A DETAIL. It must be a NORMAL MEMBER of a REAL
+# workspace — not an admin, and not a fresh empty account. An empty workspace
+# renders empty pages legitimately, which would make this smoke blind to exactly
+# the failure it exists to catch.
+# ============================================================================
+
+name: Smoke (authenticated)
+
+on:
+  workflow_dispatch:
+    inputs:
+      origin:
+        description: 'Origin to smoke (defaults to the SMOKE_ORIGIN secret). Use a preview URL to check before promotion.'
+        required: false
+        type: string
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: 'npm'
+      - name: Install
+        run: npm ci
+      - name: Smoke
+        env:
+          SMOKE_EMAIL: ${{ secrets.SMOKE_EMAIL }}
+          SMOKE_PASSWORD: ${{ secrets.SMOKE_PASSWORD }}
+          SMOKE_ORIGIN: ${{ inputs.origin || secrets.SMOKE_ORIGIN }}
+        run: npm run smoke:prod
