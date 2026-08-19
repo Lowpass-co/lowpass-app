@@ -1,0 +1,84 @@
+-- ============================================
+-- LOWPASS — Drop payroll_entries.total_fee / total_per_diem
+-- Migration 265 — DESTRUCTIVE. MONEY COLUMNS. READ ALL OF THIS FIRST.
+--
+-- ── WHY ─────────────────────────────────────────────────────────────
+-- Adam's ruling, 2026-08-14: `payroll_entries.total_fee` is not a source of
+-- truth. Do not cache it, do not fix its arithmetic — move the readers to the
+-- derived budget lines and drop the column.
+--
+-- Rows in `payroll_entries` are written ONLY when somebody paints a day
+-- status. On a tour nobody has painted, the column is not merely wrong, it is
+-- ABSENT — so the surfaces that read it rendered £0 while the surfaces that
+-- compute live showed real figures. That is the Coachella mismatch. And once
+-- you DO paint, the write was wrong a second way: it dropped every `flat_once`
+-- line (a5 Advance AND a7 Flat tour) and re-added a `body.advance_fee` the
+-- client never sends, so the column became populated-and-wrong instead of
+-- empty-and-wrong.
+--
+-- The canonical persisted total is the DERIVED BUDGET LINE
+-- (`budget_line_items.source_entity_type` = 'payroll' / 'payroll_per_diem'),
+-- written by `reconcileDerivedBudgetLines` through `fees.ts` from
+-- `personnel_rate_lines` + `effectiveStatuses`. It exists whether or not
+-- anyone painted anything, and it respects budget-version locking.
+--
+-- ── PRECONDITION: THE CODE MUST BE DEPLOYED FIRST ───────────────────
+-- As of the money-convergence bank (2026-08-19) these columns have ZERO
+-- readers and ZERO writers in the app:
+--   readers moved  → src/lib/budget/derivedPayrollTotals.ts
+--   writer deleted → src/app/api/budget/payroll/route.ts (POST)
+--   writer deleted → src/app/api/budget/payroll/generate/route.ts
+-- DO NOT PASTE THIS UNTIL THAT CODE IS LIVE. Pasting it against an older
+-- deploy makes every payroll paint 500 on an insert into a missing column.
+--
+-- ── THIS IS NOT REVERSIBLE IN DATA TERMS ────────────────────────────
+-- The down-block re-creates the COLUMNS but cannot re-create the VALUES.
+-- Everything they held is recomputable from `day_statuses` +
+-- `personnel_rate_lines`, which is the whole argument for dropping them —
+-- but if you want a keepsake, run this first and save the output:
+--
+--   SELECT tour_id, personnel_id, week_start, total_fee, total_per_diem
+--   FROM public.payroll_entries
+--   WHERE total_fee <> 0 OR total_per_diem <> 0
+--   ORDER BY tour_id, personnel_id, week_start;
+--
+-- ── BEFORE PASTING: check nothing in the DB depends on them ─────────
+-- No CASCADE is used deliberately — if a view or function references these
+-- columns the DROP will ERROR rather than silently destroying the view.
+-- To see what would break:
+--
+--   SELECT dependent_ns.nspname, dependent_view.relname
+--   FROM pg_depend d
+--   JOIN pg_rewrite r        ON r.oid = d.objid
+--   JOIN pg_class dependent_view ON dependent_view.oid = r.ev_class
+--   JOIN pg_namespace dependent_ns ON dependent_ns.oid = dependent_view.relnamespace
+--   JOIN pg_class source_table ON source_table.oid = d.refobjid
+--   JOIN pg_attribute a ON a.attrelid = d.refobjid AND a.attnum = d.refobjsubid
+--   WHERE source_table.relname = 'payroll_entries'
+--     AND a.attname IN ('total_fee', 'total_per_diem');
+--
+-- ── NOT DROPPED HERE: payroll_entries.advance_fee ───────────────────
+-- The app no longer reads or writes it either (the payroll export now takes
+-- the one-time charges from the rate card's a5/a7 lines). It is left standing
+-- because Adam ruled on `total_fee`, not on this, and it still holds whatever
+-- per-week advances were entered by hand before the paint started zeroing
+-- them. Decide separately; a second migration is cheap.
+--
+-- Idempotent (IF EXISTS). Down-block at the end.
+-- ============================================
+
+ALTER TABLE public.payroll_entries DROP COLUMN IF EXISTS total_fee;
+ALTER TABLE public.payroll_entries DROP COLUMN IF EXISTS total_per_diem;
+
+-- ============================================
+-- DOWN (restores the COLUMNS, not the VALUES — see the header)
+--
+-- ALTER TABLE public.payroll_entries
+--   ADD COLUMN IF NOT EXISTS total_fee numeric NOT NULL DEFAULT 0;
+-- ALTER TABLE public.payroll_entries
+--   ADD COLUMN IF NOT EXISTS total_per_diem numeric NOT NULL DEFAULT 0;
+--
+-- Every row will read 0. To repopulate you would have to re-run the payroll
+-- generator over each tour, which computes the same numbers the derived
+-- budget lines already carry — which is why this is a drop and not a cache.
+-- ============================================
