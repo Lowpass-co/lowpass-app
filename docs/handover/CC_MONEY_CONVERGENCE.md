@@ -1,5 +1,44 @@
 # CC — Payroll has SIX formulas, and the rooming lines are derived from placeholder hotels
 
+> **STATUS 2026-08-19 — M-1 IS BUILT AND PUSHED. M-2 IS SCHEMA-ONLY, AWAITING A PASTE.**
+> Read this banner before re-planning anything below it.
+>
+> **Shipped** (`f53ed5c` → `f9e08f9` on `main`): the eighth formula in
+> `commission-context.ts`; all seven `payroll_entries.total_fee` readers moved
+> to the derived budget lines (`src/lib/budget/derivedPayrollTotals.ts` is the
+> one read path); formulas 3, 4, 5 and 6 deleted or converged; M-1a's
+> legacy-fallback meta divergence closed; M-1b's advance-zeroing write deleted
+> rather than repaired. **The column now has zero readers AND zero writers.**
+>
+> **Harnesses extended, not merely kept: 72 → 87 and 27 → 29** (settlement
+> unchanged at 40). The new pins are at the CALLER level — see "caller-level
+> divergence pins" at the bottom of `reconcile.harness.ts` — because all 72 of
+> the originals tested `fees.ts`, which was never the broken part.
+>
+> **The formula count was wrong, low.** Eight was not the total. Two more were
+> found and deleted: `budget-utils.computeBudgetSummary` (~190 lines of
+> Decimal.js) and `tour-overview/overview-utils.computePayrollData`. Both had
+> ZERO importers, and both were wrong in the same two ways as the live ones.
+> `overview-utils.ts:293` is listed below as one of seven LIVE readers — **it
+> was not live**, and neither is the whole `src/components/tour-overview/`
+> directory.
+>
+> **Outstanding, and it needs Adam, not another session:**
+> 1. **Coachella before/after totals.** Not produced. No database access from a
+>    coding session — no `DATABASE_URL`, no `psql`, no Supabase CLI. Numbers
+>    WILL move on the summary, artist-summary and per-person salary surfaces;
+>    every move is attributable to a named divergence in this brief, but that
+>    is an argument, not a measurement. Do not accept a substitute.
+> 2. **Migration 265** — drops `payroll_entries.total_fee` / `total_per_diem`.
+>    DESTRUCTIVE, and the code must be DEPLOYED first or every payroll paint
+>    500s on an insert into a missing column.
+> 3. **Migration 266** — `hotels.is_placeholder`,
+>    `budget_settings.default_room_rate`, `budget_line_items.unit_cost`.
+>    Additive. M-2's application code is deliberately NOT written yet: it would
+>    be broken until the paste lands.
+>
+> Everything below is the original brief, unedited.
+
 Adam, walking Good Neighbours → Coachella: *"the payroll page doesn't match the budget. I also can't add hotel prices and there are like twenty lines. There should only be one summary line with the assumed cost multiplied by rooms. This should be editable still, which would update the estimated nightly cost cell."*
 
 Both reports are correct. The payroll one is worse than it sounds.

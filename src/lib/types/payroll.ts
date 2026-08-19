@@ -78,6 +78,11 @@ export interface PayrollEntryRow {
   week_start: string;
   /** Map of ISO-date → day_type-string. */
   day_statuses: Record<string, string>;
+  /** @deprecated RETIRED, migration 265 drops these columns. They were only
+   *  ever written when somebody painted a day status, so on an unpainted tour
+   *  they held nothing while the live-computing surfaces showed real figures.
+   *  Nothing reads them any more. For payroll money use the DERIVED budget
+   *  lines — `@/lib/budget/derivedPayrollTotals`. Do not add a reader. */
   advance_fee: number;
   total_fee: number;
   total_per_diem: number;
