@@ -1,7 +1,29 @@
 /**
  * Shared commission basis + amount math (math spec §7).
  * Used by CommissionsTab and spreadsheet CommissionsGrid.
+ *
+ * ─────────────────────────────────────────────────────────────────────
+ * SALARIES + PER DIEMS COME FROM THE DERIVED BUDGET LINES. 2026-08-19.
+ * ─────────────────────────────────────────────────────────────────────
+ * This module used to carry an EIGHTH payroll formula, and it was the worst
+ * one in the app because it decides what people get paid:
+ *
+ *   - `actualSalaries` summed `payroll_entries.total_fee`, a column that is
+ *     EMPTY on any tour where nobody has painted a day status.
+ *   - `proposedSalaries` did pre-migration-261 arithmetic
+ *     (`showDays * showRate + offDays * offRate + …`) over the LEGACY rate
+ *     columns, which are 0 on every card that has `personnel_rate_lines`.
+ *
+ * On Coachella both sides evaluated to zero, so `subtotalDirectProposed` and
+ * `subtotalDirectActual` were missing every salary and every per diem, and
+ * every commission on a `direct`/`net` basis was computed against that hole.
+ * (A `gross` basis was unaffected — it never touches the subtotal.)
+ *
+ * Both now read the derived budget lines, which `reconcileDerivedBudgetLines`
+ * writes through `fees.ts` from `personnel_rate_lines` + `effectiveStatuses`.
+ * One engine, one number. See `@/lib/budget/derivedPayrollTotals`.
  */
+import { derivedPayrollTotals, type DerivedPayrollLineRow } from '@/lib/budget/derivedPayrollTotals';
 
 export type CommissionContextIncomeRow = {
   post_tax_guarantee: number;
@@ -17,16 +39,7 @@ export type CommissionContextIncomeRow = {
   actual_vip: number | null;
 };
 
-type LineItemRow = { category: string; proposed_cost: number; actual_cost: number };
-type PersonnelRateRow = {
-  rate_type: string;
-  showRate: number;
-  offRate: number;
-  rehearsalRate?: number;
-  per_diem: number;
-  advance_fee: number;
-};
-type PayrollEntryRow = { total_fee: number; total_per_diem: number };
+type LineItemRow = DerivedPayrollLineRow & { category: string; proposed_cost: number; actual_cost: number };
 type FlightRow = { proposed_cost: number; actual_cost: number };
 export type CommissionSettingsRow = { insurance_pct: number; contingency_pct: number; accountancy_pct: number };
 
@@ -54,14 +67,8 @@ function derivedPostTaxOverage(row: CommissionContextIncomeRow): number {
 export function computeCommissionContext(
   incomeRows: CommissionContextIncomeRow[],
   lineItems: LineItemRow[],
-  personnel: PersonnelRateRow[],
-  payrollEntries: PayrollEntryRow[],
   flights: FlightRow[],
-  settings: CommissionSettingsRow | null,
-  routingShowDays: number,
-  routingOffDays: number,
-  routingRehearsalDays: number,
-  totalDays: number
+  settings: CommissionSettingsRow | null
 ) {
   const proposedGrossIncome =
     sum(incomeRows.map((i) => {
@@ -80,22 +87,12 @@ export function computeCommissionContext(
     sum(incomeRows.map((i) => n(i.actual_merch))) +
     sum(incomeRows.map((i) => n(i.actual_vip)));
 
-  const proposedSalaries = personnel.reduce((acc, p) => {
-    const rateType = p.rate_type ?? 'day_rate';
-    if (rateType === 'split_rate') {
-      return (
-        acc +
-        routingShowDays * Number(p.showRate) +
-        routingOffDays * Number(p.offRate) +
-        routingRehearsalDays * Number(p.rehearsalRate ?? 0) +
-        Number(p.advance_fee ?? 0)
-      );
-    }
-    return acc + totalDays * Number(p.offRate) + Number(p.advance_fee ?? 0);
-  }, 0);
-  const actualSalaries = sum(payrollEntries.map((e) => Number(e.total_fee)));
-  const proposedPerDiem = personnel.reduce((acc, p) => acc + totalDays * Number(p.per_diem ?? 0), 0);
-  const actualPerDiem = sum(payrollEntries.map((e) => Number(e.total_per_diem)));
+  // Salary + per diem, both sides, from the derived budget lines (formula 2's
+  // output, computed through fees.ts). NOTE the direct-expense filters below
+  // deliberately do not include the derived lines' own categories
+  // ('crew' / 'per_diems') — summing both would double-count every salary.
+  const { proposedSalaries, actualSalaries, proposedPerDiem, actualPerDiem } =
+    derivedPayrollTotals(lineItems);
 
   const hotelsItems = lineItems.filter((i) => i.category === 'hotels');
   const transportItems = lineItems.filter((i) => i.category.startsWith('transport_'));

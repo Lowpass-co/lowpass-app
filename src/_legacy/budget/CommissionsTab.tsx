@@ -58,34 +58,21 @@ export function CommissionsTab({ tourId }: { tourId: string }) {
       fetch(`/api/budget/commissions?tour_id=${tourId}`).then((r) => (r.ok ? r.json() : { commissions: [] })),
       fetch(`/api/budget/settings?tour_id=${tourId}`).then((r) => (r.ok ? r.json() : null)),
       fetch(`/api/budget/income?tour_id=${tourId}`).then((r) => (r.ok ? r.json() : { income: [] })),
-      fetch(`/api/tours/${tourId}/routing`).then((r) => (r.ok ? r.json() : [])),
-      fetch(`/api/budget/personnel-rates?tour_id=${tourId}`).then((r) => (r.ok ? r.json() : { personnel_rates: [] })),
-      fetch(`/api/budget/payroll?tour_id=${tourId}`).then((r) => (r.ok ? r.json() : { entries: [] })),
       fetch(`/api/budget/line-items?tour_id=${tourId}`).then((r) => (r.ok ? r.json() : { line_items: [] })),
       fetch(`/api/budget/flights?tour_id=${tourId}`).then((r) => (r.ok ? r.json() : { flights: [] })),
     ])
       .then(
-        ([commRes, settings, incomeRes, routing, personnelRes, payrollRes, lineItemsRes, flightsRes]) => {
+        ([commRes, settings, incomeRes, lineItemsRes, flightsRes]) => {
           setCommissions(commRes?.commissions ?? []);
           const incomeRows: CommissionContextIncomeRow[] = incomeRes?.income ?? [];
-          const routingRows = Array.isArray(routing) ? routing : [];
-          const showDays = routingRows.filter((r: { day_type: string }) => r.day_type === 'show' || r.day_type === 'festival').length;
-          const offDays = routingRows.filter((r: { day_type: string }) =>
-            ['off', 'travel', 'press', 'radio', 'tv'].includes(r.day_type)
-          ).length;
-          const rehearsalDays = routingRows.filter((r: { day_type: string }) => r.day_type === 'rehearsal').length;
-          const totalDays = showDays + offDays + rehearsalDays;
+          // Salaries + per diems now ride the derived budget lines inside
+          // `line_items`; routing / personnel-rates / payroll_entries are no
+          // longer needed here.
           const ctx = computeCommissionContext(
             incomeRows,
             lineItemsRes?.line_items ?? [],
-            personnelRes?.personnel_rates ?? [],
-            payrollRes?.entries ?? [],
             flightsRes?.flights ?? [],
-            settings,
-            showDays,
-            offDays,
-            rehearsalDays,
-            totalDays
+            settings
           );
           setContext(ctx);
           setSettingsDraft({

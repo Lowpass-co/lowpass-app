@@ -72,14 +72,17 @@ export function CommissionsGrid({ tourId }: { tourId: string; currency?: string 
     if (!silent) setLoading(true);
     setError(null);
     try {
+      // Salaries + per diems ride the DERIVED budget lines inside
+      // `line_items` (source_entity_type 'payroll' / 'payroll_per_diem'), so
+      // routing day-counts, personnel rate cards and payroll_entries are no
+      // longer fetched here — this grid no longer computes payroll at all.
+      // The unfiltered line-items GET reconciles the derived lines first, so
+      // what comes back is current.
       const [
         commissionsRes,
         settingsRes,
         summaryRes,
         incomeRes,
-        routingRes,
-        personnelRes,
-        payrollRes,
         lineItemsRes,
         flightsRes,
       ] = await Promise.all([
@@ -87,22 +90,16 @@ export function CommissionsGrid({ tourId }: { tourId: string; currency?: string 
         fetch(`/api/budget/settings?tour_id=${tourId}`),
         fetch(`/api/budget/summary?tour_id=${tourId}`),
         fetch(`/api/budget/income?tour_id=${tourId}`),
-        fetch(`/api/tours/${tourId}/routing`),
-        fetch(`/api/budget/personnel-rates?tour_id=${tourId}`),
-        fetch(`/api/budget/payroll?tour_id=${tourId}`),
         fetch(`/api/budget/line-items?tour_id=${tourId}`),
         fetch(`/api/budget/flights?tour_id=${tourId}`),
       ]);
       if (!commissionsRes.ok) throw new Error('Failed to load commissions');
-      const [commissionsJson, settingsJson, summaryJson, incomeData, routingRows, personnelData, payrollData, lineItemsData, flightsData] =
+      const [commissionsJson, settingsJson, summaryJson, incomeData, lineItemsData, flightsData] =
         await Promise.all([
           commissionsRes.json(),
           settingsRes.ok ? settingsRes.json() : Promise.resolve(null),
           summaryRes.ok ? summaryRes.json() : Promise.resolve(null),
           incomeRes.ok ? incomeRes.json() : Promise.resolve({ income: [] }),
-          routingRes.ok ? routingRes.json() : Promise.resolve([]),
-          personnelRes.ok ? personnelRes.json() : Promise.resolve({ personnel_rates: [] }),
-          payrollRes.ok ? payrollRes.json() : Promise.resolve({ entries: [] }),
           lineItemsRes.ok ? lineItemsRes.json() : Promise.resolve({ line_items: [] }),
           flightsRes.ok ? flightsRes.json() : Promise.resolve({ flights: [] }),
         ]);
@@ -120,22 +117,11 @@ export function CommissionsGrid({ tourId }: { tourId: string; currency?: string 
         setOverheadAmounts(overheadAmountsFromSummaryJson(summaryJson));
       }
 
-      const routing = Array.isArray(routingRows) ? routingRows : [];
-      const showDays = routing.filter(
-        (r: { day_type: string }) => r.day_type === 'show' || r.day_type === 'festival'
-      ).length;
-      const offDays = routing.filter((r: { day_type: string }) =>
-        ['off', 'travel', 'press', 'radio', 'tv'].includes(r.day_type)
-      ).length;
-      const rehearsalDays = routing.filter((r: { day_type: string }) => r.day_type === 'rehearsal').length;
-      const totalDays = showDays + offDays + rehearsalDays;
       const incomeRows: CommissionContextIncomeRow[] = incomeData?.income ?? [];
       setCommissionContext(
         computeCommissionContext(
           incomeRows,
           lineItemsData?.line_items ?? [],
-          personnelData?.personnel_rates ?? [],
-          payrollData?.entries ?? [],
           flightsData?.flights ?? [],
           settingsJson
             ? {
@@ -143,11 +129,7 @@ export function CommissionsGrid({ tourId }: { tourId: string; currency?: string 
                 contingency_pct: Number(settingsJson?.contingency_pct ?? 0.02),
                 accountancy_pct: Number(settingsJson?.accountancy_pct ?? 0),
               }
-            : null,
-          showDays,
-          offDays,
-          rehearsalDays,
-          totalDays
+            : null
         )
       );
     } catch (e) {
