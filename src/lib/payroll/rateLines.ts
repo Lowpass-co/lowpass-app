@@ -157,6 +157,50 @@ export function hasStackingConflict(amountFor: (typeId: string) => number): bool
   );
 }
 
+/** The legacy rate columns expressed as rate-line ROWS against the CANONICAL
+ *  type ids. This is the M-1a bridge: it lets the server's transitional
+ *  fallback build its lines through the SAME catalog metas the client uses,
+ *  instead of `ratesToLines`' hand-rolled ones.
+ *
+ *  Why that mattered. `ratesToLines` bills per-diem `per_active_day` and gives
+ *  Travel only `['off_travel']`. The canonical catalog bills per-diem
+ *  `per_assigned_day` and gives Travel `['off_travel','travel','off']`. So a
+ *  card with no `personnel_rate_lines` rows counted `off` and `pd_only` days
+ *  DIFFERENTLY from every other card on the same tour, silently, in the budget
+ *  only — the payroll page synthesises zeros for such a card and displays £0.
+ *
+ *  For LEGACY data the two are identical (no 'off' or 'pd_only' days exist, so
+ *  active == assigned and the extra Travel statuses never fire) — that is the
+ *  money invariant, pinned in reconcile.harness.ts. */
+export function legacyRowsToCanonicalRows(
+  rate: RateLike,
+  advanceFee: number | string | null = 0,
+): RateLineRow[] {
+  return [
+    { rate_type_id: DEFAULT_RATE_TYPE_IDS.show, amount: rate.show_rate ?? 0 },
+    { rate_type_id: DEFAULT_RATE_TYPE_IDS.offTravel, amount: rate.off_rate ?? 0 },
+    { rate_type_id: DEFAULT_RATE_TYPE_IDS.rehearsal, amount: rate.rehearsal_rate ?? 0 },
+    { rate_type_id: DEFAULT_RATE_TYPE_IDS.perDiem, amount: rate.per_diem ?? 0 },
+    { rate_type_id: DEFAULT_RATE_TYPE_IDS.advance, amount: advanceFee ?? 0 },
+  ];
+}
+
+/** THE server-side fallback body, as a pure function: a card's legacy columns
+ *  → RateLines through the canonical catalog. `rateLinesFor` calls exactly this
+ *  when a person has no `personnel_rate_lines` rows.
+ *
+ *  It lives HERE rather than inline in `loadRateLines.ts` for one reason: the
+ *  node harness cannot import `loadRateLines.ts` (it carries an extensionless
+ *  value import that `--experimental-strip-types` will not resolve), and a
+ *  fallback nothing can pin is how M-1a stayed invisible in the first place. */
+export function linesFromLegacyCard(
+  rate: RateLike,
+  advanceFee: number | string | null,
+  types: RateTypeMeta[],
+): RateLine[] {
+  return resolvePersonLines(legacyRowsToCanonicalRows(rate, advanceFee), types);
+}
+
 /** Reference: build the five DEFAULT lines directly from the legacy column
  *  values. Used by the reconciliation gate — proving this equals
  *  ratesToLines(rate, advance) means switching the read source moves no money.

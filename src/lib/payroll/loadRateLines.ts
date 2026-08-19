@@ -7,11 +7,20 @@
    personnel_rates.* columns.
 
    `rateLinesFor(ctx, personnelRateId, legacy, advanceFee)` returns the person's
-   RateLines from the DB when present, and falls back to the legacy columns
-   (ratesToLines) only for rows not yet backfilled — a transitional safety net.
-   Post-migration 228+229 every person has lines, so the fallback is inert.
-   (The fallback splits, so day_rate correctness relies on migration 229 having
-   run — which re-seeds day_rate people onto the flat a6 line.)
+   RateLines from the DB when present, and falls back to the legacy columns only
+   for rows not yet backfilled — a transitional safety net. Post-migration
+   228+229+230 every person has lines, so the fallback is inert. (The fallback
+   splits, so day_rate correctness relies on migration 229 having run — which
+   re-seeds day_rate people onto the flat a6 line.)
+
+   M-1a, 2026-08-19: the fallback now builds its lines through the SAME catalog
+   metas as the primary path, via `legacyRowsToCanonicalRows`. It used to call
+   `ratesToLines`, whose metas differ — per-diem `per_active_day` vs
+   `per_assigned_day`, Travel `['off_travel']` vs
+   `['off_travel','travel','off']` — so a card with no `personnel_rate_lines`
+   rows billed `off` and `pd_only` days differently from every other card on the
+   same tour. Silently, and in the BUDGET only: the payroll page synthesises
+   zeros for such a card and displays £0 next to a budget that bills legacy.
    ============================================ */
 
 import type { SupabaseClient } from '@supabase/supabase-js';
@@ -20,10 +29,12 @@ import {
   canonicalOrderOf,
   CANONICAL_RATE_TYPE_IDS,
   DEFAULT_RATE_TYPE_IDS,
+  DEFAULT_RATE_TYPES,
+  linesFromLegacyCard,
   type RateTypeMeta,
   type RateLineRow,
 } from './rateLines';
-import { ratesToLines, type RateLike, type RateLine, type DayStatus, type RateBucket, type RateBasis } from './fees';
+import { type RateLike, type RateLine, type DayStatus, type RateBucket, type RateBasis } from './fees';
 
 /** A card's legacy rate columns — the ONLY place they're read for the fallback. */
 type LegacyRateCard = RateLike & { advance_fee?: number | string | null };
@@ -153,8 +164,9 @@ export function rateLinesFor(
   legacy?: RateLike,
   advanceFee?: number | string | null,
 ): RateLine[] {
+  const types = ctx.types.length > 0 ? ctx.types : DEFAULT_RATE_TYPES;
   const rows = ctx.linesByRateId.get(personnelRateId);
-  if (rows && rows.length > 0) return buildRateLines(rows, ctx.types);
+  if (rows && rows.length > 0) return buildRateLines(rows, types);
 
   const card = legacy ?? ctx.legacyByRateId.get(personnelRateId) ?? {};
   const adv = advanceFee ?? (card as LegacyRateCard).advance_fee ?? 0;
@@ -164,7 +176,21 @@ export function rateLinesFor(
       `[rates] fallback: personnel_rate ${personnelRateId} has no rate_lines — computing from legacy columns`,
     );
   }
-  return ratesToLines(card, adv);
+  // M-1a — the fallback now builds through the SAME catalog metas as the
+  // primary path (see legacyRowsToCanonicalRows). It used to call
+  // `ratesToLines`, whose metas bill per-diem `per_active_day` and give Travel
+  // only `['off_travel']`, so a card with no rate_lines counted `off` and
+  // `pd_only` days differently from every other card on the tour — in the
+  // BUDGET only, because the payroll page synthesises zeros for such a card
+  // and shows £0. Two paths, one card, two answers, no error.
+  //
+  // The fallback is NOT removed. Migration 231 (dropping the legacy columns)
+  // is still on HOLD, so a card that predates the 230 backfill can still be
+  // carrying real money in those columns; synthesising zeros the way the
+  // client does would silently zero it. Making the metas identical closes the
+  // divergence without that risk. For legacy data the two meta sets are
+  // arithmetically identical — the money invariant, pinned in the harness.
+  return linesFromLegacyCard(card, adv, types);
 }
 
 /** The five individual rate amounts (camelCase, grep-clean) for a person —

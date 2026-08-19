@@ -3,21 +3,24 @@
 
    POST: Auto-generate payroll entries from routing dates.
         Body: { tour_id }
-        Groups routing by week (Mon–Sun), maps day_type → day_status,
-        computes total_fee and total_per_diem per math spec §6.
-        Advance_fee applied to week 1 only per person.
+        Groups routing by week (Mon–Sun), maps day_type → day_status, and
+        persists the resulting `day_statuses` map. That is all it persists.
+
+   MONEY REMOVED 2026-08-19 (M-1b). This route used to compute and store
+   `total_fee` / `total_per_diem` / `advance_fee` alongside the statuses. Those
+   columns have no readers any more — every money surface reads the derived
+   budget lines (`@/lib/budget/derivedPayrollTotals`), which are recomputed
+   from `personnel_rate_lines` + `effectiveStatuses` on every budget load and
+   do not require anyone to have run this generator. Writing a second, weaker
+   copy of the same total is exactly the divergence the convergence removed.
    ============================================ */
 
 import { NextResponse } from 'next/server';
 import { requireWrite } from '@/lib/auth/workspace-check';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
-// b2 — totals now sum a person's rate lines (personnel_rate_lines × rate_types)
-// via computeTotals; day counting + the day_type→status map come from the
-// canonical SSOTs (fees.countDayStatuses / effectiveDayType.dayTypeToPayStatus)
-// so generate can never disagree with the payroll display.
-import { computeTotals, countDayStatuses } from '@/lib/payroll/fees';
+// The day_type→status map is the canonical SSOT (effectiveDayType), so the
+// statuses this seeds are the same ones the payroll display would default to.
 import { dayTypeToPayStatus, type PayStatus } from '@/lib/payroll/effectiveDayType';
-import { loadTourRateContext, rateLinesFor } from '@/lib/payroll/loadRateLines';
 
 type DayStatus = PayStatus;
 
@@ -95,16 +98,13 @@ export async function POST(request: Request) {
 
   const { data: personnelRows, error: personnelError } = await supabase
     .from('personnel_rates')
-    .select('id, rate_type, per_diem, advance_fee')
+    .select('id')
     .eq('tour_id', tour_id)
     .eq('workspace_id', profile.workspace_id);
 
   if (personnelError) {
     return NextResponse.json({ error: personnelError.message }, { status: 500 });
   }
-
-  // b2 — the rate-lines source: the workspace catalog + every person's lines.
-  const rateCtx = await loadTourRateContext(supabase, tour_id, profile.workspace_id as string);
 
   const routingByDate = new Map<string, { day_type: string }>();
   const weekStarts = new Set<string>();
@@ -121,8 +121,6 @@ export async function POST(request: Request) {
   let generated = 0;
 
   for (const person of personnel) {
-    const advanceFeeTotal = Number(person.advance_fee) || 0;
-    let weekIndex = 0;
     for (const weekStart of sortedWeekStarts) {
       const dates = weekDates(weekStart);
       const dayStatuses: Record<string, DayStatus> = {};
@@ -130,18 +128,6 @@ export async function POST(request: Request) {
         const r = routingByDate.get(dateStr);
         dayStatuses[dateStr] = r ? dayTypeToPayStatus(r.day_type) : 'no_tour';
       }
-      const advanceFee = weekIndex === 0 ? advanceFeeTotal : 0;
-      // Rate-lines totals: sum this person's lines over the week's day counts.
-      // The advance is a flat_once charge applied ONCE (week 0) — so drop
-      // flat_once lines for weeks > 0. Reconciles to the legacy per-week math
-      // for both split_rate (a1/a2/a3) and day_rate (a6) — proven in the harness.
-      const counts = countDayStatuses(dayStatuses);
-      // Rates SSOT — lines from personnel_rate_lines; ctx.legacyByRateId carries
-      // the fallback (advance included) so no legacy column is named here. The
-      // a5 advance line equals the card's advance_fee, matching advanceFeeTotal.
-      const allLines = rateLinesFor(rateCtx, person.id as string);
-      const lines = weekIndex === 0 ? allLines : allLines.filter((l) => l.basis !== 'flat_once');
-      const { totalFee: total_fee, totalPerDiem: total_per_diem } = computeTotals(lines, counts);
       const { error: upsertError } = await supabase
         .from('payroll_entries')
         .upsert(
@@ -151,16 +137,12 @@ export async function POST(request: Request) {
             personnel_id: person.id,
             week_start: weekStart,
             day_statuses: dayStatuses,
-            advance_fee: advanceFee,
-            total_fee,
-            total_per_diem,
             notes: null,
             updated_at: new Date().toISOString(),
           },
           { onConflict: 'personnel_id,week_start' }
         );
       if (!upsertError) generated++;
-      weekIndex++;
     }
   }
 

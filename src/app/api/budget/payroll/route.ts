@@ -4,15 +4,39 @@
    GET: Payroll entries for a tour (?tour_id=uuid, ?week_start= optional).
         Joined with personnel_rates. Order week_start, personnel order_index.
    POST: Create/update payroll entry (upsert personnel_id + week_start).
-        Auto-computes total_fee and total_per_diem per math spec §6.
+        Persists ONE thing: `day_statuses`, the record of what was painted.
+
+   ─────────────────────────────────────────────────────────────────────
+   THIS ROUTE NO LONGER COMPUTES MONEY. 2026-08-19 (M-1b, formula 3).
+   ─────────────────────────────────────────────────────────────────────
+   It used to write `total_fee` / `total_per_diem` on every paint, and the
+   arithmetic was wrong in a way nothing could see:
+
+     const base = computeTotals(lines.filter((l) => l.basis !== 'flat_once'), counts);
+     const total_fee = base.totalFee + advanceFee;   // advanceFee = 0, always
+
+   `flat_once` is BOTH a5 Advance and a7 Flat tour, so both were dropped, and
+   `body.advance_fee` — which `usePayrollGrid` carries as a type field and
+   never actually sends — came back `undefined`, so `Number(undefined) || 0`
+   re-added nothing. Painting a day therefore REWROTE a persisted money column
+   with the advance removed and Flat tour never in it at all.
+
+   The column is not being repaired, it is being retired (Adam's ruling): the
+   canonical persisted total is the derived budget line, written through
+   `fees.ts` by `reconcileDerivedBudgetLines`, which exists whether or not
+   anyone painted anything. Every reader has moved
+   (`@/lib/budget/derivedPayrollTotals`), so the columns now have zero readers
+   and migration 265 drops them.
+
+   `advance_fee` is no longer written either — the same paint zeroed the stored
+   per-week advance, and the payroll export was reading it. The rate card's a5
+   line is the single source for the advance now, same as everywhere else.
    ============================================ */
 
 import { NextResponse } from 'next/server';
 import { requireWrite } from '@/lib/auth/workspace-check';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
-import { countDayStatuses, computeTotals } from '@/lib/payroll/fees';
-import { effectiveStatuses, type PayStatus } from '@/lib/payroll/effectiveDayType';
-import { loadTourRateContext, rateLinesFor } from '@/lib/payroll/loadRateLines';
+import { type PayStatus } from '@/lib/payroll/effectiveDayType';
 import { isPayrollFinalized, PAYROLL_FINALIZED_ERROR } from '@/lib/payroll/finalize';
 
 type DayStatus = PayStatus;
@@ -162,32 +186,11 @@ export async function POST(request: Request) {
   }
 
   const dayStatuses = (body.day_statuses ?? {}) as Record<string, DayStatus>;
-  const advanceFee = Number(body.advance_fee) || 0;
-  // Rates SSOT — fee/per-diem from personnel_rate_lines via computeTotals. This
-  // week's advance comes from the request body (a per-week override), so the
-  // card's flat_once advance line is dropped from the base and the body advance
-  // is added once.
-  // EFFECTIVE COUNTS (261): the persisted map holds only PAINTED days — the
-  // totals must also count this week's unpainted routing days at their
-  // tour-default status, exactly like the display does, or the persisted
-  // total_fee/total_per_diem undercount tour-default days.
-  const weekEnd = new Date(`${week_start}T12:00:00Z`);
-  weekEnd.setUTCDate(weekEnd.getUTCDate() + 6);
-  const weekEndStr = weekEnd.toISOString().slice(0, 10);
-  const { data: weekRouting } = await supabase
-    .from('routing')
-    .select('date, day_type')
-    .eq('tour_id', tour_id)
-    .gte('date', week_start)
-    .lte('date', weekEndStr);
-  const weekDays = ((weekRouting ?? []) as Array<{ date: string; day_type?: string | null }>);
-  const counts = countDayStatuses(effectiveStatuses(weekDays, dayStatuses));
-  const rateCtx = await loadTourRateContext(supabase, tour_id, profile.workspace_id as string);
-  const lines = rateLinesFor(rateCtx, personnel.id as string);
-  const base = computeTotals(lines.filter((l) => l.basis !== 'flat_once'), counts);
-  const total_fee = base.totalFee + advanceFee;
-  const total_per_diem = base.totalPerDiem;
 
+  // The paint record, and nothing else. `total_fee`, `total_per_diem` and
+  // `advance_fee` are deliberately ABSENT from this payload — see the header.
+  // Supabase's upsert only writes the columns it is given, so an existing row's
+  // stale values are left alone rather than being overwritten with a wrong one.
   const payload = {
     tour_id,
     workspace_id: profile.workspace_id,
@@ -195,9 +198,6 @@ export async function POST(request: Request) {
     person_id: body.person_id ?? null,
     week_start,
     day_statuses: dayStatuses,
-    advance_fee: advanceFee,
-    total_fee,
-    total_per_diem,
     notes: body.notes ?? null,
     updated_at: new Date().toISOString(),
   };

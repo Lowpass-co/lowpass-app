@@ -62,9 +62,18 @@ jobs:
       # reserved in this repo for node --experimental-strip-types harnesses, and
       # vitest does not pick them up. Run explicitly or they run nowhere.
       #
-      # Counts observed 2026-08-09: 72 / 27 / 40. Each harness exits non-zero on
-      # a mismatch, so the step fails on drift without asserting the count here —
-      # pinning the number in YAML would just be a second place to update.
+      # Counts observed 2026-08-19: 87 / 29 / 40 (was 72 / 27 / 40 on 2026-08-09,
+      # before the money-convergence bank added caller-level pins). Each harness
+      # exits non-zero on a mismatch, so the step fails on drift without
+      # asserting the count here — pinning the number in YAML would just be a
+      # second place to update.
+      #
+      # A WARNING ABOUT WHAT THESE PROVE. Until 2026-08-19 every check in the
+      # payroll harnesses tested `fees.ts`, and `fees.ts` was never wrong. 72
+      # green checks sat alongside EIGHT surfaces computing payroll eight
+      # different ways, because nothing tested the callers. If you add a payroll
+      # check here, make it a check on a CALLER — see the "caller-level
+      # divergence pins" section at the bottom of reconcile.harness.ts.
       - name: Money harness — payroll reconciliation
         run: node --experimental-strip-types src/lib/payroll/reconcile.harness.ts
 

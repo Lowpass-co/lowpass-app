@@ -33,7 +33,9 @@ import {
   DEFAULT_RATE_TYPE_IDS,
   buildRateLines,
   defaultLinesFromLegacy,
+  linesFromLegacyCard,
   type RateLineRow,
+  type RateTypeMeta,
 } from './rateLines.ts';
 
 const RT = DEFAULT_RATE_TYPE_IDS;
@@ -395,5 +397,168 @@ assert.equal(computeTotalFee({ show_rate: 100, off_rate: 50, rehearsal_rate: 25,
 assert.equal(computeTotalPerDiem({ per_diem: 10 }, counts), 30);
 checks += 3;
 
+/* ══════════════════════════════════════════════════════════════════════
+   CALLER-LEVEL DIVERGENCE PINS (money convergence, 2026-08-19)
+
+   Everything above this line tests the ENGINE, and the engine was never
+   wrong. That is precisely why 72 green checks coexisted with six surfaces
+   computing payroll six different ways: the harness had coverage of
+   `fees.ts` and none of its CALLERS. These pins sit at the caller level —
+   the server's line resolution and the per-week splitting that the export
+   does — because that is where every bug in this bank actually lived.
+   ══════════════════════════════════════════════════════════════════════ */
+console.log('\nCaller-level divergence pins — the paths, not the engine\n');
+
+/** `rateLinesFor`'s two branches, reproduced exactly — it dispatches on
+ *  "does this person have rate-line rows?" and then calls one of these two.
+ *  The dispatch itself lives in `loadRateLines.ts`, which the harness cannot
+ *  import (extensionless value import, unresolvable under type-stripping); the
+ *  BODIES are both here, which is where the arithmetic is. */
+const linesFromRows = (rows: RateLineRow[], types: RateTypeMeta[] = DEFAULT_RATE_TYPES) =>
+  buildRateLines(rows, types);
+const linesFromCard = (card: RateLike & { advance_fee?: number }, types: RateTypeMeta[] = DEFAULT_RATE_TYPES) =>
+  linesFromLegacyCard(card, card.advance_fee ?? 0, types);
+
+/** A tour with the day statuses that used to be counted wrong: a painted OFF
+ *  day, a PD-ONLY day and a PROMO_RADIO day, alongside the legacy three. */
+const MIXED = countDayStatuses({
+  '2026-04-06': 'show',
+  '2026-04-07': 'off_travel',
+  '2026-04-08': 'rehearsal',
+  '2026-04-09': 'off',
+  '2026-04-10': 'pd_only',
+  '2026-04-11': 'promo_radio',
+  '2026-04-12': 'no_tour',
+});
+assert.deepEqual(
+  { show: MIXED.show, offTravel: MIXED.offTravel, rehearsal: MIXED.rehearsal, promo: MIXED.promo, off: MIXED.off, pdOnly: MIXED.pdOnly, active: MIXED.active, assigned: MIXED.assigned },
+  { show: 1, offTravel: 1, rehearsal: 1, promo: 1, off: 1, pdOnly: 1, active: 5, assigned: 6 },
+);
+checks++;
+
+/* ── PIN 1 — A BLANK RATE CARD READS ZERO ON BOTH PATHS (M-1a) ─────────
+   The payroll page synthesises a row for every canonical type with amount 0,
+   so a card with no `personnel_rate_lines` displays £0. The server fell back
+   to the legacy columns. When the card is blank both must be zero — and when
+   it is NOT blank they must at least count days the same way (pin 2). */
+const blankServer = computeTotals(
+  linesFromCard({ show_rate: 0, off_rate: 0, rehearsal_rate: 0, per_diem: 0, advance_fee: 0 }),
+  MIXED,
+);
+// The client's path: every canonical type present, amount 0.
+const blankClient = computeTotals(
+  buildRateLines(DEFAULT_RATE_TYPES.map((t) => ({ rate_type_id: t.id, amount: 0 })), DEFAULT_RATE_TYPES),
+  MIXED,
+);
+assert.equal(blankServer.totalFee, 0, `blank card server fee ${blankServer.totalFee} !== 0`);
+assert.equal(blankServer.totalPerDiem, 0, `blank card server PD ${blankServer.totalPerDiem} !== 0`);
+assert.equal(blankServer.totalFee, blankClient.totalFee);
+assert.equal(blankServer.totalPerDiem, blankClient.totalPerDiem);
+checks += 4;
+
+/* ── PIN 2 — THE LEGACY FALLBACK COUNTS DAYS THE CANONICAL WAY (M-1a) ──
+   Two cards, identical money, one carrying rate LINES and one carrying only
+   legacy COLUMNS. Their totals must match. Before the fix they did not:
+   `ratesToLines` billed per-diem `per_active_day` (losing the pd_only day)
+   and gave Travel only `['off_travel']` (losing the painted off day), while
+   the catalog bills `per_assigned_day` and `['off_travel','travel','off']`. */
+const AMOUNTS = { show: 300, travel: 150, rehearsal: 200, perDiem: 40, advance: 500 };
+const lined = computeTotals(
+  linesFromRows([
+    { rate_type_id: RT.show, amount: AMOUNTS.show },
+    { rate_type_id: RT.offTravel, amount: AMOUNTS.travel },
+    { rate_type_id: RT.rehearsal, amount: AMOUNTS.rehearsal },
+    { rate_type_id: RT.perDiem, amount: AMOUNTS.perDiem },
+    { rate_type_id: RT.advance, amount: AMOUNTS.advance },
+  ]),
+  MIXED,
+);
+const legacyFallback = computeTotals(
+  linesFromCard({
+    show_rate: AMOUNTS.show,
+    off_rate: AMOUNTS.travel,
+    rehearsal_rate: AMOUNTS.rehearsal,
+    per_diem: AMOUNTS.perDiem,
+    advance_fee: AMOUNTS.advance,
+  }),
+  MIXED,
+);
+assert.equal(legacyFallback.totalFee, lined.totalFee, `fallback fee ${legacyFallback.totalFee} !== lined ${lined.totalFee}`);
+assert.equal(legacyFallback.totalPerDiem, lined.totalPerDiem, `fallback PD ${legacyFallback.totalPerDiem} !== lined ${lined.totalPerDiem}`);
+checks += 2;
+
+/* ── PIN 3 — THE PD_ONLY DAY EARNS PER DIEM AND NO FEE ─────────────────
+   6 assigned days × 40 = 240, not 5 active × 40 = 200. The old fallback's
+   `per_active_day` per-diem meta produced 200, silently, for exactly the
+   cards that could not be seen on the payroll page. */
+assert.equal(lined.totalPerDiem, 240, `per diem ${lined.totalPerDiem} !== 240 (6 assigned × 40)`);
+assert.equal(legacyFallback.totalPerDiem, 240);
+checks += 2;
+
+/* ── PIN 4 — THE PROMO_RADIO DAY BILLS THE SHOW RATE (Dillon ruling) ───
+   No Press/Radio amount is set on either card, so promo days fall back to
+   Show. Fee = show(300 × [show + promo] = 2) + travel(150 × [travel + off]
+   = 2) + rehearsal(200 × 1) + advance(500) = 600 + 300 + 200 + 500. */
+assert.equal(lined.totalFee, 1600, `fee ${lined.totalFee} !== 1600`);
+assert.equal(legacyFallback.totalFee, 1600);
+checks += 2;
+
+/* ── PIN 5 — A PAINTED DAY CANNOT COST SOMEONE THEIR ADVANCE (M-1b) ────
+   The export bills per week: per-day lines against that week's counts, plus
+   the ONE-TIME lines (a5 Advance, a7 Flat tour) applied once. The sum across
+   weeks must equal the whole-tour total. The old code dropped every
+   `flat_once` line and re-added `payroll_entries.advance_fee` — so a7 Flat
+   tour vanished entirely, and a5 came back as whatever the last day-status
+   paint had left in the column, which was 0.
+
+   This is the pin the brief asks for as "an advance fee whose days get
+   painted": paint or no paint, the one-time charges are the card's. */
+const advLines = linesFromRows([
+  { rate_type_id: RT.show, amount: 400 },
+  { rate_type_id: RT.offTravel, amount: 200 },
+  { rate_type_id: RT.perDiem, amount: 50 },
+  { rate_type_id: RT.advance, amount: 1000 },   // a5 flat_once
+  { rate_type_id: RT.flatTour, amount: 2500 },  // a7 flat_once — used to vanish
+]);
+const advBase = advLines.filter((l) => l.basis !== 'flat_once');
+const ZERO: DayCounts = { show: 0, offTravel: 0, rehearsal: 0, promo: 0, off: 0, pdOnly: 0, active: 0, assigned: 0, weeks: 0 };
+const advOneTime = computeTotals(advLines.filter((l) => l.basis === 'flat_once'), ZERO);
+assert.equal(advOneTime.totalFee, 3500, `one-time ${advOneTime.totalFee} !== 3500 (advance 1000 + flat tour 2500)`);
+
+// Two weeks of painting. Week counts must sum to the tour counts.
+const wk1 = countDayStatuses({ '2026-05-04': 'show', '2026-05-06': 'off_travel' });
+const wk2 = countDayStatuses({ '2026-05-11': 'show', '2026-05-12': 'show', '2026-05-13': 'off' });
+const tourCounts = countDayStatuses({
+  '2026-05-04': 'show', '2026-05-06': 'off_travel',
+  '2026-05-11': 'show', '2026-05-12': 'show', '2026-05-13': 'off',
+});
+const perWeekFee =
+  computeTotals(advBase, wk1).totalFee +
+  computeTotals(advBase, wk2).totalFee +
+  advOneTime.totalFee;
+const wholeTourFee = computeTotals(advLines, tourCounts).totalFee;
+assert.equal(perWeekFee, wholeTourFee, `per-week ${perWeekFee} !== whole-tour ${wholeTourFee}`);
+// And the absolute number, so a change to both halves at once still fails:
+// show 400 × 3 + travel 200 × (1 travel + 1 off) + 3500 one-time.
+assert.equal(wholeTourFee, 400 * 3 + 200 * 2 + 3500);
+// The OLD export arithmetic, inlined, for contrast — it is short by the whole
+// a7 Flat tour and by the advance the paint had zeroed.
+const oldExportFee =
+  computeTotals(advBase, wk1).totalFee + computeTotals(advBase, wk2).totalFee + 0;
+assert.equal(wholeTourFee - oldExportFee, 3500, 'the one-time charges the old export dropped');
+checks += 4;
+
+console.log(['pin'.padEnd(58), 'fee'.padStart(11), 'per diem'.padStart(10), 'ok'].join('  '));
+console.log('-'.repeat(86));
+for (const [label, fee, pd] of [
+  ['blank card — server path == client path == 0', blankServer.totalFee, blankServer.totalPerDiem],
+  ['legacy-column fallback (off + pd_only + promo)', legacyFallback.totalFee, legacyFallback.totalPerDiem],
+  ['same card as rate LINES — must be identical', lined.totalFee, lined.totalPerDiem],
+  ['advance + flat tour, split across two weeks', perWeekFee, 0],
+] as [string, number, number][]) {
+  console.log([label.padEnd(58), fee.toFixed(2).padStart(11), pd.toFixed(2).padStart(10), '✓'].join('  '));
+}
+console.log('-'.repeat(86));
+
 console.log('-'.repeat(92));
-console.log(`\npayroll reconciliation: ${checks} checks passed — engine reproduces legacy EXACTLY.\n`);
+console.log(`\npayroll reconciliation: ${checks} checks passed — engine reproduces legacy EXACTLY,\nand the CALLERS agree with it.\n`);

@@ -196,4 +196,31 @@ const stacked = computeTotals(
 assert.equal(stacked.totalFee, 100 * 3 + 250 * 2);
 checks++;
 
+/* ── TWO flat_once LINES SUM (money convergence, 2026-08-19) ──────────
+   `flat_once` is not one rate, it is two: a5 Advance AND a7 Flat tour. Both
+   POST /api/budget/payroll and the payroll export used to write
+   `lines.filter((l) => l.basis !== 'flat_once')` and then re-add a single
+   `advance_fee` scalar — so a person on a Flat tour rate was billed nothing
+   for it, anywhere the persisted column was read. Nothing asserted that the
+   two coexist, so the drop was invisible. */
+const twoFlatOnce = computeTotals(
+  [
+    { bucket: 'fee', basis: 'per_day_status', dayStatuses: ['show'], amount: 400 },
+    { bucket: 'fee', basis: 'flat_once', amount: 1000 },  // a5 Advance
+    { bucket: 'fee', basis: 'flat_once', amount: 2500 },  // a7 Flat tour
+  ],
+  { show: 3, offTravel: 0, rehearsal: 0, active: 3, assigned: 3 },
+);
+assert.equal(twoFlatOnce.totalFee, 400 * 3 + 1000 + 2500);
+// …and neither of them moves with the day count.
+const twoFlatOnceLongTour = computeTotals(
+  [
+    { bucket: 'fee', basis: 'flat_once', amount: 1000 },
+    { bucket: 'fee', basis: 'flat_once', amount: 2500 },
+  ],
+  { show: 40, offTravel: 20, rehearsal: 5, active: 65, assigned: 70 },
+);
+assert.equal(twoFlatOnceLongTour.totalFee, 3500);
+checks += 2;
+
 console.log(`payroll fees: ${checks} checks passed`);

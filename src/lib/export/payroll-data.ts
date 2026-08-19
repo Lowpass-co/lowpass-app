@@ -21,7 +21,14 @@ import { resolveArtistLogoUrl } from '@/lib/artists/imageUrl';
 // b2 — fee/per-diem now sum a person's rate lines (personnel_rate_lines × rate_types)
 // via computeTotals, so custom types surface here too. Reconciles to the legacy
 // split for the 5 defaults and to the flat total for day_rate (a6) — proven in
-// reconcile.harness.ts. The advance stays sourced from the per-week entry below.
+// reconcile.harness.ts.
+//
+// 2026-08-19 (formula 6): the ONE-TIME lines (a5 Advance, a7 Flat tour) now come
+// from the RATE CARD, applied once, like every other surface. They used to be
+// filtered out of the line set wholesale and re-added from
+// `payroll_entries.advance_fee` — which dropped a7 Flat tour entirely (it has no
+// column to be re-added from) and read an advance that every day-status paint
+// had just zeroed. That column is no longer written at all.
 import { countDayStatuses, computeTotals, type DayCounts } from '@/lib/payroll/fees';
 import { effectiveStatuses } from '@/lib/payroll/effectiveDayType';
 import { loadTourRateContext, rateLinesFor, rateAmountsFor, type TourRateContext } from '@/lib/payroll/loadRateLines';
@@ -62,7 +69,8 @@ export interface PayrollPerson {
   perDiemRate: number;
   /** Aggregated day counts across all the person's weekly entries. */
   days: DayCounts;
-  /** Σ fee across weeks (incl. advance_fee, which sits on the week-1 entry). */
+  /** Σ fee across weeks, including the one-time flat_once charges (Advance,
+   *  Flat tour) from the rate card, applied once across the export. */
   fee: number;
   perDiemTotal: number;
   /** fee + perDiemTotal. */
@@ -85,7 +93,11 @@ export interface PayrollExportData {
   grandTotal: number;
 }
 
-const num = (v: unknown): number => Number(v) || 0;
+/** All-zero day counts — for valuing `flat_once` lines, which are amount × 1
+ *  and ignore the counts entirely. */
+const ZERO_COUNTS: DayCounts = {
+  show: 0, offTravel: 0, rehearsal: 0, promo: 0, off: 0, pdOnly: 0, active: 0, assigned: 0, weeks: 0,
+};
 
 /** Monday (ISO week start) of a 'YYYY-MM-DD' date — matches fees.ts/payroll-utils. */
 function weekStartOf(dateStr: string): string {
@@ -128,7 +140,7 @@ export async function loadPayrollExportData(
       .eq('workspace_id', workspaceId)
       .not('tour_personnel_id', 'is', null)
       .order('order_index', { ascending: true }),
-    supabase.from('payroll_entries').select('id, personnel_id, week_start, day_statuses, advance_fee').eq('tour_id', tourId).eq('workspace_id', workspaceId).order('week_start', { ascending: true }),
+    supabase.from('payroll_entries').select('id, personnel_id, week_start, day_statuses').eq('tour_id', tourId).eq('workspace_id', workspaceId).order('week_start', { ascending: true }),
     tour.artist_id
       ? supabase.from('artists').select('id, name, branding, spotify_id, spotify_image_url').eq('id', tour.artist_id).maybeSingle()
       : Promise.resolve({ data: null }),
@@ -165,7 +177,6 @@ export async function loadPayrollExportData(
     personnel_id: string;
     week_start: string;
     day_statuses: Record<string, string> | null;
-    advance_fee: number | string | null;
   }>;
   const entriesByRateId = new Map<string, typeof entries>();
   for (const e of entries) {
@@ -203,16 +214,20 @@ export async function loadPayrollExportData(
     const role = rosterRow?.role ?? rate.role ?? null;
 
     const myEntries = entriesByRateId.get(rate.id) ?? [];
-    // A person's base (non-advance) lines don't change week-to-week; the advance
-    // is applied per-entry below, so drop the flat_once line from the base set.
-    const baseLines = rateLinesFor(rateCtx, rate.id).filter((l) => l.basis !== 'flat_once');
+    // A person's per-day lines don't change week-to-week; the flat_once lines
+    // (a5 Advance, a7 Flat tour) are one-time charges, so they are held out of
+    // the per-week sum and applied ONCE below — the same thing computeTotals
+    // does when the payroll page and the derived budget line run it over the
+    // whole tour's counts (flat_once is amount × 1, whatever the counts).
+    const allLines = rateLinesFor(rateCtx, rate.id);
+    const baseLines = allLines.filter((l) => l.basis !== 'flat_once');
+    const oneTime = computeTotals(allLines.filter((l) => l.basis === 'flat_once'), ZERO_COUNTS);
     // EFFECTIVE COUNTS (261): overlay the person's painted days on the routing
     // spine (unpainted routing days count at their tour default), then walk the
     // union of routing weeks and entry weeks so per-week rows stay complete.
     const painted: Record<string, string> = {};
     for (const e of myEntries) Object.assign(painted, e.day_statuses ?? {});
     const effective = effectiveStatuses(routingDays, painted);
-    const advByWeek = new Map(myEntries.map((e) => [e.week_start, e.advance_fee]));
     const statusesByWeek = new Map<string, Record<string, string>>();
     for (const [date, status] of Object.entries(effective)) {
       const w = weekStartOf(date);
@@ -226,16 +241,19 @@ export async function loadPayrollExportData(
     let perDiemTotal = 0;
     const weeks: PayrollWeek[] = [];
     const dayRows: PayrollDayRow[] = [];
+    // The one-time charges land on the first week of the walk. With a date
+    // range active they land on the first week that has in-range worked days,
+    // and never at all if the range excludes every one of them — the same
+    // semantics the per-week advance had, now sourced from the rate card.
+    let oneTimeSpent = false;
     for (const weekStart of [...statusesByWeek.keys()].sort()) {
       const filtered = filterStatusesByRange(statusesByWeek.get(weekStart) ?? {}, range);
       const counts = countDayStatuses(filtered);
-      // The one-time advance sits on the week-1 entry — drop it only if the date
-      // range fully excludes that week (no in-range days). Default (no range) is
-      // unchanged: the advance always applies.
-      const advRaw = advByWeek.get(weekStart) ?? 0;
-      const adv = rangeActive ? (counts.active > 0 ? advRaw : 0) : advRaw;
-      const { totalFee: baseFee, totalPerDiem: wPd } = computeTotals(baseLines, counts);
-      const wFee = baseFee + num(adv);
+      const applyOneTime = !oneTimeSpent && (!rangeActive || counts.active > 0);
+      if (applyOneTime) oneTimeSpent = true;
+      const { totalFee: baseFee, totalPerDiem: basePd } = computeTotals(baseLines, counts);
+      const wFee = baseFee + (applyOneTime ? oneTime.totalFee : 0);
+      const wPd = basePd + (applyOneTime ? oneTime.totalPerDiem : 0);
       agg.show += counts.show;
       agg.offTravel += counts.offTravel;
       agg.rehearsal += counts.rehearsal;
