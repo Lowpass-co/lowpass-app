@@ -1,5 +1,34 @@
 # Money convergence — topology confirmed. NO CODE CHANGED.
 
+> **SUPERSEDED IN EMPHASIS, 2026-08-14.** `CC_MONEY_CONVERGENCE.md` gained a
+> ROOT CAUSE section after this was written, from probing Coachella live. Read
+> that first. What changed:
+>
+> - **M-1b is NOT the reported symptom.** I called it "the sharpest item in the
+>   brief" below. The bug is real and confirmed, but Coachella has no
+>   `flat_once` lines at all, so nobody there has an advance to strip. My
+>   emphasis was wrong because I ranked by code severity without data — exactly
+>   the mistake the brief opens by warning about.
+> - **The actual cause is that `payroll_entries` has ZERO rows for the tour.**
+>   The column is not merely wrong, it is absent by default: rows are written
+>   only when someone paints a day status, and nobody has. Live-computing
+>   surfaces show real figures; column-reading surfaces show zero.
+> - **The highest-value fix is an EIGHTH formula I did not find** —
+>   `lib/commission-context.ts:83-96`, which reads legacy columns that are all
+>   zero and an empty `payroll_entries`, so every direct-cost and net-basis
+>   commission is computed against a subtotal missing all salaries and per
+>   diems. Wrong now, on live data, on what people get paid.
+> - **Adam ruled**: drop `payroll_entries.total_fee` as a source of truth. Do
+>   not cache it, do not fix its arithmetic — move all seven readers to the
+>   derived budget lines and drop the column.
+> - **Both orphan checks I flagged as unresolved are now resolved**, both dead:
+>   `TourBudgetAccordion` ↔ `TourBudgetAccordionDynamic` are mutual orphans, and
+>   `PayrollSummary`'s only apparent referrer is `PayrollSummaryCard` — a
+>   different component sharing a prefix.
+>
+> The path correction below was independently confirmed and still stands.
+> Everything else here is accurate but mis-ranked; the brief is authoritative.
+
 `CC_MONEY_CONVERGENCE.md` opens with *"Confirm every file:line below before
 planning."* This is that confirmation, and nothing else. **No money code was
 touched.**
@@ -22,8 +51,9 @@ is never in the request body. So `Number(undefined) || 0 = 0`, and every paint
 rewrites `payroll_entries.total_fee` with the advance removed and Flat tour
 never in it at all. **Seven surfaces read that column, including commission.**
 
-This is the sharpest item in the brief. It is silent, it is persisted, and it
-corrupts on a routine UI action.
+It is silent, it is persisted, and it corrupts on a routine UI action — but see
+the banner above: it is NOT what Adam is looking at on Coachella, because that
+tour has no `flat_once` lines for it to strip. Real bug, wrong rank.
 
 **M-1a — the loader's transitional fallback exists**, with `linesByRateId` and
 `legacyByRateId` both present and the legacy map documented as *"for the

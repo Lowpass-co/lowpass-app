@@ -10,6 +10,62 @@ Confirm every file:line below before planning.
 
 ---
 
+## ROOT CAUSE, found 2026-08-14 by probing Coachella. Read before M-1.
+
+The reported mismatch is **not** any of the three divergences I first suspected. All were ruled out against live data:
+
+- **M-1a ruled out** — every Coachella rate card has 5–7 `personnel_rate_lines` rows, none zero, and every legacy column is 0. The fallback path cannot fire.
+- **M-1b ruled out for this tour** — there are no `flat_once` lines at all. Nobody has an advance or flat-tour rate to strip. (The bug is still real; it just isn't this.)
+- **M-1c's documented breaks untriggered** — Coachella's routing is `off 8 / travel 3 / show 2`. No `press`/`radio`/`tv` days, so the promo-folding never happens, and off+travel both bill Travel on either path.
+
+**The actual cause: `payroll_entries` has ZERO rows for this tour.**
+
+Those rows are written only by `POST /api/budget/payroll`, which fires when a user paints a day status. Nobody has painted on Coachella. So the app splits in two:
+
+- **Computes live** (payroll page, formula 1; derived budget lines, formula 2) — from `personnel_rate_lines` plus statuses defaulted off routing `day_type`. Produces real figures with no painting required.
+- **Reads the persisted column** (formula 4 and the six other readers listed in M-1b) — `payroll_entries.total_fee`, which is **empty**, so they render zero.
+
+**The column is not merely wrong, it is absent by default**, and nothing backfills it. M-1b's advance-stripping is the same defect one step later: once you *do* paint, the column becomes populated-and-wrong instead of empty-and-wrong.
+
+### Adam's ruling: drop it as a source of truth
+
+Do not cache it, do not fix its arithmetic. The derived budget lines already hold the canonical persisted total, computed through `fees.ts`, and they exist whether or not anyone painted anything. **Move all seven readers to the derived lines, then drop the column.**
+
+Readers to move: `api/budget/summary/route.ts:170-171`, `TourBudgetAccordion.tsx:1035-1036` *(dead — see below)*, `lib/budget-utils.ts:216,222`, `lib/commission-context.ts:96-98`, `components/tour-overview/overview-utils.ts:293`, `api/budget/artist-summary/route.ts:171-172`, `components/summary/SummaryView.tsx:221`.
+
+### An EIGHTH formula, in commissions — verified against live data, and the worst one
+
+`src/lib/commission-context.ts` is a live payroll formula nobody counted. Consumer: `components/spreadsheet-view/CommissionsGrid.tsx:7` (plus the `_legacy` tab).
+
+```ts
+// :96  — empty payroll_entries → 0
+const actualSalaries = sum(payrollEntries.map((e) => Number(e.total_fee)));
+const actualPerDiem  = sum(payrollEntries.map((e) => Number(e.total_per_diem)));
+
+// :83-95 — pre-261 arithmetic on LEGACY columns; never reads personnel_rate_lines
+routingShowDays * Number(p.showRate)
+  + routingOffDays * Number(p.offRate)
+  + routingRehearsalDays * Number(p.rehearsalRate ?? 0)
+  + Number(p.advance_fee ?? 0)
+```
+
+**On Coachella both sides are zero.** Actual, because `payroll_entries` is empty. Proposed, because every legacy column on every rate card is `0` — the real figures are in `personnel_rate_lines`, which this function does not read.
+
+So `subtotalDirectProposed` and `subtotalDirectActual` are both missing all salaries and all per diems, and every commission on a direct-cost or net basis is computed against that subtotal. A gross-income basis is unaffected.
+
+**This is the highest-value fix in the bank** — it is wrong *now*, on live data, on a number that determines what people get paid. Route both sides through `fees.ts`: proposed from `rateLinesFor` + `effectiveStatuses` (formula 2's path), actual from the derived budget lines. Do not repair the legacy arithmetic.
+
+### Two orphan checks resolved — both dead, verified by following referrers
+
+- **`TourBudgetAccordion` (formula 5) is unreachable.** Its only importer is `TourBudgetAccordionDynamic`, and **nothing imports that**. Mutual orphans. The other grep hits are prose in `Skeleton.tsx` comments.
+- **`PayrollSummary` (the seventh stale formula) is unreachable.** Its only apparent referrer is `PayrollSummaryCard.tsx` in `tour-overview` — **a different component sharing a prefix**. Zero real importers.
+
+Both can be deleted. Two of the formulas were never running.
+
+### Path correction
+
+`loadRateLines.ts` is in **`src/lib/payroll/`**, not `src/server/budget/`. `reconcileDerivedLines.ts` is correctly in `src/server/budget/`. These briefs are line-accurate and directory-approximate — resolve the path before trusting a `sed`.
+
 ## M-1 — Six formulas. The doctrine says one.
 
 `CLAUDE.md`: *"One counting path for money: `fees.countDayStatuses` + `effectiveStatuses`. Every reader through the SSOT; never a second formula."*
