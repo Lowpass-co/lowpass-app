@@ -2,14 +2,36 @@
    LOWPASS — Budget Summary API
 
    GET: Returns pre-computed P&L summary for a tour (?tour_id=uuid).
-        Consolidates 8 separate queries into one endpoint.
+        Consolidates the queries into one endpoint.
         All math follows the budget spec (§9, §14).
+
+   ─────────────────────────────────────────────────────────────────────
+   THIS ROUTE NO LONGER COMPUTES PAYROLL. 2026-08-19 (M-1c + formula 4).
+   ─────────────────────────────────────────────────────────────────────
+   It used to carry TWO wrong halves:
+
+   - PROPOSED counted day types straight off `routing`, tour-wide, identically
+     for every person, and never looked at what anyone had painted. Three
+     breaks fell out of that: `press`/`radio`/`tv` folded into `offTravel` so
+     they billed Travel when `dayTypeToPayStatus` maps them to `promo_radio`;
+     `off` folded in too, so that bucket was always 0; and there was no
+     `assigned` count, so `computeLineAmount` fell through to `counts.active`
+     and per diem lost every `pd_only` day.
+   - ACTUAL summed `payroll_entries.total_fee` / `.total_per_diem` — columns
+     that hold NOTHING until somebody paints a day status, so on a tour nobody
+     has painted, every actual salary rendered as zero.
+
+   Both now come from the DERIVED budget lines this route was already reading
+   (it read them for hotels), written by `reconcileDerivedBudgetLines` through
+   `fees.ts` + `effectiveStatuses`. Same table, same fetch, one formula.
+
+   `dayCount` is still returned: it is a fact about the routing, not a payroll
+   formula, and the salary tables use it for their day columns.
    ============================================ */
 
 import { NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
-import { computeTotals } from '@/lib/payroll/fees';
-import { loadTourRateContext, rateLinesFor } from '@/lib/payroll/loadRateLines';
+import { derivedPayrollTotals } from '@/lib/budget/derivedPayrollTotals';
 
 interface SummaryLine {
   label: string;
@@ -71,8 +93,6 @@ export async function GET(request: Request) {
     settingsRes,
     incomeRes,
     routingRes,
-    personnelRes,
-    payrollRes,
     lineItemsRes,
     commissionsRes,
     flightsRes,
@@ -98,18 +118,8 @@ export async function GET(request: Request) {
       .select('id, date, day_type')
       .eq('tour_id', tourId),
     supabase
-      .from('personnel_rates')
-      .select('id')
-      .eq('workspace_id', wid)
-      .eq('tour_id', tourId),
-    supabase
-      .from('payroll_entries')
-      .select('total_fee, total_per_diem')
-      .eq('tour_id', tourId)
-      .eq('workspace_id', wid),
-    supabase
       .from('budget_line_items')
-      .select('category, proposed_cost, actual_cost')
+      .select('category, proposed_cost, actual_cost, source_entity_type')
       .eq('workspace_id', wid)
       .eq('tour_id', tourId),
     supabase
@@ -128,8 +138,6 @@ export async function GET(request: Request) {
   const settings = settingsRes.data;
   const incomeRows = incomeRes.data ?? [];
   const routingRows = routingRes.data ?? [];
-  const personnel = personnelRes.data ?? [];
-  const payrollEntries = payrollRes.data ?? [];
   const lineItems = lineItemsRes.data ?? [];
   const commissions = commissionsRes.data ?? [];
   const flights = flightsRes.data ?? [];
@@ -153,22 +161,13 @@ export async function GET(request: Request) {
     sum(incomeRows.map((i) => n(i.actual_merch))) +
     sum(incomeRows.map((i) => n(i.actual_vip)));
 
-  // --- Salaries (rates SSOT) ---
-  // Compute each person's fee + per-diem from personnel_rate_lines via the
-  // engine, not the legacy personnel_rates.* columns. computeTotals over the
-  // default lines reproduces the old split/day-rate arithmetic exactly (the
-  // day-rate branch was already totalDays × the flat day line, i.e. a6).
-  const rateCtx = await loadTourRateContext(supabase, tourId, wid);
-  const dayCounts = { show: showDays, offTravel: offDays, rehearsal: rehearsalDays, active: totalDays };
-  let proposedSalaries = 0;
-  let proposedPerDiem = 0;
-  for (const p of personnel) {
-    const totals = computeTotals(rateLinesFor(rateCtx, p.id), dayCounts);
-    proposedSalaries += totals.totalFee;
-    proposedPerDiem += totals.totalPerDiem;
-  }
-  const actualSalaries = sum(payrollEntries.map((e) => n(e.total_fee)));
-  const actualPerDiem = sum(payrollEntries.map((e) => n(e.total_per_diem)));
+  // --- Salaries + per diems (the derived budget lines, one formula) ---
+  // These are `reconcileDerivedBudgetLines`' output: computeTotals over each
+  // person's `personnel_rate_lines`, counted with `effectiveStatuses` so
+  // unpainted days fall back to their routing day-type. See the header for
+  // what this replaced.
+  const { proposedSalaries, actualSalaries, proposedPerDiem, actualPerDiem } =
+    derivedPayrollTotals(lineItems);
 
   // --- Direct expense categories ---
   const hotelsItems = lineItems.filter((i) => i.category === 'hotels');

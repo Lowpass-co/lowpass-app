@@ -15,13 +15,18 @@
 
 import { NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
-// b2 — proposed Salary/Per-Diem now project each person's rate lines
-// (personnel_rate_lines × rate_types) via computeTotals over the tour-wide day
-// counts, so custom types are included. Reconciles to the legacy split /
-// day_rate-flat projection for the defaults — proven in reconcile.harness.ts.
-// (actual Salary/Per-Diem keep coming from persisted payroll_entries.)
-import { computeTotals, type DayCounts } from '@/lib/payroll/fees';
-import { rateLinesFor, loadMultiTourRateContext } from '@/lib/payroll/loadRateLines';
+// 2026-08-19 — Salary/Per-Diem, both sides, now come from the DERIVED budget
+// lines (`source_entity_type` 'payroll' / 'payroll_per_diem'), which
+// `reconcileDerivedBudgetLines` writes through fees.ts from each person's
+// `personnel_rate_lines` counted with `effectiveStatuses`.
+//
+// Replaced two things. PROPOSED projected rate lines over TOUR-WIDE routing day
+// counts — identical for every person, blind to anything painted, folding
+// press/radio/tv into Travel and losing pd_only from per diem. ACTUAL summed
+// `payroll_entries.total_fee`, a column that holds nothing until someone paints
+// a day status, so every artist row showed £0 of actual salary on tours nobody
+// had painted. Same table this route already read for hotels; no extra query.
+import { derivedPayrollTotals } from '@/lib/budget/derivedPayrollTotals';
 
 const n = (x: unknown) => (x == null ? 0 : Number(x) || 0);
 const sum = (arr: number[]) => arr.reduce((a, b) => a + b, 0);
@@ -71,8 +76,6 @@ export async function GET(request: Request) {
   const [
     settingsRes,
     incomeRes,
-    personnelRes,
-    payrollRes,
     lineItemsRes,
     commissionsRes,
     flightsRes,
@@ -87,18 +90,8 @@ export async function GET(request: Request) {
       .select('routing_id, post_tax_guarantee, pre_tax_guarantee, merch_income, vip_income, actual_guarantee, actual_overage, actual_merch, actual_vip')
       .eq('workspace_id', wid),
 
-    supabase.from('personnel_rates')
-      .select('id, tour_id')
-      .eq('workspace_id', wid)
-      .in('tour_id', tourIds),
-
-    supabase.from('payroll_entries')
-      .select('tour_id, total_fee, total_per_diem')
-      .eq('workspace_id', wid)
-      .in('tour_id', tourIds),
-
     supabase.from('budget_line_items')
-      .select('tour_id, category, proposed_cost, actual_cost')
+      .select('tour_id, category, proposed_cost, actual_cost, source_entity_type')
       .eq('workspace_id', wid)
       .in('tour_id', tourIds),
 
@@ -119,16 +112,10 @@ export async function GET(request: Request) {
 
   const settings = settingsRes.data ?? [];
   const incomeRows = incomeRes.data ?? [];
-  const personnel = personnelRes.data ?? [];
-  const payroll = payrollRes.data ?? [];
   const lineItems = lineItemsRes.data ?? [];
   const commissions = commissionsRes.data ?? [];
   const flights = flightsRes.data ?? [];
   const routing = routingRes.data ?? [];
-
-  // Rates SSOT — one rate context spanning every tour (catalog + all lines +
-  // the legacy-column fallback), so nothing here names a legacy column.
-  const rateCtx = await loadMultiTourRateContext(supabase, tourIds, wid);
 
   // Build routing_id → tour_id map for income (income is linked via routing)
   const routingTourMap: Record<string, string> = {};
@@ -142,11 +129,10 @@ export async function GET(request: Request) {
     const tourRouting = routing.filter(r => r.tour_id === tid);
     const tourSettings = settings.find(s => s.tour_id === tid);
 
-    // Day counts
+    // Show count for the row header. The off / rehearsal / total-day counts
+    // that used to live here existed only to project salaries tour-wide; the
+    // derived lines carry that now, per person and per painted day.
     const showDays = tourRouting.filter(r => r.day_type === 'show' || r.day_type === 'festival').length;
-    const offDays = tourRouting.filter(r => ['off', 'travel', 'press', 'radio', 'tv'].includes(r.day_type)).length;
-    const rehearsalDays = tourRouting.filter(r => r.day_type === 'rehearsal').length;
-    const totalDays = showDays + offDays + rehearsalDays;
 
     // Income — filter by routing rows belonging to this tour
     const tourRoutingIds = new Set(tourRouting.map(r => r.id));
@@ -155,24 +141,13 @@ export async function GET(request: Request) {
     const proposedIncome = sum(tourIncome.map(i => n(i.post_tax_guarantee) + n(i.merch_income) + n(i.vip_income)));
     const actualIncome = sum(tourIncome.map(i => n(i.actual_guarantee) + n(i.actual_overage) + n(i.actual_merch) + n(i.actual_vip)));
 
-    // Salaries + Per Diem — projected over the tour-wide day counts from each
-    // person's rate lines (advance rides its flat_once line, applied once).
-    const tourPersonnel = personnel.filter(p => p.tour_id === tid);
-    const projCounts: DayCounts = { show: showDays, offTravel: offDays, rehearsal: rehearsalDays, active: totalDays };
-    let proposedSalaries = 0;
-    let proposedPerDiem = 0;
-    for (const p of tourPersonnel) {
-      const lines = rateLinesFor(rateCtx, p.id as string);
-      const { totalFee, totalPerDiem } = computeTotals(lines, projCounts);
-      proposedSalaries += totalFee;
-      proposedPerDiem += totalPerDiem;
-    }
-    const tourPayroll = payroll.filter(e => e.tour_id === tid);
-    const actualSalaries = sum(tourPayroll.map(e => n(e.total_fee)));
-    const actualPerDiem = sum(tourPayroll.map(e => n(e.total_per_diem)));
-
-    // Line items
+    // Line items — including the derived Salary / Per-Diem lines.
     const tourLines = lineItems.filter(i => i.tour_id === tid);
+
+    // Salaries + Per Diem, both sides, from those derived lines. One formula.
+    const { proposedSalaries, actualSalaries, proposedPerDiem, actualPerDiem } =
+      derivedPayrollTotals(tourLines);
+
     const hotelsP = sum(tourLines.filter(i => i.category === 'hotels').map(i => n(i.proposed_cost)));
     const hotelsA = sum(tourLines.filter(i => i.category === 'hotels').map(i => n(i.actual_cost)));
     const transportP = sum(tourLines.filter(i => i.category.startsWith('transport_')).map(i => n(i.proposed_cost)));

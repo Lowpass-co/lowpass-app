@@ -5,6 +5,10 @@ import { Loader2 } from 'lucide-react';
 import { useToast } from '@/components/ui/Toast';
 import { BudgetAlerts } from '@/components/summary/BudgetAlerts';
 import { cn } from '@/lib/utils';
+import {
+  derivedPayrollByPerson,
+  type DerivedPayrollLineRow,
+} from '@/lib/budget/derivedPayrollTotals';
 
 interface SummaryLine {
   label: string;
@@ -37,10 +41,20 @@ interface PersonnelRate {
   advance_fee: number;
 }
 
-interface PayrollEntry {
-  personnel_id: string;
-  total_fee: number;
-}
+/* PROJECTED + ACTUAL SALARY COME FROM THE DERIVED BUDGET LINES. 2026-08-19.
+ *
+ * This view used to hold two of the app's competing payroll formulas: `actual`
+ * summed `payroll_entries.total_fee` per person (a column that is EMPTY until
+ * somebody paints a day status, so the column read £0 for everyone on tours
+ * nobody had painted) and `projected` did pre-261 arithmetic —
+ * `showDays * showRate + offDays * offRate + advance_fee` — over tour-wide
+ * routing counts, blind to what any individual actually worked.
+ *
+ * Both now read the derived budget lines keyed by `personnel_rates.id`, which
+ * `reconcileDerivedBudgetLines` writes through `fees.ts`. The `showRate` /
+ * `offRate` / `showDays` / `offDays` COLUMNS still render from the rate card
+ * and the routing — they are what the table displays, not what it totals.
+ */
 
 interface Commission {
   id: string;
@@ -115,28 +129,31 @@ export function SummaryView({
   const [loading, setLoading] = useState(true);
   const [summary, setSummary] = useState<{ sections: SummarySection[]; dayCount: DayCount } | null>(null);
   const [personnel, setPersonnel] = useState<PersonnelRate[]>([]);
-  const [payroll, setPayroll] = useState<PayrollEntry[]>([]);
+  const [derivedLines, setDerivedLines] = useState<DerivedPayrollLineRow[]>([]);
   const [commissions, setCommissions] = useState<Commission[]>([]);
 
   useEffect(() => {
     let cancelled = false;
     async function load() {
       try {
-        const [summaryRes, personnelRes, payrollRes, commissionsRes] = await Promise.all([
+        // line-items is fetched UNFILTERED on purpose: that is the request
+        // that reconciles the derived Salary / Per-Diem lines server-side, so
+        // what comes back is current.
+        const [summaryRes, personnelRes, lineItemsRes, commissionsRes] = await Promise.all([
           fetch(`/api/budget/summary?tour_id=${encodeURIComponent(tourId)}`),
           fetch(`/api/budget/personnel-rates?tour_id=${encodeURIComponent(tourId)}`),
-          fetch(`/api/budget/payroll?tour_id=${encodeURIComponent(tourId)}`),
+          fetch(`/api/budget/line-items?tour_id=${encodeURIComponent(tourId)}`),
           fetch(`/api/budget/commissions?tour_id=${encodeURIComponent(tourId)}`),
         ]);
         if (cancelled) return;
         const summaryData = summaryRes.ok ? await summaryRes.json() : null;
         const personnelData = personnelRes.ok ? await personnelRes.json() : null;
-        const payrollData = payrollRes.ok ? await payrollRes.json() : null;
+        const lineItemsData = lineItemsRes.ok ? await lineItemsRes.json() : null;
         const commissionsData = commissionsRes.ok ? await commissionsRes.json() : null;
         if (summaryData?.sections) setSummary({ sections: summaryData.sections, dayCount: summaryData.dayCount ?? { showDays: 0, offDays: 0, rehearsalDays: 0, totalDays: 0 } });
         setPersonnel(personnelData?.personnel_rates ?? []);
-        const entries = payrollData?.entries ?? [];
-        setPayroll(Array.isArray(entries) ? entries : []);
+        const lines = lineItemsData?.line_items ?? [];
+        setDerivedLines(Array.isArray(lines) ? lines : []);
         setCommissions(commissionsData?.commissions ?? []);
       } catch {
         if (!cancelled) setSummary(null);
@@ -214,50 +231,32 @@ export function SummaryView({
     return rows;
   }, [summary]);
 
-  const actualByPersonnel = useMemo(() => {
-    const map: Record<string, number> = {};
-    payroll.forEach((e) => {
-      const id = e.personnel_id;
-      map[id] = (map[id] ?? 0) + n(e.total_fee);
-    });
-    return map;
-  }, [payroll]);
+  /** personnel_rates.id → the derived Salary line's proposed + actual. */
+  const payrollByPerson = useMemo(() => derivedPayrollByPerson(derivedLines), [derivedLines]);
 
   const salaryRows = useMemo(() => {
     const dayCount = summary?.dayCount ?? { showDays: 0, offDays: 0, rehearsalDays: 0, totalDays: 0 };
-    const { showDays, offDays, totalDays } = dayCount;
+    const { showDays, offDays } = dayCount;
     const crew = personnel.filter((p) => (p.person_type ?? 'crew').toLowerCase() === 'crew');
     const band = personnel.filter((p) => (p.person_type ?? '').toLowerCase() === 'band');
-    function projected(p: PersonnelRate): number {
-      const rateType = p.rate_type ?? 'day_rate';
-      if (rateType === 'split_rate') {
-        return showDays * n(p.showRate) + offDays * n(p.offRate) + n(p.advance_fee);
-      }
-      return totalDays * n(p.offRate) + n(p.advance_fee);
-    }
-    return {
-      crew: crew.map((p) => ({
-        role: p.role ? `${p.person_name}|${p.role}` : p.person_name,
+    const row = (p: PersonnelRate, label: string) => {
+      const derived = payrollByPerson.get(p.id);
+      return {
+        role: label,
         showRate: n(p.showRate),
         offRate: n(p.offRate),
         showDays,
         offDays,
-        projected: projected(p),
-        actual: actualByPersonnel[p.id] ?? 0,
+        projected: derived?.proposedFee ?? 0,
+        actual: derived?.actualFee ?? 0,
         count: 1,
-      })),
-      band: band.map((p) => ({
-        role: p.role || p.person_name,
-        showRate: n(p.showRate),
-        offRate: n(p.offRate),
-        showDays,
-        offDays,
-        projected: projected(p),
-        actual: actualByPersonnel[p.id] ?? 0,
-        count: 1,
-      })),
+      };
     };
-  }, [personnel, summary?.dayCount, actualByPersonnel]);
+    return {
+      crew: crew.map((p) => row(p, p.role ? `${p.person_name}|${p.role}` : p.person_name)),
+      band: band.map((p) => row(p, p.role || p.person_name)),
+    };
+  }, [personnel, summary?.dayCount, payrollByPerson]);
 
   const commissionAmounts = useMemo(() => {
     const expensesBeforeCommProposed = totalExpensesProposed - (summary?.sections.find((s) => s.title === 'OVERHEADS')?.lines?.find((l) => l.label === 'Commissions')?.proposed ?? 0);
