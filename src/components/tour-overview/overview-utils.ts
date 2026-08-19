@@ -266,54 +266,14 @@ export function computeRoomingData(
 
 // ─── Payroll ──────────────────────────────────────────────────────────────────
 
-interface RawPayrollEntry {
-  week_start: string;
-  total_fee?: number | null;
-  total_per_diem?: number | null;
-}
+// `computePayrollData` was deleted 2026-08-19. It had ZERO importers and it was
+// a stale payroll formula: `costToDate` summed `payroll_entries.total_fee` +
+// `.total_per_diem` (a column that is EMPTY until somebody paints a day status)
+// and `projectedTotal` averaged the legacy show/off rate columns, which are 0
+// on every card that has `personnel_rate_lines`. Both came out zero on live
+// data and nothing was there to notice.
+//
+// `PayrollCardData` above is kept — `PayrollSummaryCard` imports the type. If a
+// payroll card is ever mounted again, fill it from the DERIVED budget lines via
+// `@/lib/budget/derivedPayrollTotals`, not from `payroll_entries`.
 
-interface RawPersonnelRate {
-  person_type?: string | null;
-  /** Rates SSOT — the caller supplies these camelCase amounts via rateAmountsFor
-   *  (from personnel_rate_lines), so no legacy column name appears here. */
-  showRate?: number | null;
-  offRate?: number | null;
-  per_diem?: number | null;
-}
-
-export function computePayrollData(
-  entries: RawPayrollEntry[],
-  rates: RawPersonnelRate[],
-  routing: RawRouting[]
-): PayrollCardData | null {
-  if (rates.length === 0 && entries.length === 0) return null;
-
-  const n = (v: number | null | undefined) => Number(v) || 0;
-
-  const costToDate = entries.reduce((sum, e) => sum + n(e.total_fee) + n(e.total_per_diem), 0);
-  const perDiemTotal = entries.reduce((sum, e) => sum + n(e.total_per_diem), 0);
-
-  const weeksEntered = new Set(entries.map((e) => e.week_start)).size;
-
-  let totalWeeks = 0;
-  if (routing.length > 0) {
-    const sorted = [...routing].sort((a, b) => a.date.localeCompare(b.date));
-    const firstDate = new Date(sorted[0].date + 'T12:00:00');
-    const lastDate = new Date(sorted[sorted.length - 1].date + 'T12:00:00');
-    const days = Math.ceil((lastDate.getTime() - firstDate.getTime()) / 86400000);
-    totalWeeks = Math.max(1, Math.ceil(days / 7) + 1);
-  }
-
-  const crewCount = rates.filter((r) => r.person_type === 'crew').length;
-  const bandCount = rates.filter(
-    (r) => r.person_type === 'band' || r.person_type === 'principal'
-  ).length;
-
-  const avgWeeklyCost = rates.reduce(
-    (sum, r) => sum + (n(r.showRate) + n(r.offRate)) / 2 + n(r.per_diem) * 7,
-    0
-  );
-  const projectedTotal = avgWeeklyCost * Math.max(totalWeeks, 1);
-
-  return { costToDate, perDiemTotal, weeksEntered, totalWeeks, crewCount, bandCount, projectedTotal };
-}
