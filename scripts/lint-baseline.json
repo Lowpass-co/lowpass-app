@@ -1,8 +1,8 @@
 {
-  "errors": 50,
-  "warnings": 390,
+  "errors": 47,
+  "warnings": 379,
   "byRule": {
-    "react-hooks/set-state-in-effect": 44,
+    "react-hooks/set-state-in-effect": 41,
     "react-hooks/preserve-manual-memoization": 3,
     "react-hooks/refs": 2,
     "prefer-const": 1
