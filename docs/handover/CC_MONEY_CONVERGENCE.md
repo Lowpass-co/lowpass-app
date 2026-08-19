@@ -107,6 +107,10 @@ body: JSON.stringify({ tour_id, personnel_id, week_start, day_statuses: statuses
 
 `Number(undefined) || 0 = 0`. So painting a day status rewrites `payroll_entries.total_fee` with the advance **removed**, and Flat tour never in it at all.
 
+**The fix is smaller than "make the client send it" — verified against the generated schema 2026-08-14.** `payroll_entries` already has a persisted **`advance_fee`** column (13 columns: `advance_fee, created_at, day_statuses, id, notes, person_id, personnel_id, total_fee, total_per_diem, tour_id, updated_at, week_start, workspace_id`). The route defaults `body.advance_fee` to 0 while a stored value sits on the row it is about to update. Fall back to the existing column when the body omits it, rather than adding a field to every client call site — one change instead of two, and it cannot regress the next caller that forgets.
+
+That still leaves `flat_once` being stripped wholesale, which also drops **a7 Flat tour** — a rate type with no corresponding column to fall back on. Stop filtering `flat_once` out; `computeTotals` already handles it correctly, which is the entire argument for routing everything through `fees.ts`.
+
 **Seven surfaces read that column:** `budget/summary/route.ts:170`, `TourBudgetAccordion.tsx:1035`, `budget-utils.ts:216,222`, `commission-context.ts:96`, `overview-utils.ts:293`, `artist-summary/route.ts:171`, `SummaryView.tsx:221`. Commission is calculated off it.
 
 ### M-1c — `/api/budget/summary` ignores painted days
@@ -152,7 +156,7 @@ So: **one line, `quantity` = room-nights, unit cost editable, edit writes back t
 
 **2. The assumed nightly rate is per tour.** It is a planning assumption, not a fact about a building.
 
-Put it on **`budget_settings`**, which is already tour-scoped and already the home for budget configuration — not on `tours`. Note that migration 264 gated `budget_settings` writes behind `can_access('page','budget.summary','write')`, so writing this figure is correctly a budget-write. Reads stay workspace-wide, which is what you want for a currency-adjacent display value.
+Put it on **`budget_settings`**, which is already tour-scoped and already the home for budget configuration — not on `tours`. Verified against the generated schema: `budget_settings` already carries exactly this class of planning assumption — `default_dollars_per_head`, `default_merch_fee_pct`, `default_sell_thru`, `overage_haircut`, `insurance_pct`, `contingency_pct`. **Follow the house naming: `default_room_rate`, not `assumed_nightly_cost`.** Five neighbours use the `default_*` prefix for exactly this idea. Note that migration 264 gated `budget_settings` writes behind `can_access('page','budget.summary','write')`, so writing this figure is correctly a budget-write. Reads stay workspace-wide, which is what you want for a currency-adjacent display value.
 
 The estimate line is then `quantity` = room-nights × `assumed_nightly_cost`, and editing the unit cost on that line writes back to `budget_settings`. That is the "editable, which would update the estimated nightly cost cell" round-trip Adam asked for — the budget line and the rooming header read the same stored number, so they cannot disagree.
 
