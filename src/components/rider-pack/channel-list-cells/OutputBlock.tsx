@@ -225,7 +225,9 @@ export function OutputBlock({ row, outputRowIdx, onUpdateLocal, onRefresh }: Out
           style={{ color: 'var(--color-lp-error)' }}
           onClick={async () => {
             if (!confirm('Delete this output row?')) return;
-            await ch.deleteRow(createClient(), row.id);
+            /* §CL-1 — sectionId lets the delete close the output
+               sequence behind it (outputs number 1..M independently). */
+            await ch.deleteRow(createClient(), row.id, row.section_id);
             await onRefresh();
           }}
         >

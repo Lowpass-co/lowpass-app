@@ -17,6 +17,7 @@ import { useToast } from '@/components/ui/Toast';
 import { createClient } from '@/lib/supabase-client';
 import type { ChannelListRow, MicLibraryEntry, RiderPack, ResolvedSection, StageBox, SubSnake } from '@/lib/rider-packs/types';
 import * as ch from '@/lib/rider-packs/channel-list';
+import { normaliseRowIndexes } from '@/lib/channel-list/rowNumbering';
 import { listMics } from '@/lib/rider-packs/mic-library';
 import SubSnakeDialog from './SubSnakeDialog';
 import StageBoxDialog from './StageBoxDialog';
@@ -191,20 +192,54 @@ export default function ChannelListEditor({
     };
   }, []);
 
+  /* Sprint 12 §8b2 — split rows by row_kind. Input rows drive
+     the main channel grid; output rows render in a stacked
+     sub-grid below.
+
+     §CL-1 — the two kinds do NOT share a row_index sequence, and
+     the comment that used to say they did (citing 040's UNIQUE
+     (section_id, row_index)) is what the drag handler below was
+     written against. Migration 115 replaced that constraint with
+     UNIQUE (section_id, row_kind, row_index): inputs number 1..N
+     and outputs 1..M, independently.
+
+     Declared above handleDragEnd because the handler reorders
+     inputRows — reading it from a later const defeats the React
+     Compiler's memoization (react-hooks/preserve-manual-memoization). */
+  const inputRows = useMemo(
+    () => rows.filter((r) => (r.row_kind ?? 'input') === 'input'),
+    [rows],
+  );
+  const outputRows = useMemo(
+    () => rows.filter((r) => r.row_kind === 'output'),
+    [rows],
+  );
+
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
 
   const handleDragEnd = async (e: DragEndEvent) => {
     const { active, over } = e;
     if (!over || active.id === over.id) return;
-    const oldIndex = rows.findIndex((r) => r.id === active.id);
-    const newIndex = rows.findIndex((r) => r.id === over.id);
+    /* §CL-1 — the SortableContext below is seeded from `inputRows`,
+       so the reorder has to be computed over inputRows too. It used
+       to be computed over `rows` — the unfiltered array — and ship
+       every id, inputs and outputs, as one flat sequence to a RPC
+       that renumbered 1..N across the whole section. That is what
+       merged the two independent sequences: one drag left the inputs
+       with a hole wherever an output had landed, and nothing ever
+       renumbered them back. Adam's list read 1, 2, 5, 6, 7, 8, 9, 10. */
+    const oldIndex = inputRows.findIndex((r) => r.id === active.id);
+    const newIndex = inputRows.findIndex((r) => r.id === over.id);
     if (oldIndex < 0 || newIndex < 0) return;
-    const next = arrayMove(rows, oldIndex, newIndex);
-    setRows(next);
-    const ids = next.map((r) => r.id);
+    const orderedIds = arrayMove(inputRows, oldIndex, newIndex).map((r) => r.id);
     const prev = rows;
+    /* Optimistic. normaliseRowIndexes computes exactly what
+       normalise_channel_list_indexes is about to persist, so the
+       numbers the operator sees mid-flight are the numbers that
+       land — no snap-back on success. */
+    setRows(normaliseRowIndexes(rows, orderedIds));
     try {
-      await ch.reorderRows(createClient(), section.id, ids);
+      await ch.reorderRows(createClient(), section.id, orderedIds);
       await onStructureChange();
     } catch (err) {
       showToast(err instanceof Error ? err.message : 'Reorder failed', 'error');
@@ -220,12 +255,17 @@ export default function ChannelListEditor({
 
   const addChannel = async () => {
     try {
-      const r = await ch.appendRow(createClient(), {
+      /* §CL-1 — appendRow hands back the WHOLE section, because
+         normalising can renumber rows this click never touched (it
+         closes gaps left by earlier appends and deletes). Merging
+         only the new row would leave the grid showing numbers the
+         database no longer holds. */
+      const { created, rows: fresh } = await ch.appendRow(createClient(), {
         packId: pack.id,
         sectionId: section.id,
       });
-      setRows((prev) => [...prev, r].sort((a, b) => a.row_index - b.row_index));
-      setNewlyAddedRowId(r.id);
+      setRows(fresh);
+      if (created[0]) setNewlyAddedRowId(created[0].id);
       await onStructureChange();
     } catch (err) {
       /* §CL1.1 — pre-fix the click silently swallowed the
@@ -239,12 +279,12 @@ export default function ChannelListEditor({
   /* §CL-FIX-4 — bulk-add N input rows in one round-trip. */
   const addManyChannels = async (count: number) => {
     try {
-      const created = await ch.appendRows(createClient(), {
+      const { created, rows: fresh } = await ch.appendRows(createClient(), {
         packId: pack.id,
         sectionId: section.id,
         count,
       });
-      setRows((prev) => [...prev, ...created].sort((a, b) => a.row_index - b.row_index));
+      setRows(fresh);
       setMultiAddOpen(false);
       if (created.length > 0) setNewlyAddedRowId(created[0].id);
       await onStructureChange();
@@ -257,30 +297,17 @@ export default function ChannelListEditor({
      sub-grid below the input table. */
   const addOutput = async () => {
     try {
-      const r = await ch.appendOutputRow(createClient(), {
+      const { created, rows: fresh } = await ch.appendOutputRow(createClient(), {
         packId: pack.id,
         sectionId: section.id,
       });
-      setRows((prev) => [...prev, r].sort((a, b) => a.row_index - b.row_index));
-      setNewlyAddedRowId(r.id);
+      setRows(fresh);
+      if (created[0]) setNewlyAddedRowId(created[0].id);
       await onStructureChange();
     } catch (err) {
       showToast(err instanceof Error ? err.message : 'Add output failed', 'error');
     }
   };
-
-  /* Sprint 12 §8b2 — split rows by row_kind. Input rows drive
-     the main channel grid; output rows render in a stacked
-     sub-grid below. Both share the underlying row_index
-     sequence (UNIQUE constraint on section_id, row_index). */
-  const inputRows = useMemo(
-    () => rows.filter((r) => (r.row_kind ?? 'input') === 'input'),
-    [rows],
-  );
-  const outputRows = useMemo(
-    () => rows.filter((r) => r.row_kind === 'output'),
-    [rows],
-  );
 
   const setOutputLocal = useCallback(
     (r: ChannelListRow) =>
@@ -1421,7 +1448,9 @@ function ChannelBlock({
             className="whitespace-nowrap text-lp-error hover:opacity-90"
             onClick={async () => {
               if (!confirm('Delete this channel row?')) return;
-              await ch.deleteRow(createClient(), row.id);
+              /* §CL-1 — sectionId closes the sequence behind the
+                 delete; without it row 4 of 10 left a permanent hole. */
+              await ch.deleteRow(createClient(), row.id, sectionId);
               await onRefresh();
             }}
           >
