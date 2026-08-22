@@ -320,9 +320,17 @@ export default function ChannelListEditor({
     [refetchLocal, showToast],
   );
 
-  /* Structural-change notifier handed to the I/O dialogs + inventory patch.
+  /* Structural-change notifier handed to the I/O dialogs + inventory patch,
+     AND to every row's Copy / Del button (see onRefresh below).
      Does a local, non-navigating refetch, then still calls the parent hook
-     (a no-op on the tour surface; the rider PackEditor keeps its own sync). */
+     (a no-op on the tour surface; the rider PackEditor keeps its own sync).
+
+     §CL-ONREFRESH — the row Copy/Del buttons used to receive the RAW
+     `onStructureChange` prop, which ChannelListTourEditor passes as `() => {}`.
+     The §CL-NORELOAD note there is right that the parent needn't re-render —
+     but it left the row buttons wired to a literal no-op, so on the tour
+     surface a deleted or copied row only appeared after a manual reload.
+     They now get `notifyStructureChange`, which refetches locally first. */
   const notifyStructureChange = useCallback(async () => {
     await refetchLocal();
     await onStructureChange();
@@ -659,7 +667,7 @@ export default function ChannelListEditor({
                       show={show}
                       navCol={navCol}
                       onUpdateLocal={(r) => setRows((prev) => prev.map((x) => (x.id === r.id ? r : x)))}
-                      onRefresh={onStructureChange}
+                      onRefresh={notifyStructureChange}
                       onOpenSubDialog={() => setSubDialog(true)}
                       onOpenStageDialog={() => setStageDialog(true)}
                       sectionId={section.id}
@@ -798,7 +806,7 @@ export default function ChannelListEditor({
                     row={row}
                     outputRowIdx={idx}
                     onUpdateLocal={setOutputLocal}
-                    onRefresh={onStructureChange}
+                    onRefresh={notifyStructureChange}
                   />
                 ))}
               </CellNavProvider>
