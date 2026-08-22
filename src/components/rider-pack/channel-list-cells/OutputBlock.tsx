@@ -26,13 +26,13 @@
    useDebouncedSave; NavCell Enter-down / Esc-revert.
    ============================================ */
 
-import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react';
+import { useRef, type CSSProperties } from 'react';
 import { Check } from 'lucide-react';
-import { useDebouncedSave } from '@/hooks/useDebouncedSave';
 import { createClient } from '@/lib/supabase-client';
 import * as ch from '@/lib/rider-packs/channel-list';
 import type { ChannelListRow } from '@/lib/rider-packs/types';
 import { NavCell } from '@/lib/hooks/useCellNav';
+import { useRowSave } from './useRowSave';
 
 /* §CL-FIX-7 — output sub-grid tracks: # | NAME | DESCRIPTION |
    STEREO? | POSITION | NOTES | actions. */
@@ -50,40 +50,30 @@ interface OutputBlockProps {
   outputRowIdx: number;
   onUpdateLocal: (r: ChannelListRow) => void;
   onRefresh: () => void | Promise<void>;
+  /* §CL-5 — tells the grid this row has unsaved or in-flight data,
+     so a refetch cannot read around the write. */
+  onWriteActive?: (rowId: string, active: boolean) => void;
+  onSaveError?: (message: string) => void;
 }
 
-export function OutputBlock({ row, outputRowIdx, onUpdateLocal, onRefresh }: OutputBlockProps) {
-  const patchRef = useRef<Partial<ChannelListRow>>({});
-  const saveRow = useDebouncedSave<number>(
-    useCallback(
-      async (_tick: number) => {
-        void _tick;
-        const p = { ...patchRef.current };
-        patchRef.current = {};
-        if (Object.keys(p).length === 0) return;
-        await ch.updateRow(createClient(), row.id, p);
-      },
-      [row.id],
-    ),
-    400,
-  );
-
-  const [local, setLocal] = useState(row);
-  useEffect(() => {
-    if (saveRow.isPending()) return;
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- sync from server when no edit is in flight (matches ChannelBlock)
-    setLocal(row);
-  }, [row, saveRow]);
-
-  const queue = (patch: Partial<ChannelListRow>) => {
-    patchRef.current = { ...patchRef.current, ...patch };
-    setLocal((l) => {
-      const n = { ...l, ...patch } as ChannelListRow;
-      onUpdateLocal(n);
-      return n;
-    });
-    saveRow.schedule(0);
-  };
+export function OutputBlock({
+  row,
+  outputRowIdx,
+  onUpdateLocal,
+  onRefresh,
+  onWriteActive,
+  onSaveError,
+}: OutputBlockProps) {
+  /* §CL-5 — the debounced writer, the optimistic `local` copy and the
+     stale-prop guard all live in useRowSave now. This block used to
+     carry its own copy of them, and therefore its own copy of the
+     clear-the-buffer-before-the-await data loss. */
+  const { local, queue, flush } = useRowSave({
+    row,
+    onUpdateLocal,
+    onWriteActive,
+    onError: onSaveError,
+  });
 
   /* Pre-focus snapshots for Esc-revert. */
   const nameSnapRef = useRef<string>(local.output_item ?? '');
@@ -122,7 +112,7 @@ export function OutputBlock({ row, outputRowIdx, onUpdateLocal, onRefresh }: Out
               nameSnapRef.current = local.output_item ?? '';
             }}
             onChange={(e) => queue({ output_item: e.target.value })}
-            onBlur={() => void saveRow.flush()}
+            onBlur={() => void flush()}
             placeholder="PSM1000 w/ P10R"
             className={fieldClass}
             title={local.output_item ?? ''}
@@ -140,7 +130,7 @@ export function OutputBlock({ row, outputRowIdx, onUpdateLocal, onRefresh }: Out
               descSnapRef.current = local.output_description ?? '';
             }}
             onChange={(e) => queue({ output_description: e.target.value })}
-            onBlur={() => void saveRow.flush()}
+            onBlur={() => void flush()}
             placeholder="SL MON / DRIVE LOOM"
             className={fieldClass}
             title={local.output_description ?? ''}
@@ -159,7 +149,7 @@ export function OutputBlock({ row, outputRowIdx, onUpdateLocal, onRefresh }: Out
             title="Stereo pair (claims two positions)"
             onClick={() => {
               queue({ output_is_stereo: !local.output_is_stereo });
-              void saveRow.flush();
+              void flush();
             }}
             className="flex h-7 w-7 items-center justify-center rounded border hover:bg-lp-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--color-lp-orange)]"
             style={{
@@ -188,7 +178,7 @@ export function OutputBlock({ row, outputRowIdx, onUpdateLocal, onRefresh }: Out
               posSnapRef.current = local.output_position ?? '';
             }}
             onChange={(e) => queue({ output_position: e.target.value })}
-            onBlur={() => void saveRow.flush()}
+            onBlur={() => void flush()}
             placeholder={positionPlaceholder}
             className={`${fieldClass} text-center tabular-nums`}
             title={local.output_position ?? positionPlaceholder}
@@ -206,7 +196,7 @@ export function OutputBlock({ row, outputRowIdx, onUpdateLocal, onRefresh }: Out
               notesSnapRef.current = local.output_notes ?? '';
             }}
             onChange={(e) => queue({ output_notes: e.target.value })}
-            onBlur={() => void saveRow.flush()}
+            onBlur={() => void flush()}
             placeholder="…"
             className={fieldClass}
             title={local.output_notes ?? ''}
@@ -225,7 +215,9 @@ export function OutputBlock({ row, outputRowIdx, onUpdateLocal, onRefresh }: Out
           style={{ color: 'var(--color-lp-error)' }}
           onClick={async () => {
             if (!confirm('Delete this output row?')) return;
-            await ch.deleteRow(createClient(), row.id);
+            /* §CL-1 — sectionId lets the delete close the output
+               sequence behind it (outputs number 1..M independently). */
+            await ch.deleteRow(createClient(), row.id, row.section_id);
             await onRefresh();
           }}
         >

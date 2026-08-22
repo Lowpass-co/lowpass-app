@@ -17,7 +17,8 @@ import { loadBudgetExportData } from '@/lib/export/budget-data';
 import { loadRoomingExportData } from '@/lib/export/rooming-data';
 import { loadPayrollExportData } from '@/lib/export/payroll-data';
 import { loadRoutingExportData } from '@/lib/export/routing-data';
-import { loadChannelListExportData } from '@/lib/export/channel-list-data';
+import { loadChannelListExportData, channelExportColumnLabel } from '@/lib/export/channel-list-data';
+import type { ChannelExportCellKey } from '@/lib/export/channel-list-data';
 import type { ExportSurface, TemplateConfig } from '@/lib/export/template-config';
 import type { BudgetExportData } from '@/lib/export/budget-data';
 import type { RoomingExportData } from '@/lib/export/rooming-data';
@@ -48,7 +49,7 @@ interface Col {
   /** Sum this column into a totals row. */
   total?: boolean;
 }
-interface SheetSpec {
+export interface SheetSpec {
   name: string;
   columns: Col[];
   rows: Array<Record<string, string | number | null>>;
@@ -255,21 +256,24 @@ function routingSheet(data: RoutingExportData): SheetSpec {
 }
 
 /** Channel list — the surface that most benefits from a clean Excel (engineers
- *  reuse it). Inputs on one sheet, outputs on another. */
-function channelListSheets(data: ChannelListExportData): SheetSpec[] {
+ *  reuse it). Inputs on one sheet, outputs on another.
+ *
+ *  §CL-9: the input sheet's columns are the section's OWN enabled set
+ *  (`data.columns`), in the editor's order and under the editor's labels — not
+ *  a hardcoded list. Don't reintroduce one. */
+export function channelListSheets(data: ChannelListExportData): SheetSpec[] {
+  const cellKeys = data.columns.filter((k): k is ChannelExportCellKey => k !== 'number');
+  const hasNumber = data.columns.includes('number');
   const inputs: SheetSpec = {
     name: 'Input list',
     columns: [
-      { header: '#', key: 'index', numFmt: QTY_FMT },
-      { header: 'Source', key: 'source' },
-      { header: 'Mic / DI', key: 'micDi' },
-      { header: 'Sub-snake', key: 'subSnake' },
-      { header: 'Stage I/O', key: 'stageIO' },
-      { header: 'Insert', key: 'insert' },
-      { header: 'Phantom', key: 'phantom' },
-      { header: 'Notes', key: 'notes' },
+      ...(hasNumber ? [{ header: channelExportColumnLabel('number'), key: 'index', numFmt: QTY_FMT }] : []),
+      ...cellKeys.map((k) => ({ header: channelExportColumnLabel(k), key: k })),
     ],
-    rows: data.inputs.map((r) => ({ index: r.index, source: r.source, micDi: r.micDi, subSnake: r.subSnake, stageIO: r.stageIO, insert: r.insert, phantom: r.phantom, notes: r.notes })),
+    rows: data.inputs.map((r) => ({
+      ...(hasNumber ? { index: r.index } : {}),
+      ...Object.fromEntries(cellKeys.map((k) => [k, r.cells[k]])),
+    })),
   };
   const specs = [inputs];
   if (data.outputs.length) {

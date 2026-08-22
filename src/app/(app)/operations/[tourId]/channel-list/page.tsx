@@ -14,9 +14,7 @@ import { NewChannelListButton } from '@/components/channel-list/NewChannelListBu
 import { ExportButton } from '@/components/export/ExportButton';
 import { PageTitle } from '@/components/ui/PageHeader';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
-import { formatResolveError, resolvePack } from '@/lib/rider-packs/resolve';
-import type { RiderPack, ResolvedSection } from '@/lib/rider-packs/types';
-import { resolveShowDocuments } from '@/lib/rider-packs/attachments';
+import { resolveTourChannelList } from '@/lib/rider-packs/resolveChannelList';
 
 export const dynamic = 'force-dynamic';
 
@@ -36,60 +34,18 @@ export default async function OperationsTourChannelListPage({
 
   if (error || !tour) notFound();
 
-  const { data: packs } = await supabase
-    .from('rider_packs')
-    .select('*')
-    .eq('tour_id', tour.id)
-    .order('updated_at', { ascending: false });
-
-  let resolvedSection: ResolvedSection | null = null;
-  let resolvedPackId: string | null = null;
+  /* ONE resolver, shared with the export (src/lib/rider-packs/resolveChannelList.ts).
+     Attachment-first with the legacy scan as fallback — the logic used to live
+     inline here, and the export's private copy of it drifted, so the PDF showed
+     a different list from this page. Both call the same function now. */
+  const resolved = await resolveTourChannelList(supabase, tour.id);
+  const packs = resolved.packs;
+  const resolvedSection = resolved.section;
+  const resolvedPackId = resolved.packId;
   // #17 — keep the full pack so the tour tab can mount the editable editor.
-  let resolvedPack: RiderPack | null = null;
-  let resolveError: string | null = null;
-
-  /* Decouple phase A (2026-08-05) — ATTACHMENT-FIRST. If a channel-list
-     document is attached to this tour, it IS the tour's channel list: its own
-     pack, its own sections, no rider inheritance, so the inherited lock can
-     never engage. The scan below survives only as the legacy fallback for
-     tours with nothing attached yet. */
-  const attached = await resolveShowDocuments(supabase, tour.id, null);
-  const attachedDoc = attached.channel_list;
-  if (attachedDoc) {
-    const { data: docPack } = await supabase
-      .from('rider_packs')
-      .select('*')
-      .eq('id', attachedDoc.document_pack_id)
-      .maybeSingle();
-    if (docPack) {
-      try {
-        const resolved = await resolvePack(supabase, docPack as RiderPack);
-        const sec = resolved.sections.find((s) => s.section_type === 'channel_list');
-        if (sec) {
-          resolvedSection = sec;
-          resolvedPackId = docPack.id as string;
-          resolvedPack = docPack as RiderPack;
-        }
-      } catch (e) {
-        resolveError = formatResolveError(e);
-      }
-    }
-  }
-
-  for (const pack of resolvedSection ? [] : packs ?? []) {
-    try {
-      const resolved = await resolvePack(supabase, pack as RiderPack);
-      const sec = resolved.sections.find((s) => s.section_type === 'channel_list');
-      if (sec) {
-        resolvedSection = sec;
-        resolvedPackId = pack.id as string;
-        resolvedPack = pack as RiderPack;
-        break;
-      }
-    } catch (e) {
-      resolveError = formatResolveError(e);
-    }
-  }
+  const resolvedPack = resolved.pack;
+  const resolveError = resolved.error;
+  const attachedDoc = resolved.attachedDoc;
 
 
   return (
@@ -144,11 +100,11 @@ export default async function OperationsTourChannelListPage({
           }
           /* B2 — stage-plot packs on this tour + the one (if any) currently
              linked to this channel list, so the tab can link/unlink one. */
-          stagePlotCandidates={(packs ?? [])
+          stagePlotCandidates={packs
             .filter((p) => (p as { kind?: string }).kind === 'stage_plot')
             .map((p) => ({ id: p.id as string, title: ((p as { title?: string }).title as string) ?? 'Untitled' }))}
           linkedStagePlotId={
-            ((packs ?? []).find(
+            (packs.find(
               (p) => (p as { kind?: string }).kind === 'stage_plot' && (p as { linked_rider_pack_id?: string | null }).linked_rider_pack_id === resolvedPackId,
             )?.id as string | undefined) ?? null
           }

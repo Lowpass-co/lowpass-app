@@ -301,8 +301,17 @@ export function PatchMatrix({
         onKeyDown={onKeyDown}
         onMouseLeave={() => setHover(null)}
         onScroll={(e) => { const x = e.currentTarget.scrollLeft > 0; setScrolledX((prev) => (prev === x ? prev : x)); }}
-        className="overflow-auto outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-lp-orange/40"
-        style={{ maxHeight: 'min(70vh, 640px)', border: `1px solid ${HAIRLINE}`, borderRadius: 'var(--lp-radius-md)', userSelect: 'none', background: EMPTY_CELL }}
+        /* §CL-7 — was overflow-auto + maxHeight min(70vh,640px): the
+           third nested scroller on this page, inside <main>, which
+           AppShellV3 gives overflow:auto as the app's one scroll
+           surface. Horizontal stays (the socket columns run wide and
+           the channel-name column is sticky-left); the height cap
+           goes so the page scrolls the matrix rather than the matrix
+           scrolling inside the page. The sticky column HEADERS here
+           lose their top-pinning for the same reason as the channel
+           grid — see the note at ChannelListEditor's grid scroller. */
+        className="overflow-x-auto outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-lp-orange/40"
+        style={{ border: `1px solid ${HAIRLINE}`, borderRadius: 'var(--lp-radius-md)', userSelect: 'none', background: EMPTY_CELL }}
       >
         {/* CSS GRID (not a <table>): every socket column is minmax(40px,1fr) —
             template-driven equal widths, floored at 40px, immune to the global

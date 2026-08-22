@@ -116,8 +116,8 @@ export async function loadStagePlotExportData(
   let channel: ChannelListExportData | null = null;
   if (opts?.includeInputList) {
     const section = await resolvePairedChannelSection(supabase, riderPackId);
-    const { inputs, outputs } = channelDataFromSection(section);
-    channel = { tour: { id: '', name: plot.name }, artist, logoUrl, inputs, outputs, hasSection: section !== null };
+    const { columns, inputs, outputs } = channelDataFromSection(section);
+    channel = { tour: { id: '', name: plot.name }, artist, logoUrl, columns, inputs, outputs, hasSection: section !== null };
   }
 
   return { plot, items, customIcons, plotName: plot.name, artist, logoUrl, channel };

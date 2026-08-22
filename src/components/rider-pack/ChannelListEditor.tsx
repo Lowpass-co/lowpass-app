@@ -1,6 +1,6 @@
 'use client';
 
-import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import {
   DndContext,
   PointerSensor,
@@ -12,11 +12,11 @@ import {
 import { SortableContext, arrayMove, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { GripVertical, ListPlus, Columns3, X } from 'lucide-react';
-import { useDebouncedSave } from '@/hooks/useDebouncedSave';
 import { useToast } from '@/components/ui/Toast';
 import { createClient } from '@/lib/supabase-client';
 import type { ChannelListRow, MicLibraryEntry, RiderPack, ResolvedSection, StageBox, SubSnake } from '@/lib/rider-packs/types';
 import * as ch from '@/lib/rider-packs/channel-list';
+import { normaliseRowIndexes } from '@/lib/channel-list/rowNumbering';
 import { listMics } from '@/lib/rider-packs/mic-library';
 import SubSnakeDialog from './SubSnakeDialog';
 import StageBoxDialog from './StageBoxDialog';
@@ -35,6 +35,7 @@ import { ChannelListSectionBand } from './channel-list-cells/ChannelListSectionB
 import { GearDetailSlideOver } from '@/components/gear/GearDetailSlideOver';
 import { PatchMatrix, type SocketPatch } from './PatchMatrix';
 import { CellNavProvider, NavCell, useCellNav } from '@/lib/hooks/useCellNav';
+import { useRowSave } from './channel-list-cells/useRowSave';
 import {
   COLUMN_BY_KEY,
   OPTIONAL_COLUMNS,
@@ -191,20 +192,54 @@ export default function ChannelListEditor({
     };
   }, []);
 
+  /* Sprint 12 §8b2 — split rows by row_kind. Input rows drive
+     the main channel grid; output rows render in a stacked
+     sub-grid below.
+
+     §CL-1 — the two kinds do NOT share a row_index sequence, and
+     the comment that used to say they did (citing 040's UNIQUE
+     (section_id, row_index)) is what the drag handler below was
+     written against. Migration 115 replaced that constraint with
+     UNIQUE (section_id, row_kind, row_index): inputs number 1..N
+     and outputs 1..M, independently.
+
+     Declared above handleDragEnd because the handler reorders
+     inputRows — reading it from a later const defeats the React
+     Compiler's memoization (react-hooks/preserve-manual-memoization). */
+  const inputRows = useMemo(
+    () => rows.filter((r) => (r.row_kind ?? 'input') === 'input'),
+    [rows],
+  );
+  const outputRows = useMemo(
+    () => rows.filter((r) => r.row_kind === 'output'),
+    [rows],
+  );
+
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
 
   const handleDragEnd = async (e: DragEndEvent) => {
     const { active, over } = e;
     if (!over || active.id === over.id) return;
-    const oldIndex = rows.findIndex((r) => r.id === active.id);
-    const newIndex = rows.findIndex((r) => r.id === over.id);
+    /* §CL-1 — the SortableContext below is seeded from `inputRows`,
+       so the reorder has to be computed over inputRows too. It used
+       to be computed over `rows` — the unfiltered array — and ship
+       every id, inputs and outputs, as one flat sequence to a RPC
+       that renumbered 1..N across the whole section. That is what
+       merged the two independent sequences: one drag left the inputs
+       with a hole wherever an output had landed, and nothing ever
+       renumbered them back. Adam's list read 1, 2, 5, 6, 7, 8, 9, 10. */
+    const oldIndex = inputRows.findIndex((r) => r.id === active.id);
+    const newIndex = inputRows.findIndex((r) => r.id === over.id);
     if (oldIndex < 0 || newIndex < 0) return;
-    const next = arrayMove(rows, oldIndex, newIndex);
-    setRows(next);
-    const ids = next.map((r) => r.id);
+    const orderedIds = arrayMove(inputRows, oldIndex, newIndex).map((r) => r.id);
     const prev = rows;
+    /* Optimistic. normaliseRowIndexes computes exactly what
+       normalise_channel_list_indexes is about to persist, so the
+       numbers the operator sees mid-flight are the numbers that
+       land — no snap-back on success. */
+    setRows(normaliseRowIndexes(rows, orderedIds));
     try {
-      await ch.reorderRows(createClient(), section.id, ids);
+      await ch.reorderRows(createClient(), section.id, orderedIds);
       await onStructureChange();
     } catch (err) {
       showToast(err instanceof Error ? err.message : 'Reorder failed', 'error');
@@ -220,12 +255,17 @@ export default function ChannelListEditor({
 
   const addChannel = async () => {
     try {
-      const r = await ch.appendRow(createClient(), {
+      /* §CL-1 — appendRow hands back the WHOLE section, because
+         normalising can renumber rows this click never touched (it
+         closes gaps left by earlier appends and deletes). Merging
+         only the new row would leave the grid showing numbers the
+         database no longer holds. */
+      const { created, rows: fresh } = await ch.appendRow(createClient(), {
         packId: pack.id,
         sectionId: section.id,
       });
-      setRows((prev) => [...prev, r].sort((a, b) => a.row_index - b.row_index));
-      setNewlyAddedRowId(r.id);
+      setRows(fresh);
+      if (created[0]) setNewlyAddedRowId(created[0].id);
       await onStructureChange();
     } catch (err) {
       /* §CL1.1 — pre-fix the click silently swallowed the
@@ -239,12 +279,12 @@ export default function ChannelListEditor({
   /* §CL-FIX-4 — bulk-add N input rows in one round-trip. */
   const addManyChannels = async (count: number) => {
     try {
-      const created = await ch.appendRows(createClient(), {
+      const { created, rows: fresh } = await ch.appendRows(createClient(), {
         packId: pack.id,
         sectionId: section.id,
         count,
       });
-      setRows((prev) => [...prev, ...created].sort((a, b) => a.row_index - b.row_index));
+      setRows(fresh);
       setMultiAddOpen(false);
       if (created.length > 0) setNewlyAddedRowId(created[0].id);
       await onStructureChange();
@@ -257,30 +297,17 @@ export default function ChannelListEditor({
      sub-grid below the input table. */
   const addOutput = async () => {
     try {
-      const r = await ch.appendOutputRow(createClient(), {
+      const { created, rows: fresh } = await ch.appendOutputRow(createClient(), {
         packId: pack.id,
         sectionId: section.id,
       });
-      setRows((prev) => [...prev, r].sort((a, b) => a.row_index - b.row_index));
-      setNewlyAddedRowId(r.id);
+      setRows(fresh);
+      if (created[0]) setNewlyAddedRowId(created[0].id);
       await onStructureChange();
     } catch (err) {
       showToast(err instanceof Error ? err.message : 'Add output failed', 'error');
     }
   };
-
-  /* Sprint 12 §8b2 — split rows by row_kind. Input rows drive
-     the main channel grid; output rows render in a stacked
-     sub-grid below. Both share the underlying row_index
-     sequence (UNIQUE constraint on section_id, row_index). */
-  const inputRows = useMemo(
-    () => rows.filter((r) => (r.row_kind ?? 'input') === 'input'),
-    [rows],
-  );
-  const outputRows = useMemo(
-    () => rows.filter((r) => r.row_kind === 'output'),
-    [rows],
-  );
 
   const setOutputLocal = useCallback(
     (r: ChannelListRow) =>
@@ -288,18 +315,55 @@ export default function ChannelListEditor({
     [],
   );
 
+  /* §CL-5 — which rows currently hold unsaved or in-flight edits.
+     Every ChannelBlock / OutputBlock reports in via onWriteActive,
+     and so does the patch-mode writer below. This is the half of the
+     save race that cannot be fixed inside the row: the stale read is
+     issued by refetchLocal, not by the writer, so the writer has no
+     way to stop it on its own. */
+  const pendingRowWritesRef = useRef<Set<string>>(new Set());
+  /* Keyed per WRITER, not per row — patchChannel and the row's own
+     debounced saver both write the same row, and a shared key would
+     let whichever finished first clear the other's flag. */
+  const noteRowWrite = useCallback((writerKey: string, active: boolean) => {
+    if (active) pendingRowWritesRef.current.add(writerKey);
+    else pendingRowWritesRef.current.delete(writerKey);
+  }, []);
+  const showSaveError = useCallback(
+    (message: string) => showToast(message, 'error'),
+    [showToast],
+  );
+  /* Sequence number so an older refetch that overtakes a newer one
+     cannot apply its staler results. */
+  const refetchSeqRef = useRef(0);
+
   /* §CL-NORELOAD — reconcile the grid with the server WITHOUT navigating.
      Reads rows + stage boxes + sub-snakes client-side and swaps local state.
      This replaces router.refresh() for the structural paths (I/O dialogs, the
      stage-box patch modal, sub-snake edits) whose results touch data the grid
      renders but that the mutating child doesn't push back optimistically. */
   const refetchLocal = useCallback(async () => {
+    /* §CL-5 — do not START a read while a row write is outstanding.
+       A SELECT issued before the UPDATE lands comes back holding the
+       pre-write value, and arriving after the write it overwrites
+       what the operator just typed. The deadline is a backstop: a
+       row whose save keeps failing stays "active" indefinitely, and
+       a stale grid is a worse outcome than a slightly stale read. */
+    const deadline = Date.now() + 4000;
+    while (pendingRowWritesRef.current.size > 0 && Date.now() < deadline) {
+      await new Promise((resolve) => setTimeout(resolve, 40));
+    }
+    const seq = refetchSeqRef.current + 1;
+    refetchSeqRef.current = seq;
     const supabase = createClient();
     const [freshRows, boxes, snakes] = await Promise.all([
       ch.listRows(supabase, section.id),
       ch.listStageBoxes(supabase, section.id),
       ch.listSubSnakes(supabase, section.id),
     ]);
+    /* A newer refetch started while this one was in flight — its
+       answer is the fresher truth, so drop ours rather than race it. */
+    if (seq !== refetchSeqRef.current) return;
     setRows(freshRows);
     setStageBoxes(boxes);
     setSubSnakes(snakes);
@@ -312,17 +376,34 @@ export default function ChannelListEditor({
   const patchChannel = useCallback(
     (channelId: string, patch: SocketPatch) => {
       setRows((prev) => prev.map((x) => (x.id === channelId ? { ...x, ...patch } : x)));
-      void ch.updateRow(createClient(), channelId, patch).catch((err) => {
-        showToast(err instanceof Error ? err.message : 'Patch failed', 'error');
-        void refetchLocal();
-      });
+      /* §CL-5 — the second, uncoordinated writer to the same row.
+         It reports in on the same channel as the debounced row saver
+         so a refetch waits for it too; without that, a patch and a
+         refetch racing each other produced the same snap-back. */
+      const key = `patch:${channelId}`;
+      noteRowWrite(key, true);
+      void ch
+        .updateRow(createClient(), channelId, patch)
+        .catch((err) => {
+          showToast(err instanceof Error ? err.message : 'Patch failed', 'error');
+          void refetchLocal();
+        })
+        .finally(() => noteRowWrite(key, false));
     },
-    [refetchLocal, showToast],
+    [noteRowWrite, refetchLocal, showToast],
   );
 
-  /* Structural-change notifier handed to the I/O dialogs + inventory patch.
+  /* Structural-change notifier handed to the I/O dialogs + inventory patch,
+     AND to every row's Copy / Del button (see onRefresh below).
      Does a local, non-navigating refetch, then still calls the parent hook
-     (a no-op on the tour surface; the rider PackEditor keeps its own sync). */
+     (a no-op on the tour surface; the rider PackEditor keeps its own sync).
+
+     §CL-ONREFRESH — the row Copy/Del buttons used to receive the RAW
+     `onStructureChange` prop, which ChannelListTourEditor passes as `() => {}`.
+     The §CL-NORELOAD note there is right that the parent needn't re-render —
+     but it left the row buttons wired to a literal no-op, so on the tour
+     surface a deleted or copied row only appeared after a manual reload.
+     They now get `notifyStructureChange`, which refetches locally first. */
   const notifyStructureChange = useCallback(async () => {
     await refetchLocal();
     await onStructureChange();
@@ -363,6 +444,78 @@ export default function ChannelListEditor({
     () => enabledKeys.filter((k) => COLUMN_BY_KEY[k].focusable).length,
     [enabledKeys],
   );
+
+  /* §CL-8 — the column header is LIFTED OUT of the horizontal
+     scroller and scroll-synced to it.
+
+     Why it had to move: §CL-7 removed the input grid's vertical
+     scroller (Adam: "dont make the page scrollable within the
+     page") but left `overflow-x-auto` on the same div, because
+     the grid genuinely is wider than the viewport and the
+     sticky-left # column needs a horizontal scrollport. CSS
+     computes `overflow-y: visible` to `auto` the moment
+     `overflow-x` isn't `visible`, so that div became a
+     scrollport on BOTH axes and the header's `sticky top-0`
+     started resolving against it — a box with no vertical
+     scroll — instead of <main>. The header stopped pinning.
+
+     There is no CSS-only fix: `overflow-x: clip` would preserve
+     `overflow-y: visible` but clip doesn't scroll. So: two
+     scrollports, one driven by the other.
+
+       headerScrollRef — overflow-x: hidden (still programmatically
+         scrollable, unlike clip), position: sticky inside a plain
+         wrapper that spans header + rows, so `top` resolves
+         against <main>.
+       bodyScrollRef — overflow-x: auto, the one the operator
+         actually drags. No vertical constraint; the page scrolls.
+
+     The sync is ONE-DIRECTIONAL (body → header). Mirroring both
+     ways feeds each element's programmatic scroll back into the
+     other and jitters under momentum scrolling.
+
+     Offset is genuinely 0: AppShellV3 renders <TopBarV3> as a
+     flex SIBLING above <main>, not over it, so <main>'s scrollport
+     already starts below the bar. `top: 0` pins flush under the
+     chrome — there is no chrome-height variable to subtract.
+
+     Re-sync triggers, not just `scroll`: a ResizeObserver on the
+     scroller (window resize, rail collapse) plus an effect
+     dependency on `enabledKeys` (column toggle) and `patchMode`
+     (the matrix unmounts the grid entirely, so the refs go null
+     and must be re-bound on the way back). */
+  const headerScrollRef = useRef<HTMLDivElement | null>(null);
+  const bodyScrollRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    const body = bodyScrollRef.current;
+    if (!body) return;
+    let raf = 0;
+    const apply = () => {
+      raf = 0;
+      const h = headerScrollRef.current;
+      const b = bodyScrollRef.current;
+      if (!h || !b) return;
+      if (h.scrollLeft !== b.scrollLeft) h.scrollLeft = b.scrollLeft;
+    };
+    const schedule = () => {
+      if (!raf) raf = requestAnimationFrame(apply);
+    };
+    body.addEventListener('scroll', schedule, { passive: true });
+    const ro =
+      typeof ResizeObserver !== 'undefined' ? new ResizeObserver(schedule) : null;
+    ro?.observe(body);
+    window.addEventListener('resize', schedule);
+    /* Column toggles and the patch-mode return land here via the
+       deps, so align once on (re)bind rather than waiting for the
+       next scroll event. */
+    schedule();
+    return () => {
+      body.removeEventListener('scroll', schedule);
+      ro?.disconnect();
+      window.removeEventListener('resize', schedule);
+      if (raf) cancelAnimationFrame(raf);
+    };
+  }, [patchMode, enabledKeys]);
 
   /* §CL-FIX-6b — soft-hide toggle. Persists the optional-column
      set to rider_sections.metadata.enabled_columns (the first
@@ -566,14 +719,50 @@ export default function ChannelListEditor({
         <ChannelListSectionBand label="Inputs" count={inputRows.length} />
 
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={(e) => void handleDragEnd(e)}>
-          <div className="w-full min-w-0 max-h-[min(75vh,720px)] overflow-y-auto overflow-x-auto overscroll-contain">
+          {/* §CL-7 — Adam: "dont make the page scrollable within the
+              page." This was max-h-[min(75vh,720px)] overflow-y-auto
+              overscroll-contain, nested inside <main>, which
+              AppShellV3 gives overflow:auto as the app's one scroll
+              surface. Two scrollbars, and overscroll-contain meant
+              the wheel STOPPED dead at the inner boundary instead of
+              chaining to the page. It also stranded everything below
+              it — outputs, the stage-box legend, Inventory — under a
+              box the operator had to scroll past to reach.
+
+              overflow-x-auto stays: the sticky-left # column below
+              needs a horizontal scrollport, and a 14-column channel
+              grid genuinely is wider than the viewport. With no
+              max-height the box is content-height, so the vertical
+              scrollbar never appears and the page scrolls instead.
+
+              §CL-8 resolves the cost this comment used to record and
+              leave standing: a horizontal scrollport is a scrollport
+              on BOTH axes, so `sticky top-0` on a header INSIDE this
+              div resolved against the div rather than <main>. The
+              header now lives in its own overflow-x:hidden scrollport
+              (below), sticky inside the plain wrapper that spans both,
+              and follows this one's scrollLeft. The z-indexes are
+              still load-bearing for the sticky-LEFT # column. */}
+          {/* The wrapper is deliberately plain — no overflow, no
+              transform/filter/contain/will-change. It is the header's
+              containing block, so it must span header + rows for the
+              sticky to have anywhere to travel, and it must not
+              itself become a scrollport or the whole fix regresses. */}
+          <div className="w-full min-w-0">
+          <div
+            ref={headerScrollRef}
+            className="sticky top-0 z-20 w-full min-w-0 overflow-x-hidden bg-lp-surface"
+          >
             <div className="w-full min-w-0" style={{ minWidth: 'min(100%, 1180px)' }}>
               {/* Sprint 12 §8b1 — header columns match the new
                   spec order. Track 3 (channel #) is sticky-left
                   per row; the header cell gets the same z-index
-                  treatment so it stays put on horizontal scroll. */}
+                  treatment so it stays put on horizontal scroll.
+                  ONE grid template, one source: channelGridStyle is
+                  the same object the rows get, so a column toggle
+                  can never move one and not the other. */}
               <div
-                className="sticky top-0 z-20 grid w-full min-h-9 items-stretch gap-0 border-b border-lp-border bg-lp-surface text-[10px] font-bold uppercase tracking-wider text-lp-text-tertiary shadow-[0_1px_0_var(--lp-border)]"
+                className="grid w-full min-h-9 items-stretch gap-0 border-b border-lp-border bg-lp-surface text-[10px] font-bold uppercase tracking-wider text-lp-text-tertiary shadow-[0_1px_0_var(--lp-border)]"
                 style={channelGridStyle}
               >
                 <div className="py-2" style={{ borderLeft: '2px solid transparent' }} />
@@ -619,35 +808,29 @@ export default function ChannelListEditor({
                 })}
                 <div className="px-0.5 py-2 text-right" />
               </div>
+            </div>
+          </div>
+          {/* The body scroller — the one the operator actually drags.
+              overflow-x only; no max-height, so the PAGE scrolls
+              vertically (§CL-7) and the header above tracks scrollLeft. */}
+          <div ref={bodyScrollRef} className="w-full min-w-0 overflow-x-auto">
+            <div className="w-full min-w-0" style={{ minWidth: 'min(100%, 1180px)' }}>
               <CellNavProvider colCount={inputColCount}>
                 <SortableContext items={inputRows.map((r) => r.id)} strategy={verticalListSortingStrategy}>
-                  {inputRows.map((row, idx) => {
-                  /* VIS-CL-06 — group the input rows by STAGE BOX (Adam's call):
-                     render a boundary header whenever the stage_box changes from
-                     the previous row, so channel-number gaps read as box edges.
-                     The header is decorative (not a SortableContext item), so the
-                     sortable id list stays exactly inputRows.map(r => r.id). */
-                  const prevBoxId = idx > 0 ? inputRows[idx - 1].stage_box_id : undefined;
-                  const showGroupHeader =
-                    show.has('stage_box') && stageBoxes.length > 0 && row.stage_box_id !== prevBoxId;
-                  const groupBox = stageBoxes.find((s) => s.id === row.stage_box_id);
-                  return (
-                    <Fragment key={row.id}>
-                    {showGroupHeader && (
-                      <div className="flex items-center gap-2 border-b border-lp-border bg-lp-bg px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-lp-text-tertiary">
-                        <span
-                          aria-hidden
-                          className="h-2 w-2 shrink-0 rounded-sm"
-                          style={{
-                            backgroundColor: groupBox?.colour ?? 'transparent',
-                            filter: groupBox?.colour ? 'saturate(0.55)' : undefined,
-                            border: groupBox?.colour ? 'none' : '1px solid var(--lp-border)',
-                          }}
-                        />
-                        {groupBox?.label ?? 'Unassigned'}
-                      </div>
-                    )}
+                  {/* §CL-2 — the input grid is ONE uninterrupted list.
+                      VIS-CL-06 used to break it with a boundary header
+                      each time stage_box changed, and its own comment
+                      gave the reason: "so channel-number gaps read as
+                      box edges". It was a workaround for CL-1, and
+                      Adam's note is exact — "the stage boxes being
+                      coloured is awesome but it should NOT split the
+                      list up". With the numbers correct there are no
+                      gaps left to explain, so the headers go and the
+                      per-box colour stays: the left row-stripe on each
+                      ChannelBlock plus the legend below the grid. */}
+                  {inputRows.map((row, idx) => (
                     <ChannelBlock
+                      key={row.id}
                       row={row}
                       rows={inputRows}
                       inputRowIdx={idx}
@@ -659,7 +842,9 @@ export default function ChannelListEditor({
                       show={show}
                       navCol={navCol}
                       onUpdateLocal={(r) => setRows((prev) => prev.map((x) => (x.id === r.id ? r : x)))}
-                      onRefresh={onStructureChange}
+                      onRefresh={notifyStructureChange}
+                      onWriteActive={noteRowWrite}
+                      onSaveError={showSaveError}
                       onOpenSubDialog={() => setSubDialog(true)}
                       onOpenStageDialog={() => setStageDialog(true)}
                       sectionId={section.id}
@@ -676,12 +861,11 @@ export default function ChannelListEditor({
                       onAutoFocused={() => setNewlyAddedRowId(null)}
                       onGearChipClick={onGearChipClick ?? setGearDetailId}
                     />
-                    </Fragment>
-                  );
-                  })}
+                  ))}
                 </SortableContext>
               </CellNavProvider>
             </div>
+          </div>
           </div>
         </DndContext>
 
@@ -798,7 +982,9 @@ export default function ChannelListEditor({
                     row={row}
                     outputRowIdx={idx}
                     onUpdateLocal={setOutputLocal}
-                    onRefresh={onStructureChange}
+                    onRefresh={notifyStructureChange}
+                    onWriteActive={noteRowWrite}
+                    onSaveError={showSaveError}
                   />
                 ))}
               </CellNavProvider>
@@ -869,6 +1055,8 @@ function ChannelBlock({
   navCol,
   onUpdateLocal,
   onRefresh,
+  onWriteActive,
+  onSaveError,
   onOpenSubDialog,
   onOpenStageDialog,
   sectionId,
@@ -895,6 +1083,10 @@ function ChannelBlock({
   navCol: Partial<Record<ChannelListColumnKey, number>>;
   onUpdateLocal: (r: ChannelListRow) => void;
   onRefresh: () => void | Promise<void>;
+  /* §CL-5 — tells the grid this row has unsaved or in-flight data,
+     so refetchLocal cannot read around the write. */
+  onWriteActive?: (rowId: string, active: boolean) => void;
+  onSaveError?: (message: string) => void;
   onOpenSubDialog: () => void;
   onOpenStageDialog: () => void;
   sectionId: string;
@@ -977,36 +1169,21 @@ function ChannelBlock({
     [rows, row.id],
   );
 
-  const patchRef = useRef<Partial<ChannelListRow>>({});
-  const saveRow = useDebouncedSave<number>(
-    useCallback(
-      async (_tick: number) => {
-        void _tick;
-        const p = { ...patchRef.current };
-        patchRef.current = {};
-        if (Object.keys(p).length === 0) return;
-        await ch.updateRow(createClient(), row.id, p);
-      },
-      [row.id],
-    ),
-    400,
-  );
-
-  const [local, setLocal] = useState(row);
-  useEffect(() => {
-    if (saveRow.isPending()) return;
-    setLocal(row);
-  }, [row, saveRow]);
-
-  const queue = (patch: Partial<ChannelListRow>) => {
-    patchRef.current = { ...patchRef.current, ...patch };
-    setLocal((l) => {
-      const n = { ...l, ...patch } as ChannelListRow;
-      onUpdateLocal(n);
-      return n;
-    });
-    saveRow.schedule(0);
-  };
+  /* §CL-5 — the debounced writer, the optimistic `local` copy and the
+     stale-prop guard moved into useRowSave, shared with OutputBlock.
+     The version that lived here cleared its patch buffer BEFORE the
+     await, so a failed write lost the edit with no toast and no
+     retry — silent data loss — and it guarded the incoming `row`
+     prop on saveRow.isPending() alone, which goes false the instant
+     the drain resolves and so let a read issued before the write
+     land after it. That pair is Adam's "populate wrong and then load
+     later". See the header of useRowSave.ts. */
+  const { local, queue, flush } = useRowSave({
+    row,
+    onUpdateLocal,
+    onWriteActive,
+    onError: onSaveError,
+  });
 
   /* Sprint 12 §8b1 — phantom flash state. When a mic with
      default_phantom=true is picked, we briefly highlight the
@@ -1055,7 +1232,7 @@ function ChannelBlock({
       phantomFlashTimerRef.current = setTimeout(() => setPhantomFlash(false), 700);
     }
     queue(patch);
-    void saveRow.flush();
+    void flush();
   };
 
   /* Gear chip — rendered INLINE with the Mic/DI input (same row,
@@ -1127,7 +1304,7 @@ function ChannelBlock({
               }}
               onChange={(e) => queue({ channel_name: e.target.value })}
               onBlur={() => {
-                void saveRow.flush();
+                void flush();
               }}
               className="min-w-0 w-full border-0 bg-transparent py-2 text-sm font-semibold text-lp-text outline-none focus:ring-0"
               placeholder="Channel"
@@ -1143,7 +1320,7 @@ function ChannelBlock({
                 value={local.position}
                 onChange={(v) => {
                   queue({ position: v });
-                  void saveRow.flush();
+                  void flush();
                 }}
                 ariaLabel={`Stage position for channel ${row.row_index}`}
                 onEnterCommit={() => advanceFrom('position')}
@@ -1209,7 +1386,7 @@ function ChannelBlock({
                 value={local.cable_length}
                 onChange={(v) => {
                   queue({ cable_length: v });
-                  void saveRow.flush();
+                  void flush();
                 }}
                 ariaLabel={`Cable length for channel ${row.row_index}`}
                 onEnterCommit={() => advanceFrom('cable_length')}
@@ -1262,7 +1439,7 @@ function ChannelBlock({
                 type="text"
                 value={local.gain ?? ''}
                 onChange={(e) => queue({ gain: e.target.value })}
-                onBlur={() => void saveRow.flush()}
+                onBlur={() => void flush()}
                 className="w-full min-w-0 rounded border border-lp-border bg-lp-bg px-1.5 py-1.5 text-xs text-lp-text outline-none focus:border-lp-orange/40"
                 placeholder="…"
                 aria-label={`Gain for channel ${row.row_index}`}
@@ -1278,7 +1455,7 @@ function ChannelBlock({
                 value={local.stand}
                 onChange={(v) => {
                   queue({ stand: v });
-                  void saveRow.flush();
+                  void flush();
                 }}
                 ariaLabel={`Stand type for channel ${row.row_index}`}
                 onEnterCommit={() => advanceFrom('stand')}
@@ -1298,7 +1475,7 @@ function ChannelBlock({
               title="Phantom +48V (on / off)"
               onClick={() => {
                 queue({ phantom_power: local.phantom_power !== true });
-                void saveRow.flush();
+                void flush();
               }}
               className="flex h-7 w-7 items-center justify-center rounded border hover:bg-lp-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--color-lp-orange)]"
               style={{
@@ -1344,7 +1521,7 @@ function ChannelBlock({
                 const next: 'band' | 'venue' | 'hire' | null =
                   p === 'band' || p === 'venue' || p === 'hire' ? p : null;
                 queue({ provider: next });
-                void saveRow.flush();
+                void flush();
               }}
               /* VIS-CL-05 — ownership chips. The leading colour dot (rendered
                  by BrandedSelect in both the trigger and the menu) reads the
@@ -1384,7 +1561,7 @@ function ChannelBlock({
                 notesSnapRef.current = local.notes;
               }}
               onChange={(e) => queue({ notes: e.target.value })}
-              onBlur={() => void saveRow.flush()}
+              onBlur={() => void flush()}
               className="w-full min-w-0 rounded border border-lp-border bg-lp-bg px-1.5 py-1.5 text-xs text-lp-text outline-none focus:border-lp-orange/40"
               placeholder="…"
               title={local.notes}
@@ -1413,7 +1590,9 @@ function ChannelBlock({
             className="whitespace-nowrap text-lp-error hover:opacity-90"
             onClick={async () => {
               if (!confirm('Delete this channel row?')) return;
-              await ch.deleteRow(createClient(), row.id);
+              /* §CL-1 — sectionId closes the sequence behind the
+                 delete; without it row 4 of 10 left a permanent hole. */
+              await ch.deleteRow(createClient(), row.id, sectionId);
               await onRefresh();
             }}
           >

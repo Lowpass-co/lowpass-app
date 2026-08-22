@@ -6,25 +6,35 @@
    the outputs (IEM / mix) rows. Two coarse, config-toggleable/reorderable sections
    (inputs / outputs). Pure (no I/O); reuses the shell's table primitives.
    Presentation only.
+
+   §CL-9: the input columns are driven by `data.columns` — the section's own
+   enabled-column set — so the printed table is the table on screen. Nothing
+   here may hardcode a column list again.
    ============================================ */
 
 import { escapeHtml as esc } from '@/lib/export/shell';
-import type { ChannelListExportData } from '@/lib/export/channel-list-data';
+import { channelExportColumnLabel, type ChannelListExportData, type ChannelExportCellKey } from '@/lib/export/channel-list-data';
 import type { TemplateConfig } from '@/lib/export/template-config';
 
+/* §CL-9 — the input table's columns come from the section's enabled set
+   (data.columns), NOT from a hardcoded list here. `number` is the sticky
+   left column and renders as the numeric cell; everything else is a text
+   cell keyed by column key. Notes keep the quiet `lp-native` treatment. */
 function renderInputs(data: ChannelListExportData): string {
   if (data.inputs.length === 0) return `<div class="lp-sec-head">Input list</div><p class="lp-native">No input channels.</p>`;
+  const cellKeys = data.columns.filter((k): k is ChannelExportCellKey => k !== 'number');
+  const hasNumber = data.columns.includes('number');
+  const head = [
+    ...(hasNumber ? [`<th class="num">${esc(channelExportColumnLabel('number'))}</th>`] : []),
+    ...cellKeys.map((k) => `<th>${esc(channelExportColumnLabel(k))}</th>`),
+  ].join('');
   const rows = data.inputs
     .map(
       (r, idx) => `<tr${idx % 2 === 1 ? ' style="background:#faf8f5;"' : ''}>
-        <td class="num">${r.index}</td>
-        <td>${esc(r.source)}</td>
-        <td>${esc(r.micDi)}</td>
-        <td>${esc(r.subSnake)}</td>
-        <td>${esc(r.stageIO)}</td>
-        <td>${esc(r.insert)}</td>
-        <td>${esc(r.phantom)}</td>
-        <td class="lp-native">${esc(r.notes)}</td>
+        ${[
+          ...(hasNumber ? [`<td class="num">${r.index}</td>`] : []),
+          ...cellKeys.map((k) => `<td${k === 'notes' ? ' class="lp-native"' : ''}>${esc(r.cells[k])}</td>`),
+        ].join('')}
       </tr>`,
     )
     .join('');
@@ -32,7 +42,7 @@ function renderInputs(data: ChannelListExportData): string {
     <div class="lp-sec-head">Input list</div>
     <div class="lp-native" style="margin:-2px 0 4px;">${data.inputs.length} channel${data.inputs.length === 1 ? '' : 's'}</div>
     <table class="lp-tbl">
-      <thead><tr><th class="num">#</th><th>Source</th><th>Mic / DI</th><th>Sub-snake</th><th>Stage I/O</th><th>Insert</th><th>Ph.</th><th>Notes</th></tr></thead>
+      <thead><tr>${head}</tr></thead>
       <tbody>${rows}</tbody>
     </table>`;
 }
