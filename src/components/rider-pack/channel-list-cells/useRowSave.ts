@@ -101,6 +101,12 @@ export function useRowSave({
   /* Declared here so the saveFn below can re-schedule ITSELF for the
      retry — it cannot close over `saveRow`, which the hook returns. */
   const saveRowRef = useRef<{ schedule: (value: number) => void } | null>(null);
+  /* The unmount cleanup below runs once, so it cannot close over
+     `rowId` directly without re-running on every row change. */
+  const rowIdRef = useRef(rowId);
+  useEffect(() => {
+    rowIdRef.current = rowId;
+  }, [rowId]);
 
   /* Callbacks live in a ref: useDebouncedSave cancels any pending
      save when its saveFn identity changes, so the saveFn must not
@@ -167,6 +173,14 @@ export function useRowSave({
   useEffect(
     () => () => {
       if (retryTimerRef.current) clearTimeout(retryTimerRef.current);
+      /* §CL-5 — release this row's hold on refetchLocal when the row
+         goes away (deleted, or the section switched). A row that was
+         dirty but never flushed would otherwise leave its flag set
+         with nobody left to clear it, and every subsequent refetch
+         would sit out the full 4s backstop. If a write IS in flight
+         the flag is left alone — that request is still going to land,
+         and its own finally clears it. */
+      if (inFlightRef.current === 0) cbRef.current.onWriteActive?.(rowIdRef.current, false);
     },
     [],
   );

@@ -232,7 +232,20 @@ export async function normaliseSectionIndexes(
     p_section_id: sectionId,
     p_ordered_ids: orderedIds,
   });
-  if (error) throw new Error(error.message);
+  if (!error) return;
+  /* This branch REQUIRES migration 267. There is deliberately no
+     fallback to the old reorder_channel_list_rows: falling back
+     would quietly reintroduce the kind-blind renumber that caused
+     CL-1, and a wrong result nobody is told about is worse than a
+     write that refuses. Say which migration is missing instead. */
+  const missing =
+    (error as { code?: string }).code === 'PGRST202' ||
+    /could not find the function|does not exist/i.test(error.message);
+  throw new Error(
+    missing
+      ? 'Channel numbering needs database migration 267 — paste database/migrations/267_channel_list_numbering_invariant.sql, then retry.'
+      : error.message,
+  );
 }
 
 /* §CL-1 — what an append hands back.
@@ -290,10 +303,8 @@ export async function appendRow(
 
 /* §CL-FIX-4 — bulk-append N blank INPUT rows in ONE round-trip.
    Supabase .insert() takes an array, so a 32-channel festival
-   list is a single network call instead of 32. row_index
-   continues sequentially after the section's current max
-   (UNIQUE (section_id, row_index) holds for a single editor).
-   Count is clamped to 1..64. */
+   list is a single network call instead of 32. Count is clamped
+   to 1..64. */
 export async function appendRows(
   supabase: SupabaseClient,
   args: { packId: string; sectionId: string; count: number },
@@ -323,11 +334,12 @@ export async function appendRows(
    stay at their defaults (mic='', stand='', etc.) and are
    ignored by the output UI.
 
-   row_index is shared across the section (inputs and outputs
-   compete for the same sequence) so the UNIQUE (section_id,
-   row_index) constraint still holds. The editor renders the
-   two kinds in stacked sub-tables but the underlying ordering
-   is one stream. */
+   §CL-1 — outputs do NOT share the input sequence. Migration 115
+   replaced 040's UNIQUE (section_id, row_index) with
+   UNIQUE (section_id, row_kind, row_index): inputs number 1..N
+   and outputs 1..M, independently. The comment that used to sit
+   here said the opposite, and the writers were written to match
+   the comment. */
 export async function appendOutputRow(
   supabase: SupabaseClient,
   args: { packId: string; sectionId: string },
