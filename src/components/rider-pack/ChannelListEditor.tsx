@@ -1,6 +1,6 @@
 'use client';
 
-import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import {
   DndContext,
   PointerSensor,
@@ -656,33 +656,20 @@ export default function ChannelListEditor({
               </div>
               <CellNavProvider colCount={inputColCount}>
                 <SortableContext items={inputRows.map((r) => r.id)} strategy={verticalListSortingStrategy}>
-                  {inputRows.map((row, idx) => {
-                  /* VIS-CL-06 — group the input rows by STAGE BOX (Adam's call):
-                     render a boundary header whenever the stage_box changes from
-                     the previous row, so channel-number gaps read as box edges.
-                     The header is decorative (not a SortableContext item), so the
-                     sortable id list stays exactly inputRows.map(r => r.id). */
-                  const prevBoxId = idx > 0 ? inputRows[idx - 1].stage_box_id : undefined;
-                  const showGroupHeader =
-                    show.has('stage_box') && stageBoxes.length > 0 && row.stage_box_id !== prevBoxId;
-                  const groupBox = stageBoxes.find((s) => s.id === row.stage_box_id);
-                  return (
-                    <Fragment key={row.id}>
-                    {showGroupHeader && (
-                      <div className="flex items-center gap-2 border-b border-lp-border bg-lp-bg px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-lp-text-tertiary">
-                        <span
-                          aria-hidden
-                          className="h-2 w-2 shrink-0 rounded-sm"
-                          style={{
-                            backgroundColor: groupBox?.colour ?? 'transparent',
-                            filter: groupBox?.colour ? 'saturate(0.55)' : undefined,
-                            border: groupBox?.colour ? 'none' : '1px solid var(--lp-border)',
-                          }}
-                        />
-                        {groupBox?.label ?? 'Unassigned'}
-                      </div>
-                    )}
+                  {/* §CL-2 — the input grid is ONE uninterrupted list.
+                      VIS-CL-06 used to break it with a boundary header
+                      each time stage_box changed, and its own comment
+                      gave the reason: "so channel-number gaps read as
+                      box edges". It was a workaround for CL-1, and
+                      Adam's note is exact — "the stage boxes being
+                      coloured is awesome but it should NOT split the
+                      list up". With the numbers correct there are no
+                      gaps left to explain, so the headers go and the
+                      per-box colour stays: the left row-stripe on each
+                      ChannelBlock plus the legend below the grid. */}
+                  {inputRows.map((row, idx) => (
                     <ChannelBlock
+                      key={row.id}
                       row={row}
                       rows={inputRows}
                       inputRowIdx={idx}
@@ -711,9 +698,7 @@ export default function ChannelListEditor({
                       onAutoFocused={() => setNewlyAddedRowId(null)}
                       onGearChipClick={onGearChipClick ?? setGearDetailId}
                     />
-                    </Fragment>
-                  );
-                  })}
+                  ))}
                 </SortableContext>
               </CellNavProvider>
             </div>
