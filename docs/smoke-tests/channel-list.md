@@ -504,3 +504,25 @@ on horizontal scroll, 2px orange inset cursor ring, conflict = red tile. **Needs
 the Boxes filter (other boxes hidden but toggleable back on) — NOT the old socket-strip
 modal. The old `StageBoxPatchModal` is deleted; there is no second patch UI with old
 styling anywhere. Leaving patch mode clears the box focus. **Needs-live**.
+
+## Export ↔ editor agreement (fix/channel-list-export) — 2026-08-22
+
+#### CHL-29 — The export shows the SAME list as the editor
+**Do**: Open a tour that has a channel-list document ATTACHED and also an older
+rider pack carrying a `channel_list` section (Charlotte Sands · Satellite USA
+Headline is the reported case). Note the editor's input/output counts and row 1.
+Click **Export** and read the preview / generated PDF header.
+**Expect**: identical counts and identical row 1. For Satellite USA Headline:
+**32 inputs / 6 outputs**, row 1 **KICK IN / sE BL8** — NOT the legacy pack's
+31 / 2 starting KICK OUT. Both surfaces call `resolveTourChannelList()`
+(`src/lib/rider-packs/resolveChannelList.ts`); a divergence means someone grew a
+second resolver. **Needs-live**.
+
+#### CHL-30 — Exported columns are the editor's enabled columns
+**Do**: In the editor's column menu note which optional columns are on. Export
+to PDF, then to Excel.
+**Expect**: both carry exactly those columns, in the editor's order, under the
+editor's labels — the phantom column heads **48V** (never `Ph.` / `Phantom`).
+Columns switched OFF (e.g. Loom, Notes) appear in neither file; columns switched
+ON that the old export never printed (Pos, Cable, Gain, Stand, Prov) appear in
+both. Toggle one column off, re-export, confirm it disappears. **Needs-live**.
