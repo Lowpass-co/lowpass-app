@@ -445,6 +445,78 @@ export default function ChannelListEditor({
     [enabledKeys],
   );
 
+  /* §CL-8 — the column header is LIFTED OUT of the horizontal
+     scroller and scroll-synced to it.
+
+     Why it had to move: §CL-7 removed the input grid's vertical
+     scroller (Adam: "dont make the page scrollable within the
+     page") but left `overflow-x-auto` on the same div, because
+     the grid genuinely is wider than the viewport and the
+     sticky-left # column needs a horizontal scrollport. CSS
+     computes `overflow-y: visible` to `auto` the moment
+     `overflow-x` isn't `visible`, so that div became a
+     scrollport on BOTH axes and the header's `sticky top-0`
+     started resolving against it — a box with no vertical
+     scroll — instead of <main>. The header stopped pinning.
+
+     There is no CSS-only fix: `overflow-x: clip` would preserve
+     `overflow-y: visible` but clip doesn't scroll. So: two
+     scrollports, one driven by the other.
+
+       headerScrollRef — overflow-x: hidden (still programmatically
+         scrollable, unlike clip), position: sticky inside a plain
+         wrapper that spans header + rows, so `top` resolves
+         against <main>.
+       bodyScrollRef — overflow-x: auto, the one the operator
+         actually drags. No vertical constraint; the page scrolls.
+
+     The sync is ONE-DIRECTIONAL (body → header). Mirroring both
+     ways feeds each element's programmatic scroll back into the
+     other and jitters under momentum scrolling.
+
+     Offset is genuinely 0: AppShellV3 renders <TopBarV3> as a
+     flex SIBLING above <main>, not over it, so <main>'s scrollport
+     already starts below the bar. `top: 0` pins flush under the
+     chrome — there is no chrome-height variable to subtract.
+
+     Re-sync triggers, not just `scroll`: a ResizeObserver on the
+     scroller (window resize, rail collapse) plus an effect
+     dependency on `enabledKeys` (column toggle) and `patchMode`
+     (the matrix unmounts the grid entirely, so the refs go null
+     and must be re-bound on the way back). */
+  const headerScrollRef = useRef<HTMLDivElement | null>(null);
+  const bodyScrollRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    const body = bodyScrollRef.current;
+    if (!body) return;
+    let raf = 0;
+    const apply = () => {
+      raf = 0;
+      const h = headerScrollRef.current;
+      const b = bodyScrollRef.current;
+      if (!h || !b) return;
+      if (h.scrollLeft !== b.scrollLeft) h.scrollLeft = b.scrollLeft;
+    };
+    const schedule = () => {
+      if (!raf) raf = requestAnimationFrame(apply);
+    };
+    body.addEventListener('scroll', schedule, { passive: true });
+    const ro =
+      typeof ResizeObserver !== 'undefined' ? new ResizeObserver(schedule) : null;
+    ro?.observe(body);
+    window.addEventListener('resize', schedule);
+    /* Column toggles and the patch-mode return land here via the
+       deps, so align once on (re)bind rather than waiting for the
+       next scroll event. */
+    schedule();
+    return () => {
+      body.removeEventListener('scroll', schedule);
+      ro?.disconnect();
+      window.removeEventListener('resize', schedule);
+      if (raf) cancelAnimationFrame(raf);
+    };
+  }, [patchMode, enabledKeys]);
+
   /* §CL-FIX-6b — soft-hide toggle. Persists the optional-column
      set to rider_sections.metadata.enabled_columns (the first
      explicit toggle freezes the lazily-derived set), then
@@ -663,25 +735,34 @@ export default function ChannelListEditor({
               max-height the box is content-height, so the vertical
               scrollbar never appears and the page scrolls instead.
 
-              Known cost, stated rather than hidden: a horizontal
-              scrollport is a scrollport on BOTH axes (CSS computes
-              overflow-y:visible to auto when overflow-x isn't
-              visible), so the header's `sticky top-0` now resolves
-              against this box rather than <main> and no longer pins
-              the column names on a long list. There is no CSS that
-              gives horizontal scrolling and page-level vertical
-              stickiness at once; getting both back needs the header
-              lifted out and scroll-synced, which is more than this
-              fix. The z-indexes below are still load-bearing for the
-              sticky-LEFT column. */}
-          <div className="w-full min-w-0 overflow-x-auto">
+              §CL-8 resolves the cost this comment used to record and
+              leave standing: a horizontal scrollport is a scrollport
+              on BOTH axes, so `sticky top-0` on a header INSIDE this
+              div resolved against the div rather than <main>. The
+              header now lives in its own overflow-x:hidden scrollport
+              (below), sticky inside the plain wrapper that spans both,
+              and follows this one's scrollLeft. The z-indexes are
+              still load-bearing for the sticky-LEFT # column. */}
+          {/* The wrapper is deliberately plain — no overflow, no
+              transform/filter/contain/will-change. It is the header's
+              containing block, so it must span header + rows for the
+              sticky to have anywhere to travel, and it must not
+              itself become a scrollport or the whole fix regresses. */}
+          <div className="w-full min-w-0">
+          <div
+            ref={headerScrollRef}
+            className="sticky top-0 z-20 w-full min-w-0 overflow-x-hidden bg-lp-surface"
+          >
             <div className="w-full min-w-0" style={{ minWidth: 'min(100%, 1180px)' }}>
               {/* Sprint 12 §8b1 — header columns match the new
                   spec order. Track 3 (channel #) is sticky-left
                   per row; the header cell gets the same z-index
-                  treatment so it stays put on horizontal scroll. */}
+                  treatment so it stays put on horizontal scroll.
+                  ONE grid template, one source: channelGridStyle is
+                  the same object the rows get, so a column toggle
+                  can never move one and not the other. */}
               <div
-                className="sticky top-0 z-20 grid w-full min-h-9 items-stretch gap-0 border-b border-lp-border bg-lp-surface text-[10px] font-bold uppercase tracking-wider text-lp-text-tertiary shadow-[0_1px_0_var(--lp-border)]"
+                className="grid w-full min-h-9 items-stretch gap-0 border-b border-lp-border bg-lp-surface text-[10px] font-bold uppercase tracking-wider text-lp-text-tertiary shadow-[0_1px_0_var(--lp-border)]"
                 style={channelGridStyle}
               >
                 <div className="py-2" style={{ borderLeft: '2px solid transparent' }} />
@@ -727,6 +808,13 @@ export default function ChannelListEditor({
                 })}
                 <div className="px-0.5 py-2 text-right" />
               </div>
+            </div>
+          </div>
+          {/* The body scroller — the one the operator actually drags.
+              overflow-x only; no max-height, so the PAGE scrolls
+              vertically (§CL-7) and the header above tracks scrollLeft. */}
+          <div ref={bodyScrollRef} className="w-full min-w-0 overflow-x-auto">
+            <div className="w-full min-w-0" style={{ minWidth: 'min(100%, 1180px)' }}>
               <CellNavProvider colCount={inputColCount}>
                 <SortableContext items={inputRows.map((r) => r.id)} strategy={verticalListSortingStrategy}>
                   {/* §CL-2 — the input grid is ONE uninterrupted list.
@@ -777,6 +865,7 @@ export default function ChannelListEditor({
                 </SortableContext>
               </CellNavProvider>
             </div>
+          </div>
           </div>
         </DndContext>
 
