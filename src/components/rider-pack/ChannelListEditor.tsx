@@ -12,7 +12,6 @@ import {
 import { SortableContext, arrayMove, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { GripVertical, ListPlus, Columns3, X } from 'lucide-react';
-import { useDebouncedSave } from '@/hooks/useDebouncedSave';
 import { useToast } from '@/components/ui/Toast';
 import { createClient } from '@/lib/supabase-client';
 import type { ChannelListRow, MicLibraryEntry, RiderPack, ResolvedSection, StageBox, SubSnake } from '@/lib/rider-packs/types';
@@ -36,6 +35,7 @@ import { ChannelListSectionBand } from './channel-list-cells/ChannelListSectionB
 import { GearDetailSlideOver } from '@/components/gear/GearDetailSlideOver';
 import { PatchMatrix, type SocketPatch } from './PatchMatrix';
 import { CellNavProvider, NavCell, useCellNav } from '@/lib/hooks/useCellNav';
+import { useRowSave } from './channel-list-cells/useRowSave';
 import {
   COLUMN_BY_KEY,
   OPTIONAL_COLUMNS,
@@ -315,18 +315,55 @@ export default function ChannelListEditor({
     [],
   );
 
+  /* §CL-5 — which rows currently hold unsaved or in-flight edits.
+     Every ChannelBlock / OutputBlock reports in via onWriteActive,
+     and so does the patch-mode writer below. This is the half of the
+     save race that cannot be fixed inside the row: the stale read is
+     issued by refetchLocal, not by the writer, so the writer has no
+     way to stop it on its own. */
+  const pendingRowWritesRef = useRef<Set<string>>(new Set());
+  /* Keyed per WRITER, not per row — patchChannel and the row's own
+     debounced saver both write the same row, and a shared key would
+     let whichever finished first clear the other's flag. */
+  const noteRowWrite = useCallback((writerKey: string, active: boolean) => {
+    if (active) pendingRowWritesRef.current.add(writerKey);
+    else pendingRowWritesRef.current.delete(writerKey);
+  }, []);
+  const showSaveError = useCallback(
+    (message: string) => showToast(message, 'error'),
+    [showToast],
+  );
+  /* Sequence number so an older refetch that overtakes a newer one
+     cannot apply its staler results. */
+  const refetchSeqRef = useRef(0);
+
   /* §CL-NORELOAD — reconcile the grid with the server WITHOUT navigating.
      Reads rows + stage boxes + sub-snakes client-side and swaps local state.
      This replaces router.refresh() for the structural paths (I/O dialogs, the
      stage-box patch modal, sub-snake edits) whose results touch data the grid
      renders but that the mutating child doesn't push back optimistically. */
   const refetchLocal = useCallback(async () => {
+    /* §CL-5 — do not START a read while a row write is outstanding.
+       A SELECT issued before the UPDATE lands comes back holding the
+       pre-write value, and arriving after the write it overwrites
+       what the operator just typed. The deadline is a backstop: a
+       row whose save keeps failing stays "active" indefinitely, and
+       a stale grid is a worse outcome than a slightly stale read. */
+    const deadline = Date.now() + 4000;
+    while (pendingRowWritesRef.current.size > 0 && Date.now() < deadline) {
+      await new Promise((resolve) => setTimeout(resolve, 40));
+    }
+    const seq = refetchSeqRef.current + 1;
+    refetchSeqRef.current = seq;
     const supabase = createClient();
     const [freshRows, boxes, snakes] = await Promise.all([
       ch.listRows(supabase, section.id),
       ch.listStageBoxes(supabase, section.id),
       ch.listSubSnakes(supabase, section.id),
     ]);
+    /* A newer refetch started while this one was in flight — its
+       answer is the fresher truth, so drop ours rather than race it. */
+    if (seq !== refetchSeqRef.current) return;
     setRows(freshRows);
     setStageBoxes(boxes);
     setSubSnakes(snakes);
@@ -339,12 +376,21 @@ export default function ChannelListEditor({
   const patchChannel = useCallback(
     (channelId: string, patch: SocketPatch) => {
       setRows((prev) => prev.map((x) => (x.id === channelId ? { ...x, ...patch } : x)));
-      void ch.updateRow(createClient(), channelId, patch).catch((err) => {
-        showToast(err instanceof Error ? err.message : 'Patch failed', 'error');
-        void refetchLocal();
-      });
+      /* §CL-5 — the second, uncoordinated writer to the same row.
+         It reports in on the same channel as the debounced row saver
+         so a refetch waits for it too; without that, a patch and a
+         refetch racing each other produced the same snap-back. */
+      const key = `patch:${channelId}`;
+      noteRowWrite(key, true);
+      void ch
+        .updateRow(createClient(), channelId, patch)
+        .catch((err) => {
+          showToast(err instanceof Error ? err.message : 'Patch failed', 'error');
+          void refetchLocal();
+        })
+        .finally(() => noteRowWrite(key, false));
     },
-    [refetchLocal, showToast],
+    [noteRowWrite, refetchLocal, showToast],
   );
 
   /* Structural-change notifier handed to the I/O dialogs + inventory patch,
@@ -709,6 +755,8 @@ export default function ChannelListEditor({
                       navCol={navCol}
                       onUpdateLocal={(r) => setRows((prev) => prev.map((x) => (x.id === r.id ? r : x)))}
                       onRefresh={notifyStructureChange}
+                      onWriteActive={noteRowWrite}
+                      onSaveError={showSaveError}
                       onOpenSubDialog={() => setSubDialog(true)}
                       onOpenStageDialog={() => setStageDialog(true)}
                       sectionId={section.id}
@@ -846,6 +894,8 @@ export default function ChannelListEditor({
                     outputRowIdx={idx}
                     onUpdateLocal={setOutputLocal}
                     onRefresh={notifyStructureChange}
+                    onWriteActive={noteRowWrite}
+                    onSaveError={showSaveError}
                   />
                 ))}
               </CellNavProvider>
@@ -916,6 +966,8 @@ function ChannelBlock({
   navCol,
   onUpdateLocal,
   onRefresh,
+  onWriteActive,
+  onSaveError,
   onOpenSubDialog,
   onOpenStageDialog,
   sectionId,
@@ -942,6 +994,10 @@ function ChannelBlock({
   navCol: Partial<Record<ChannelListColumnKey, number>>;
   onUpdateLocal: (r: ChannelListRow) => void;
   onRefresh: () => void | Promise<void>;
+  /* §CL-5 — tells the grid this row has unsaved or in-flight data,
+     so refetchLocal cannot read around the write. */
+  onWriteActive?: (rowId: string, active: boolean) => void;
+  onSaveError?: (message: string) => void;
   onOpenSubDialog: () => void;
   onOpenStageDialog: () => void;
   sectionId: string;
@@ -1024,36 +1080,21 @@ function ChannelBlock({
     [rows, row.id],
   );
 
-  const patchRef = useRef<Partial<ChannelListRow>>({});
-  const saveRow = useDebouncedSave<number>(
-    useCallback(
-      async (_tick: number) => {
-        void _tick;
-        const p = { ...patchRef.current };
-        patchRef.current = {};
-        if (Object.keys(p).length === 0) return;
-        await ch.updateRow(createClient(), row.id, p);
-      },
-      [row.id],
-    ),
-    400,
-  );
-
-  const [local, setLocal] = useState(row);
-  useEffect(() => {
-    if (saveRow.isPending()) return;
-    setLocal(row);
-  }, [row, saveRow]);
-
-  const queue = (patch: Partial<ChannelListRow>) => {
-    patchRef.current = { ...patchRef.current, ...patch };
-    setLocal((l) => {
-      const n = { ...l, ...patch } as ChannelListRow;
-      onUpdateLocal(n);
-      return n;
-    });
-    saveRow.schedule(0);
-  };
+  /* §CL-5 — the debounced writer, the optimistic `local` copy and the
+     stale-prop guard moved into useRowSave, shared with OutputBlock.
+     The version that lived here cleared its patch buffer BEFORE the
+     await, so a failed write lost the edit with no toast and no
+     retry — silent data loss — and it guarded the incoming `row`
+     prop on saveRow.isPending() alone, which goes false the instant
+     the drain resolves and so let a read issued before the write
+     land after it. That pair is Adam's "populate wrong and then load
+     later". See the header of useRowSave.ts. */
+  const { local, queue, flush } = useRowSave({
+    row,
+    onUpdateLocal,
+    onWriteActive,
+    onError: onSaveError,
+  });
 
   /* Sprint 12 §8b1 — phantom flash state. When a mic with
      default_phantom=true is picked, we briefly highlight the
@@ -1102,7 +1143,7 @@ function ChannelBlock({
       phantomFlashTimerRef.current = setTimeout(() => setPhantomFlash(false), 700);
     }
     queue(patch);
-    void saveRow.flush();
+    void flush();
   };
 
   /* Gear chip — rendered INLINE with the Mic/DI input (same row,
@@ -1174,7 +1215,7 @@ function ChannelBlock({
               }}
               onChange={(e) => queue({ channel_name: e.target.value })}
               onBlur={() => {
-                void saveRow.flush();
+                void flush();
               }}
               className="min-w-0 w-full border-0 bg-transparent py-2 text-sm font-semibold text-lp-text outline-none focus:ring-0"
               placeholder="Channel"
@@ -1190,7 +1231,7 @@ function ChannelBlock({
                 value={local.position}
                 onChange={(v) => {
                   queue({ position: v });
-                  void saveRow.flush();
+                  void flush();
                 }}
                 ariaLabel={`Stage position for channel ${row.row_index}`}
                 onEnterCommit={() => advanceFrom('position')}
@@ -1256,7 +1297,7 @@ function ChannelBlock({
                 value={local.cable_length}
                 onChange={(v) => {
                   queue({ cable_length: v });
-                  void saveRow.flush();
+                  void flush();
                 }}
                 ariaLabel={`Cable length for channel ${row.row_index}`}
                 onEnterCommit={() => advanceFrom('cable_length')}
@@ -1309,7 +1350,7 @@ function ChannelBlock({
                 type="text"
                 value={local.gain ?? ''}
                 onChange={(e) => queue({ gain: e.target.value })}
-                onBlur={() => void saveRow.flush()}
+                onBlur={() => void flush()}
                 className="w-full min-w-0 rounded border border-lp-border bg-lp-bg px-1.5 py-1.5 text-xs text-lp-text outline-none focus:border-lp-orange/40"
                 placeholder="…"
                 aria-label={`Gain for channel ${row.row_index}`}
@@ -1325,7 +1366,7 @@ function ChannelBlock({
                 value={local.stand}
                 onChange={(v) => {
                   queue({ stand: v });
-                  void saveRow.flush();
+                  void flush();
                 }}
                 ariaLabel={`Stand type for channel ${row.row_index}`}
                 onEnterCommit={() => advanceFrom('stand')}
@@ -1345,7 +1386,7 @@ function ChannelBlock({
               title="Phantom +48V (on / off)"
               onClick={() => {
                 queue({ phantom_power: local.phantom_power !== true });
-                void saveRow.flush();
+                void flush();
               }}
               className="flex h-7 w-7 items-center justify-center rounded border hover:bg-lp-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--color-lp-orange)]"
               style={{
@@ -1391,7 +1432,7 @@ function ChannelBlock({
                 const next: 'band' | 'venue' | 'hire' | null =
                   p === 'band' || p === 'venue' || p === 'hire' ? p : null;
                 queue({ provider: next });
-                void saveRow.flush();
+                void flush();
               }}
               /* VIS-CL-05 — ownership chips. The leading colour dot (rendered
                  by BrandedSelect in both the trigger and the menu) reads the
@@ -1431,7 +1472,7 @@ function ChannelBlock({
                 notesSnapRef.current = local.notes;
               }}
               onChange={(e) => queue({ notes: e.target.value })}
-              onBlur={() => void saveRow.flush()}
+              onBlur={() => void flush()}
               className="w-full min-w-0 rounded border border-lp-border bg-lp-bg px-1.5 py-1.5 text-xs text-lp-text outline-none focus:border-lp-orange/40"
               placeholder="…"
               title={local.notes}
