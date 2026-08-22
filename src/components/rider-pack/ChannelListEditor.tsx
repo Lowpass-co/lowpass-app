@@ -601,7 +601,34 @@ export default function ChannelListEditor({
         <ChannelListSectionBand label="Inputs" count={inputRows.length} />
 
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={(e) => void handleDragEnd(e)}>
-          <div className="w-full min-w-0 max-h-[min(75vh,720px)] overflow-y-auto overflow-x-auto overscroll-contain">
+          {/* §CL-7 — Adam: "dont make the page scrollable within the
+              page." This was max-h-[min(75vh,720px)] overflow-y-auto
+              overscroll-contain, nested inside <main>, which
+              AppShellV3 gives overflow:auto as the app's one scroll
+              surface. Two scrollbars, and overscroll-contain meant
+              the wheel STOPPED dead at the inner boundary instead of
+              chaining to the page. It also stranded everything below
+              it — outputs, the stage-box legend, Inventory — under a
+              box the operator had to scroll past to reach.
+
+              overflow-x-auto stays: the sticky-left # column below
+              needs a horizontal scrollport, and a 14-column channel
+              grid genuinely is wider than the viewport. With no
+              max-height the box is content-height, so the vertical
+              scrollbar never appears and the page scrolls instead.
+
+              Known cost, stated rather than hidden: a horizontal
+              scrollport is a scrollport on BOTH axes (CSS computes
+              overflow-y:visible to auto when overflow-x isn't
+              visible), so the header's `sticky top-0` now resolves
+              against this box rather than <main> and no longer pins
+              the column names on a long list. There is no CSS that
+              gives horizontal scrolling and page-level vertical
+              stickiness at once; getting both back needs the header
+              lifted out and scroll-synced, which is more than this
+              fix. The z-indexes below are still load-bearing for the
+              sticky-LEFT column. */}
+          <div className="w-full min-w-0 overflow-x-auto">
             <div className="w-full min-w-0" style={{ minWidth: 'min(100%, 1180px)' }}>
               {/* Sprint 12 §8b1 — header columns match the new
                   spec order. Track 3 (channel #) is sticky-left
