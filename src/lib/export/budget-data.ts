@@ -21,6 +21,7 @@ import { enrichLinesWithTransactionAggregates } from '@/lib/budget/transactions'
 import { loadTourFxRates } from '@/lib/budget/fxRates';
 import type { FxRateMap } from '@/lib/budget/fxRates';
 import { resolveVenue, type RoutingVenueSource } from '@/lib/venues/resolveVenue';
+import { reconcileDerivedBudgetLines } from '@/server/budget/reconcileDerivedLines';
 import { resolveActiveVersion, resolveApprovedVersion, getProposedLineMap, type VersionStatus } from '@/server/budget/versions';
 import { resolveArtistLogoUrl } from '@/lib/artists/imageUrl';
 import type { CommissionInput, IncomeInput, PnlSettingsInput } from '@/lib/budget/computeBudgetPnl';
@@ -59,6 +60,9 @@ export async function loadBudgetExportData(
   opts?: { versionId?: string | null },
 ): Promise<BudgetExportData> {
   const tourId = tour.id;
+  // Money repair — an export is a money read: bring the automatic lines
+  // (hotels, payroll, flights, gear) up to date before printing them.
+  await reconcileDerivedBudgetLines(supabase, tourId, workspaceId);
 
   const [lineItemsRes, sectionsRes, settingsRes, routingRes, artistRes, fxRates] = await Promise.all([
     supabase.from('budget_line_items').select('*').eq('tour_id', tourId).eq('workspace_id', workspaceId)

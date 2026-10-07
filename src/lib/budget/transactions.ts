@@ -8,6 +8,7 @@
 
 import { NextResponse } from 'next/server';
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { loadTourMoneyContext, loadTxnAggregates } from '@/lib/budget/moneyContext';
 
 export interface BudgetLineItemTransaction {
   id: string;
@@ -144,14 +145,19 @@ export async function syncActualCostIfNoOverride(
   deltaApplied: number,
 ): Promise<void> {
   if (deltaApplied === 0) return;
-  const { data: line } = await supabase
+  const { data: line, error: lineErr } = await supabase
     .from('budget_line_items')
-    .select('actual_cost, actual_cost_override')
+    .select('actual_cost, actual_cost_override, currency, tour_id, workspace_id')
     .eq('id', lineItemId)
-    .maybeSingle<{ actual_cost: number | null; actual_cost_override: boolean }>();
+    .maybeSingle<{ actual_cost: number | null; actual_cost_override: boolean; currency: string | null; tour_id: string; workspace_id: string }>();
+  // Money repair — a failed read is an error, not "nothing to sync".
+  if (lineErr) throw new Error(`sync actual: ${lineErr.message}`);
   if (!line) return;
 
-  const aggregates = await fetchTransactionAggregates(supabase, [lineItemId]);
+  // Converted into the line's currency (a ¥ receipt on a £ line used to be
+  // summed raw — £25,000 for a ¥25,000 receipt).
+  const money = await loadTourMoneyContext(supabase, line.tour_id, line.workspace_id);
+  const aggregates = await loadTxnAggregates(supabase, [{ id: lineItemId, currency: line.currency }], money);
   const newCount = aggregates.get(lineItemId)?.count ?? 0;
 
   /* §B0 spec: "cleared by deleting all transactions". The
@@ -163,10 +169,11 @@ export async function syncActualCostIfNoOverride(
      value). */
   if (newCount === 0) {
     if (line.actual_cost_override) {
-      await supabase
+      const { error } = await supabase
         .from('budget_line_items')
         .update({ actual_cost_override: false })
         .eq('id', lineItemId);
+      if (error) throw new Error(`sync actual: ${error.message}`);
     }
     return;
   }
@@ -176,12 +183,30 @@ export async function syncActualCostIfNoOverride(
      the user clears the override. */
   if (line.actual_cost_override) return;
 
-  const newSum = aggregates.get(lineItemId)?.sum ?? 0;
+  const newSum = Math.round((aggregates.get(lineItemId)?.sum ?? 0) * 100) / 100;
   if (numericEqual(Number(line.actual_cost ?? 0), newSum)) return;
-  await supabase
+  const { error } = await supabase
     .from('budget_line_items')
-    .update({ actual_cost: newSum })
+    .update({ actual_cost: newSum, updated_at: new Date().toISOString() })
     .eq('id', lineItemId);
+  if (error) throw new Error(`sync actual: ${error.message}`);
+}
+
+/** Route wrapper: the transaction is already saved when this runs, so a sync
+ *  failure must not turn into a 500 (the client would retry and double-post).
+ *  Returns a warning string to put in the response instead — never silent. */
+export async function syncActualCostSafe(
+  supabase: SupabaseClient,
+  lineItemId: string,
+  deltaApplied: number,
+): Promise<string | null> {
+  try {
+    await syncActualCostIfNoOverride(supabase, lineItemId, deltaApplied);
+    return null;
+  } catch (e) {
+    console.error('[lp] syncActualCostIfNoOverride', { lineItemId, err: (e as Error).message });
+    return 'Saved, but the line’s actual could not be updated — reload to retry.';
+  }
 }
 
 /** Aggregate of transactions for a single line item. */
@@ -202,27 +227,35 @@ export async function fetchTransactionAggregates(
   supabase: SupabaseClient,
   lineItemIds: string[],
 ): Promise<Map<string, LineTransactionAggregate>> {
+  if (lineItemIds.length === 0) return new Map();
+  /* Money repair — sums are CONVERTED into each line's currency at its tour's
+     rate (they used to add raw amounts across currencies). RLS scopes every
+     query to the caller's workspace. */
+  const { data: lines, error } = await supabase
+    .from('budget_line_items')
+    .select('id, currency, tour_id, workspace_id')
+    .in('id', lineItemIds);
+  if (error) throw new Error(`transaction aggregates: ${error.message}`);
+  return aggregateConverted(supabase, (lines ?? []) as Array<{ id: string; currency: string | null; tour_id: string; workspace_id: string }>);
+}
+
+async function aggregateConverted(
+  supabase: SupabaseClient,
+  lines: Array<{ id: string; currency?: string | null; tour_id?: string | null; workspace_id?: string | null }>,
+): Promise<Map<string, LineTransactionAggregate>> {
   const map = new Map<string, LineTransactionAggregate>();
-  if (lineItemIds.length === 0) return map;
-  /* PostgREST has no GROUP BY in REST. Fetch the rows we need
-     and aggregate client-side. The transactions table is
-     narrow (12 cols) and bounded — typical line item has
-     1-10 transactions, so this is small even for big budgets. */
-  const { data } = await supabase
-    .from('budget_line_item_transactions')
-    .select('line_item_id, amount')
-    .in('line_item_id', lineItemIds);
-  for (const row of (data ?? []) as Array<{ line_item_id: string; amount: number }>) {
-    const existing = map.get(row.line_item_id);
-    if (existing) {
-      existing.sum += Number(row.amount || 0);
-      existing.count += 1;
-    } else {
-      map.set(row.line_item_id, {
-        line_item_id: row.line_item_id,
-        sum: Number(row.amount || 0),
-        count: 1,
-      });
+  const byTour = new Map<string, { workspaceId: string; lines: Array<{ id: string; currency: string | null }> }>();
+  for (const l of lines) {
+    if (!l.tour_id || !l.workspace_id) continue;
+    const g = byTour.get(l.tour_id) ?? { workspaceId: l.workspace_id, lines: [] };
+    g.lines.push({ id: l.id, currency: l.currency ?? null });
+    byTour.set(l.tour_id, g);
+  }
+  for (const [tourId, g] of byTour) {
+    const money = await loadTourMoneyContext(supabase, tourId, g.workspaceId);
+    const aggs = await loadTxnAggregates(supabase, g.lines, money);
+    for (const [id, a] of aggs) {
+      map.set(id, { line_item_id: id, sum: Math.round(a.sum * 100) / 100, count: a.count });
     }
   }
   return map;
@@ -235,12 +268,11 @@ export async function fetchTransactionAggregates(
  *  separate piece the helper uses to detect overrides + drive
  *  the Sync button. Returns a new array; originals untouched. */
 export async function enrichLinesWithTransactionAggregates<
-  L extends { id: string },
+  L extends { id: string; currency?: string | null; tour_id?: string | null; workspace_id?: string | null },
 >(supabase: SupabaseClient, lines: L[]): Promise<
   Array<L & { transaction_sum: number; transaction_count: number }>
 > {
-  const ids = lines.map((l) => l.id);
-  const aggregates = await fetchTransactionAggregates(supabase, ids);
+  const aggregates = await aggregateConverted(supabase, lines);
   return lines.map((line) => {
     const agg = aggregates.get(line.id);
     return {

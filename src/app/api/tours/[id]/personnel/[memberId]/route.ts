@@ -19,6 +19,7 @@ import {
   fetchActiveGrants,
   canAccess,
 } from '@/lib/permissions/server';
+import { tourFromParams, withDerivedRefresh } from '@/server/budget/withDerivedRefresh';
 
 export const dynamic = 'force-dynamic';
 
@@ -49,7 +50,7 @@ interface PatchPayload {
   status?: Status;
 }
 
-export async function PATCH(
+async function patchHandler(
   request: Request,
   { params }: { params: Promise<{ id: string; memberId: string }> },
 ) {
@@ -217,7 +218,7 @@ export async function PATCH(
   return NextResponse.json({ ok: true });
 }
 
-export async function DELETE(
+async function deleteHandler(
   _request: Request,
   { params }: { params: Promise<{ id: string; memberId: string }> },
 ) {
@@ -367,3 +368,8 @@ export async function GET(
     sharedRooms,
   });
 }
+
+// Money repair — roster and routing changes move salaries and per diems, so the
+// budget's payroll lines are refreshed after a successful write.
+export const PATCH = withDerivedRefresh(patchHandler, 'payroll', tourFromParams);
+export const DELETE = withDerivedRefresh(deleteHandler, 'payroll', tourFromParams);

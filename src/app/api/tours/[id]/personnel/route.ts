@@ -24,6 +24,7 @@ import {
 // the person's library defaults (personnel.standard_rates), NOT a hand-typed
 // daily rate. See RATES_SSOT_DISCOVERY_2026-07-03 §3.
 import { DEFAULT_RATE_TYPE_IDS } from '@/lib/payroll/rateLines';
+import { tourFromParams, withDerivedRefresh } from '@/server/budget/withDerivedRefresh';
 
 export const dynamic = 'force-dynamic';
 
@@ -183,7 +184,7 @@ export async function GET(
   return NextResponse.json({ personnel: list });
 }
 
-export async function POST(
+async function postHandler(
   request: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
@@ -397,3 +398,7 @@ export async function POST(
   // member optimistically (no router.refresh).
   return NextResponse.json({ id: inserted.id, rateCard });
 }
+
+// Money repair — roster and routing changes move salaries and per diems, so the
+// budget's payroll lines are refreshed after a successful write.
+export const POST = withDerivedRefresh(postHandler, 'payroll', tourFromParams);

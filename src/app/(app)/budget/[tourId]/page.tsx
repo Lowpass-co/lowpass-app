@@ -48,6 +48,8 @@ import { reconcileDerivedBudgetLines } from '@/server/budget/reconcileDerivedLin
 import { resolveActiveVersion, getProposedLineMap, getProposedIncomeMap } from '@/server/budget/versions';
 import { loadTourFxRates } from '@/lib/budget/fxRates';
 import { FxMissingRateBanner } from '@/components/budget/FxMissingRateBanner';
+import { DerivedRefreshBanner } from '@/components/budget/DerivedRefreshBanner';
+import { syncPhoneExpensesToBank } from '@/server/budget/fileReceipt';
 import type { BudgetVersionVm } from '@/components/budget/versioning/versionApi';
 import { logServerError } from '@/lib/log/serverError';
 import type {
@@ -129,7 +131,13 @@ export default async function BudgetTourPage({
      payroll) BEFORE reading lines + sections, so the grid shows fresh
      derived rows and their auto-created sections on load. Self-guarded:
      never throws. */
-  await reconcileDerivedBudgetLines(supabase, tourId, workspaceId);
+  const derived = await reconcileDerivedBudgetLines(supabase, tourId, workspaceId);
+  // A read-only member can't write the refresh — that's not a fault to show.
+  const derivedFailed = derived.ok || derived.permissionOnly
+    ? []
+    : ['hotel_booking', 'payroll', 'payroll_per_diem', 'flight', 'gear'].filter(
+        (f) => !derived.families.includes(f as (typeof derived.families)[number]),
+      );
 
   const [
     phases,
@@ -268,6 +276,10 @@ export default async function BudgetTourPage({
      The bank is the answer to "where did my receipt go?", so it must not depend
      on a client fetch that can fail silently. Degrades to [] on error — the tab
      still renders, it just says there is nothing to show. */
+  // Money audit #8 — receipts photographed on the phone land in the bank.
+  await syncPhoneExpensesToBank(supabase, tourId, workspaceId).catch((err) => {
+    logServerError('syncPhoneExpensesToBank failed', err, { tourId });
+  });
   const receipts = await loadTourReceipts(supabase, tourId, tourCurrency).catch((err) => {
     logServerError('loadTourReceipts failed', err, { tourId });
     return [];
@@ -424,6 +436,7 @@ export default async function BudgetTourPage({
           fxRates={fxRates}
           showMeter={tab !== 'summary'}
         />
+        <DerivedRefreshBanner failed={derivedFailed} detail={derived.errors[0]} />
         <FxMissingRateBanner
           missing={fxMissing}
           tourCurrency={tourCurrency}

@@ -51,7 +51,8 @@ describe('the receipts CRUD route never writes actual_cost', () => {
   });
 
   it('reconciles through the sanctioned helper instead', () => {
-    expect(src).toContain('syncActualCostIfNoOverride');
+    // syncActualCostSafe is the route-level wrapper around syncActualCostIfNoOverride.
+    expect(src).toMatch(/syncActualCost(IfNoOverride|Safe)/);
   });
 
   it('all three verbs are still present — the fix removed writes, not endpoints', () => {

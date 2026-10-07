@@ -184,6 +184,10 @@ export async function POST(request: Request): Promise<NextResponse> {
           tour_id: batch.tour_id,
           vendor_name: vendorName,
           amount,
+          // Money repair — the receipt's own currency. Omitted, the amount was
+          // stamped with the LINE's currency: a $ receipt linked to a £ line
+          // counted its dollars as pounds.
+          ...(v.currency ? { currency: v.currency } : {}),
           paid_at: v.date ?? null,
           receipt_id: row.receipt_id ?? null,
         }),

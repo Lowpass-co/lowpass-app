@@ -18,7 +18,7 @@ import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { requireWrite } from '@/lib/auth/workspace-check';
 import {
   resolveTransactionLineItem,
-  syncActualCostIfNoOverride,
+  syncActualCostSafe,
   type BudgetLineItemTransaction,
   type TransactionInput,
 } from '@/lib/budget/transactions';
@@ -110,11 +110,13 @@ export async function PATCH(
      unless an override is active. patch.amount is only set when
      the PATCH body included an amount; other-field edits (vendor /
      notes / paid_at / sort_order) leave the sum untouched. */
-  if (patch.amount !== undefined) {
-    const delta = Number(data.amount) - Number(ctx.transaction.amount);
-    await syncActualCostIfNoOverride(supabase, ctx.line_item_id, delta);
+  // Money repair — a CURRENCY change moves the converted sum too (it used to
+  // be ignored, as did an amount edit that happened to net to zero).
+  let sync_warning: string | null = null;
+  if (patch.amount !== undefined || patch.currency !== undefined) {
+    sync_warning = await syncActualCostSafe(supabase, ctx.line_item_id, 1);
   }
-  return NextResponse.json({ transaction: data });
+  return NextResponse.json({ transaction: data, ...(sync_warning ? { sync_warning } : {}) });
 }
 
 export async function DELETE(
@@ -153,10 +155,6 @@ export async function DELETE(
   /* §A3 — delta is negative since we removed the row's amount.
      Auto-sync the line's actual_cost unless an override is in
      place. */
-  await syncActualCostIfNoOverride(
-    supabase,
-    ctx.line_item_id,
-    -Number(ctx.transaction.amount || 0),
-  );
-  return NextResponse.json({ ok: true });
+  const sync_warning = await syncActualCostSafe(supabase, ctx.line_item_id, 1);
+  return NextResponse.json({ ok: true, ...(sync_warning ? { sync_warning } : {}) });
 }

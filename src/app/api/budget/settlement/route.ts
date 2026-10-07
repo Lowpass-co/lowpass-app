@@ -300,7 +300,7 @@ export async function POST(request: Request) {
   // Live FX (#currency 2.5) — LOCK-ON-ACTUAL. When actuals land, freeze the FX
   // rate this show's native income converts at, so realised income never drifts
   // with later market moves. Write-once: a row already locked keeps its rate.
-  // Missing rate / tour-currency show → 1:1 (never 0).
+  // Tour-currency show → 1:1. Missing rate → NOT locked (see below).
   const hasActuals =
     actualGuarantee != null || actualOverage != null || actualMerch != null || actualDeductions != null;
   let lockedFxRate: number | null = null;
@@ -327,10 +327,16 @@ export async function POST(request: Request) {
           .from('budget_fx_rates')
           .select('rate_to_tour_currency')
           .eq('tour_id', tourId)
-          .eq('currency', showCcy)
+          .ilike('currency', showCcy) // rates are read case-insensitively everywhere else
+          .limit(1)
           .maybeSingle();
         const r = Number((fx as { rate_to_tour_currency?: number } | null)?.rate_to_tour_currency);
-        lockedFxRate = Number.isFinite(r) && r > 0 ? r : 1; // missing → 1:1, never 0
+        // Money repair — a MISSING rate is not locked. Locking 1:1 froze the
+        // show's income at face value in the wrong currency forever (a
+        // settled ¥ show counted its yen as pounds, with no way to correct it
+        // short of editing the row). Unlocked, the P&L converts at the live
+        // rate once one is entered, and flags the currency until then.
+        lockedFxRate = Number.isFinite(r) && r > 0 ? r : null;
       } else {
         lockedFxRate = 1;
       }

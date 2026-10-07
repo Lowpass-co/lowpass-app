@@ -39,8 +39,8 @@ import { countDayStatuses, computeTotals } from '@/lib/payroll/fees';
 import { effectiveStatuses } from '@/lib/payroll/effectiveDayType';
 import { loadTourRateContext, rateLinesFor } from '@/lib/payroll/loadRateLines';
 import { PLACEHOLDER_HOTEL_PREFIX } from '@/lib/rooming/nightsSummary';
-import { convertVia, type FxRateMap } from '@/lib/budget/fxRates';
 import { logServerError } from '@/lib/log/serverError';
+import { loadTourMoneyContext, loadTxnAggregates, type TourMoneyContext } from '@/lib/budget/moneyContext';
 import {
   DERIVED_FAMILIES,
   planFamily,
@@ -51,10 +51,10 @@ import {
   type MirrorRow,
   type PlanContext,
   type PlanOp,
-  type TxnAggregate,
-} from '@/lib/budget/derivedPlan';
+  } from '@/lib/budget/derivedPlan';
 
 export { DERIVED_FAMILIES, type DerivedFamily } from '@/lib/budget/derivedPlan';
+export { loadTourMoneyContext, loadTxnAggregates, type TourMoneyContext } from '@/lib/budget/moneyContext';
 
 /** Kept for existing importers. */
 export const DERIVED_SOURCE_TYPES = DERIVED_FAMILIES;
@@ -105,38 +105,6 @@ function nightsBetween(start: unknown, end: unknown): number {
   const ms = b.getTime() - a.getTime();
   if (!Number.isFinite(ms) || ms <= 0) return 0;
   return Math.round(ms / 86_400_000);
-}
-
-/* ---- Tour money context ----------------------------------------- */
-
-export interface TourMoneyContext {
-  tourCurrency: string;
-  rates: FxRateMap;
-  /** null = tour currency. */
-  convert: (amount: number, from: string | null, to: string | null) => number;
-}
-
-export async function loadTourMoneyContext(
-  supabase: SupabaseClient,
-  tourId: string,
-  workspaceId: string,
-): Promise<TourMoneyContext> {
-  const [tourRes, fxRes] = await Promise.all([
-    supabase.from('tours').select('currency').eq('id', tourId).eq('workspace_id', workspaceId).maybeSingle(),
-    supabase.from('budget_fx_rates').select('currency, rate_to_tour_currency').eq('tour_id', tourId).eq('workspace_id', workspaceId),
-  ]);
-  if (tourRes.error) throw new SourceReadError('tour', tourRes.error);
-  if (fxRes.error) throw new SourceReadError('fx rates', fxRes.error);
-  const tourCurrency = String((tourRes.data as { currency?: string } | null)?.currency ?? 'GBP').toUpperCase();
-  const rates: FxRateMap = {};
-  for (const r of (fxRes.data ?? []) as Array<{ currency?: string; rate_to_tour_currency?: number }>) {
-    const c = String(r.currency ?? '').toUpperCase();
-    const rate = Number(r.rate_to_tour_currency);
-    if (c && Number.isFinite(rate) && rate > 0) rates[c] = rate;
-  }
-  const convert = (amount: number, from: string | null, to: string | null) =>
-    convertVia(amount, from ?? tourCurrency, to ?? tourCurrency, tourCurrency, rates);
-  return { tourCurrency, rates, convert };
 }
 
 /* ---- Sources → desired lines ------------------------------------ */
@@ -426,38 +394,6 @@ async function loadExisting(
   const out = new Map<DerivedFamily, ExistingLine[]>();
   for (const f of families) out.set(f, []);
   for (const r of rows) out.get(r.source_entity_type as DerivedFamily)?.push(r);
-  return out;
-}
-
-/** Transaction sums per line, converted into each line's currency.
- *  A transaction with NULL currency was written when its line had no currency
- *  of its own (the transactions route stores the line's currency, and NULL
- *  meant "tour currency"), so NULL is read as the TOUR currency — not as
- *  whatever the line's currency is today. */
-export async function loadTxnAggregates(
-  supabase: SupabaseClient,
-  lines: Array<{ id: string; currency: string | null }>,
-  money: Pick<TourMoneyContext, 'convert'>,
-): Promise<Map<string, TxnAggregate>> {
-  const out = new Map<string, TxnAggregate>();
-  if (lines.length === 0) return out;
-  const ccyByLine = new Map(lines.map((l) => [l.id, (l.currency ?? '').toUpperCase() || null]));
-  const ids = lines.map((l) => l.id);
-  for (let i = 0; i < ids.length; i += 200) {
-    const rows = must<Array<{ line_item_id: string; amount: number | string | null; currency: string | null }>>(
-      'transactions',
-      await supabase.from('budget_line_item_transactions').select('line_item_id, amount, currency').in('line_item_id', ids.slice(i, i + 200)),
-    );
-    for (const r of rows) {
-      const lineCcy = ccyByLine.get(r.line_item_id) ?? null;
-      const txnCcy = (r.currency ?? '').toUpperCase() || null;
-      const amt = money.convert(Number(r.amount) || 0, txnCcy, lineCcy);
-      const agg = out.get(r.line_item_id) ?? { count: 0, sum: 0 };
-      agg.count += 1;
-      agg.sum += amt;
-      out.set(r.line_item_id, agg);
-    }
-  }
   return out;
 }
 

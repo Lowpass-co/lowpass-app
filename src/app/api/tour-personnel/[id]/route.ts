@@ -2,13 +2,14 @@ import { NextResponse } from 'next/server';
 import { requireWrite } from '@/lib/auth/workspace-check';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { isRoleTag } from '@/lib/personnel/role-tags';
+import { withDerivedRefresh } from '@/server/budget/withDerivedRefresh';
 
 type Params = { params: Promise<{ id: string }> };
 
 const EMPLOYMENT = new Set(['staff', 'freelance', 'crew', 'band', 'mgmt']);
 const RATE_PERIODS = new Set(['day', 'week', 'flat', 'hour']);
 
-export async function PATCH(request: Request, { params }: Params) {
+async function patchHandler(request: Request, { params }: Params) {
   const supabase = await createServerSupabaseClient();
   const auth = await requireWrite(supabase);
   if ('error' in auth) return auth.error;
@@ -131,7 +132,7 @@ export async function PATCH(request: Request, { params }: Params) {
   });
 }
 
-export async function DELETE(_: Request, { params }: Params) {
+async function deleteHandler(_: Request, { params }: Params) {
   const supabase = await createServerSupabaseClient();
   const auth = await requireWrite(supabase);
   if ('error' in auth) return auth.error;
@@ -167,4 +168,17 @@ export async function DELETE(_: Request, { params }: Params) {
   }
 
   return new Response(null, { status: 204 });
+}
+
+// Money repair — roster and routing changes move salaries and per diems, so the
+// budget's payroll lines are refreshed after a successful write.
+export const PATCH = withDerivedRefresh(patchHandler, 'payroll', tourPersonnelTour);
+export const DELETE = withDerivedRefresh(deleteHandler, 'payroll', tourPersonnelTour);
+
+async function tourPersonnelTour(
+  supabase: Awaited<ReturnType<typeof createServerSupabaseClient>>,
+  p: Record<string, string>,
+): Promise<string | null> {
+  const { data } = await supabase.from('tour_personnel').select('tour_id').eq('id', p.id).maybeSingle();
+  return (data as { tour_id?: string } | null)?.tour_id ?? null;
 }

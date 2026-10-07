@@ -5,6 +5,7 @@ import type { Expense } from '@/lib/types/expense';
 import { autoDetectForDate, addDaysIso, localTodayIso } from '@/lib/mobile/auto-detect';
 import { enqueueExpense } from '@/lib/mobile/expense-queue';
 import { getPendingExpenses } from '@/lib/mobile/expense-queue';
+import { useExpenseQueueSync } from '@/hooks/useExpenseQueueSync';
 import { useArtistTourContext } from '@/contexts/ArtistTourContext';
 import { useToast } from '@/components/ui/Toast';
 import Image from 'next/image';
@@ -126,6 +127,10 @@ function BlobFill({ blob }: { blob: Blob }) {
 export function MobileReceiptCapture() {
   const router = useRouter();
   const { showToast } = useToast();
+  // Receipts saved offline are queued on the phone; this flushes the queue.
+  // Its only mount (ExpenseQueueMount) was never rendered anywhere, so queued
+  // receipts were never sent.
+  useExpenseQueueSync();
   const {
     selectedTourId,
     selectedTour,

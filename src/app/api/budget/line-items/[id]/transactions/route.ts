@@ -21,7 +21,7 @@ import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { requireUserAndWorkspace, requireTourInWorkspace, requireWrite } from '@/lib/auth/workspace-check';
 import {
   resolveLineItemContext,
-  syncActualCostIfNoOverride,
+  syncActualCostSafe,
   type BudgetLineItemTransaction,
 } from '@/lib/budget/transactions';
 
@@ -149,8 +149,9 @@ export async function POST(
   }
   /* §A3 — keep the line's actual_cost in lockstep with the new
      sum unless the user has a manual override in place. */
-  await syncActualCostIfNoOverride(supabase, lineItemId, Number(data.amount || 0));
-  return NextResponse.json({ transaction: data }, { status: 201 });
+  // `|| 1`: a £0 transaction still changes the count (and may clear an override).
+  const sync_warning = await syncActualCostSafe(supabase, lineItemId, Number(data.amount || 0) || 1);
+  return NextResponse.json({ transaction: data, ...(sync_warning ? { sync_warning } : {}) }, { status: 201 });
 }
 
 /** Next sort_order = max(existing) + 1, or 0 if no rows. */
