@@ -1,475 +1,760 @@
 /* ============================================
-   LOWPASS — Budget ← Operations derived-line reconcile
+   LOWPASS — Budget ← Operations derived-line reconcile (THE one writer)
 
-   Populates the budget's Accommodation / Salary / Per Diem sections
-   from the source Operations modules, mirroring the existing gear-hire
-   reconcile in GET /api/budget/line-items. Derived lines are read-only
-   in the budget and edited at source.
+   Every automatic budget line is written HERE and nowhere else:
 
-   Sources (READ-only — we never write the Operations tables):
-     - Accommodation ← hotels / rooms / room_assignments
-         one derived line per hotel; est/actual = Σ(room.cost_amount ×
-         nights) over that hotel's room assignments.
-         source_entity_type='hotel_booking', hotel_id = hotels.id.
-         (Enhances the cost=0 placeholder line that budget/hotels
-         already creates — same source_entity_type + hotel_id, so this
-         find-or-creates and fills in the real total without colliding.)
-     - Salary  ← payroll_entries.total_fee summed per personnel_rates
-         person. source_entity_type='payroll'.
-     - Per Diem ← payroll_entries.total_per_diem per person.
-         source_entity_type='payroll_per_diem'.
+     family            source (owner)                         line identity
+     ───────────────── ────────────────────────────────────── ─────────────────
+     hotel_booking     hotels / rooms / room_assignments       hotels.id
+     payroll           personnel_rate_lines × day statuses     personnel_rates.id
+     payroll_per_diem  personnel_rate_lines × day statuses     personnel_rates.id
+     flight            flights                                 flights.id
+     gear              tour_gear × gear (hired_to_client)      gear.id
 
-   Idempotent: create / update / delete only rows carrying the matching
-   source_entity_type; manual lines are never touched. Target sections
-   are auto-created when there's derived data to place. The whole pass
-   is wrapped so a source hiccup can never break the budget page render.
+   WHO CALLS IT (money repair, Oct 2026):
+     - every route that WRITES a source (payroll paint, rates, roster, routing,
+       rooming, hotels, flights, gear) — via refreshDerivedLines(), scoped to
+       the families that write can affect, so the budget is current the moment
+       the owner saves;
+     - every money READER (budget page, line-items GET, summary, artist
+       summary, exports) — so a reader never shows a stale cache even if a
+       writer's refresh failed.
+
+   WHAT CHANGED vs the old pass (each one an audited leak):
+     - errors are CHECKED, not swallowed. A failed source read SKIPS that
+       family — it never reads "no rows" and deletes the budget's lines;
+     - families run even when their source is empty, so the last hotel /
+       person / flight deleted no longer leaves its cost behind;
+     - the plan (src/lib/budget/derivedPlan.ts) never overwrites a receipt-set
+       actual, never deletes a line with transactions on it, merges duplicates
+       instead of keeping both, and writes only what changed;
+     - flights and gear are reconciled here too, so the flight editor and the
+       gear editor reach the budget through the same door as everything else;
+     - each derived line carries its source currency, and transaction sums are
+       converted into the line's currency before they become its actual.
    ============================================ */
 
 import type { SupabaseClient } from '@supabase/supabase-js';
-// b2 — Salary/Per-Diem derived lines now sum each person's rate lines
-// (personnel_rate_lines × rate_types) via computeTotals, so custom types feed the
-// budget too. Reconciles to legacy for the 5 defaults + day_rate — proven in
-// reconcile.harness.ts. Advance stays the rate-card single-source (flat_once ×1).
 import { countDayStatuses, computeTotals } from '@/lib/payroll/fees';
 import { effectiveStatuses } from '@/lib/payroll/effectiveDayType';
 import { loadTourRateContext, rateLinesFor } from '@/lib/payroll/loadRateLines';
-import { resolveActiveVersion } from '@/server/budget/versions';
-import { derivedUpdatePayload, derivedInsertProposed } from '@/server/budget/derivedLockPolicy';
 import { PLACEHOLDER_HOTEL_PREFIX } from '@/lib/rooming/nightsSummary';
+import { convertVia, type FxRateMap } from '@/lib/budget/fxRates';
+import { logServerError } from '@/lib/log/serverError';
+import {
+  DERIVED_FAMILIES,
+  planFamily,
+  type DerivedFamily,
+  type DesiredLine,
+  type DraftSnapshot,
+  type ExistingLine,
+  type MirrorRow,
+  type PlanContext,
+  type PlanOp,
+  type TxnAggregate,
+} from '@/lib/budget/derivedPlan';
 
-/** Versioning context for one reconcile pass (§3a): when the active version is
- *  APPROVED the derived feeds flow to ACTUALS only (the locked proposed baseline
- *  is frozen); when DRAFT they write proposed (column + the draft snapshot). */
-interface VersionCtx {
-  locked: boolean;
-  draftVersionId: string | null;
+export { DERIVED_FAMILIES, type DerivedFamily } from '@/lib/budget/derivedPlan';
+
+/** Kept for existing importers. */
+export const DERIVED_SOURCE_TYPES = DERIVED_FAMILIES;
+
+export interface ReconcileResult {
+  /** True when every requested family reconciled without an error. */
+  ok: boolean;
+  /** Families that completed. */
+  families: DerivedFamily[];
+  /** Human-readable failures (also logged server-side). */
+  errors: string[];
+  /** Row writes performed (0 on a pass with nothing to change). */
+  writes: number;
+  /** True when every failure was a permission refusal (read-only member). */
+  permissionOnly: boolean;
 }
 
 const SECTION_ACCOMMODATION = 'Accommodation';
-// Phase S — create the TEMPLATE name (plural) so a later template application
-// find-or-creates the same section; alias-match the singular so an existing
-// reconcile-made "Salary"/"Per Diem" is adopted, never twinned.
 const SECTION_SALARY = 'Salaries';
 const SALARY_ALIASES = ['Salary'];
 const SECTION_PER_DIEM = 'Per Diems';
 const PER_DIEM_ALIASES = ['Per Diem'];
+const FLIGHT_SECTIONS = ['Flights', 'Travel', 'Transport', 'Transportation'];
+const GEAR_SECTIONS = ['Equipment Hire', 'Hire', 'Production', 'Equipment'];
 
-/** Distinguishes the two payroll-derived line families (same person id,
- *  different budget line) and the hotel family. */
-export const DERIVED_SOURCE_TYPES = [
-  'hotel_booking',
-  'payroll',
-  'payroll_per_diem',
-] as const;
+const LINE_COLUMNS =
+  'id, source_entity_type, source_entity_id, label, category, proposed_cost, actual_cost, actual_cost_override, currency, section_id, quantity, created_at, hotel_id, flight_id, gear_id, tour_gear_id';
 
-type Desired = {
-  /** budget_line_items.source_entity_id (hotels.id or personnel_rates.id) */
-  sourceId: string;
-  label: string;
-  /** proposed_cost === actual_cost === total (recomputed each pass) */
-  total: number;
-  /** hotels only — sets the hotel_id FK (→ hotels.id). */
-  hotelId?: string;
-};
+/** Thrown by a loader so the family is skipped, never treated as empty. */
+class SourceReadError extends Error {
+  constructor(what: string, public readonly cause: { message?: string; code?: string } | null) {
+    super(`${what}: ${cause?.message ?? 'unknown error'}`);
+  }
+}
+
+function must<T>(what: string, res: { data: T | null; error: { message?: string; code?: string } | null }): T {
+  if (res.error) throw new SourceReadError(what, res.error);
+  return (res.data ?? ([] as unknown)) as T;
+}
+
+const isPermissionError = (code?: string | null): boolean =>
+  code === '42501' || code === 'PGRST301' || code === '401' || code === '403';
 
 function nightsBetween(start: unknown, end: unknown): number {
   if (!start || !end) return 0;
-  const a = new Date(String(start));
-  const b = new Date(String(end));
+  const a = new Date(`${String(start).slice(0, 10)}T12:00:00Z`);
+  const b = new Date(`${String(end).slice(0, 10)}T12:00:00Z`);
   const ms = b.getTime() - a.getTime();
   if (!Number.isFinite(ms) || ms <= 0) return 0;
   return Math.round(ms / 86_400_000);
 }
 
-/* ---- Source → desired-line computations ------------------------- */
+/* ---- Tour money context ----------------------------------------- */
 
-async function computeHotelDesired(
+export interface TourMoneyContext {
+  tourCurrency: string;
+  rates: FxRateMap;
+  /** null = tour currency. */
+  convert: (amount: number, from: string | null, to: string | null) => number;
+}
+
+export async function loadTourMoneyContext(
   supabase: SupabaseClient,
   tourId: string,
   workspaceId: string,
-): Promise<Desired[]> {
-  const { data: hotels } = await supabase
-    .from('hotels')
-    .select('id, name, city, check_in_at')
-    .eq('tour_id', tourId)
-    .eq('workspace_id', workspaceId);
-  if (!hotels?.length) return [];
+): Promise<TourMoneyContext> {
+  const [tourRes, fxRes] = await Promise.all([
+    supabase.from('tours').select('currency').eq('id', tourId).eq('workspace_id', workspaceId).maybeSingle(),
+    supabase.from('budget_fx_rates').select('currency, rate_to_tour_currency').eq('tour_id', tourId).eq('workspace_id', workspaceId),
+  ]);
+  if (tourRes.error) throw new SourceReadError('tour', tourRes.error);
+  if (fxRes.error) throw new SourceReadError('fx rates', fxRes.error);
+  const tourCurrency = String((tourRes.data as { currency?: string } | null)?.currency ?? 'GBP').toUpperCase();
+  const rates: FxRateMap = {};
+  for (const r of (fxRes.data ?? []) as Array<{ currency?: string; rate_to_tour_currency?: number }>) {
+    const c = String(r.currency ?? '').toUpperCase();
+    const rate = Number(r.rate_to_tour_currency);
+    if (c && Number.isFinite(rate) && rate > 0) rates[c] = rate;
+  }
+  const convert = (amount: number, from: string | null, to: string | null) =>
+    convertVia(amount, from ?? tourCurrency, to ?? tourCurrency, tourCurrency, rates);
+  return { tourCurrency, rates, convert };
+}
 
-  const hotelIds = hotels.map((h) => h.id as string);
-  const { data: rooms } = await supabase
-    .from('rooms')
-    .select('id, hotel_id, cost_amount, room_type')
-    .eq('workspace_id', workspaceId)
-    .in('hotel_id', hotelIds);
+/* ---- Sources → desired lines ------------------------------------ */
 
-  const roomById = new Map(
-    (rooms ?? []).map((r) => [r.id as string, r as { hotel_id: string; cost_amount: number | null; room_type: string | null }]),
+/**
+ * The currency a source amount is really in.
+ *
+ * Rooms, flights and gear all carry a currency column that DEFAULTS to 'GBP'
+ * and several write paths stamp 'GBP' unconditionally (the budget flight
+ * route did, on every tour). So 'GBP' on a non-GBP tour is not evidence that
+ * someone priced it in pounds — it is usually the default. Rule:
+ *   - any non-GBP code is deliberate → honoured (converted at the tour rate);
+ *   - 'GBP' on a GBP tour → the tour currency (nothing to convert);
+ *   - 'GBP' on a non-GBP tour → ambiguous → treated as the tour currency,
+ *     which is exactly how the budget has always counted it. No money moves
+ *     for data entered before this rule existed.
+ * Returns null for "tour currency".
+ */
+export function sourceCurrency(raw: string | null | undefined, tourCurrency: string): string | null {
+  const c = (raw ?? '').trim().toUpperCase();
+  if (!c || c === tourCurrency.toUpperCase() || c === 'GBP') return null;
+  return c;
+}
+
+
+export interface HotelTotal {
+  hotelId: string;
+  total: number;
+  currency: string | null;
+  rooms: number;
+}
+
+/** Per-hotel cost: Σ(room.cost_amount × nights) with each room's assignments
+ *  collapsed to one range, so a shared room is counted once, not per occupant.
+ *  THE hotel formula — the rooming API reads this too. */
+export async function computeHotelTotals(
+  supabase: SupabaseClient,
+  tourId: string,
+  workspaceId: string,
+  money: TourMoneyContext,
+): Promise<{ hotels: Array<{ id: string; name: string; city: string; check_in_at: string | null }>; totals: Map<string, HotelTotal> }> {
+  const hotels = must<Array<{ id: string; name: string | null; city: string | null; check_in_at: string | null }>>(
+    'hotels',
+    await supabase.from('hotels').select('id, name, city, check_in_at').eq('tour_id', tourId).eq('workspace_id', workspaceId),
   );
-  const roomIds = (rooms ?? []).map((r) => r.id as string);
+  const totals = new Map<string, HotelTotal>();
+  const out = hotels.map((h) => ({ id: h.id, name: String(h.name ?? 'Hotel'), city: String(h.city ?? '').trim(), check_in_at: h.check_in_at }));
+  if (hotels.length === 0) return { hotels: out, totals };
 
-  // Distinct REAL rooms per hotel ('-' is the grid's no-room sentinel) — the
-  // "# rooms" the derived line label advertises (Adam's bug: the old
-  // room-TYPES label read 'Unassigned Hotel — SGL, DBL' for every grid
-  // placeholder, so the budget flooded with indistinguishable lines).
-  const roomCountByHotel = new Map<string, number>();
-  for (const r of rooms ?? []) {
-    const type = String((r as { room_type?: string | null }).room_type ?? '').trim();
-    if (!type || type === '-') continue;
-    const hid = (r as { hotel_id: string }).hotel_id;
-    roomCountByHotel.set(hid, (roomCountByHotel.get(hid) ?? 0) + 1);
+  const hotelIds = hotels.map((h) => h.id);
+  const rooms = must<Array<{ id: string; hotel_id: string; cost_amount: number | null; cost_currency: string | null; room_type: string | null }>>(
+    'rooms',
+    await supabase.from('rooms').select('id, hotel_id, cost_amount, cost_currency, room_type').eq('workspace_id', workspaceId).in('hotel_id', hotelIds),
+  );
+  const roomIds = rooms.map((r) => r.id);
+  const assignments = roomIds.length
+    ? must<Array<{ room_id: string; starts_on: string | null; ends_on: string | null }>>(
+        'room assignments',
+        await supabase.from('room_assignments').select('room_id, starts_on, ends_on').eq('workspace_id', workspaceId).in('room_id', roomIds),
+      )
+    : [];
+
+  const rangeByRoom = new Map<string, { start: string; end: string }>();
+  for (const a of assignments) {
+    if (!a.starts_on || !a.ends_on) continue;
+    const prev = rangeByRoom.get(a.room_id);
+    rangeByRoom.set(a.room_id, prev
+      ? { start: a.starts_on < prev.start ? a.starts_on : prev.start, end: a.ends_on > prev.end ? a.ends_on : prev.end }
+      : { start: a.starts_on, end: a.ends_on });
   }
 
-  const totalByHotel = new Map<string, number>();
-  if (roomIds.length) {
-    const { data: assignments } = await supabase
-      .from('room_assignments')
-      .select('room_id, starts_on, ends_on')
-      .eq('workspace_id', workspaceId)
-      .in('room_id', roomIds);
-
-    // Collapse each room's assignments into a single date range
-    // (earliest start → latest end) so a room shared by multiple people
-    // is counted ONCE, not once per occupant.
-    const rangeByRoom = new Map<string, { start: string; end: string }>();
-    for (const a of assignments ?? []) {
-      const roomId = a.room_id as string;
-      const start = a.starts_on as string | null;
-      const end = a.ends_on as string | null;
-      if (!start || !end) continue;
-      const prev = rangeByRoom.get(roomId);
-      if (!prev) {
-        rangeByRoom.set(roomId, { start, end });
-      } else {
-        rangeByRoom.set(roomId, {
-          start: start < prev.start ? start : prev.start,
-          end: end > prev.end ? end : prev.end,
-        });
-      }
-    }
-
-    // Sum cost_amount × nights once per distinct room.
-    for (const [roomId, range] of rangeByRoom.entries()) {
-      const room = roomById.get(roomId);
-      if (!room) continue;
-      const cost = Number(room.cost_amount ?? 0) * nightsBetween(range.start, range.end);
-      totalByHotel.set(
-        room.hotel_id,
-        (totalByHotel.get(room.hotel_id) ?? 0) + cost,
-      );
-    }
+  // Each hotel's line currency = the currency most of its costed rooms use.
+  const ccyVotes = new Map<string, Map<string, number>>();
+  for (const r of rooms) {
+    if (!Number(r.cost_amount)) continue;
+    const c = sourceCurrency(r.cost_currency, money.tourCurrency) ?? money.tourCurrency;
+    const votes = ccyVotes.get(r.hotel_id) ?? new Map<string, number>();
+    votes.set(c, (votes.get(c) ?? 0) + 1);
+    ccyVotes.set(r.hotel_id, votes);
   }
+  const hotelCcy = (hid: string): string => {
+    const votes = ccyVotes.get(hid);
+    if (!votes) return money.tourCurrency;
+    return [...votes.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))[0][0];
+  };
 
+  for (const h of hotels) totals.set(h.id, { hotelId: h.id, total: 0, currency: hotelCcy(h.id), rooms: 0 });
+  for (const r of rooms) {
+    const t = totals.get(r.hotel_id);
+    if (!t) continue;
+    const type = String(r.room_type ?? '').trim();
+    if (type && type !== '-') t.rooms += 1;
+    const range = rangeByRoom.get(r.id);
+    if (!range) continue;
+    const cost = Number(r.cost_amount ?? 0) * nightsBetween(range.start, range.end);
+    const roomCcy = sourceCurrency(r.cost_currency, money.tourCurrency) ?? money.tourCurrency;
+    t.total += money.convert(cost, roomCcy, t.currency);
+  }
+  return { hotels: out, totals };
+}
+
+async function desiredHotels(supabase: SupabaseClient, tourId: string, workspaceId: string, money: TourMoneyContext): Promise<DesiredLine[]> {
+  const { hotels, totals } = await computeHotelTotals(supabase, tourId, workspaceId, money);
   return hotels.map((h) => {
-    const hid = h.id as string;
-    const name = String(h.name ?? 'Hotel');
-    const city = String((h as { city?: string | null }).city ?? '').trim();
-    const checkIn = String((h as { check_in_at?: string | null }).check_in_at ?? '').slice(0, 10);
-    const nRooms = roomCountByHotel.get(hid) ?? 0;
-    // Label = `{hotel} — {city} · {check-in date} · {N rooms}` (multi-night
-    // stays show the check-in date). Grid-made placeholders are ALREADY named
-    // 'Hotel — {city} · {date}' (placeholderHotelName), so for those only the
-    // room count is appended — no repeated city/date. sourceId stays the hotel
-    // id, so the reconcile UPDATES each existing line's label in place
-    // (derivedUpdatePayload writes `label` when the version is a draft) rather
-    // than duplicating lines. Labels are NOT part of line identity.
-    const base = name.startsWith(PLACEHOLDER_HOTEL_PREFIX)
-      ? name
-      : `${city ? `${name} — ${city}` : name}${checkIn ? ` · ${checkIn}` : ''}`;
+    const t = totals.get(h.id);
+    const checkIn = String(h.check_in_at ?? '').slice(0, 10);
+    const base = h.name.startsWith(PLACEHOLDER_HOTEL_PREFIX)
+      ? h.name
+      : `${h.city ? `${h.name} — ${h.city}` : h.name}${checkIn ? ` · ${checkIn}` : ''}`;
+    const n = t?.rooms ?? 0;
     return {
-      sourceId: hid,
-      label: nRooms > 0 ? `${base} · ${nRooms} room${nRooms === 1 ? '' : 's'}` : base,
-      total: totalByHotel.get(hid) ?? 0,
-      hotelId: hid,
+      sourceId: h.id,
+      label: n > 0 ? `${base} · ${n} room${n === 1 ? '' : 's'}` : base,
+      total: t?.total ?? 0,
+      currency: t?.currency === money.tourCurrency ? null : t?.currency ?? null,
+      category: 'hotels',
+      legacySection: 'hotels',
+      sectionId: null, // filled by the caller (ensureSection)
+      links: { hotel_id: h.id },
     };
   });
 }
 
-async function computePayrollDesired(
+async function desiredPayroll(
   supabase: SupabaseClient,
   tourId: string,
   workspaceId: string,
-): Promise<{ salary: Desired[]; perDiem: Desired[] }> {
-  // Personnel unification — derived Salary/Per-diem lines come from every
-  // roster member (rate cards linked to a live tour_personnel row). Orphan /
-  // un-rostered cards don't generate budget lines.
-  const { data: persons } = await supabase
-    .from('personnel_rates')
-    .select('id, person_name, role, order_index')
-    .eq('tour_id', tourId)
-    .eq('workspace_id', workspaceId)
-    .not('tour_personnel_id', 'is', null);
-  if (!persons?.length) return { salary: [], perDiem: [] };
-
-  // b2 — the rate-lines source (catalog + every person's lines) for this tour.
-  const rateCtx = await loadTourRateContext(supabase, tourId, workspaceId);
-
-  // OPS-17b — compute fees from day_statuses + the rate card via the SAME
-  // shared helper the payroll sheets use, instead of trusting the persisted
-  // total_fee column. This guarantees the budget Salary/Per-Diem == the
-  // payroll display.
-  // EFFECTIVE COUNTS (261): merge each person's painted days over the tour's
-  // routing dates and fill unpainted days with their tour-default status —
-  // exactly the payroll display's counting path. Counting only the persisted
-  // entries undercounts tour-default days (the "Rates ≠ matrix" bug, server
-  // edition). The advance comes from the rate card (a5 flat_once line).
-  const [{ data: entries }, { data: routingRows }] = await Promise.all([
-    supabase
-      .from('payroll_entries')
-      .select('personnel_id, day_statuses')
+): Promise<{ salary: DesiredLine[]; perDiem: DesiredLine[] }> {
+  // Every roster member (rate card linked to a live tour_personnel row).
+  const persons = must<Array<{ id: string; person_name: string | null; role: string | null }>>(
+    'personnel rates',
+    await supabase
+      .from('personnel_rates')
+      .select('id, person_name, role, order_index')
       .eq('tour_id', tourId)
-      .eq('workspace_id', workspaceId),
-    supabase
-      .from('routing')
-      .select('date, day_type')
-      .eq('tour_id', tourId),
+      .eq('workspace_id', workspaceId)
+      .not('tour_personnel_id', 'is', null),
+  );
+  if (persons.length === 0) return { salary: [], perDiem: [] };
+
+  const [rateCtx, entriesRes, routingRes] = await Promise.all([
+    loadTourRateContext(supabase, tourId, workspaceId, { strict: true }),
+    supabase.from('payroll_entries').select('personnel_id, day_statuses').eq('tour_id', tourId).eq('workspace_id', workspaceId),
+    supabase.from('routing').select('date, day_type').eq('tour_id', tourId),
   ]);
+  const entries = must<Array<{ personnel_id: string; day_statuses: Record<string, string> | null }>>('payroll entries', entriesRes);
+  const routing = must<Array<{ date: string; day_type?: string | null }>>('routing', routingRes);
 
-  const routingDates = ((routingRows ?? []) as Array<{ date: string; day_type?: string | null }>);
   const paintedBy = new Map<string, Record<string, string>>();
-  for (const e of entries ?? []) {
-    const id = e.personnel_id as string;
-    const merged = paintedBy.get(id) ?? {};
-    Object.assign(merged, (e.day_statuses as Record<string, string>) ?? {});
-    paintedBy.set(id, merged);
-  }
-  const countsBy = new Map<string, ReturnType<typeof countDayStatuses>>();
-  for (const p of persons) {
-    const id = p.id as string;
-    countsBy.set(id, countDayStatuses(effectiveStatuses(routingDates, paintedBy.get(id))));
+  for (const e of entries) {
+    const merged = paintedBy.get(e.personnel_id) ?? {};
+    Object.assign(merged, e.day_statuses ?? {});
+    paintedBy.set(e.personnel_id, merged);
   }
 
-  const salary: Desired[] = [];
-  const perDiem: Desired[] = [];
+  const salary: DesiredLine[] = [];
+  const perDiem: DesiredLine[] = [];
   for (const p of persons) {
-    const id = p.id as string;
-    const label = p.role
-      ? `${String(p.person_name)} — ${String(p.role)}`
-      : String(p.person_name);
-    const counts = countsBy.get(id) ?? countDayStatuses({});
-    // PAY-04: rate-card advance is the single source (matches the payroll
-    // displays + budget/summary routes; survives a day-status edit, which
-    // zeroes the per-week entries.advance_fee). The advance rides its flat_once
-    // line (a5), applied once over the aggregated counts.
-    // Rates SSOT — lines come from personnel_rate_lines; the ctx carries the
-    // legacy-column fallback (advance included) so this call names no columns.
-    const lines = rateLinesFor(rateCtx, id);
-    const { totalFee: fee, totalPerDiem: pd } = computeTotals(lines, counts);
-    // One Salary line per roster member (named + costed; 0 until days set).
-    salary.push({ sourceId: id, label, total: fee });
-    // Phase D — Per-Diem is now SYMMETRIC with Salary: one line per roster
-    // member even when their per-diem is 0 (was gated behind pd > 0, which hid
-    // the whole Per-Diem section on tours with salary but no per-diem rate). A
-    // £0 line adds no money, so no double-count; the section gate at
-    // payroll.perDiem.length > 0 now fires whenever there are people, like Salary.
-    perDiem.push({ sourceId: id, label, total: pd });
+    const label = p.role ? `${String(p.person_name)} — ${String(p.role)}` : String(p.person_name);
+    const counts = countDayStatuses(effectiveStatuses(routing, paintedBy.get(p.id)));
+    const { totalFee, totalPerDiem } = computeTotals(rateLinesFor(rateCtx, p.id), counts);
+    salary.push({ sourceId: p.id, label, total: totalFee, currency: null, category: 'crew', legacySection: 'payroll', sectionId: null });
+    perDiem.push({ sourceId: p.id, label, total: totalPerDiem, currency: null, category: 'per_diems', legacySection: 'per_diems', sectionId: null });
   }
   return { salary, perDiem };
 }
 
-/* ---- Section auto-create (find-or-create by name) --------------- */
+async function desiredFlights(supabase: SupabaseClient, tourId: string, workspaceId: string, money: TourMoneyContext): Promise<DesiredLine[]> {
+  const flights = must<Array<{
+    id: string; person_name: string | null; origin_airport: string | null; destination_airport: string | null;
+    cost_amount: number | null; cost_currency: string | null;
+  }>>(
+    'flights',
+    await supabase
+      .from('flights')
+      .select('id, person_name, origin_airport, destination_airport, cost_amount, cost_currency')
+      .eq('tour_id', tourId)
+      .eq('workspace_id', workspaceId),
+  );
+  return flights.map((f) => {
+    const ccy = sourceCurrency(f.cost_currency, money.tourCurrency);
+    return {
+      sourceId: f.id,
+      label: `${f.person_name ?? 'Flight'}: ${(f.origin_airport ?? 'TBD').toUpperCase()}→${(f.destination_airport ?? 'TBD').toUpperCase()}`,
+      total: Number(f.cost_amount) || 0,
+      currency: ccy,
+      category: 'flights',
+      legacySection: 'travel',
+      sectionId: null,
+      links: { flight_id: f.id },
+    };
+  });
+}
 
-async function ensureSection(
+async function desiredGear(supabase: SupabaseClient, tourId: string, workspaceId: string, money: TourMoneyContext): Promise<DesiredLine[]> {
+  const rows = must<Array<{
+    id: string; quantity: number | null; tour_ownership: string | null; tour_hire_cost_amount: number | null;
+    tour_hire_cost_currency: string | null;
+    gear: { id?: string; name?: string; ownership?: string; hire_cost_amount?: number | null; hire_cost_currency?: string | null }
+      | Array<{ id?: string; name?: string; ownership?: string; hire_cost_amount?: number | null; hire_cost_currency?: string | null }>
+      | null;
+  }>>(
+    'tour gear',
+    await supabase
+      .from('tour_gear')
+      .select('id, quantity, tour_ownership, tour_hire_cost_amount, tour_hire_cost_currency, gear:gear_id(id, name, ownership, hire_cost_amount, hire_cost_currency)')
+      .eq('workspace_id', workspaceId)
+      .eq('tour_id', tourId),
+  );
+  const byGear = new Map<string, DesiredLine>();
+  for (const row of rows) {
+    const g = Array.isArray(row.gear) ? row.gear[0] : row.gear;
+    if (!g?.id) continue;
+    const ownership = row.tour_ownership ?? g.ownership ?? 'owned';
+    if (ownership !== 'hired_to_client') continue;
+    const qty = Math.max(1, Number(row.quantity ?? 1));
+    const unit = Number(row.tour_hire_cost_amount ?? g.hire_cost_amount ?? 0);
+    const ccy = sourceCurrency(
+      (row.tour_hire_cost_amount != null ? row.tour_hire_cost_currency : null) ?? g.hire_cost_currency,
+      money.tourCurrency,
+    );
+    byGear.set(g.id, {
+      sourceId: g.id,
+      label: String(g.name ?? 'Gear hire'),
+      total: unit * qty,
+      currency: ccy,
+      category: 'prod_equipment',
+      legacySection: 'hire',
+      sectionId: null,
+      quantity: qty,
+      links: { gear_id: g.id, tour_gear_id: row.id },
+    });
+  }
+  return [...byGear.values()];
+}
+
+/* ---- Sections ---------------------------------------------------- */
+
+async function findOrCreateSection(
   supabase: SupabaseClient,
   tourId: string,
   workspaceId: string,
   name: string,
-  /** Phase S — extra names to ADOPT if present (e.g. the singular twin), so the
-   *  reconcile attaches to a template's existing section instead of creating one.
-   *  The section is CREATED under `name` when none of the aliases exist. */
-  aliases: string[] = [],
+  aliases: string[],
+  create: boolean,
 ): Promise<string | null> {
-  const { data: existing } = await supabase
-    .from('budget_sections')
-    .select('id, name, sort_order')
-    .eq('tour_id', tourId)
-    .eq('workspace_id', workspaceId);
-  const matchSet = new Set([name, ...aliases].map((n) => n.toLowerCase()));
-  const found = (existing ?? []).find(
-    (s) => matchSet.has(String(s.name).toLowerCase()),
+  const existing = must<Array<{ id: string; name: string; sort_order: number | null; created_at: string | null }>>(
+    'budget sections',
+    await supabase.from('budget_sections').select('id, name, sort_order, created_at').eq('tour_id', tourId).eq('workspace_id', workspaceId),
   );
-  if (found) return found.id as string;
-  const maxSort = (existing ?? []).reduce(
-    (m, s) => Math.max(m, Number(s.sort_order ?? 0)),
-    -1,
-  );
-  const { data: created } = await supabase
+  const wanted = [name, ...aliases].map((n) => n.toLowerCase());
+  // Prefer the earliest-created match so two passes that both created the
+  // section converge on the same one.
+  const matches = existing
+    .filter((s) => wanted.includes(String(s.name).toLowerCase()))
+    .sort((a, b) => wanted.indexOf(String(a.name).toLowerCase()) - wanted.indexOf(String(b.name).toLowerCase())
+      || String(a.created_at ?? '').localeCompare(String(b.created_at ?? '')));
+  if (matches.length) return matches[0].id;
+  if (!create) return null;
+  const maxSort = existing.reduce((m, s) => Math.max(m, Number(s.sort_order ?? 0)), -1);
+  const { data, error } = await supabase
     .from('budget_sections')
     .insert({ tour_id: tourId, workspace_id: workspaceId, name, sort_order: maxSort + 1 })
     .select('id')
     .maybeSingle();
-  return (created?.id as string | undefined) ?? null;
+  if (error) throw new SourceReadError(`create section ${name}`, error);
+  return (data?.id as string | undefined) ?? null;
 }
 
-/* ---- Generic reconcile for one source_entity_type --------------- */
+/* ---- Cache state ------------------------------------------------- */
 
-async function reconcileType(
+async function loadExisting(
   supabase: SupabaseClient,
-  opts: {
-    tourId: string;
-    workspaceId: string;
-    sourceType: string;
-    sectionId: string | null;
-    category: string;
-    legacySection: string;
-    desired: Desired[];
-    setHotelId?: boolean;
-    ctx: VersionCtx;
-  },
-): Promise<void> {
-  const { tourId, workspaceId, sourceType, sectionId, category, legacySection, desired, setHotelId, ctx } =
-    opts;
-
-  const { data: existing } = await supabase
-    .from('budget_line_items')
-    .select('id, source_entity_id')
-    .eq('workspace_id', workspaceId)
-    .eq('tour_id', tourId)
-    .eq('source_entity_type', sourceType);
-
-  const desiredIds = new Set(desired.map((d) => d.sourceId));
-  const idBySource = new Map<string, string>();
-  for (const r of existing ?? []) {
-    const sid = r.source_entity_id as string | null;
-    if (sid) idBySource.set(sid, r.id as string);
-    // Source entity gone. Draft → delete the derived line. Locked → the proposed
-    // baseline is frozen (and deleting would cascade-fail on its immutable
-    // version_lines row); just zero the ACTUAL.
-    if (!sid || !desiredIds.has(sid)) {
-      if (ctx.locked) {
-        await supabase.from('budget_line_items')
-          .update({ actual_cost: 0, updated_at: new Date().toISOString() })
-          .eq('id', r.id as string).eq('workspace_id', workspaceId);
-      } else {
-        await supabase.from('budget_line_items')
-          .delete().eq('id', r.id as string).eq('workspace_id', workspaceId);
-      }
-    }
-  }
-
-  for (const d of desired) {
-    const existingId = idBySource.get(d.sourceId);
-    if (existingId) {
-      // §3a — LOCKED: actual only (never the frozen proposed/structure).
-      const payload: Record<string, unknown> = {
-        ...derivedUpdatePayload(ctx.locked, d, sectionId),
-        updated_at: new Date().toISOString(),
-      };
-      if (!ctx.locked && setHotelId && d.hotelId) payload.hotel_id = d.hotelId;
-      await supabase.from('budget_line_items').update(payload).eq('id', existingId).eq('workspace_id', workspaceId);
-      if (!ctx.locked && ctx.draftVersionId) {
-        await mirrorProposed(supabase, ctx.draftVersionId, existingId, workspaceId, sectionId, d, category);
-      }
-    } else {
-      // New derived entity. LOCKED → actuals-only line (proposed 0, NOT in the
-      // approved snapshot → shows as unbudgeted variance). DRAFT → proposed+actual.
-      const { data: ins } = await supabase.from('budget_line_items').insert({
-        tour_id: tourId,
-        workspace_id: workspaceId,
-        category,
-        label: d.label,
-        quantity: 1,
-        proposed_cost: derivedInsertProposed(ctx.locked, d.total),
-        actual_cost: d.total,
-        source_entity_type: sourceType,
-        source_entity_id: d.sourceId,
-        section_id: sectionId,
-        section: legacySection,
-        order_index: 0,
-        sort_order: 0,
-        ...(setHotelId && d.hotelId ? { hotel_id: d.hotelId } : {}),
-      }).select('id').maybeSingle();
-      if (!ctx.locked && ctx.draftVersionId && ins?.id) {
-        await mirrorProposed(supabase, ctx.draftVersionId, ins.id as string, workspaceId, sectionId, d, category);
-      }
-    }
-  }
+  tourId: string,
+  workspaceId: string,
+  families: DerivedFamily[],
+): Promise<Map<DerivedFamily, ExistingLine[]>> {
+  const rows = must<Array<ExistingLine & { source_entity_type: string }>>(
+    'derived lines',
+    await supabase
+      .from('budget_line_items')
+      .select(LINE_COLUMNS)
+      .eq('tour_id', tourId)
+      .eq('workspace_id', workspaceId)
+      .in('source_entity_type', families),
+  );
+  const out = new Map<DerivedFamily, ExistingLine[]>();
+  for (const f of families) out.set(f, []);
+  for (const r of rows) out.get(r.source_entity_type as DerivedFamily)?.push(r);
+  return out;
 }
 
-/** Mirror a derived line's proposed into the active DRAFT's snapshot. */
-async function mirrorProposed(
+/** Transaction sums per line, converted into each line's currency.
+ *  A transaction with NULL currency was written when its line had no currency
+ *  of its own (the transactions route stores the line's currency, and NULL
+ *  meant "tour currency"), so NULL is read as the TOUR currency — not as
+ *  whatever the line's currency is today. */
+export async function loadTxnAggregates(
+  supabase: SupabaseClient,
+  lines: Array<{ id: string; currency: string | null }>,
+  money: Pick<TourMoneyContext, 'convert'>,
+): Promise<Map<string, TxnAggregate>> {
+  const out = new Map<string, TxnAggregate>();
+  if (lines.length === 0) return out;
+  const ccyByLine = new Map(lines.map((l) => [l.id, (l.currency ?? '').toUpperCase() || null]));
+  const ids = lines.map((l) => l.id);
+  for (let i = 0; i < ids.length; i += 200) {
+    const rows = must<Array<{ line_item_id: string; amount: number | string | null; currency: string | null }>>(
+      'transactions',
+      await supabase.from('budget_line_item_transactions').select('line_item_id, amount, currency').in('line_item_id', ids.slice(i, i + 200)),
+    );
+    for (const r of rows) {
+      const lineCcy = ccyByLine.get(r.line_item_id) ?? null;
+      const txnCcy = (r.currency ?? '').toUpperCase() || null;
+      const amt = money.convert(Number(r.amount) || 0, txnCcy, lineCcy);
+      const agg = out.get(r.line_item_id) ?? { count: 0, sum: 0 };
+      agg.count += 1;
+      agg.sum += amt;
+      out.set(r.line_item_id, agg);
+    }
+  }
+  return out;
+}
+
+async function loadSnapshots(
+  supabase: SupabaseClient,
+  versionId: string | null,
+  lineIds: string[],
+): Promise<Map<string, DraftSnapshot>> {
+  const out = new Map<string, DraftSnapshot>();
+  if (!versionId || lineIds.length === 0) return out;
+  for (let i = 0; i < lineIds.length; i += 200) {
+    const rows = must<Array<DraftSnapshot & { line_item_id: string }>>(
+      'version lines',
+      await supabase
+        .from('budget_version_lines')
+        .select('line_item_id, proposed_cost, label, section_id, currency')
+        .eq('version_id', versionId)
+        .in('line_item_id', lineIds.slice(i, i + 200)),
+    );
+    for (const r of rows) out.set(r.line_item_id, r);
+  }
+  return out;
+}
+
+/* ---- Executor ---------------------------------------------------- */
+
+interface ExecState {
+  writes: number;
+  errors: Array<{ message: string; code?: string }>;
+}
+
+async function writeMirror(
   supabase: SupabaseClient,
   versionId: string,
-  lineItemId: string,
   workspaceId: string,
-  sectionId: string | null,
-  d: Desired,
-  category: string,
+  lineId: string,
+  m: MirrorRow,
+  st: ExecState,
 ): Promise<void> {
-  await supabase.from('budget_version_lines').upsert(
-    { version_id: versionId, line_item_id: lineItemId, workspace_id: workspaceId, section_id: sectionId, label: d.label, category, proposed_cost: d.total },
+  const { error } = await supabase.from('budget_version_lines').upsert(
+    {
+      version_id: versionId,
+      line_item_id: lineId,
+      workspace_id: workspaceId,
+      section_id: m.section_id,
+      label: m.label,
+      category: m.category,
+      proposed_cost: m.proposed_cost,
+      currency: m.currency,
+    },
     { onConflict: 'version_id,line_item_id' },
   );
+  if (error) st.errors.push({ message: `mirror ${lineId}: ${error.message}`, code: error.code });
+  else st.writes++;
+}
+
+/** Child tables whose rows must follow a merged duplicate to its survivor. */
+const CHILD_TABLES: Array<{ table: string; column: string }> = [
+  { table: 'budget_line_item_transactions', column: 'line_item_id' },
+  { table: 'budget_line_item_notes', column: 'line_item_id' },
+  { table: 'budget_line_item_attachments', column: 'line_item_id' },
+  { table: 'expense_receipts', column: 'linked_line_item_id' },
+];
+
+async function execOps(
+  supabase: SupabaseClient,
+  tourId: string,
+  workspaceId: string,
+  family: DerivedFamily,
+  ops: PlanOp[],
+  ctx: PlanContext,
+  st: ExecState,
+): Promise<void> {
+  const now = () => new Date().toISOString();
+  for (const op of ops) {
+    if (op.kind === 'merge') {
+      for (const loserId of op.loserIds) {
+        let movedAll = true;
+        for (const { table, column } of CHILD_TABLES) {
+          const { error } = await supabase.from(table).update({ [column]: op.survivorId }).eq(column, loserId);
+          // A table that doesn't exist on this database holds nothing to move.
+          if (error && error.code !== '42P01' && error.code !== 'PGRST205') {
+            movedAll = false;
+            st.errors.push({ message: `merge ${loserId} → ${op.survivorId} (${table}): ${error.message}`, code: error.code });
+          }
+        }
+        // Only delete once everything attached has moved — delete cascades.
+        const del = movedAll
+          ? await supabase.from('budget_line_items').delete().eq('id', loserId).eq('workspace_id', workspaceId)
+          : { error: { message: 'children not moved' } as { message: string; code?: string } };
+        if (!del.error) {
+          st.writes++;
+          continue;
+        }
+        // Couldn't delete (an approved snapshot references it, or children
+        // didn't move): neutralise so it can never be counted twice again.
+        const neutral: Record<string, unknown> = {
+          source_entity_type: null,
+          source_entity_id: null,
+          hotel_id: null,
+          flight_id: null,
+          gear_id: null,
+          tour_gear_id: null,
+          updated_at: now(),
+        };
+        if (movedAll) neutral.actual_cost = 0;
+        if (!ctx.locked) neutral.proposed_cost = 0;
+        const { error } = await supabase.from('budget_line_items').update(neutral).eq('id', loserId).eq('workspace_id', workspaceId);
+        if (error) st.errors.push({ message: `neutralise duplicate ${loserId}: ${error.message}`, code: error.code });
+        else st.writes++;
+      }
+    } else if (op.kind === 'delete') {
+      const { error } = await supabase.from('budget_line_items').delete().eq('id', op.id).eq('workspace_id', workspaceId);
+      if (error) st.errors.push({ message: `delete ${op.id}: ${error.message}`, code: error.code });
+      else st.writes++;
+    } else if (op.kind === 'update') {
+      if (Object.keys(op.patch).length > 0) {
+        const { error } = await supabase
+          .from('budget_line_items')
+          .update({ ...op.patch, updated_at: now() })
+          .eq('id', op.id)
+          .eq('workspace_id', workspaceId);
+        if (error) {
+          st.errors.push({ message: `update ${op.id}: ${error.message}`, code: error.code });
+          continue;
+        }
+        st.writes++;
+      }
+      if (op.mirror && ctx.draftVersionId) await writeMirror(supabase, ctx.draftVersionId, workspaceId, op.id, op.mirror, st);
+    } else {
+      const { data, error } = await supabase
+        .from('budget_line_items')
+        .insert({ ...op.row, tour_id: tourId, workspace_id: workspaceId })
+        .select('id')
+        .maybeSingle();
+      if (error) {
+        // 23505: a concurrent pass inserted this source's line first (the
+        // unique index from migration 269). Its values are the same; done.
+        if (error.code !== '23505') st.errors.push({ message: `insert ${family} ${op.sourceId}: ${error.message}`, code: error.code });
+        continue;
+      }
+      st.writes++;
+      if (op.mirror && ctx.draftVersionId && data?.id) {
+        await writeMirror(supabase, ctx.draftVersionId, workspaceId, data.id as string, op.mirror, st);
+      }
+    }
+  }
 }
 
 /* ---- Public entry point ----------------------------------------- */
 
+/**
+ * Bring the tour's derived budget lines in line with their sources.
+ * Never throws. A family whose source can't be read is SKIPPED (its lines are
+ * left exactly as they were) and reported in `errors`.
+ */
 export async function reconcileDerivedBudgetLines(
   supabase: SupabaseClient,
   tourId: string,
   workspaceId: string,
-): Promise<void> {
-  try {
-    // §3a — resolve the active version ONCE. Approved → feeds touch actuals only.
-    const active = await resolveActiveVersion(supabase, tourId, workspaceId);
-    const ctx: VersionCtx = {
-      locked: active?.status === 'approved',
-      draftVersionId: active?.status === 'draft' ? active.id : null,
+  opts: { families?: readonly DerivedFamily[] } = {},
+): Promise<ReconcileResult> {
+  const requested = [...new Set(opts.families ?? DERIVED_FAMILIES)];
+  const st: ExecState = { writes: 0, errors: [] };
+  const done: DerivedFamily[] = [];
+  const finish = (): ReconcileResult => {
+    const errors = st.errors.map((e) => e.message);
+    if (errors.length) logServerError('reconcileDerivedBudgetLines', errors.join(' | '), { tourId, families: requested });
+    return {
+      ok: errors.length === 0,
+      families: done,
+      errors,
+      writes: st.writes,
+      permissionOnly: st.errors.length > 0 && st.errors.every((e) => isPermissionError(e.code)),
     };
+  };
 
-    const [hotelDesired, payroll] = await Promise.all([
-      computeHotelDesired(supabase, tourId, workspaceId),
-      computePayrollDesired(supabase, tourId, workspaceId),
-    ]);
+  let money: TourMoneyContext;
+  let ctx: PlanContext;
+  try {
+    money = await loadTourMoneyContext(supabase, tourId, workspaceId);
+    const { data: version, error: vErr } = await supabase
+      .from('budget_versions')
+      .select('id, status')
+      .eq('tour_id', tourId)
+      .eq('workspace_id', workspaceId)
+      .not('status', 'in', '(superseded,rolled_back)')
+      .order('version_number', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    // An unknown lock state must never be treated as "unlocked" — that would
+    // let the pass rewrite an approved baseline.
+    if (vErr) throw new SourceReadError('budget versions', vErr);
+    const status = (version as { status?: string } | null)?.status;
+    ctx = {
+      locked: status === 'approved',
+      draftVersionId: status === 'draft' ? ((version as { id: string }).id) : null,
+      convert: money.convert,
+    };
+  } catch (e) {
+    const err = e as SourceReadError;
+    st.errors.push({ message: err.message, code: err.cause?.code });
+    return finish();
+  }
 
-    if (hotelDesired.length > 0) {
-      const sectionId = await ensureSection(
-        supabase,
-        tourId,
-        workspaceId,
-        SECTION_ACCOMMODATION,
-      );
-      await reconcileType(supabase, {
-        tourId,
-        workspaceId,
-        sourceType: 'hotel_booking',
-        sectionId,
-        category: 'hotels',
-        legacySection: 'hotels',
-        desired: hotelDesired,
-        setHotelId: true,
-        ctx,
-      });
+  // Sources, computed per family. A payroll read serves both payroll families.
+  let payroll: Promise<{ salary: DesiredLine[]; perDiem: DesiredLine[] }> | null = null;
+  const payrollOnce = () => (payroll ??= desiredPayroll(supabase, tourId, workspaceId));
+
+  const sectionFor = async (family: DerivedFamily, needed: boolean): Promise<string | null> => {
+    switch (family) {
+      case 'hotel_booking':
+        return findOrCreateSection(supabase, tourId, workspaceId, SECTION_ACCOMMODATION, [], needed);
+      case 'payroll':
+        return findOrCreateSection(supabase, tourId, workspaceId, SECTION_SALARY, SALARY_ALIASES, needed);
+      case 'payroll_per_diem':
+        return findOrCreateSection(supabase, tourId, workspaceId, SECTION_PER_DIEM, PER_DIEM_ALIASES, needed);
+      case 'flight':
+        return findOrCreateSection(supabase, tourId, workspaceId, FLIGHT_SECTIONS[0], FLIGHT_SECTIONS.slice(1), false);
+      case 'gear':
+        return findOrCreateSection(supabase, tourId, workspaceId, GEAR_SECTIONS[0], GEAR_SECTIONS.slice(1), false);
     }
+  };
 
-    if (payroll.salary.length > 0) {
-      const sectionId = await ensureSection(supabase, tourId, workspaceId, SECTION_SALARY, SALARY_ALIASES);
-      await reconcileType(supabase, {
-        tourId,
-        workspaceId,
-        sourceType: 'payroll',
-        sectionId,
-        category: 'crew',
-        legacySection: 'payroll',
-        desired: payroll.salary,
-        ctx,
-      });
-    }
+  let existingByFamily: Map<DerivedFamily, ExistingLine[]>;
+  try {
+    existingByFamily = await loadExisting(supabase, tourId, workspaceId, requested);
+  } catch (e) {
+    const err = e as SourceReadError;
+    st.errors.push({ message: err.message, code: err.cause?.code });
+    return finish();
+  }
 
-    if (payroll.perDiem.length > 0) {
-      const sectionId = await ensureSection(supabase, tourId, workspaceId, SECTION_PER_DIEM, PER_DIEM_ALIASES);
-      await reconcileType(supabase, {
-        tourId,
-        workspaceId,
-        sourceType: 'payroll_per_diem',
-        sectionId,
-        category: 'per_diems',
-        legacySection: 'per_diems',
-        desired: payroll.perDiem,
-        ctx,
-      });
+  for (const family of requested) {
+    try {
+      let desired: DesiredLine[];
+      switch (family) {
+        case 'hotel_booking': desired = await desiredHotels(supabase, tourId, workspaceId, money); break;
+        case 'payroll': desired = (await payrollOnce()).salary; break;
+        case 'payroll_per_diem': desired = (await payrollOnce()).perDiem; break;
+        case 'flight': desired = await desiredFlights(supabase, tourId, workspaceId, money); break;
+        case 'gear': desired = await desiredGear(supabase, tourId, workspaceId, money); break;
+      }
+      const existing = existingByFamily.get(family) ?? [];
+      const sectionId = await sectionFor(family, desired.length > 0);
+      // Flights and gear only ADOPT a matching section (never create one), and
+      // never move a line the user has already filed somewhere.
+      const managesSection = family === 'hotel_booking' || family === 'payroll' || family === 'payroll_per_diem';
+      const bySource = new Map(existing.map((l) => [l.source_entity_id, l]));
+      for (const d of desired) {
+        d.sectionId = managesSection ? sectionId : (bySource.get(d.sourceId)?.section_id ?? sectionId);
+      }
+      const [txns, snapshots] = await Promise.all([
+        loadTxnAggregates(supabase, existing, money),
+        loadSnapshots(supabase, ctx.draftVersionId, existing.map((l) => l.id)),
+      ]);
+      const ops = planFamily({ family, desired, existing, txns, snapshots, ctx });
+      const before = st.errors.length;
+      await execOps(supabase, tourId, workspaceId, family, ops, ctx, st);
+      if (st.errors.length === before) done.push(family);
+    } catch (e) {
+      const err = e as SourceReadError;
+      st.errors.push({ message: `${family}: ${err.message}`, code: err.cause?.code });
     }
-  } catch {
-    // Never let a source hiccup break the budget page render — the grid
-    // still shows whatever derived lines were last persisted.
+  }
+
+  return finish();
+}
+
+/* ---- Writer-side hook -------------------------------------------- */
+
+/** Which families a write to each source table can change. */
+export const FAMILIES_FOR_SOURCE = {
+  payroll: ['payroll', 'payroll_per_diem'],
+  routing: ['payroll', 'payroll_per_diem'],
+  rooming: ['hotel_booking'],
+  flights: ['flight'],
+  gear: ['gear'],
+  all: DERIVED_FAMILIES,
+} as const satisfies Record<string, readonly DerivedFamily[]>;
+
+/**
+ * Call after a successful write to a source. Never throws and never fails the
+ * write it follows — the write is already committed; this only refreshes the
+ * budget's cached copy (and the next money read re-runs it regardless).
+ */
+export async function refreshDerivedLines(
+  supabase: SupabaseClient,
+  tourId: string | null | undefined,
+  workspaceId: string | null | undefined,
+  source: keyof typeof FAMILIES_FOR_SOURCE,
+): Promise<ReconcileResult | null> {
+  if (!tourId || !workspaceId) return null;
+  try {
+    return await reconcileDerivedBudgetLines(supabase, tourId, workspaceId, { families: FAMILIES_FOR_SOURCE[source] });
+  } catch (e) {
+    logServerError('refreshDerivedLines', e, { tourId, source });
+    return null;
   }
 }
