@@ -115,6 +115,13 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   const syncTourId = typeof body.sync_tour_id === 'string' ? body.sync_tour_id : null;
   const targets = new Set<string>(syncTourIds);
   if (syncTourId) targets.add(syncTourId);
+  // Money repair — a gear-level hire cost feeds EVERY tour this gear is on, so
+  // refresh all of them, not only the ones the client remembered to name.
+  for (const tg of tourGear ?? []) if (tg.tour_id) targets.add(tg.tour_id);
+  {
+    const { data: onTours } = await supabase.from('tour_gear').select('tour_id').eq('gear_id', id);
+    for (const r of onTours ?? []) if (r.tour_id) targets.add(r.tour_id as string);
+  }
 
   if (targets.size > 0) {
     for (const tourId of targets) {

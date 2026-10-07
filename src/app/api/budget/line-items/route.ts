@@ -10,7 +10,7 @@
 import { NextResponse } from 'next/server';
 import { requireWrite } from '@/lib/auth/workspace-check';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
-import { reconcileDerivedBudgetLines } from '@/server/budget/reconcileDerivedLines';
+import { reconcileDerivedBudgetLines, type DerivedFamily } from '@/server/budget/reconcileDerivedLines';
 import { resolveLockState, writeProposedToActiveDraft } from '@/server/budget/versions';
 import { removeRecordChunksSafe } from '@/lib/ai/rag/reindex';
 
@@ -72,117 +72,34 @@ export async function GET(request: Request) {
     query = query.eq('category', category);
   }
 
-  const needsGearSync = !category || category === 'prod_equipment';
-  if (needsGearSync) {
-    const { data: tourGearRows } = await supabase
-      .from('tour_gear')
-      .select(`
-        id,
-        quantity,
-        tour_ownership,
-        tour_hire_cost_amount,
-        gear:gear_id(id, name, ownership, hire_cost_amount)
-      `)
-      .eq('workspace_id', profile.workspace_id)
-      .eq('tour_id', tourId);
-
-    const desired = new Map<string, { label: string; qty: number; total: number; tourGearId: string; gearId: string }>();
-    for (const row of tourGearRows ?? []) {
-      const gearRef = Array.isArray((row as { gear?: unknown }).gear)
-        ? ((row as { gear?: Array<{ id?: string; name?: string; ownership?: string; hire_cost_amount?: number | null }> }).gear ?? [])[0]
-        : (row as { gear?: { id?: string; name?: string; ownership?: string; hire_cost_amount?: number | null } | null }).gear;
-      if (!gearRef?.id) continue;
-      const ownership = (row as { tour_ownership?: string | null }).tour_ownership ?? gearRef.ownership ?? 'owned';
-      if (ownership !== 'hired_to_client') continue;
-      const qty = Math.max(1, Number((row as { quantity?: number | null }).quantity ?? 1));
-      const unit = Number((row as { tour_hire_cost_amount?: number | null }).tour_hire_cost_amount ?? gearRef.hire_cost_amount ?? 0);
-      desired.set(gearRef.id, {
-        label: String(gearRef.name ?? 'Gear hire'),
-        qty,
-        total: unit * qty,
-        tourGearId: String((row as { id: string }).id),
-        gearId: gearRef.id,
-      });
-    }
-
-    const { data: existingDerived } = await supabase
-      .from('budget_line_items')
-      .select('id, gear_id')
-      .eq('workspace_id', profile.workspace_id)
-      .eq('tour_id', tourId)
-      .eq('category', 'prod_equipment')
-      .eq('source_entity_type', 'gear');
-
-    for (const row of existingDerived ?? []) {
-      const gearId = (row as { gear_id?: string | null }).gear_id ?? null;
-      if (!gearId || desired.has(gearId)) continue;
-      await supabase
-        .from('budget_line_items')
-        .delete()
-        .eq('id', (row as { id: string }).id)
-        .eq('workspace_id', profile.workspace_id);
-    }
-
-    for (const [gearId, d] of desired.entries()) {
-      const existing = (existingDerived ?? []).find((x) => (x as { gear_id?: string | null }).gear_id === gearId);
-      if (existing) {
-        await supabase
-          .from('budget_line_items')
-          .update({
-            label: d.label,
-            quantity: d.qty,
-            proposed_cost: d.total,
-            actual_cost: d.total,
-            gear_id: d.gearId,
-            tour_gear_id: d.tourGearId,
-            updated_at: new Date().toISOString(),
-          })
-          .eq('id', (existing as { id: string }).id)
-          .eq('workspace_id', profile.workspace_id);
-      } else {
-        const { data: maxOrder } = await supabase
-          .from('budget_line_items')
-          .select('order_index')
-          .eq('workspace_id', profile.workspace_id)
-          .eq('tour_id', tourId)
-          .eq('category', 'prod_equipment')
-          .order('order_index', { ascending: false })
-          .limit(1)
-          .maybeSingle();
-        await supabase
-          .from('budget_line_items')
-          .insert({
-            workspace_id: profile.workspace_id,
-            tour_id: tourId,
-            category: 'prod_equipment',
-            label: d.label,
-            quantity: d.qty,
-            proposed_cost: d.total,
-            actual_cost: d.total,
-            source_entity_type: 'gear',
-            source_entity_id: d.gearId,
-            gear_id: d.gearId,
-            tour_gear_id: d.tourGearId,
-            order_index: Number(maxOrder?.order_index ?? 0) + 1,
-            section: 'hire',
-            sort_order: Number(maxOrder?.order_index ?? 0) + 1,
-          });
-      }
-    }
-  }
-
-  // Budget ← Operations linking — reconcile rooming + payroll derived
-  // lines on a full (unfiltered) load, mirroring the gear pattern above.
-  if (!category) {
-    await reconcileDerivedBudgetLines(supabase, tourId, profile.workspace_id);
-  }
+  // Every automatic line (hotels, payroll, flights, gear) is refreshed by the
+  // ONE derived-line writer before reading, so this list is never stale. It
+  // used to run its own gear sync here — a second writer with its own rules
+  // (it overwrote receipt-set actuals and ignored budget locks).
+  const familyForCategory: Record<string, DerivedFamily> = {
+    hotels: 'hotel_booking',
+    crew: 'payroll',
+    per_diems: 'payroll_per_diem',
+    flights: 'flight',
+    prod_equipment: 'gear',
+  };
+  const scoped = category ? familyForCategory[category] : undefined;
+  const reconcile =
+    category && !scoped
+      ? null // a manual-only category has no automatic lines to refresh
+      : await reconcileDerivedBudgetLines(supabase, tourId, profile.workspace_id, scoped ? { families: [scoped] } : {});
 
   const { data, error } = await query;
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
-  return NextResponse.json({ line_items: data ?? [] });
+  return NextResponse.json({
+    line_items: data ?? [],
+    // Surfaced so a client can say "automatic lines couldn't refresh" instead
+    // of silently showing the last cached figures.
+    derived_refresh: reconcile && !reconcile.ok && !reconcile.permissionOnly ? { ok: false, errors: reconcile.errors } : undefined,
+  });
 }
 
 export async function POST(request: Request) {

@@ -8,6 +8,7 @@ import { NextResponse } from 'next/server';
 import { requireWrite } from '@/lib/auth/workspace-check';
 import { revalidatePath } from 'next/cache';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
+import { refreshDerivedLines } from '@/server/budget/reconcileDerivedLines';
 
 export async function POST(request: Request) {
   const supabase = await createServerSupabaseClient();
@@ -65,5 +66,6 @@ export async function POST(request: Request) {
   }
 
   revalidatePath(`/tours/${tourId}/personnel`);
+  await refreshDerivedLines(supabase, tourId, profile.workspace_id, 'payroll');
   return NextResponse.json({ deleted: deletedIds.length, deleted_ids: deletedIds });
 }

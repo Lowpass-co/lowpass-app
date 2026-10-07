@@ -4,10 +4,11 @@
    LOWPASS — usePayrollGrid (shared payroll day-status data layer)
 
    Backs the Days matrix (and feeds the Rates & totals computed columns) with
-   ONE copy of the day-status read/write. Write path UNCHANGED — same
-   POST /api/budget/payroll (per person per week, merging day_statuses) the week
-   sheet used — so the budget Salary/Per-Diem reconcile feed stays identical.
-   Optimistic per-cell override (OPS-04 feel), revert on failure.
+   ONE copy of the day-status read/write. Writes go to POST
+   /api/budget/payroll carrying ONLY the changed cells (`changes`); the server
+   merges them into the stored week atomically and refreshes the budget's
+   Salary / Per-Diem lines. Optimistic per-cell override (OPS-04 feel), reverted
+   on failure.
    ============================================ */
 
 import { useCallback, useMemo, useState } from 'react';
@@ -52,6 +53,17 @@ export interface RoutingDay {
 }
 
 type Entry = Record<string, unknown>;
+
+/** Replace a person-week entry with the server's copy — unless we already
+ *  hold a NEWER copy (replies can arrive out of order when paints overlap). */
+function keepNewest(entries: Entry[], updated: Entry): Entry[] {
+  const same = (e: Entry) => e.personnel_id === updated.personnel_id && e.week_start === updated.week_start;
+  const held = entries.find(same);
+  const heldAt = (held as { updated_at?: string } | undefined)?.updated_at ?? '';
+  const newAt = (updated as { updated_at?: string }).updated_at ?? '';
+  if (held && heldAt && newAt && heldAt > newAt) return entries;
+  return [...entries.filter((e) => !same(e)), updated];
+}
 
 export function usePayrollGrid(
   tourId: string,
@@ -99,23 +111,24 @@ export function usePayrollGrid(
       if (prev === status) return;
       setOverrides((o) => new Map(o).set(key, status));
       const weekStart = getWeekStart(date);
-      const entry = entryByPersonWeek.get(`${personnelId}:${weekStart}`);
-      const statuses = { ...((entry?.day_statuses as Record<string, string>) ?? {}), [date]: status };
       try {
+        // Send ONLY this cell. The server merges it into the stored week, so a
+        // second quick paint can't overwrite the first (it used to send the
+        // whole week from this browser's possibly-stale copy).
         const res = await fetch('/api/budget/payroll', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ tour_id: tourId, personnel_id: personnelId, week_start: weekStart, day_statuses: statuses }),
+          body: JSON.stringify({ tour_id: tourId, personnel_id: personnelId, week_start: weekStart, changes: { [date]: status } }),
         });
         if (!res.ok) throw new Error('Save failed');
-        const updated = await res.json();
-        setEntries((p) => [...p.filter((e) => !(e.personnel_id === personnelId && e.week_start === weekStart)), updated]);
+        const updated = (await res.json()) as Entry;
+        setEntries((p) => keepNewest(p, updated));
       } catch {
         setOverrides((o) => new Map(o).set(key, prev));
         showToast('Could not save day status', 'error');
       }
     },
-    [tourId, statusOf, entryByPersonWeek, showToast],
+    [tourId, statusOf, showToast],
   );
 
   /** G2-1 brush — paint a person-day with a brush type. Resolves the brush to a
@@ -164,24 +177,30 @@ export function usePayrollGrid(
         (byWeek.get(w) ?? byWeek.set(w, []).get(w)!).push(p);
       }
       for (const [weekStart, weekPairs] of byWeek) {
-        const entry = entryByPersonWeek.get(`${personnelId}:${weekStart}`);
-        const statuses = { ...((entry?.day_statuses as Record<string, string>) ?? {}) };
-        for (const { date, status } of weekPairs) statuses[date] = status;
+        const changes: Record<string, string> = {};
+        for (const { date, status } of weekPairs) changes[date] = status;
         try {
           const res = await fetch('/api/budget/payroll', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ tour_id: tourId, personnel_id: personnelId, week_start: weekStart, day_statuses: statuses }),
+            body: JSON.stringify({ tour_id: tourId, personnel_id: personnelId, week_start: weekStart, changes }),
           });
           if (!res.ok) throw new Error('Save failed');
-          const updated = await res.json();
-          setEntries((p) => [...p.filter((e) => !(e.personnel_id === personnelId && e.week_start === weekStart)), updated]);
+          const updated = (await res.json()) as Entry;
+          setEntries((p) => keepNewest(p, updated));
         } catch {
+          // Un-paint what didn't save, so the screen never shows days the
+          // database doesn't have (it used to leave them painted).
+          setOverrides((o) => {
+            const next = new Map(o);
+            for (const { date } of weekPairs) next.delete(`${personnelId}:${date}`);
+            return next;
+          });
           showToast('Could not fill some days', 'error');
         }
       }
     },
-    [tourId, entryByPersonWeek, showToast],
+    [tourId, showToast],
   );
 
   /** EFFECTIVE day counts for a person across every routing date (persisted

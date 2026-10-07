@@ -199,6 +199,24 @@ describe('derived lines — receipts are never lost', () => {
   });
 });
 
+describe('derived lines — a refused delete detaches instead', () => {
+  it('a line an approved snapshot still references is unlinked, not left erroring', async () => {
+    const db = newDb();
+    seedSummerSonic(db);
+    await reconcileDerivedBudgetLines(db.client(), TOUR, WS);
+    db.tables.set('flights', db.t('flights').filter((f) => f.id !== 'f7'));
+    db.failDeletes.set('budget_line_items', { message: 'budget version v0 is locked', code: '23514' });
+    const res = await reconcileDerivedBudgetLines(db.client(), TOUR, WS, { families: ['flight'] });
+    expect(res.ok).toBe(true);
+    const scott = db.t('budget_line_items').find((l) => String(l.label).startsWith('SCOTT VERRILL'))!;
+    expect(scott.source_entity_type).toBeNull();
+    expect(scott.flight_id).toBeNull();
+    expect(scott.proposed_cost).toBe(0);
+    expect(scott.actual_cost).toBe(0);
+    expect(sum(lines(db, 'flight'), 'proposed_cost')).toBe(7250);
+  });
+});
+
 describe('derived lines — duplicates', () => {
   it('merges a duplicate into the line with receipts, moving everything attached', async () => {
     const db = newDb();

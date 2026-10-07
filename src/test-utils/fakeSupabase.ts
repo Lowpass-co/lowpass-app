@@ -34,7 +34,10 @@ export class FakeDb {
   tables = new Map<string, Row[]>();
   failReads = new Set<string>();
   failWrites = new Map<string, PgError>();
+  failDeletes = new Map<string, PgError>();
   log: Array<{ op: string; table: string; detail?: unknown }> = [];
+  /** Called before every write — lets a test interleave a concurrent write. */
+  beforeWrite: Array<(op: string, table: string) => void> = [];
   clock = 0;
 
   constructor(public opts: FakeDbOptions = {}) {}
@@ -86,6 +89,7 @@ export class FakeDb {
     const db: FakeDb = this; // eslint-disable-line @typescript-eslint/no-this-alias -- closures below need the instance
     return {
       from: (table: string) => new Query(db, table),
+      auth: { getUser: async () => ({ data: { user: { id: 'user-1' } }, error: null }) },
       rpc: async (name: string, args: Record<string, unknown>) => {
         const h = db.opts.rpc?.[name];
         if (!h) return { data: null, error: { message: `function ${name} not found`, code: 'PGRST202' } };
@@ -207,6 +211,7 @@ class Query implements PromiseLike<Result> {
       if (db.failReads.has(this.table)) return { data: null, error: { message: `read of ${this.table} failed`, code: 'XX000' } };
       return this.shape(this.matches());
     }
+    for (const h of [...db.beforeWrite]) h(this.op, this.table);
     const wErr = db.failWrites.get(this.table);
     if (wErr) return { data: null, error: wErr };
 
@@ -249,6 +254,8 @@ class Query implements PromiseLike<Result> {
     }
 
     // delete
+    const dErr = db.failDeletes.get(this.table);
+    if (dErr) return { data: null, error: dErr };
     const hits = this.matches();
     db.deleteRows(this.table, hits);
     db.log.push({ op: 'delete', table: this.table, detail: { n: hits.length } });

@@ -111,7 +111,10 @@ export interface PlanContext {
 
 export type PlanOp =
   | { kind: 'merge'; survivorId: string; loserIds: string[] }
-  | { kind: 'delete'; id: string }
+  /** `fallback` runs when the delete is refused — a line that any approved or
+   *  superseded version's snapshot references can't be deleted (212's lock
+   *  trigger), so it is detached instead. */
+  | { kind: 'delete'; id: string; fallback: Extract<PlanOp, { kind: 'update' }> }
   | { kind: 'update'; id: string; patch: Record<string, unknown>; mirror: MirrorRow | null }
   | { kind: 'insert'; sourceId: string; row: Record<string, unknown>; mirror: MirrorRow | null };
 
@@ -247,10 +250,6 @@ export function planFamily(input: FamilyPlanInput): PlanOp[] {
   for (const l of gone) {
     const t = effectiveTxns.get(l.id);
     const hasMoneyAttached = (t?.count ?? 0) > 0 || Boolean(l.actual_cost_override);
-    if (!hasMoneyAttached && !ctx.locked) {
-      ops.push({ kind: 'delete', id: l.id });
-      continue;
-    }
     const patch: Record<string, unknown> = {
       source_entity_type: null,
       source_entity_id: null,
@@ -273,7 +272,8 @@ export function planFamily(input: FamilyPlanInput): PlanOp[] {
         currency: normCcy(l.currency),
       });
     }
-    ops.push({ kind: 'update', id: l.id, patch, mirror });
+    const detach = { kind: 'update' as const, id: l.id, patch, mirror };
+    ops.push(!hasMoneyAttached && !ctx.locked ? { kind: 'delete', id: l.id, fallback: detach } : detach);
   }
 
   // Desired lines: update the survivor, or insert.

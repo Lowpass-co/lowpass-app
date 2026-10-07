@@ -17,6 +17,7 @@ import { isMissingRosterPersonnelIdColumn } from '@/lib/personnel-schema-fallbac
 import { writeRates } from '@/server/payroll/writeRates';
 import { loadTourRateContext, rateAmountsFor } from '@/lib/payroll/loadRateLines';
 import { PERMISSIONS } from '@/types';
+import { refreshDerivedLines } from '@/server/budget/reconcileDerivedLines';
 
 const PERSON_TYPE_ORDER: Record<string, number> = {
   principal: 1,
@@ -490,5 +491,6 @@ export async function DELETE(request: Request) {
     return NextResponse.json({ error: 'Not found or could not remove' }, { status: 404 });
   }
   revalidatePath(`/tours/${removed.tour_id}/personnel`);
+  await refreshDerivedLines(supabase, removed.tour_id as string, profile.workspace_id, 'payroll');
   return new Response(null, { status: 204 });
 }

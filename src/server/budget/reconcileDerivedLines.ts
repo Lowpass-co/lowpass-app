@@ -571,8 +571,24 @@ async function execOps(
       }
     } else if (op.kind === 'delete') {
       const { error } = await supabase.from('budget_line_items').delete().eq('id', op.id).eq('workspace_id', workspaceId);
-      if (error) st.errors.push({ message: `delete ${op.id}: ${error.message}`, code: error.code });
-      else st.writes++;
+      if (!error) {
+        st.writes++;
+        continue;
+      }
+      // Refused (an approved/superseded snapshot references it): detach.
+      const { error: e2 } = await supabase
+        .from('budget_line_items')
+        .update({ ...op.fallback.patch, updated_at: now() })
+        .eq('id', op.id)
+        .eq('workspace_id', workspaceId);
+      if (e2) {
+        st.errors.push({ message: `remove ${op.id}: ${error.message}; detach: ${e2.message}`, code: e2.code });
+        continue;
+      }
+      st.writes++;
+      if (op.fallback.mirror && ctx.draftVersionId) {
+        await writeMirror(supabase, ctx.draftVersionId, workspaceId, op.id, op.fallback.mirror, st);
+      }
     } else if (op.kind === 'update') {
       if (Object.keys(op.patch).length > 0) {
         const { error } = await supabase
@@ -728,6 +744,15 @@ export async function reconcileDerivedBudgetLines(
 }
 
 /* ---- Writer-side hook -------------------------------------------- */
+
+/** The tour a room belongs to (rooms → hotels.tour_id), for writers that only
+ *  know a room or an assignment. Null when it can't be resolved. */
+export async function tourIdForRoom(supabase: SupabaseClient, roomId: string | null | undefined): Promise<string | null> {
+  if (!roomId) return null;
+  const { data } = await supabase.from('rooms').select('hotel_id, hotels(tour_id)').eq('id', roomId).maybeSingle();
+  const h = (data as { hotels?: { tour_id?: string } | Array<{ tour_id?: string }> | null } | null)?.hotels;
+  return (Array.isArray(h) ? h[0]?.tour_id : h?.tour_id) ?? null;
+}
 
 /** Which families a write to each source table can change. */
 export const FAMILIES_FOR_SOURCE = {

@@ -14,6 +14,7 @@ import { NextResponse } from 'next/server';
 import { requireWrite } from '@/lib/auth/workspace-check';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { isPayrollFinalized, PAYROLL_FINALIZED_ERROR } from '@/lib/payroll/finalize';
+import { refreshDerivedLines } from '@/server/budget/reconcileDerivedLines';
 
 export async function PATCH(request: Request) {
   const supabase = await createServerSupabaseClient();
@@ -76,5 +77,6 @@ export async function PATCH(request: Request) {
     .select('id, personnel_rate_id, rate_type_id, amount')
     .single();
   if (error || !data) return NextResponse.json({ error: error?.message ?? 'Save failed' }, { status: 500 });
+  await refreshDerivedLines(supabase, pr.tour_id, wid, 'payroll');
   return NextResponse.json(data);
 }

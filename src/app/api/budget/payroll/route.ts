@@ -3,8 +3,12 @@
 
    GET: Payroll entries for a tour (?tour_id=uuid, ?week_start= optional).
         Joined with personnel_rates. Order week_start, personnel order_index.
-   POST: Create/update payroll entry (upsert personnel_id + week_start).
-        Persists ONE thing: `day_statuses`, the record of what was painted.
+   POST: Merge a paint into a person's week (personnel_id + week_start).
+        Body carries `changes` — ONLY the cells that changed (null = clear) —
+        and the server merges them atomically (migration 269's
+        payroll_merge_day_statuses, else a compare-and-swap retry). The old
+        body replaced the whole week with the browser's copy, so two quick
+        paints in one week lost the first (money audit #1, Oct 2026).
 
    ─────────────────────────────────────────────────────────────────────
    THIS ROUTE NO LONGER COMPUTES MONEY. 2026-08-19 (M-1b, formula 3).
@@ -36,10 +40,9 @@
 import { NextResponse } from 'next/server';
 import { requireWrite } from '@/lib/auth/workspace-check';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
-import { type PayStatus } from '@/lib/payroll/effectiveDayType';
 import { isPayrollFinalized, PAYROLL_FINALIZED_ERROR } from '@/lib/payroll/finalize';
-
-type DayStatus = PayStatus;
+import { mergeDayStatuses, parseDayStatusChanges, type DayStatusChanges } from '@/lib/payroll/mergeDayStatuses';
+import { refreshDerivedLines } from '@/server/budget/reconcileDerivedLines';
 
 export async function GET(request: Request) {
   const supabase = await createServerSupabaseClient();
@@ -139,8 +142,10 @@ export async function POST(request: Request) {
     personnel_id: string;
     person_id?: string | null;
     week_start: string;
-    day_statuses?: Record<string, DayStatus>;
-    advance_fee?: number;
+    /** The cells this paint changed: date → status, or null to clear. */
+    changes?: unknown;
+    /** LEGACY — a whole-week map from an old client. Merged, never replaced. */
+    day_statuses?: unknown;
     notes?: string | null;
   };
   try {
@@ -155,6 +160,18 @@ export async function POST(request: Request) {
       { error: 'tour_id, personnel_id, and week_start are required' },
       { status: 400 }
     );
+  }
+
+  const changes = parseDayStatusChanges(body.changes ?? body.day_statuses ?? {});
+  if (!changes) {
+    return NextResponse.json({ error: 'changes must map YYYY-MM-DD dates to a status or null' }, { status: 400 });
+  }
+  // Every changed date must sit inside this row's week.
+  const weekEnd = new Date(`${week_start}T12:00:00Z`);
+  weekEnd.setUTCDate(weekEnd.getUTCDate() + 6);
+  const lastDay = weekEnd.toISOString().slice(0, 10);
+  if (Object.keys(changes).some((d) => d < week_start || d > lastDay)) {
+    return NextResponse.json({ error: 'a changed date falls outside week_start’s week' }, { status: 400 });
   }
 
   const { data: tour } = await supabase
@@ -185,31 +202,107 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Personnel rate not found' }, { status: 404 });
   }
 
-  const dayStatuses = (body.day_statuses ?? {}) as Record<string, DayStatus>;
-
-  // The paint record, and nothing else. `total_fee`, `total_per_diem` and
-  // `advance_fee` are deliberately ABSENT from this payload — see the header.
-  // Supabase's upsert only writes the columns it is given, so an existing row's
-  // stale values are left alone rather than being overwritten with a wrong one.
-  const payload = {
-    tour_id,
-    workspace_id: profile.workspace_id,
-    personnel_id,
-    person_id: body.person_id ?? null,
-    week_start,
-    day_statuses: dayStatuses,
-    notes: body.notes ?? null,
-    updated_at: new Date().toISOString(),
-  };
-
-  const { data, error } = await supabase
-    .from('payroll_entries')
-    .upsert(payload, { onConflict: 'personnel_id,week_start' })
-    .select()
-    .single();
-
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  const saved = await mergePaint(supabase, {
+    tourId: tour_id,
+    workspaceId: profile.workspace_id,
+    personnelId: personnel_id,
+    personId: body.person_id ?? null,
+    weekStart: week_start,
+    changes,
+    notes: body.notes,
+  });
+  if ('error' in saved) {
+    return NextResponse.json({ error: saved.error }, { status: saved.status });
   }
-  return NextResponse.json(data);
+
+  // Money repair — the paint is a salary / per-diem change. Refresh the
+  // budget's payroll lines now, not whenever someone next opens Budget.
+  await refreshDerivedLines(supabase, tour_id, profile.workspace_id, 'payroll');
+  return NextResponse.json(saved.row);
+}
+
+/**
+ * Merge a paint into the stored week ATOMICALLY.
+ *
+ * Preferred path: the `payroll_merge_day_statuses` function (migration 269) —
+ * one INSERT … ON CONFLICT DO UPDATE that merges under the row lock.
+ *
+ * Fallback (269 not pasted yet): read → merge → write-if-unchanged, retried.
+ * The write only lands if `updated_at` is still what we read, so a paint that
+ * raced in between is merged on the next attempt instead of overwritten.
+ *
+ * Notes are only written when the caller sends them — a paint used to null the
+ * week's notes every time.
+ */
+async function mergePaint(
+  supabase: Awaited<ReturnType<typeof createServerSupabaseClient>>,
+  a: {
+    tourId: string;
+    workspaceId: string;
+    personnelId: string;
+    personId: string | null;
+    weekStart: string;
+    changes: DayStatusChanges;
+    notes: string | null | undefined;
+  },
+): Promise<{ row: unknown } | { error: string; status: number }> {
+  const rpc = await supabase.rpc('payroll_merge_day_statuses', {
+    p_tour_id: a.tourId,
+    p_personnel_id: a.personnelId,
+    p_week_start: a.weekStart,
+    p_changes: a.changes,
+    p_person_id: a.personId,
+    p_set_notes: a.notes !== undefined,
+    p_notes: a.notes ?? null,
+  });
+  if (!rpc.error) return { row: rpc.data };
+  const missingFn = rpc.error.code === 'PGRST202' || rpc.error.code === '42883';
+  if (!missingFn) return { error: rpc.error.message, status: 500 };
+
+  for (let attempt = 0; attempt < 6; attempt++) {
+    const { data: cur, error: readErr } = await supabase
+      .from('payroll_entries')
+      .select('id, day_statuses, updated_at')
+      .eq('personnel_id', a.personnelId)
+      .eq('week_start', a.weekStart)
+      .maybeSingle();
+    if (readErr) return { error: readErr.message, status: 500 };
+
+    if (!cur) {
+      const { data, error } = await supabase
+        .from('payroll_entries')
+        .insert({
+          tour_id: a.tourId,
+          workspace_id: a.workspaceId,
+          personnel_id: a.personnelId,
+          person_id: a.personId,
+          week_start: a.weekStart,
+          day_statuses: mergeDayStatuses({}, a.changes),
+          ...(a.notes !== undefined ? { notes: a.notes } : {}),
+        })
+        .select()
+        .single();
+      if (error?.code === '23505') continue; // another paint created the week first
+      if (error) return { error: error.message, status: 500 };
+      return { row: data };
+    }
+
+    const row = cur as { id: string; day_statuses: Record<string, string> | null; updated_at: string };
+    const { data, error } = await supabase
+      .from('payroll_entries')
+      .update({
+        day_statuses: mergeDayStatuses(row.day_statuses, a.changes),
+        updated_at: new Date().toISOString(),
+        ...(a.personId ? { person_id: a.personId } : {}),
+        ...(a.notes !== undefined ? { notes: a.notes } : {}),
+      })
+      .eq('id', row.id)
+      .eq('updated_at', row.updated_at)
+      .select()
+      .maybeSingle();
+    if (error) return { error: error.message, status: 500 };
+    if (data) return { row: data };
+    // Someone else wrote this week between our read and our write — go again.
+  }
+  return { error: 'The week kept changing while saving — please retry', status: 409 };
 }
