@@ -28,7 +28,8 @@
           whose baseline is frozen) is DETACHED: it becomes an ordinary manual
           line, editable and deletable by hand, with its spend intact.
       Previously the line was deleted — and transactions cascade on delete, so
-      the receipts went with it.
+      the receipts went with it. Notes, attachments (an invoice PDF) and
+      linked receipt documents count as "attached" too.
 
    4. AN APPROVED BUDGET'S BASELINE IS FROZEN. On a locked version only the
       actual moves; proposed, label, section and currency are never written.
@@ -133,6 +134,9 @@ export interface FamilyPlanInput {
   existing: ExistingLine[];
   txns: Map<string, TxnAggregate>;
   snapshots: Map<string, DraftSnapshot>;
+  /** Lines with notes, attachments or a linked receipt document. Deleting
+   *  such a line would cascade those away, so it is detached instead. */
+  attached?: Set<string>;
   ctx: PlanContext;
 }
 
@@ -202,6 +206,7 @@ function mirrorIfChanged(
 /** Plan one family. Pure. */
 export function planFamily(input: FamilyPlanInput): PlanOp[] {
   const { family, desired, existing, txns, snapshots, ctx } = input;
+  const attached = input.attached ?? new Set<string>();
   const ops: PlanOp[] = [];
 
   // Group the cache by source id. Lines with no source id are orphans.
@@ -249,7 +254,8 @@ export function planFamily(input: FamilyPlanInput): PlanOp[] {
   ];
   for (const l of gone) {
     const t = effectiveTxns.get(l.id);
-    const hasMoneyAttached = (t?.count ?? 0) > 0 || Boolean(l.actual_cost_override);
+    const hasMoneyAttached =
+      (t?.count ?? 0) > 0 || Boolean(l.actual_cost_override) || attached.has(l.id);
     const patch: Record<string, unknown> = {
       source_entity_type: null,
       source_entity_id: null,

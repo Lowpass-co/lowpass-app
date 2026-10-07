@@ -199,6 +199,22 @@ describe('derived lines — receipts are never lost', () => {
   });
 });
 
+describe('derived lines — notes and documents count as attached', () => {
+  it('a vanished source whose line has an attached invoice is detached, not deleted', async () => {
+    const db = newDb();
+    seedSummerSonic(db);
+    await reconcileDerivedBudgetLines(db.client(), TOUR, WS);
+    const keys = lines(db, 'payroll').find((l) => l.source_entity_id === 'p-ke')!;
+    db.seed('budget_line_item_attachments', [{ line_item_id: keys.id, path: 'invoice-keys.pdf' }]);
+    db.tables.set('personnel_rates', db.t('personnel_rates').filter((p) => p.id !== 'p-ke'));
+    await reconcileDerivedBudgetLines(db.client(), TOUR, WS, { families: ['payroll'] });
+    const kept = db.t('budget_line_items').find((l) => l.id === keys.id);
+    expect(kept).toBeDefined();
+    expect(kept!.source_entity_type).toBeNull();
+    expect(kept!.proposed_cost).toBe(0);
+  });
+});
+
 describe('derived lines — a refused delete detaches instead', () => {
   it('a line an approved snapshot still references is unlinked, not left erroring', async () => {
     const db = newDb();

@@ -397,6 +397,33 @@ async function loadExisting(
   return out;
 }
 
+/** Lines that carry notes, attachments or a linked receipt document. */
+async function loadAttached(supabase: SupabaseClient, lineIds: string[]): Promise<Set<string>> {
+  const out = new Set<string>();
+  if (lineIds.length === 0) return out;
+  const sources: Array<[string, string]> = [
+    ['budget_line_item_notes', 'line_item_id'],
+    ['budget_line_item_attachments', 'line_item_id'],
+    ['expense_receipts', 'linked_line_item_id'],
+  ];
+  for (const [table, col] of sources) {
+    for (let i = 0; i < lineIds.length; i += 200) {
+      const res = await supabase.from(table).select(col).in(col, lineIds.slice(i, i + 200));
+      if (res.error) {
+        // A table this database doesn't have holds nothing; anything else is a
+        // real failure and must stop the family (we can't prove a delete safe).
+        if (res.error.code === '42P01' || res.error.code === 'PGRST205') break;
+        throw new SourceReadError(table, res.error);
+      }
+      for (const r of (res.data ?? []) as unknown as Array<Record<string, string | null>>) {
+        const id = r[col];
+        if (id) out.add(id);
+      }
+    }
+  }
+  return out;
+}
+
 async function loadSnapshots(
   supabase: SupabaseClient,
   versionId: string | null,
@@ -662,11 +689,12 @@ export async function reconcileDerivedBudgetLines(
       for (const d of desired) {
         d.sectionId = managesSection ? sectionId : (bySource.get(d.sourceId)?.section_id ?? sectionId);
       }
-      const [txns, snapshots] = await Promise.all([
+      const [txns, snapshots, attached] = await Promise.all([
         loadTxnAggregates(supabase, existing, money),
         loadSnapshots(supabase, ctx.draftVersionId, existing.map((l) => l.id)),
+        loadAttached(supabase, existing.map((l) => l.id)),
       ]);
-      const ops = planFamily({ family, desired, existing, txns, snapshots, ctx });
+      const ops = planFamily({ family, desired, existing, txns, snapshots, attached, ctx });
       const before = st.errors.length;
       await execOps(supabase, tourId, workspaceId, family, ops, ctx, st);
       if (st.errors.length === before) done.push(family);
