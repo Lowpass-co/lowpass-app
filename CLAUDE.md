@@ -29,7 +29,7 @@ src/
     document/   ← <DocumentCanvas> (UX07)
     entity/     ← <EntityChip>, EntityRoutingProvider, slide-over hosts (UX08)
     command-palette/ ← ⌘K palette (UX08b)
-    _legacy/    ← retired pre-overhaul code; do NOT import from here (rule has known leaky exceptions in budget — see §"_legacy" below)
+    (no _legacy/ — retired code is deleted, not parked; see §"_legacy — gone")
   contexts/
     ProductContext.tsx ← which product silo the URL is inside (Phase 1)
     ArtistTourContext.tsx ← active artist+tour state
@@ -256,13 +256,33 @@ When introducing a new slide-over with a destructive path, opt for hybrid rather
 
 **Sensitive-grants policy** (`MemberManageSlideOver`): the visible warning panel + Cancel-restores-snapshot replaces the Sprint 9 confirm-on-Save modal. Future slide-overs that toggle visible-warning state should follow the same pattern — show the consequence inline the moment it's triggered, and rely on Cancel for the safety gate.
 
-### `_legacy/` directories — leaky on purpose
+### `_legacy/` — gone
 
-One `_legacy/` tree remains (`src/components/_legacy/sidebar/` was deleted in P8 hygiene):
+`src/_legacy/budget/` was deleted in the money repair (Oct 2026), along with
+every other unreachable budget surface (`spreadsheet-view/*Grid`,
+`tour-overview/`, `tour-wide/`, `summary/`, the pre-Grid budget components,
+`commission-context`). Each was found by an import-graph walk from the app's
+entry points, not by name — and each carried its own copy of the money
+formula, which is how the app came to have four commission formulas. Do not
+recreate a `_legacy/` tree: delete dead code instead of parking it.
 
-- `src/_legacy/budget/` — leaky. Pre-budget-redesign tab system. Active code in `src/components/budget/` and `src/lib/shell/rails/` still imports `BUDGET_TABS`, `pushRecentTourId`, and `BudgetDetailShell` from here, and `budget/[tourId]/settlement/page.tsx:18` imports `SettlementTab` from `@/_legacy/budget/SettlementTab`. The general "do not import from `_legacy/`" rule is violated by load-bearing code. A follow-up pass should retire these and delete what survives.
+### Money — one writer, one formula (money repair, Oct 2026)
 
-Until that follow-up lands, the rule is: don't add NEW imports from `_legacy/`. The existing four (`BUDGET_TABS`, `pushRecentTourId`, `BudgetDetailShell`, `SettlementTab`) are documented exceptions, not licence to add more.
+- **Automatic budget lines** (hotels, salaries, per diems, flights, gear) are
+  written ONLY by `reconcileDerivedBudgetLines`
+  (`src/server/budget/reconcileDerivedLines.ts`), whose rules live in the pure
+  planner `src/lib/budget/derivedPlan.ts`. Any route that writes a source table
+  calls `refreshDerivedLines(...)` (or is wrapped in `withDerivedRefresh`)
+  after it succeeds. Never write a derived line anywhere else.
+- **The P&L** is `computeBudgetPnl`. Server surfaces get it through
+  `loadTourPnl` (`src/server/budget/loadTourPnl.ts`). Never re-derive income,
+  commissions or overheads in a route.
+- **Transaction sums** are converted into the line's currency
+  (`src/lib/budget/moneyContext.ts`). Never `reduce` raw amounts across lines
+  or transactions that may differ in currency.
+- **Payroll paints** send only the changed cells (`changes`); the server merges
+  them (`payroll_merge_day_statuses`, migration 269).
+- Tests for all of the above run against `src/test-utils/fakeSupabase.ts`.
 
 ### Auth + RLS
 

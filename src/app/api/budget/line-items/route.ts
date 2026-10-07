@@ -245,10 +245,13 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Insert returned no row' }, { status: 500 });
   }
   // Snapshot the new line's proposed into the active draft (canonical source).
-  await writeProposedToActiveDraft(supabase, {
+  const mirror = await writeProposedToActiveDraft(supabase, {
     tourId: tour_id, workspaceId: profile.workspace_id,
     lineItemId: (created as { id: string }).id, proposedCost: Number(body.proposed_cost) || 0,
   });
+  if (mirror.error) {
+    return NextResponse.json({ error: `Line added, but its budgeted figure didn't save: ${mirror.error}` }, { status: 500 });
+  }
   return NextResponse.json(created);
 }
 
@@ -468,10 +471,13 @@ export async function PATCH(request: Request) {
   if (updates.proposed_cost !== undefined) {
     const r = data as { tour_id?: string; proposed_cost?: number };
     if (r.tour_id) {
-      await writeProposedToActiveDraft(supabase, {
+      const mirror = await writeProposedToActiveDraft(supabase, {
         tourId: r.tour_id, workspaceId: profile.workspace_id,
         lineItemId: id, proposedCost: Number(r.proposed_cost) || 0,
       });
+      if (mirror.error) {
+        return NextResponse.json({ error: `The budgeted figure didn't save: ${mirror.error}` }, { status: 500 });
+      }
     }
   }
 

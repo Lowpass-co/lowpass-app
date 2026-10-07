@@ -38,7 +38,6 @@
   ],
   "exclude": [
     "node_modules",
-    "src/_legacy",
     "scripts",
     "**/*.test.ts",
     "**/*.harness.ts",
