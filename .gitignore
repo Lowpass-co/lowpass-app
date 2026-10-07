@@ -49,3 +49,5 @@ tsconfig.tsbuildinfo
 
 # session handovers / local .docx scratch
 *.docx
+# local Supabase CLI state (never commit)
+supabase/
