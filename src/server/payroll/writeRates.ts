@@ -27,6 +27,7 @@
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { DEFAULT_RATE_TYPE_IDS } from '@/lib/payroll/rateLines';
+import { refreshDerivedLines } from '@/server/budget/reconcileDerivedLines';
 
 const num = (v: unknown): number => Number(v) || 0;
 
@@ -175,5 +176,7 @@ export async function writeRates(
     if (lineErr) return { card, error: `Rates saved but rate lines failed: ${lineErr.message}` };
   }
 
+  // Money repair — a rate change is a salary / per-diem change in the budget.
+  await refreshDerivedLines(supabase, resolvedTourId, workspaceId, 'payroll');
   return { card };
 }

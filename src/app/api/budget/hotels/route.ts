@@ -5,6 +5,12 @@
 import { NextResponse } from 'next/server';
 import { requireWrite } from '@/lib/auth/workspace-check';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
+import {
+  computeHotelTotals,
+  loadTourMoneyContext,
+  reconcileDerivedBudgetLines,
+  refreshDerivedLines,
+} from '@/server/budget/reconcileDerivedLines';
 
 export async function GET(request: Request) {
   const supabase = await createServerSupabaseClient();
@@ -130,106 +136,46 @@ export async function GET(request: Request) {
     };
   });
 
-  // Ensure each hotel has a linked budget_line_item for the detail pop-out
-  for (const h of hotels) {
-    const row = h as { id: string; line_item_id?: string | null; hotel_name: string; tour_id: string };
-    if (row.line_item_id) continue;
-    const { data: existing } = await supabase
-      .from('budget_line_items')
-      .select('id')
-      .eq('workspace_id', profile.workspace_id)
-      .eq('tour_id', tourId)
-      .eq('category', 'hotels')
-      .eq('hotel_id', row.id)
-      .maybeSingle();
-    if (existing?.id) {
-      row.line_item_id = existing.id;
-      continue;
-    }
-    const { data: lineItem, error: liErr } = await supabase
-      .from('budget_line_items')
-      .insert({
-        tour_id: tourId,
-        workspace_id: profile.workspace_id,
-        category: 'hotels',
-        label: String(row.hotel_name ?? '').trim(),
-        proposed_cost: 0,
-        actual_cost: 0,
-        source_entity_type: 'hotel_booking',
-        source_entity_id: row.id,
-        hotel_id: row.id,
-      })
-      .select('id')
-      .single();
-    if (!liErr && lineItem?.id) {
-      await supabase
-        .from('budget_line_items')
-        .update({ hotel_id: row.id })
-        .eq('id', lineItem.id)
-        .eq('workspace_id', profile.workspace_id);
-      row.line_item_id = lineItem.id;
-    }
-  }
+  // Money repair — this GET used to WRITE: it created placeholder lines and
+  // rewrote every hotel line's proposed AND actual with its own formula
+  // (nights × rate PER OCCUPANT, so a shared room cost double), fighting the
+  // budget's reconcile (per ROOM) on every load and erasing receipt actuals.
+  // Now the one derived-line writer refreshes the hotel lines, and this route
+  // only reads them back alongside the same per-room total it used.
+  await reconcileDerivedBudgetLines(supabase, tourId, profile.workspace_id, { families: ['hotel_booking'] });
+  const money = await loadTourMoneyContext(supabase, tourId, profile.workspace_id).catch(() => null);
+  const totals = money
+    ? (await computeHotelTotals(supabase, tourId, profile.workspace_id, money).catch(() => null))?.totals ?? null
+    : null;
 
-  const lineIds = [
-    ...new Set(
-      hotels
-        .map((x) => (x as { line_item_id?: string | null }).line_item_id)
-        .filter((id): id is string => Boolean(id))
-    ),
-  ];
-  const lineMetaById = new Map<string, { proposed_cost: number; actual_cost: number; status: string }>();
-  if (lineIds.length > 0) {
-    const { data: lineRows } = await supabase
-      .from('budget_line_items')
-      .select('id, proposed_cost, actual_cost, status')
-      .eq('workspace_id', profile.workspace_id)
-      .in('id', lineIds);
-    for (const row of lineRows ?? []) {
-      lineMetaById.set(String((row as { id: string }).id), {
-        proposed_cost: Number((row as { proposed_cost?: number | null }).proposed_cost ?? 0),
-        actual_cost: Number((row as { actual_cost?: number | null }).actual_cost ?? 0),
-        status: String((row as { status?: string | null }).status ?? 'draft'),
-      });
-    }
-  }
+  const hotelIds = hotels.map((h) => h.id);
+  const { data: lineRows } = hotelIds.length
+    ? await supabase
+        .from('budget_line_items')
+        .select('id, source_entity_id, proposed_cost, actual_cost, status')
+        .eq('workspace_id', profile.workspace_id)
+        .eq('tour_id', tourId)
+        .eq('source_entity_type', 'hotel_booking')
+        .in('source_entity_id', hotelIds)
+    : { data: [] as Array<{ id: string; source_entity_id: string; proposed_cost: number | null; actual_cost: number | null; status: string | null }> };
+  const lineByHotel = new Map(
+    (lineRows ?? []).map((r) => [String((r as { source_entity_id: string }).source_entity_id), r as {
+      id: string; proposed_cost: number | null; actual_cost: number | null; status: string | null;
+    }]),
+  );
 
   const hotelsOut = hotels.map((h) => {
-    const liId = (h as { line_item_id?: string | null }).line_item_id;
-    const meta = liId ? lineMetaById.get(liId) : undefined;
-    const derivedCost = (h.room_assignments ?? []).reduce(
-      (sum: number, a: { nights?: number; rate_per_night?: number }) =>
-        sum + Number(a.nights ?? 0) * Number(a.rate_per_night ?? 0),
-      0
-    );
+    const line = lineByHotel.get(h.id);
+    const derivedCost = totals?.get(h.id)?.total ?? 0;
     return {
       ...h,
-      proposed_cost: meta?.proposed_cost ?? derivedCost,
-      actual_cost: meta?.actual_cost ?? derivedCost,
+      line_item_id: line?.id ?? null,
+      proposed_cost: line ? Number(line.proposed_cost ?? 0) : derivedCost,
+      actual_cost: line ? Number(line.actual_cost ?? 0) : derivedCost,
       derived_cost: derivedCost,
-      status: meta?.status ?? 'draft',
+      status: line?.status ?? 'draft',
     };
   });
-
-  for (const h of hotelsOut) {
-    if (!(h as { line_item_id?: string | null }).line_item_id) continue;
-    const id = (h as { line_item_id: string }).line_item_id;
-    const target = Number((h as { derived_cost?: number }).derived_cost ?? 0);
-    const current = lineMetaById.get(id);
-    if (!current) continue;
-    if (Number(current.proposed_cost) === target && Number(current.actual_cost) === target) continue;
-    await supabase
-      .from('budget_line_items')
-      .update({
-        proposed_cost: target,
-        actual_cost: target,
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', id)
-      .eq('workspace_id', profile.workspace_id);
-    (h as { proposed_cost: number; actual_cost: number }).proposed_cost = target;
-    (h as { proposed_cost: number; actual_cost: number }).actual_cost = target;
-  }
 
   return NextResponse.json({ hotels: hotelsOut });
 }
@@ -310,25 +256,18 @@ export async function POST(request: Request) {
 
   const booking = created as { id: string; line_item_id?: string | null };
 
-  const { data: lineItem, error: liError } = await supabase
+  // The hotel's budget line is created by the one derived-line writer (it used
+  // to be inserted here too — a second writer, and a duplicate-line race).
+  await refreshDerivedLines(supabase, tour_id, profile.workspace_id, 'rooming');
+  const { data: line } = await supabase
     .from('budget_line_items')
-    .insert({
-      tour_id,
-      workspace_id: profile.workspace_id,
-      category: 'hotels',
-      label: nameForRow,
-      proposed_cost: 0,
-      actual_cost: 0,
-      source_entity_type: 'hotel_booking',
-      source_entity_id: booking.id,
-      hotel_id: booking.id,
-    })
     .select('id')
-    .single();
-
-  if (!liError && lineItem) {
-    booking.line_item_id = lineItem.id;
-  }
+    .eq('workspace_id', profile.workspace_id)
+    .eq('tour_id', tour_id)
+    .eq('source_entity_type', 'hotel_booking')
+    .eq('source_entity_id', booking.id)
+    .maybeSingle();
+  booking.line_item_id = (line?.id as string | undefined) ?? null;
 
   return NextResponse.json(booking);
 }
@@ -396,22 +335,8 @@ export async function PATCH(request: Request) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  if (updates.hotel_name !== undefined) {
-    const { data: line } = await supabase
-      .from('budget_line_items')
-      .select('id')
-      .eq('workspace_id', profile.workspace_id)
-      .eq('hotel_id', id)
-      .maybeSingle();
-    const label = String((data as { name?: string | null }).name ?? '').trim();
-    if (line?.id) {
-      await supabase
-        .from('budget_line_items')
-        .update({ label, updated_at: new Date().toISOString() })
-        .eq('id', line.id)
-        .eq('workspace_id', profile.workspace_id);
-    }
-  }
+  // Name / city / check-in feed the budget line's label — refresh it.
+  await refreshDerivedLines(supabase, (data as { tour_id?: string } | null)?.tour_id, profile.workspace_id, 'rooming');
 
   return NextResponse.json({
     ...(data ?? {}),
@@ -452,21 +377,22 @@ export async function DELETE(request: Request) {
     return NextResponse.json({ error: 'id is required' }, { status: 400 });
   }
 
-  const { error } = await supabase
+  const { data: gone, error } = await supabase
     .from('hotels')
     .delete()
     .eq('id', body.id)
-    .eq('workspace_id', profile.workspace_id);
+    .eq('workspace_id', profile.workspace_id)
+    .select('tour_id');
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  await supabase
-    .from('budget_line_items')
-    .delete()
-    .eq('workspace_id', profile.workspace_id)
-    .eq('hotel_id', body.id);
+  // The hotel's budget line follows the shared rule: removed if nothing is
+  // attached, otherwise kept as a manual line with its receipts. (This used to
+  // delete it outright — taking any receipts' transactions with it.)
+  const goneTour = (gone as Array<{ tour_id?: string }> | null)?.[0]?.tour_id;
+  await refreshDerivedLines(supabase, goneTour, profile.workspace_id, 'rooming');
 
   return new Response(null, { status: 204 });
 }

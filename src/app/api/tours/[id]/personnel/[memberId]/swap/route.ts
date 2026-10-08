@@ -25,10 +25,11 @@ import {
   fetchActiveGrants,
   canAccess,
 } from '@/lib/permissions/server';
+import { tourFromParams, withDerivedRefresh } from '@/server/budget/withDerivedRefresh';
 
 export const dynamic = 'force-dynamic';
 
-export async function POST(
+async function postHandler(
   request: Request,
   { params }: { params: Promise<{ id: string; memberId: string }> },
 ) {
@@ -161,3 +162,7 @@ export async function POST(
 
   return NextResponse.json({ ok: true });
 }
+
+// Money repair — roster and routing changes move salaries and per diems, so the
+// budget's payroll lines are refreshed after a successful write.
+export const POST = withDerivedRefresh(postHandler, 'payroll', tourFromParams);

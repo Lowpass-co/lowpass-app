@@ -12,6 +12,7 @@
 import { NextResponse } from 'next/server';
 import { requireWrite } from '@/lib/auth/workspace-check';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
+import { refreshDerivedLines } from '@/server/budget/reconcileDerivedLines';
 
 export async function POST(request: Request) {
   const supabase = await createServerSupabaseClient();
@@ -111,6 +112,7 @@ export async function POST(request: Request) {
       },
       { onConflict: 'tour_id,gear_id' },
     );
+    await refreshDerivedLines(supabase, tourId, profile.workspace_id, 'gear');
   }
 
   // Return the Gear row (with tour_gear) shaped like /api/gear/[id].

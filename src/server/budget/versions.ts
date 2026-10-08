@@ -176,14 +176,33 @@ export async function resolveLockState(
 export async function writeProposedToActiveDraft(
   supabase: SupabaseClient,
   params: { tourId: string; workspaceId: string; lineItemId: string; proposedCost: number },
-): Promise<void> {
-  const v = await resolveActiveVersion(supabase, params.tourId, params.workspaceId);
-  if (!v || v.status !== 'draft') return;
+): Promise<{ error: string | null }> {
+  // Money repair — this used to log and carry on. The snapshot is what every
+  // screen READS as proposed, so a failed mirror meant "saved" on the wire and
+  // the old figure on screen, with nothing telling anyone. It now reports.
+  const { data: v, error: vErr } = await supabase
+    .from('budget_versions')
+    .select('id, status')
+    .eq('tour_id', params.tourId)
+    .eq('workspace_id', params.workspaceId)
+    .not('status', 'in', '(superseded,rolled_back)')
+    .order('version_number', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (vErr) {
+    logServerError('writeProposedToActiveDraft: version', vErr, { lineItemId: params.lineItemId });
+    return { error: vErr.message };
+  }
+  if (!v || (v as { status: string }).status !== 'draft') return { error: null };
   const { error } = await supabase
     .from('budget_version_lines')
     .upsert(
-      { version_id: v.id, line_item_id: params.lineItemId, workspace_id: params.workspaceId, proposed_cost: params.proposedCost },
+      { version_id: (v as { id: string }).id, line_item_id: params.lineItemId, workspace_id: params.workspaceId, proposed_cost: params.proposedCost },
       { onConflict: 'version_id,line_item_id' },
     );
-  if (error) logServerError('writeProposedToActiveDraft failed', error, { lineItemId: params.lineItemId });
+  if (error) {
+    logServerError('writeProposedToActiveDraft failed', error, { lineItemId: params.lineItemId });
+    return { error: error.message };
+  }
+  return { error: null };
 }

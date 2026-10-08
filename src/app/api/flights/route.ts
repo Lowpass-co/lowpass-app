@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { requireWrite } from '@/lib/auth/workspace-check';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
+import { refreshDerivedLines } from '@/server/budget/reconcileDerivedLines';
 import { jsonError } from '@/lib/http/errors';
 
 export async function GET(request: Request) {
@@ -78,5 +79,6 @@ export async function POST(request: Request) {
     .single();
 
   if (error) return jsonError('flights.create', error);
+  await refreshDerivedLines(supabase, data?.tour_id as string | undefined, profile.workspace_id, 'flights');
   return NextResponse.json(data);
 }

@@ -8,6 +8,7 @@
 import { NextResponse } from 'next/server';
 import { requireWrite } from '@/lib/auth/workspace-check';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
+import { filePhoneExpense, type PhoneExpense } from '@/server/budget/fileReceipt';
 
 const BUCKET = 'receipts';
 const MAX_BYTES = 10 * 1024 * 1024;
@@ -56,7 +57,11 @@ export async function GET(request: Request) {
     .limit(limit);
 
   if (q.length > 0) {
-    query = query.or(`category.ilike.%${q}%,description.ilike.%${q}%`);
+    // Strip the characters that break out of PostgREST's .or() grammar
+    // (commas, parens) and escape ILIKE wildcards — the raw value was
+    // interpolated straight into the filter string.
+    const term = q.replace(/[(),]/g, ' ').trim().replace(/[%_\\]/g, (m) => `\\${m}`);
+    if (term) query = query.or(`category.ilike.%${term}%,description.ilike.%${term}%`);
   }
 
   const { data: rows, error } = await query;
@@ -219,11 +224,17 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: insertErr.message }, { status: 500 });
   }
 
+  // Money audit #8 — file it into the tour's Receipts bank too. Phone receipts
+  // used to land ONLY in `expenses`, which no Budget screen reads, so they
+  // never appeared in the budget. Never fails the capture: the expense is saved.
+  const bankReceiptId = await filePhoneExpense(supabase, inserted as PhoneExpense, { bytes: buffer, contentType });
+
   let receipt_signed_url: string | null = null;
   const { data: signed } = await supabase.storage.from(BUCKET).createSignedUrl(storagePath, 3600);
   receipt_signed_url = signed?.signedUrl ?? null;
 
   return NextResponse.json({
     expense: { ...inserted, receipt_signed_url },
+    bank_receipt_id: bankReceiptId,
   });
 }

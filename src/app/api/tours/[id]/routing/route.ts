@@ -18,6 +18,7 @@ import {
   freezePassedVenues,
   type RoutingVenueSource,
 } from '@/lib/venues/resolveVenue';
+import { tourFromParams, withDerivedRefresh } from '@/server/budget/withDerivedRefresh';
 
 /** Canonical join for the venue resolver (Venue SSOT). */
 const CANONICAL_JOIN =
@@ -158,7 +159,7 @@ export async function GET(
   return NextResponse.json(resolved);
 }
 
-export async function POST(
+async function postHandler(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
@@ -326,3 +327,7 @@ export async function POST(
 
   return NextResponse.json(inserted ?? []);
 }
+
+// Money repair — roster and routing changes move salaries and per diems, so the
+// budget's payroll lines are refreshed after a successful write.
+export const POST = withDerivedRefresh(postHandler, 'routing', tourFromParams);

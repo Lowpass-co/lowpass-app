@@ -5,6 +5,7 @@
 import { NextResponse } from 'next/server';
 import { requireWrite } from '@/lib/auth/workspace-check';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
+import { refreshDerivedLines, tourIdForRoom } from '@/server/budget/reconcileDerivedLines';
 import { placeholderHotelName } from '@/lib/rooming/nightsSummary';
 
 /** The day after `date` (YYYY-MM-DD), UTC-safe. */
@@ -373,6 +374,8 @@ export async function POST(request: Request) {
     }
   }
 
+  // Money repair — rooming feeds the hotel budget lines.
+  await refreshDerivedLines(supabase, workEntries[0]?.tour_id, profile.workspace_id, 'rooming');
   return NextResponse.json(Array.isArray(entries) ? { entries: upserted } : (upserted[0] ?? null));
 }
 
@@ -406,14 +409,17 @@ export async function DELETE(request: Request) {
     return NextResponse.json({ error: 'id is required' }, { status: 400 });
   }
 
-  const { error } = await supabase
+  const { data: gone, error } = await supabase
     .from('room_assignments')
     .delete()
     .eq('id', body.id)
-    .eq('workspace_id', profile.workspace_id);
+    .eq('workspace_id', profile.workspace_id)
+    .select('room_id');
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
+  const roomId = (gone as Array<{ room_id?: string }> | null)?.[0]?.room_id;
+  await refreshDerivedLines(supabase, await tourIdForRoom(supabase, roomId), profile.workspace_id, 'rooming');
   return new Response(null, { status: 204 });
 }

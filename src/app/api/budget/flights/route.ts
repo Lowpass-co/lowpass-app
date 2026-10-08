@@ -11,6 +11,7 @@
 import { NextResponse } from 'next/server';
 import { requireWrite } from '@/lib/auth/workspace-check';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
+import { reconcileDerivedBudgetLines, refreshDerivedLines } from '@/server/budget/reconcileDerivedLines';
 
 export async function GET(request: Request) {
   const supabase = await createServerSupabaseClient();
@@ -72,42 +73,25 @@ export async function GET(request: Request) {
     cost_amount: number | null;
     confirmation: string | null;
   }>;
+  // Money repair — the flight's budget line is written by the one derived-line
+  // writer; this GET used to insert missing lines itself (a second writer).
+  await reconcileDerivedBudgetLines(supabase, tourId, profile.workspace_id, { families: ['flight'] });
   const flightIds = flightsRaw.map((f) => f.id);
   const { data: lineItems } = flightIds.length
     ? await supabase
         .from('budget_line_items')
-        .select('id, flight_id')
+        .select('id, source_entity_id')
         .eq('workspace_id', profile.workspace_id)
         .eq('tour_id', tourId)
-        .eq('category', 'flights')
-        .in('flight_id', flightIds)
-    : { data: [] as Array<{ id: string; flight_id: string | null }> };
+        .eq('source_entity_type', 'flight')
+        .in('source_entity_id', flightIds)
+    : { data: [] as Array<{ id: string; source_entity_id: string | null }> };
 
   const lineItemByFlight = new Map<string, string>();
   (lineItems ?? []).forEach((row) => {
-    if (row.flight_id) lineItemByFlight.set(row.flight_id, row.id);
+    if (row.source_entity_id) lineItemByFlight.set(row.source_entity_id as string, row.id as string);
   });
 
-  for (const f of flightsRaw) {
-    if (lineItemByFlight.has(f.id)) continue;
-    const label = `${f.person_name}: ${f.origin_airport}→${f.destination_airport}`;
-    const { data: lineItem } = await supabase
-      .from('budget_line_items')
-      .insert({
-        tour_id: tourId,
-        workspace_id: profile.workspace_id,
-        category: 'flights',
-        label,
-        proposed_cost: Number(f.cost_amount) || 0,
-        actual_cost: Number(f.cost_amount) || 0,
-        source_entity_type: 'flight',
-        source_entity_id: f.id,
-        flight_id: f.id,
-      })
-      .select('id')
-      .single();
-    if (lineItem?.id) lineItemByFlight.set(f.id, lineItem.id);
-  }
   const flights = flightsRaw.map((f) => {
     const date = f.depart_at?.slice(0, 10) ?? null;
     const time = f.depart_at?.slice(11, 16) ?? null;
@@ -182,7 +166,7 @@ export async function POST(request: Request) {
 
   const { data: tour } = await supabase
     .from('tours')
-    .select('id')
+    .select('id, currency')
     .eq('id', tour_id)
     .eq('workspace_id', profile.workspace_id)
     .single();
@@ -208,7 +192,9 @@ export async function POST(request: Request) {
       origin_airport: (body.origin_code ?? 'TBD').toUpperCase(),
       destination_airport: (body.destination_code ?? 'TBD').toUpperCase(),
       cost_amount: costAmount,
-      cost_currency: 'GBP',
+      // Was hard-coded 'GBP' on every tour. The amount typed here is in the
+      // tour's currency (the budget grid's currency).
+      cost_currency: String((tour as { currency?: string | null }).currency ?? 'GBP').toUpperCase(),
       airline: body.airline ?? null,
       flight_number: body.flight_number ?? null,
       pnr: body.confirmation ?? null,
@@ -234,27 +220,19 @@ export async function POST(request: Request) {
     depart_at: string;
     cost_amount: number | null;
   };
-  const label = `${body.person_name.trim()}: ${(body.origin_code ?? 'TBD').toUpperCase()}→${(body.destination_code ?? 'TBD').toUpperCase()}`;
-
-  const { data: lineItem, error: liError } = await supabase
+  await refreshDerivedLines(supabase, tour_id, profile.workspace_id, 'flights');
+  const { data: lineItem } = await supabase
     .from('budget_line_items')
-    .insert({
-      tour_id,
-      workspace_id: profile.workspace_id,
-      category: 'flights',
-      label,
-      proposed_cost: costAmount,
-      actual_cost: costAmount,
-      source_entity_type: 'flight',
-      source_entity_id: flight.id,
-      flight_id: flight.id,
-    })
     .select('id')
-    .single();
+    .eq('workspace_id', profile.workspace_id)
+    .eq('tour_id', tour_id)
+    .eq('source_entity_type', 'flight')
+    .eq('source_entity_id', flight.id)
+    .maybeSingle();
 
   const response = {
     ...flight,
-    line_item_id: liError ? null : lineItem?.id ?? null,
+    line_item_id: (lineItem?.id as string | undefined) ?? null,
     origin_code: flight.origin_airport,
     destination_code: flight.destination_airport,
     departure_date: flight.depart_at?.slice(0, 10) ?? null,
@@ -352,18 +330,9 @@ export async function PATCH(request: Request) {
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
-  await supabase
-    .from('budget_line_items')
-    .update({
-      label: `${data.person_name}: ${data.origin_airport}→${data.destination_airport}`,
-      proposed_cost: Number(data.cost_amount) || 0,
-      actual_cost: Number(data.cost_amount) || 0,
-      source_entity_type: 'flight',
-      source_entity_id: data.id,
-      updated_at: new Date().toISOString(),
-    })
-    .eq('workspace_id', profile.workspace_id)
-    .eq('flight_id', data.id);
+  // The derived line follows through the one writer (it used to be patched
+  // here, overwriting any receipt-set actual with the flight's cost).
+  await refreshDerivedLines(supabase, data.tour_id as string, profile.workspace_id, 'flights');
   return NextResponse.json(data);
 }
 
@@ -397,14 +366,17 @@ export async function DELETE(request: Request) {
     return NextResponse.json({ error: 'id is required' }, { status: 400 });
   }
 
-  const { error } = await supabase
+  const { data: gone, error } = await supabase
     .from('flights')
     .delete()
     .eq('id', body.id)
-    .eq('workspace_id', profile.workspace_id);
+    .eq('workspace_id', profile.workspace_id)
+    .select('tour_id');
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
+  // A deleted flight used to leave its cost in the budget forever.
+  await refreshDerivedLines(supabase, (gone as Array<{ tour_id?: string }> | null)?.[0]?.tour_id, profile.workspace_id, 'flights');
   return new Response(null, { status: 204 });
 }

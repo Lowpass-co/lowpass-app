@@ -27,7 +27,8 @@ import {
   PAYROLL_SALARY_SOURCE,
   PAYROLL_PER_DIEM_SOURCE,
 } from './derivedPayrollTotals';
-import { computeCommissionContext, type CommissionContextIncomeRow } from '@/lib/commission-context';
+import { computeBudgetPnl } from '@/lib/budget/computeBudgetPnl';
+import type { BudgetLineItem } from '@/types';
 
 /** A tour's derived lines as `reconcileDerivedBudgetLines` writes them:
  *  one salary + one per-diem line per roster member, proposed == actual
@@ -90,59 +91,51 @@ describe('derivedPayrollTotals', () => {
 
 /* ── The commission hole ─────────────────────────────────────────────────── */
 
-const INCOME: CommissionContextIncomeRow[] = [
-  {
-    post_tax_guarantee: 100_000,
-    merch_income: 0,
-    vip_income: 0,
-    actual_guarantee: 100_000,
-    actual_overage: null,
-    actual_merch: null,
-    actual_vip: null,
-  },
-];
-
+/* Money repair (Oct 2026): `computeCommissionContext` is deleted — it was one
+   of four commission formulas, with no live caller. The same pins now hold the
+   ONE formula every screen uses, `computeBudgetPnl`. */
+const INCOME = [{ post_tax_guarantee: 100_000, actual_guarantee: 100_000 }];
 const NO_OVERHEADS = { insurance_pct: 0, contingency_pct: 0, accountancy_pct: 0 };
+const NET_10 = [{ id: 'c1', label: 'Agency', percentage: 0.1, basis: 'net' }];
+const GROSS_10 = [{ id: 'c1', label: 'Agency', percentage: 0.1, basis: 'gross' }];
+const pnl = (lines: typeof LINES, commissions = NET_10) =>
+  computeBudgetPnl({
+    lines: lines as unknown as BudgetLineItem[],
+    income: INCOME,
+    commissions,
+    settings: NO_OVERHEADS,
+    tourCurrency: 'GBP',
+  });
 
-describe('computeCommissionContext — salaries reach the direct subtotal', () => {
-  it('includes derived salary + per diem in subtotalDirect on BOTH sides', () => {
-    const ctx = computeCommissionContext(INCOME, LINES, [], NO_OVERHEADS);
+describe('computeBudgetPnl — salaries reach the expense base', () => {
+  it('includes derived salary + per diem in the base on BOTH sides', () => {
     // 8000 salary + 1300 per diem + 1600 hotels
-    expect(ctx.subtotalDirectProposed).toBe(10_900);
+    expect(pnl(LINES).baseExpenses.projected).toBe(10_900);
     // 8200 salary + 1350 per diem + 1600 hotels
-    expect(ctx.subtotalDirectActual).toBe(11_150);
+    expect(pnl(LINES).baseExpenses.actual).toBe(11_150);
   });
 
   it('a net-basis commission MOVES when payroll is present — the regression pin', () => {
-    const withPayroll = computeCommissionContext(INCOME, LINES, [], NO_OVERHEADS);
-    const withoutPayroll = computeCommissionContext(
-      INCOME,
-      LINES.filter((l) => l.category === 'hotels'),
-      [],
-      NO_OVERHEADS,
-    );
+    const withPayroll = pnl(LINES).commissions.projected;
+    const withoutPayroll = pnl(LINES.filter((l) => l.category === 'hotels')).commissions.projected;
     // net = gross − expenses. 100_000 − 10_900 vs 100_000 − 1_600.
-    expect(withPayroll.amountProposed(0.1, 'net')).toBeCloseTo(8_910, 6);
-    expect(withoutPayroll.amountProposed(0.1, 'net')).toBeCloseTo(9_840, 6);
-    // The old code produced the SECOND number on a tour with real salaries.
-    expect(withPayroll.amountProposed(0.1, 'net')).not.toBeCloseTo(
-      withoutPayroll.amountProposed(0.1, 'net'),
-      6,
-    );
+    expect(withPayroll).toBeCloseTo(8_910, 6);
+    expect(withoutPayroll).toBeCloseTo(9_840, 6);
   });
 
   it('a gross-basis commission is unaffected — the documented exception', () => {
-    const withPayroll = computeCommissionContext(INCOME, LINES, [], NO_OVERHEADS);
-    const withoutPayroll = computeCommissionContext(INCOME, [], [], NO_OVERHEADS);
-    expect(withPayroll.amountProposed(0.1, 'gross')).toBe(10_000);
-    expect(withoutPayroll.amountProposed(0.1, 'gross')).toBe(10_000);
+    expect(pnl(LINES, GROSS_10).commissions.projected).toBe(10_000);
+    expect(pnl([], GROSS_10).commissions.projected).toBe(10_000);
   });
 
-  it('does not double-count: the crew / per_diems categories are not direct-expense categories', () => {
-    // If the category filters ever grow to include 'crew' or 'per_diems', the
-    // subtotal doubles. This is the assertion that would fail.
-    const salaryOnly = LINES.filter((l) => l.source_entity_type === PAYROLL_SALARY_SOURCE);
-    const ctx = computeCommissionContext(INCOME, salaryOnly, [], NO_OVERHEADS);
-    expect(ctx.subtotalDirectProposed).toBe(8_000);
+  it('a 0% overhead stays 0% (the deleted summary formula read 0% insurance as 3%)', () => {
+    const r = pnl(LINES, GROSS_10);
+    expect(r.insurance.projected).toBe(0);
+    expect(r.contingency.projected).toBe(0);
+  });
+
+  it('a whole-number commission (15 = 15%) is normalised, not 1500%', () => {
+    const r = pnl([], [{ id: 'c1', label: 'Agency', percentage: 15, basis: 'gross' }]);
+    expect(r.commissions.projected).toBe(15_000);
   });
 });

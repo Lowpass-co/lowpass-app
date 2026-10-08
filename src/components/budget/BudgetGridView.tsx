@@ -321,8 +321,11 @@ export function BudgetGridView({
           // No-reload: overlay the server-created row (with its real id) so the
           // grid shows it instantly and edits target a real id. Fall back to a
           // refresh only if the row can't be read from the response.
-          const json = (await res.json().catch(() => null)) as { line_items?: BudgetLineItem[] } | null;
-          const created = json?.line_items?.[0];
+          // POST /api/budget/line-items returns the created ROW (not
+          // { line_items }), so this read always missed and fell back to a
+          // full refresh. Accept both shapes.
+          const json = (await res.json().catch(() => null)) as ({ line_items?: BudgetLineItem[] } & Partial<BudgetLineItem>) | null;
+          const created = json?.line_items?.[0] ?? (json?.id ? (json as BudgetLineItem) : undefined);
           if (created) setPendingLines((prev) => [...prev, created]);
           else router.refresh();
         })

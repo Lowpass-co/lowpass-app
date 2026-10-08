@@ -12,7 +12,8 @@
 import { NextResponse } from 'next/server';
 import { requireWrite } from '@/lib/auth/workspace-check';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
-import { syncActualCostIfNoOverride } from '@/lib/budget/transactions';
+import { syncActualCostSafe } from '@/lib/budget/transactions';
+import { insertReceiptWithNumber } from '@/server/budget/fileReceipt';
 
 /** RC-5 page range as a spreadable fragment — `{}` when there isn't one. */
 function pageRange(from: unknown, to: unknown): Record<string, number> {
@@ -20,15 +21,6 @@ function pageRange(from: unknown, to: unknown): Record<string, number> {
   const t = Number(to);
   if (!Number.isFinite(f) || !Number.isFinite(t) || f < 1 || t < f) return {};
   return { page_from: f, page_to: t };
-}
-
-function parseReceiptNumber(receiptNumber: string): number {
-  const match = (receiptNumber ?? '').match(/^R-?(\d+)$/i);
-  return match ? parseInt(match[1], 10) : 0;
-}
-
-function formatReceiptNumber(n: number): string {
-  return `R-${String(n).padStart(3, '0')}`;
 }
 
 export async function GET(request: Request) {
@@ -199,39 +191,11 @@ export async function POST(request: Request) {
     ...pageRange(body.page_from, body.page_to),
   };
 
-  let created: Record<string, unknown> | null = null;
-  for (let attempt = 0; attempt < 5; attempt++) {
-    const { data: existingReceipts, error: readError } = await supabase
-      .from('expense_receipts')
-      .select('receipt_number')
-      .eq('tour_id', tour_id)
-      .eq('workspace_id', profile.workspace_id);
-    if (readError) {
-      return NextResponse.json({ error: readError.message }, { status: 500 });
-    }
-    let maxNum = 0;
-    for (const r of existingReceipts ?? []) {
-      const n = parseReceiptNumber(r.receipt_number as string);
-      if (n > maxNum) maxNum = n;
-    }
-    const receiptNumber = formatReceiptNumber(maxNum + 1);
-
-    const { data: row, error: insertError } = await supabase
-      .from('expense_receipts')
-      .insert({ ...baseRow, receipt_number: receiptNumber })
-      .select()
-      .single();
-
-    if (!insertError && row) {
-      created = row;
-      break;
-    }
-    // 23505 = unique_violation: another receipt grabbed this number — recompute.
-    if (insertError && insertError.code === '23505') continue;
-    if (insertError) {
-      return NextResponse.json({ error: insertError.message }, { status: 500 });
-    }
+  const ins = await insertReceiptWithNumber(supabase, baseRow);
+  if ('error' in ins) {
+    return NextResponse.json({ error: ins.error.message }, { status: 500 });
   }
+  const created: Record<string, unknown> | null = ins.row;
 
   if (!created) {
     return NextResponse.json({ error: 'Could not allocate a receipt number' }, { status: 500 });
@@ -347,7 +311,7 @@ export async function PATCH(request: Request) {
      joined. Numerically a no-op when things were already consistent; a repair
      when they weren't. Best-effort: never fail an edit over a recompute. */
   for (const lineId of new Set([prevLinkedId, newLinkedId].filter(Boolean) as string[])) {
-    await syncActualCostIfNoOverride(supabase, lineId, 1).catch(() => {});
+    await syncActualCostSafe(supabase, lineId, 1);
   }
 
   return NextResponse.json(data);
@@ -422,10 +386,7 @@ export async function DELETE(request: Request) {
      a repair when they weren't. Deleting the transaction is a separate,
      explicit action on the transactions route. */
   if (linkedLineId) {
-    await syncActualCostIfNoOverride(supabase, linkedLineId, 1).catch(() => {
-      /* best-effort: the receipt is already gone, and the next transaction
-         write re-syncs. Never fail the delete over a recompute. */
-    });
+    await syncActualCostSafe(supabase, linkedLineId, 1);
   }
 
   return new Response(null, { status: 204 });

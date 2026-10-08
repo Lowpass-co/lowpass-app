@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { requireWrite } from '@/lib/auth/workspace-check';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
+import { refreshDerivedLines } from '@/server/budget/reconcileDerivedLines';
 
 export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   const supabase = await createServerSupabaseClient();
@@ -75,10 +76,13 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     .from('rooms')
     .select(`
       *,
-      hotels(id, name, address, city, phone, confirmation_number)
+      hotels(id, name, address, city, phone, confirmation_number, tour_id, workspace_id)
     `)
     .eq('id', id)
     .single();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  // Money repair — a room's rate / the hotel's name feed the hotel's budget line.
+  const hotel = (Array.isArray(data?.hotels) ? data.hotels[0] : data?.hotels) as { tour_id?: string; workspace_id?: string } | null;
+  await refreshDerivedLines(supabase, hotel?.tour_id, hotel?.workspace_id, 'rooming');
   return NextResponse.json(data);
 }

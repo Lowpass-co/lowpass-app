@@ -15,6 +15,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { Loader2, TrendingUp, TrendingDown, Minus } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import Link from 'next/link';
+import { budgetCurrencySymbol } from '@/lib/budget-currency';
 
 interface TourSummaryRow {
   tour_id: string;
@@ -51,6 +52,10 @@ interface MonthlyEntry {
 interface ArtistSummaryData {
   tours: TourSummaryRow[];
   totals: Totals;
+  /** null when the tours are in more than one currency. */
+  totals_currency?: string | null;
+  totals_by_currency?: Record<string, Totals>;
+  mixed_currencies?: boolean;
   monthly_rolling: MonthlyEntry[];
 }
 
@@ -274,7 +279,15 @@ export function ArtistBudgetSummary({ artistId, artistName }: { artistId: string
 
   useEffect(() => { load(); }, [load]);
 
-  const symbol = '£';
+  // Money repair — each tour in its own currency; totals only when the tours
+  // share one (a $ tour and a £ tour have no honest sum). Was hard-coded £.
+  const symbol = budgetCurrencySymbol(data?.totals_currency ?? 'GBP');
+  const mixed = Boolean(data?.mixed_currencies);
+  const mixedNote = mixed
+    ? Object.entries(data?.totals_by_currency ?? {})
+        .map(([c, t]) => `${budgetCurrencySymbol(c)}${Math.round(t.net_actual).toLocaleString('en-GB')} ${c}`)
+        .join(' · ')
+    : '';
 
   return (
     <div className="flex flex-col min-h-0 overflow-hidden rounded-xl border border-lp-border bg-lp-surface">
@@ -297,9 +310,19 @@ export function ArtistBudgetSummary({ artistId, artistName }: { artistId: string
         <>
           {/* Summary cards */}
           <div className="flex items-stretch border-b border-lp-border/60 overflow-x-auto shrink-0">
-            <SummaryCard label="Total Income" proposed={data.totals.income_proposed} actual={data.totals.income_actual} isIncome symbol={symbol} />
-            <SummaryCard label="Total Expenses" proposed={data.totals.expenses_proposed} actual={data.totals.expenses_actual} symbol={symbol} />
-            <SummaryCard label="Net P&L" proposed={data.totals.net_proposed} actual={data.totals.net_actual} isIncome symbol={symbol} />
+            {mixed ? (
+              <div className="flex flex-col gap-0.5 px-4 py-3">
+                <span className="text-[10px] font-semibold uppercase tracking-wider text-lp-text-tertiary">Net P&L (actual) by currency</span>
+                <span className="text-[13px] font-semibold tabular-nums text-lp-text mt-0.5">{mixedNote}</span>
+                <span className="text-[11px] text-lp-text-tertiary">Tours are in different currencies, so there is no single total.</span>
+              </div>
+            ) : (
+              <>
+                <SummaryCard label="Total Income" proposed={data.totals.income_proposed} actual={data.totals.income_actual} isIncome symbol={symbol} />
+                <SummaryCard label="Total Expenses" proposed={data.totals.expenses_proposed} actual={data.totals.expenses_actual} symbol={symbol} />
+                <SummaryCard label="Net P&L" proposed={data.totals.net_proposed} actual={data.totals.net_actual} isIncome symbol={symbol} />
+              </>
+            )}
             <div className="flex flex-col gap-0.5 px-4 py-3">
               <span className="text-[10px] font-semibold uppercase tracking-wider text-lp-text-tertiary">Tours</span>
               <span className="text-[17px] font-bold text-lp-text mt-0.5">{data.tours.length}</span>
@@ -327,11 +350,11 @@ export function ArtistBudgetSummary({ artistId, artistName }: { artistId: string
                 No tours found for {year}
               </div>
             ) : (
-              data.tours.map(t => <TourRow key={t.tour_id} tour={t} symbol={symbol} />)
+              data.tours.map(t => <TourRow key={t.tour_id} tour={t} symbol={budgetCurrencySymbol(t.currency ?? 'GBP')} />)
             )}
 
             {/* Totals row */}
-            {data.tours.length > 0 && (
+            {data.tours.length > 0 && !mixed && (
               <div className="grid grid-cols-[minmax(0,1.4fr)_100px_36px_90px_90px_90px_90px_90px_90px] gap-x-2 px-4 py-2.5 items-center border-t-2 border-lp-border text-[12px] font-semibold bg-lp-surface/70 sticky bottom-0">
                 <span className="text-lp-text uppercase tracking-wide text-[10px]">Total {year}</span>
                 <span />
@@ -346,7 +369,7 @@ export function ArtistBudgetSummary({ artistId, artistName }: { artistId: string
             )}
 
             {/* Monthly rolling */}
-            <MonthlyRolling data={data.monthly_rolling} symbol={symbol} />
+            {!mixed && <MonthlyRolling data={data.monthly_rolling} symbol={symbol} />}
           </div>
         </>
       )}

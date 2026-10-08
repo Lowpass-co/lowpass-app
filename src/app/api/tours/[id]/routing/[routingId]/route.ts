@@ -10,6 +10,7 @@ import { NextResponse } from 'next/server';
 import { requireWrite } from '@/lib/auth/workspace-check';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { findOrCreateCanonicalVenue } from '@/lib/venues/canonical';
+import { tourFromParams, withDerivedRefresh } from '@/server/budget/withDerivedRefresh';
 
 /**
  * Fields callers are allowed to PATCH on a routing row.
@@ -33,7 +34,7 @@ const ALLOWED_FIELDS = new Set<string>([
   'canonical_venue_id',
 ]);
 
-export async function PATCH(
+async function patchHandler(
   request: Request,
   { params }: { params: Promise<{ id: string; routingId: string }> }
 ) {
@@ -132,3 +133,7 @@ export async function PATCH(
 
   return NextResponse.json(updated);
 }
+
+// Money repair — roster and routing changes move salaries and per diems, so the
+// budget's payroll lines are refreshed after a successful write.
+export const PATCH = withDerivedRefresh(patchHandler, 'routing', tourFromParams);

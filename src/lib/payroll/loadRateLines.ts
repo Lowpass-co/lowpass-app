@@ -95,11 +95,15 @@ function assembleRateContext(
   return { types, linesByRateId, legacyByRateId };
 }
 
-/** Load the tour's rate context (catalog + all rate lines) in three queries. */
+/** Load the tour's rate context (catalog + all rate lines) in three queries.
+ *  `strict` (money writers): a failed read THROWS instead of yielding an empty
+ *  context — an empty context computes £0 for everyone, which a writer would
+ *  then persist as the budget's salary figure. */
 export async function loadTourRateContext(
   supabase: SupabaseClient,
   tourId: string,
   workspaceId: string,
+  opts: { strict?: boolean } = {},
 ): Promise<TourRateContext> {
   const [typesRes, linesRes, legacyRes] = await Promise.all([
     supabase
@@ -119,6 +123,12 @@ export async function loadTourRateContext(
       .eq('tour_id', tourId),
   ]);
 
+  if (opts.strict) {
+    const failed = [typesRes, linesRes, legacyRes].find((r) => r.error);
+    if (failed?.error) {
+      throw Object.assign(new Error(`rate context: ${failed.error.message}`), { cause: failed.error });
+    }
+  }
   return assembleRateContext(typesRes.data, linesRes.data, legacyRes.data);
 }
 

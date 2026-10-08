@@ -5,6 +5,7 @@
 import { NextResponse } from 'next/server';
 import { requireWrite } from '@/lib/auth/workspace-check';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
+import { refreshDerivedLines, tourIdForRoom } from '@/server/budget/reconcileDerivedLines';
 
 export async function GET(request: Request) {
   const supabase = await createServerSupabaseClient();
@@ -204,6 +205,7 @@ export async function POST(request: Request) {
   const roomRef = Array.isArray((created as { rooms?: unknown }).rooms)
     ? ((created as { rooms?: Array<{ room_number?: string | null; room_type?: string | null; cost_amount?: number | null; notes?: string | null }> }).rooms ?? [])[0]
     : (created as { rooms?: { room_number?: string | null; room_type?: string | null; cost_amount?: number | null; notes?: string | null } | null }).rooms;
+  await refreshDerivedLines(supabase, await tourIdForRoom(supabase, roomId), profile.workspace_id, 'rooming');
   return NextResponse.json({
     id: (created as { id: string }).id,
     person_name: personRef?.full_name ?? person_name.trim(),
@@ -305,6 +307,8 @@ export async function PATCH(request: Request) {
     if (roomErr) return NextResponse.json({ error: roomErr.message }, { status: 500 });
   }
 
+  await refreshDerivedLines(supabase, await tourIdForRoom(supabase, existing.room_id as string), profile.workspace_id, 'rooming');
+
   const { data, error } = await supabase
     .from('room_assignments')
     .select(`
@@ -370,14 +374,17 @@ export async function DELETE(request: Request) {
     return NextResponse.json({ error: 'id is required' }, { status: 400 });
   }
 
-  const { error } = await supabase
+  const { data: gone, error } = await supabase
     .from('room_assignments')
     .delete()
     .eq('id', body.id)
-    .eq('workspace_id', profile.workspace_id);
+    .eq('workspace_id', profile.workspace_id)
+    .select('room_id');
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
+  const roomId = (gone as Array<{ room_id?: string }> | null)?.[0]?.room_id;
+  await refreshDerivedLines(supabase, await tourIdForRoom(supabase, roomId), profile.workspace_id, 'rooming');
   return new Response(null, { status: 204 });
 }
