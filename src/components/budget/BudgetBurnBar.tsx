@@ -5,12 +5,18 @@
    bar — the single home for the est/act/var summary (section headers are
    now NAME · count only).
 
-   Reads:
-     Remaining  = TOTAL − SPENT          (the runway, led large)
-     TOTAL      = Σ proposed_cost
-     SPENT      = Σ effective actual WHERE status = paid
-     COMMITTED  = Σ proposed_cost  WHERE status ∈ {quoted, approved, paid}
-     Variance   = SPENT − COMMITTED      (actuals vs what you committed to)
+   Reads (money repair smoke, Oct 2026):
+     BUDGET     = Σ proposed_cost        (expense lines only — income rows out)
+     SPENT      = Σ effective actual     (every expense line)
+     REMAINING  = BUDGET − SPENT
+
+   SPENT used to count only lines whose status was 'paid'. Nothing in the
+   app sets that status as money is spent, so the bar read "£0 spent ·
+   Remaining = the whole budget" on a tour £43K in, while Summary and the
+   grid showed the real actual. It now uses the same actual as every other
+   screen. The "committed" figures (status quoted/approved/paid) are kept
+   only as the marker's tooltip — they were a third "spent-like" number in
+   one row, and the row overflowed into the buttons beside it.
 
    The meter fills spent / budget; a thin marker shows where Committed
    sits on the same scale; the fill turns red once spent crosses 100%.
@@ -22,9 +28,9 @@
 
 import { useMemo } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { ArrowDown, ArrowUp } from 'lucide-react';
 import { convertVia, type FxRateMap } from '@/lib/budget/fxRates';
 import { getEffectiveActual } from '@/lib/budget/transactions';
+import { isIncomeRow } from '@/lib/budget/income-rows';
 import type { BudgetLineItem } from '@/types';
 
 interface BudgetBurnBarProps {
@@ -41,7 +47,6 @@ interface BudgetBurnBarProps {
 }
 
 const COMMITTED_STATUSES = new Set(['quoted', 'approved', 'paid']);
-const SPENT_STATUSES = new Set(['paid']);
 
 function symbolFor(currency: string): string {
   try {
@@ -87,6 +92,7 @@ export function BudgetBurnBar({ lines, tourCurrency, fxRates = {}, inline = fals
     let committed = 0;
     let spent = 0;
     for (const line of lines) {
+      if (isIncomeRow(line)) continue;
       const cur = (line.currency || tourCurrency).toUpperCase();
       const proposed = convertVia(
         Number(line.proposed_cost ?? 0),
@@ -105,10 +111,9 @@ export function BudgetBurnBar({ lines, tourCurrency, fxRates = {}, inline = fals
       total += proposed;
       const status = (line.status ?? '').toLowerCase();
       if (COMMITTED_STATUSES.has(status)) committed += proposed;
-      if (SPENT_STATUSES.has(status)) spent += actual;
+      spent += actual;
     }
     const remaining = total - spent;
-    const variance = spent - committed;
     const pctUsed = total > 0 ? (spent / total) * 100 : 0;
     const committedPct = total > 0 ? clampPct((committed / total) * 100) : 0;
     return {
@@ -116,20 +121,14 @@ export function BudgetBurnBar({ lines, tourCurrency, fxRates = {}, inline = fals
       committed,
       spent,
       remaining,
-      variance,
       pctUsed,
       committedPct,
       over: spent > total && total > 0,
     };
-  }, [lines, tourCurrency, displayCurrency]);
+  }, [lines, tourCurrency, displayCurrency, fxRates]);
 
   const fillPct = clampPct(m.pctUsed);
   const fillColor = m.over ? 'var(--color-lp-error)' : 'var(--color-lp-orange)';
-  const varianceOver = m.variance > 0; // spent more than committed
-  const VarianceIcon = varianceOver ? ArrowUp : ArrowDown;
-  const varianceColor = varianceOver
-    ? 'var(--color-lp-error)'
-    : 'var(--color-lp-status-complete)';
 
   return (
     /* #27 — ONE status line. The old three stacked column-blocks (big Runway
@@ -138,7 +137,7 @@ export function BudgetBurnBar({ lines, tourCurrency, fxRates = {}, inline = fals
     <div
       className={
         inline
-          ? 'lp-budget-burn-bar flex min-w-0 flex-1 items-center gap-4'
+          ? 'lp-budget-burn-bar flex min-w-0 flex-1 items-center gap-4 overflow-hidden'
           : 'lp-budget-burn-bar flex items-center gap-4 border-b px-6 py-2'
       }
       style={
@@ -208,36 +207,12 @@ export function BudgetBurnBar({ lines, tourCurrency, fxRates = {}, inline = fals
         ) : null}
       </div>
 
-      {/* Spent / used caption + committed — inline. */}
+      {/* Spent caption — the same actual Summary and the grid show. */}
       <span className="shrink-0 whitespace-nowrap" style={{ fontSize: '11px', color: 'var(--lp-text-secondary)' }}>
-        <span className="lp-mono" style={{ color: 'var(--lp-text)', fontWeight: 600 }}>
+        <span className="lp-mono" style={{ color: m.over ? 'var(--color-lp-error)' : 'var(--lp-text)', fontWeight: 600 }}>
           {formatAbbrev(m.spent, displayCurrency)}
         </span>{' '}
-        spent · {Math.round(m.pctUsed)}% · committed{' '}
-        <span className="lp-mono" style={{ color: 'var(--lp-text-secondary)' }}>
-          {formatAbbrev(m.committed, displayCurrency)}
-        </span>
-      </span>
-
-      {m.over ? (
-        <span className="shrink-0" style={{ fontSize: '11px', fontWeight: 600, color: 'var(--color-lp-error)' }}>
-          Over budget
-        </span>
-      ) : null}
-
-      {/* vs Committed — actuals vs what you committed to. Distinct from the
-          grid's "Variance" (actuals vs estimate) so one word doesn't name two
-          metrics. Inline, end of the row. */}
-      <span
-        className="lp-mono inline-flex shrink-0 items-center gap-1 whitespace-nowrap"
-        title={varianceOver ? 'over committed' : 'under committed'}
-        style={{ fontSize: '13px', fontWeight: 700, color: varianceColor }}
-      >
-        <span style={{ fontSize: '10px', fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--lp-text-tertiary)' }}>
-          vs Committed
-        </span>
-        <VarianceIcon className="h-3.5 w-3.5" aria-hidden />
-        {formatAbbrev(Math.abs(m.variance), displayCurrency)}
+        spent · {Math.round(m.pctUsed)}%{m.over ? ' · over budget' : ''}
       </span>
     </div>
   );

@@ -87,8 +87,9 @@ export async function GET(request: Request) {
     `)
     .eq('workspace_id', profile.workspace_id)
     .eq('tour_id', tourId)
-    .order('week_start')
-    .order('personnel(order_index)');
+    .order('week_start');
+  // (Ordered by person in JS below. The old `.order('personnel(order_index)')`
+  // named an embed this select doesn't have, so every GET returned 500.)
 
   if (weekStart) {
     query = query.eq('week_start', weekStart);
