@@ -2143,3 +2143,49 @@ src/lib/budget/actualsProvenance.harness.ts` → "18 checks passed, 0 failed".
   opening a receipt goes to `?tab=receipts&receipt=<id>`, which shows that
   receipt whatever state it is in (not just Needs details) and outlines it.
   **Test-pinned.**
+
+## Money repair (PR #30) + smoke fixes — Oct 2026
+
+Run live on 2026-10-09 against production, writes on the `Tester Tuor '26`
+test tour only. ✅ = passed live; ⚙ = covered by vitest, not live-run.
+
+#### BUD-MR-01 — every money read agrees ✅
+- **Do:** For each tour, compare Summary's Net P&L with `GET /api/budget/summary`.
+- **Expect:** Identical projected and actual (Simple Plan: −£43,831 actual,
+  −£39,671 projected on both).
+
+#### BUD-MR-02 — a rate change reaches the budget without opening Budget ✅
+- **Do:** Set a person's Show £300 / Travel £150 / PD £25 on a tour with
+  travel·show·show·off. Read the artist roll-up (it does not reconcile).
+- **Expect:** £900 salary + £100 per diem already in the budget.
+
+#### BUD-MR-03 — two quick payroll paints both land ✅
+- **Do:** Paint two different days in one week at the same moment.
+- **Expect:** Both stored; budget follows (£825 in the fixture above).
+
+#### BUD-MR-04 — a shared room counts once, and Rooming no longer rewrites it ✅
+- **Do:** Two people in one £200 double for three nights. Load Rooming, then Budget.
+- **Expect:** Hotel line £600 on both (not £1,200), unchanged by either load.
+
+#### BUD-MR-05 — the flight editor reaches the budget ✅
+- **Do:** Create a £500 flight, edit it to £650, delete it.
+- **Expect:** Budget follows each step; the line is gone after delete.
+
+#### BUD-MR-06 — receipts are never overwritten or lost ✅
+- **Do:** Add a £550 transaction to a hotel line, reload, then delete the hotel.
+- **Expect:** Actual £550 after reload. After delete the line stays as
+  MANUAL "… (source deleted)", estimate £0, actual £550, transaction intact.
+
+#### BUD-MR-07 — phone receipts reach the Receipts bank ✅
+- **Do:** Capture a receipt on `/m/receipt`.
+- **Expect:** It appears in Receipts as the next R-number, photo attached,
+  "Captured on phone" note, no money until applied.
+
+#### BUD-MR-08 — the header meter shows real spend
+- **Do:** Open Expenses on a tour with actuals but no "paid" statuses.
+- **Expect:** "£X spent" equals the grid's `act` total; Remaining = budget −
+  spent; the row never overlaps the buttons on its right.
+
+#### BUD-MR-09 — FX: a foreign receipt converts into the line's currency ⚙
+#### BUD-MR-10 — an approved budget's baseline never moves ⚙
+#### BUD-MR-11 — a failed source read leaves lines untouched and shows a banner ⚙
