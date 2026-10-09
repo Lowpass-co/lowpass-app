@@ -19,12 +19,10 @@ import {
   railFor,
   itemsFor,
   activeItemFor,
-  modeLandingHref,
   upFrom,
   isUnshelledPath,
   isShelledPath,
   hasOwnRail,
-  TOUR_MODES,
 } from './ia';
 
 const T = 'tour-123';
@@ -98,7 +96,7 @@ describe('resolveScope — the other three scopes', () => {
     expect(resolveScope('/rider-packs').scope).toBe('artist');
   });
 
-  it('the mode pill exists ONLY at tour scope', () => {
+  it('only tour URLs carry a mode', () => {
     for (const p of ['/artists', `/artists/${A}`, '/settings', '/venues']) {
       expect(resolveScope(p).mode).toBeNull();
     }
@@ -119,7 +117,8 @@ describe('activeItemFor — the deep-link contract', () => {
     expect(ctx.scope).toBe('tour');
     expect(ctx.mode).toBe('money');
     expect(ctx.tourId).toBe(T);
-    expect(activeItemFor(path)).toBe('settlements');
+    // Settlements is one job with Income — one rail item for both.
+    expect(activeItemFor(path)).toBe('income');
   });
 
   it.each([
@@ -138,7 +137,8 @@ describe('activeItemFor — the deep-link contract', () => {
     [`/operations/${T}/stage-plot`, '', 'stage-plot'],
     [`/operations/${T}/riders`, '', 'riders'],
     [`/operations/${T}/riders/pack-1`, '', 'riders'],
-    [`/budget/${T}/settlement`, '', 'settlements'],
+    [`/budget/${T}/settlement`, '', 'income'],
+    [`/operations/${T}/travel`, '', 'travel'],
     [`/artists/${A}`, '', 'overview'],
     [`/artists/${A}/riders`, '', 'riders-specs'],
     [`/artists/${A}/channel-lists`, '', 'riders-specs'],
@@ -169,9 +169,9 @@ describe('activeItemFor — the deep-link contract', () => {
     expect(activeItemFor(`/budget/${T}`)).toBe('expenses');
   });
 
-  it('the longest href prefix wins', () => {
-    // /budget/x/settlement must not resolve to a bare-/budget/x item.
-    expect(activeItemFor(`/budget/${T}/settlement`)).toBe('settlements');
+  it('a sub-route lights its parent item, not a bare-/budget item', () => {
+    // /budget/x/settlement must not resolve to the bare-/budget/x Budget item.
+    expect(activeItemFor(`/budget/${T}/settlement`)).toBe('income');
   });
 
   it('nothing matches → null, rather than a confident guess', () => {
@@ -182,9 +182,14 @@ describe('activeItemFor — the deep-link contract', () => {
 });
 
 describe('railFor — the shape of each rail', () => {
-  it('every tour mode has a rail, and they differ', () => {
-    const ids = TOUR_MODES.map((m) => itemsFor('tour', m).map((i) => i.id).join(','));
-    expect(new Set(ids).size).toBe(3);
+  it('ONE tour rail — every mode returns the same list (no mode switch)', () => {
+    const ids = (['tour', 'money', 'production'] as const).map((m) => itemsFor('tour', m).map((i) => i.id).join(','));
+    expect(new Set(ids).size).toBe(1);
+  });
+
+  it('the tour rail is grouped by job, in this order', () => {
+    const groups = railFor('tour', 'tour').filter((e) => e.kind === 'group').map((e) => e.label);
+    expect(groups).toEqual(['The run', 'People & logistics', 'Money', 'Production', 'Tour']);
   });
 
   it('Labor calls is NOT a top-level rail item anywhere', () => {
@@ -197,9 +202,15 @@ describe('railFor — the shape of each rail', () => {
     expect(all.some((i) => /labor|labour/i.test(i.label))).toBe(false);
   });
 
-  it('Payroll is in Money’s rail and NOT in Tour’s', () => {
-    expect(itemsFor('tour', 'money').some((i) => i.id === 'payroll')).toBe(true);
-    expect(itemsFor('tour', 'tour').some((i) => i.id === 'payroll')).toBe(false);
+  it('Payroll sits in the Money group, Crew in People & logistics', () => {
+    const rail = railFor('tour', null);
+    const groupOf = (id: string) => {
+      let g = '';
+      for (const e of rail) { if (e.kind === 'group') g = e.label; else if (e.id === id) return g; }
+      return null;
+    };
+    expect(groupOf('payroll')).toBe('Money');
+    expect(groupOf('crew')).toBe('People & logistics');
   });
 
   it('every item id is unique within its rail', () => {
@@ -221,32 +232,13 @@ describe('railFor — the shape of each rail', () => {
     }
   });
 
-  it('the not-yet-built pages are present but hrefless — a visible gap, not a hidden one', () => {
-    /* IA_CANONICAL S-5: these are missing PAGES, not missing nav. Rendering them
-       disabled is what turns "a feature nobody could find" into an empty slot. */
+  it('NOTHING is greyed out — every item in every rail goes somewhere', () => {
+    /* UX simplification (Oct 2026): twelve disabled items that did nothing made
+       the menu read as unfinished. Unbuilt pages are not in the nav at all. */
     const hrefless = [
-      ...itemsFor('tour', 'tour'), ...itemsFor('tour', 'money'), ...itemsFor('tour', 'production'),
-      ...itemsFor('artist', null), ...itemsFor('you', null),
+      ...itemsFor('tour', null), ...itemsFor('artist', null), ...itemsFor('workspace', null), ...itemsFor('you', null),
     ].filter((i) => i.href === null).map((i) => i.id);
-    expect(hrefless).toEqual(
-      expect.arrayContaining(['travel', 'per-diems', 'spaces', 'movements', 'year-budget', 'contacts']),
-    );
-  });
-});
-
-describe('modeLandingHref — clicking a mode pill', () => {
-  it('Tour → Routing, Money → Summary, Production → Assets', () => {
-    expect(modeLandingHref('tour', T)).toBe(`/operations/${T}/routing`);
-    expect(modeLandingHref('money', T)).toBe(`/budget/${T}?tab=summary`);
-    expect(modeLandingHref('production', T)).toBe(`/operations/${T}/hire`);
-  });
-
-  it('every landing href resolves back to its own mode — no cross-wiring', () => {
-    for (const mode of TOUR_MODES) {
-      const href = modeLandingHref(mode, T);
-      const [path, search] = href.split('?');
-      expect(modeForPath(path, search ? `?${search}` : '')).toBe(mode);
-    }
+    expect(hrefless).toEqual([]);
   });
 });
 
@@ -334,7 +326,7 @@ describe('what crosses to the client is plain data', () => {
     }
   });
 
-  it('hrefs arrive as strings, or null for unbuilt pages', () => {
+  it('hrefs arrive as built strings', () => {
     const view = resolveRailView({ scope: 'tour', artistId: A, tourId: T, mode: 'tour' }, `/operations/${T}/routing`);
     const items = view.filter((e) => e.kind === 'item');
     for (const i of items) {
@@ -342,14 +334,14 @@ describe('what crosses to the client is plain data', () => {
       expect(i.href === null || typeof i.href === 'string').toBe(true);
     }
     const travel = items.find((i) => i.kind === 'item' && i.id === 'travel');
-    expect(travel && travel.kind === 'item' ? travel.href : 'x').toBeNull();
+    expect(travel && travel.kind === 'item' ? travel.href : null).toBe(`/operations/${T}/travel`);
   });
 
   it('the active flag is resolved server-side, not left to the client', () => {
     const view = resolveRailView(CTX, `/budget/${T}/settlement`);
     const active = view.filter((e) => e.kind === 'item' && e.active);
     expect(active.length).toBe(1);
-    expect(active[0].kind === 'item' && active[0].id).toBe('settlements');
+    expect(active[0].kind === 'item' && active[0].id).toBe('income');
   });
 
   it('badges arrive as strings', () => {
@@ -413,8 +405,9 @@ describe('isShelledPath — what is on the canonical shell after S-2c', () => {
   it('TOUR SCOPE IS COMPLETE — no tour URL is left on old chrome', () => {
     /* The check that says S-2d can start: if any of these went false, the
        ProductShell branches the next bank deletes would still be load-bearing. */
-    for (const mode of TOUR_MODES) {
-      expect(isShelledPath(modeLandingHref(mode, T).split('?')[0])).toBe(true);
+    for (const item of itemsFor('tour', null)) {
+      const ctx = { scope: 'tour' as const, artistId: null, tourId: T, mode: null };
+      expect(isShelledPath(item.href!(ctx).split('?')[0])).toBe(true);
     }
     // And the odd corners that belong to no rail item.
     for (const p of [`/operations/${T}`, `/operations/${T}/summary`, `/operations/${T}/edit`, `/operations/${T}/labor`]) {
@@ -564,7 +557,7 @@ describe('badges count work, so zero is not a badge', () => {
 
   it('the rule is general, not a receipts special case', () => {
     const view = resolveRailView(money, `/budget/${T}`, '?tab=budget', { lines: 0, unsettled: 0 });
-    for (const id of ['expenses', 'settlements']) {
+    for (const id of ['expenses', 'income']) {
       const item = view.find((e) => e.kind === 'item' && e.id === id);
       expect(item && item.kind === 'item' ? item.badge : 'x').toBeNull();
     }
@@ -572,41 +565,31 @@ describe('badges count work, so zero is not a badge', () => {
 });
 
 /* ============================================
-   S-2d — GREYED MEANS ONE THING
+   GREYED MEANS NOTHING — there are no greyed items
 
-   A disabled rail item is a promise: "this doesn't exist yet." Patch broke that
-   promise — it is built and shipped as a MODE of Channel list (the PATCH toggle
-   swaps in <PatchMatrix>), with no route of its own and none planned. Greying
-   it told the user working software was missing.
-
-   This pins the whole set rather than the one case, so adding a grey item is a
-   deliberate act with a test to update, not a shrug.
+   S-2d pinned the exact set of disabled items so adding one was deliberate.
+   The Oct 2026 simplification removed them all: a menu of things that do
+   nothing reads as unfinished. Pinned at ZERO for the same reason.
    ============================================ */
 
-describe('the disabled items are exactly the unbuilt ones', () => {
+describe('no rail carries a disabled item', () => {
   const greyed = (scope: Parameters<typeof itemsFor>[0], mode: Parameters<typeof itemsFor>[1]) =>
-    itemsFor(scope, mode).filter((i) => !i.href).map((i) => i.id).sort();
+    itemsFor(scope, mode).filter((i) => !i.href).map((i) => i.id);
 
   it('Patch is NOT in the rail — it is a mode of Channel list', () => {
-    expect(itemsFor('tour', 'production').some((i) => i.id === 'patch')).toBe(false);
+    expect(itemsFor('tour', null).some((i) => i.id === 'patch')).toBe(false);
   });
 
   it.each([
-    ['tour', 'tour', ['travel']],
-    ['tour', 'money', ['per-diems']],
-    ['tour', 'production', ['manifests', 'movements', 'spaces', 'templates']],
-    ['artist', null, ['brand', 'contacts', 'people', 'year-budget']],
-    ['workspace', null, []],
-    ['you', null, ['billing']],
-  ] as const)('%s/%s greys exactly %j', (scope, mode, expected) => {
-    expect(greyed(scope, mode)).toEqual([...expected]);
+    ['tour', null], ['artist', null], ['workspace', null], ['you', null],
+  ] as const)('%s greys nothing', (scope, mode) => {
+    expect(greyed(scope, mode)).toEqual([]);
   });
 
-  it('every OTHER item resolves to a real href', () => {
-    const ctx = { scope: 'tour' as const, artistId: A, tourId: T, mode: 'production' as const };
-    for (const item of itemsFor('tour', 'production')) {
-      if (!item.href) continue;
-      expect(item.href(ctx).startsWith('/')).toBe(true);
+  it('every item resolves to a real href', () => {
+    const ctx = { scope: 'tour' as const, artistId: A, tourId: T, mode: null };
+    for (const item of itemsFor('tour', null)) {
+      expect(item.href!(ctx).startsWith('/')).toBe(true);
     }
   });
 });
@@ -690,19 +673,9 @@ describe('P-1 — every gated rail item names a REAL resource', () => {
     expect(unknown).toEqual([]);
   });
 
-  it('the resource set is non-empty and covers all three tour modes', () => {
+  it('the tour rail has gated items', () => {
     // A silently-empty set would make the filter a no-op and look like it works.
-    for (const mode of TOUR_MODES) {
-      expect(itemsFor('tour', mode).some((i) => i.resource)).toBe(true);
-    }
-  });
-
-  it('no DISABLED item is gated — hiding a thing that does nothing is noise', () => {
-    for (const mode of TOUR_MODES) {
-      for (const item of itemsFor('tour', mode)) {
-        if (!item.href) expect(item.resource).toBeUndefined();
-      }
-    }
+    expect(itemsFor('tour', null).some((i) => i.resource)).toBe(true);
   });
 });
 
@@ -723,23 +696,22 @@ describe('P-1 — resolveRailView filters by the allow-list', () => {
   it('and the rest of Money survives that removal', () => {
     const allowed = allRailResources().filter((r) => r !== 'operations.payroll');
     const shown = ids(resolveRailView(money, `/budget/${T}`, '', {}, allowed));
-    expect(shown).toEqual(expect.arrayContaining(['summary', 'expenses', 'settlements']));
+    expect(shown).toEqual(expect.arrayContaining(['summary', 'expenses', 'income', 'receipts']));
   });
 
   it('ungated items survive an EMPTY allow-list — absent means ungated', () => {
-    /* Settlements, Income and Per diems have no catalogue entry. If an empty
-       list hid them, the filter would be denying by default, which is a
-       different and much worse policy than the one intended. */
+    /* Income, Day sheets, Travel and Tour settings have no catalogue entry. If
+       an empty list hid them, the filter would be denying by default, which is
+       a different and much worse policy than the one intended. */
     const shown = ids(resolveRailView(money, `/budget/${T}`, '', {}, []));
-    expect(shown).toEqual(expect.arrayContaining(['income', 'settlements', 'per-diems']));
+    expect(shown).toEqual(expect.arrayContaining(['income', 'day-sheets', 'travel', 'reports']));
     expect(shown).not.toContain('payroll');
   });
 
   it('a heading left with no items under it is dropped', () => {
-    /* "Plan" holds Summary / Expenses / Income. Income is ungated so the group
-       survives here; the PRODUCTION rail's "Paper" group is the empty-able one
-       once its two disabled items are the only members. Asserted structurally:
-       no view may end with a group, and no two groups may be adjacent. */
+    /* With an empty allow-list "Production" keeps only Gear (ungated).
+       Asserted structurally: no view may end with a group, and no two groups
+       may be adjacent. */
     const view = resolveRailView(money, `/budget/${T}`, '', {}, []);
     expect(view[view.length - 1].kind).toBe('item');
     for (let i = 0; i < view.length - 1; i++) {

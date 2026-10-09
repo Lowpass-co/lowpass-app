@@ -89,18 +89,24 @@ export function RoomingMatrix({
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
       <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 12, fontSize: 13 }}>
-        <span style={{ color: 'var(--lp-text-secondary)' }}>Assumed rate</span>
+        {/* Oct 2026 — this was labelled "Assumed rate", which read like a
+            scratch estimate. It is the nightly price written onto every room
+            you set from here on (useRoomingGrid → cost_amount → the budget).
+            It is not remembered between visits, so the label says "next". */}
+        <label htmlFor="rooming-rate" style={{ color: 'var(--lp-text-secondary)' }}>Price per room-night for the rooms you set next</label>
         <span style={{ color: 'var(--lp-text-tertiary)' }}>{currency}</span>
         <input
+          id="rooming-rate"
           type="number"
           step="0.01"
+          min="0"
+          placeholder="0.00"
           value={assumedRate || ''}
           onChange={(e) => setAssumedRate(parseFloat(e.target.value) || 0)}
           style={{ width: 96, textAlign: 'right', padding: '4px 8px', borderRadius: 'var(--lp-radius-md)', border: '1px solid var(--lp-border)', background: 'var(--lp-surface)', color: 'var(--lp-text)' }}
         />
-        <span style={{ color: 'var(--lp-text-secondary)' }}>/ room · night</span>
         <span style={{ marginLeft: 'auto', fontWeight: 600, color: 'var(--lp-text)' }}>
-          Est total: {new Intl.NumberFormat('en-GB', { style: 'currency', currency, minimumFractionDigits: 0 }).format(estTotal)}
+          Estimated at this price: {new Intl.NumberFormat('en-GB', { style: 'currency', currency, minimumFractionDigits: 0 }).format(estTotal)}
         </span>
       </div>
 

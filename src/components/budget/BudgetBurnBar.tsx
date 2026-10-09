@@ -212,7 +212,16 @@ export function BudgetBurnBar({ lines, tourCurrency, fxRates = {}, inline = fals
         <span className="lp-mono" style={{ color: m.over ? 'var(--color-lp-error)' : 'var(--lp-text)', fontWeight: 600 }}>
           {formatAbbrev(m.spent, displayCurrency)}
         </span>{' '}
-        spent · {Math.round(m.pctUsed)}%{m.over ? ' · over budget' : ''}
+        spent ·{' '}
+        {/* "· over budget" was cut off when the band was tight ("over bu").
+            Over is already said by the red fill and a figure above 100%, so the
+            percentage itself turns red instead of adding words. */}
+        <span
+          title={m.over ? 'Over budget' : undefined}
+          style={m.over ? { color: 'var(--color-lp-error)', fontWeight: 600 } : undefined}
+        >
+          {Math.round(m.pctUsed)}%
+        </span>
       </span>
     </div>
   );

@@ -21,7 +21,7 @@ import { VersionLockModal } from '@/components/budget/versioning/VersionLockModa
 import type { VersionStatus, BudgetVersionVm } from '@/components/budget/versioning/versionApi';
 import { AddReceiptPanel, type AddReceiptResult } from '@/components/budget/AddReceiptPanel';
 import type { Column, GridFx, GridLineApi, GridStatusConfig } from '@/components/grid/types';
-import { budgetToGridSections, gridEditToPatch } from '@/lib/grid/budgetAdapter';
+import { budgetToGridSections, gridEditToPatch, hideEmptyAutoRows } from '@/lib/grid/budgetAdapter';
 import { convertVia, type FxRateMap } from '@/lib/budget/fxRates';
 import { useToast } from '@/components/ui/Toast';
 import type { BudgetLineItem, BudgetSection } from '@/types';
@@ -201,7 +201,13 @@ export function BudgetGridView({
     const merged = [...lines, ...pendingLines.filter((p) => !serverIds.has(p.id))];
     return pendingDeletes.size > 0 ? merged.filter((l) => !pendingDeletes.has(l.id)) : merged;
   }, [lines, pendingLines, pendingDeletes]);
-  const data = budgetToGridSections(allLines, sections, { tourCurrency: native, ungroupedName: 'Uncategorised', dayTypeByRouting });
+  const fullData = budgetToGridSections(allLines, sections, { tourCurrency: native, ungroupedName: 'Uncategorised', dayTypeByRouting });
+  /* Oct 2026 declutter — automatic lines with no cost are hidden by default
+     (see hideEmptyAutoRows). One toggle above the grid brings them back. */
+  const [showEmptyAuto, setShowEmptyAuto] = useState(false);
+  const declutter = hideEmptyAutoRows(fullData);
+  const data = showEmptyAuto ? fullData : declutter.data;
+  const hiddenBySection = showEmptyAuto ? null : declutter.hiddenBySection;
 
   // VIS-BG-04 — attach the display-only vendor label per line (row._uid = line
   // item id, the same key vendorByLine uses). Non-line rows (section/formula)
@@ -409,9 +415,11 @@ export function BudgetGridView({
   );
 
   const onReorderRow = useCallback(
-    (_sectionUid: string, orderedRowUids: string[]) =>
-      persistOrder('/api/budget/line-items', orderedRowUids),
-    [persistOrder],
+    // Hidden rows go last, so sort_order stays ONE sequence per section
+    // rather than the visible rows reusing the hidden rows' positions.
+    (sectionUid: string, orderedRowUids: string[]) =>
+      persistOrder('/api/budget/line-items', [...orderedRowUids, ...(hiddenBySection?.get(sectionUid) ?? [])]),
+    [persistOrder, hiddenBySection],
   );
 
   // #5 — the grid's section list includes the synthetic "Ungrouped" pseudo-
@@ -583,10 +591,27 @@ export function BudgetGridView({
           </span>
         </div>
       ) : null}
+      {declutter.hiddenCount > 0 ? (
+        <div style={{ margin: '0 0 var(--lp-space-2)' }}>
+          <button
+            type="button"
+            data-testid="toggle-empty-auto"
+            onClick={() => setShowEmptyAuto((v) => !v)}
+            style={{
+              border: 0, background: 'transparent', padding: 0, cursor: 'pointer',
+              fontSize: 'var(--lp-text-sm)', color: 'var(--lp-text-secondary)', textDecoration: 'underline',
+            }}
+          >
+            {showEmptyAuto
+              ? 'Hide automatic lines with no cost'
+              : `Show ${declutter.hiddenCount} automatic line${declutter.hiddenCount === 1 ? '' : 's'} with no cost`}
+          </button>
+        </div>
+      ) : null}
       <Grid
         // re-init when the line/section COUNT changes (add/delete via a refresh);
         // cell edits don't change counts, so the grid keeps its session state.
-        key={`${tourId}:${lines.length}:${sections.length}:${versionLocked ? 'locked' : 'draft'}`}
+        key={`${tourId}:${lines.length}:${sections.length}:${versionLocked ? 'locked' : 'draft'}:${showEmptyAuto ? 'all' : 'tidy'}`}
         initialColumns={EXPENSE_COLS}
         initialData={data}
         fx={fx}

@@ -173,7 +173,7 @@ export function TourFilesClient({ initial, uploadScope, title = 'Files', subtitl
     >
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <PageTitle style={{ fontSize: 28 }}>{title}</PageTitle>
+          <PageTitle>{title}</PageTitle>
           <p className="mt-1 text-sm" style={{ color: 'var(--lp-text-secondary)' }}>
             {subtitle ?? 'Consolidated uploads. Row click opens the file panel (preview when available).'}
           </p>

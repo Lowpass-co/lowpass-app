@@ -23,19 +23,15 @@
    shell, and it is confined to this file.
    ============================================ */
 
-/** The four scopes. The mode pill exists ONLY at tour scope. */
+/** The four scopes. */
 export type Scope = 'workspace' | 'artist' | 'tour' | 'you';
 
-/** The three tour modes. Confirmed by Adam: Tour · Money · Production. */
+/**
+ * Which product tree a tour URL belongs to. There is no longer a mode SWITCH
+ * (Oct 2026: one tour rail) — this survives because isShelledPath and the
+ * tests still classify tour URLs by it.
+ */
 export type TourMode = 'tour' | 'money' | 'production';
-
-export const TOUR_MODES: readonly TourMode[] = ['tour', 'money', 'production'];
-
-export const MODE_LABEL: Record<TourMode, string> = {
-  tour: 'Tour',
-  money: 'Money',
-  production: 'Production',
-};
 
 export const SCOPE_LABEL: Record<Scope, string> = {
   workspace: 'Workspace',
@@ -52,8 +48,9 @@ export interface RailItem {
   label: string;
   /** lucide-react icon name; the rail maps it to a component. */
   icon: string;
-  /** Built from the ids in context. Null = the page doesn't exist yet (S-5). */
-  href: ((ctx: NavContext) => string) | null;
+  /** Built from the ids in context. Never null: an unbuilt page is not in the
+   *  nav at all (Oct 2026 — greyed items read as an unfinished app). */
+  href: (ctx: NavContext) => string;
   /** Which count to show, if the host supplies one. */
   badge?: string;
   /** Extra pathname prefixes that should light this item up. */
@@ -96,25 +93,35 @@ const g = (label: string): RailGroup => ({ kind: 'group', label });
 
 /* ── TOUR scope ───────────────────────────────────────────────────────────── */
 
+/** Budget's tabs are query params, so money items match on ?tab= as well. */
+const budgetTab = (tab: string) => (p: string, s: string) => {
+  if (!/^\/budget\/[^/]+\/?$/.test(p)) return false;
+  const active = new URLSearchParams(s).get('tab') ?? 'budget';
+  return active === tab;
+};
+
+/*
+ * ONE TOUR RAIL (UX simplification, Oct 2026 — Adam's call).
+ *
+ * The tour used to be split into three rails behind a TOUR / MONEY /
+ * PRODUCTION switch in the top bar: three menus stacked on top of each other,
+ * with Payroll in "Money" but Crew in "Tour", and settings filed under
+ * "Reports & workbook". It is now a single list, grouped by job, in plain
+ * words, with every page reachable in one click and nothing greyed out.
+ *
+ * `TourMode` still exists — other code asks which product tree a URL is in —
+ * but every mode returns this same rail.
+ */
 const TOUR_RAIL: RailEntry[] = [
   g('The run'),
   {
-    kind: 'item', id: 'routing', label: 'Routing', icon: 'Rows3', badge: 'days', resource: 'operations.routing',
+    kind: 'item', id: 'routing', label: 'Schedule', icon: 'CalendarRange', badge: 'days', resource: 'operations.routing',
     href: (c) => `/operations/${c.tourId}/routing`,
   },
   {
     kind: 'item', id: 'day-sheets', label: 'Day sheets', icon: 'CalendarDays',
     href: (c) => `/operations/${c.tourId}/day`,
-    /* IA_CANONICAL writes this as "/operations/[tourId]/day · /day/[routingId]",
-       which reads as a top-level /day route. There isn't one — the per-day page
-       is /operations/[tourId]/day/[routingId], nested. Worth knowing before S-2
-       plans around a path that does not exist.
-
-       LABOR CALLS LIGHTS THIS TOO. It has no rail item by design — IA_CANONICAL
-       reaches it from Day sheets → Schedule — but "no rail item" and "nothing
-       highlighted" are different things to look at. A rail with nothing lit
-       reads as broken, so it lights its PARENT, which is where you came from
-       and where you'd go back to. */
+    /* Labor calls has no item of its own; it lights its parent, Day sheets. */
     match: (p) => /^\/operations\/[^/]+\/(day|labor)(\/|$)/.test(p),
   },
   {
@@ -124,71 +131,34 @@ const TOUR_RAIL: RailEntry[] = [
   },
   g('People & logistics'),
   { kind: 'item', id: 'crew', label: 'Crew', icon: 'Users', resource: 'operations.personnel', href: (c) => `/operations/${c.tourId}/personnel` },
-  { kind: 'item', id: 'rooming', label: 'Rooming', icon: 'BedDouble', resource: 'operations.rooming', href: (c) => `/operations/${c.tourId}/rooming` },
-  /* Travel has no page yet — IA_CANONICAL S-5 calls it out as a missing PAGE,
-     not missing nav. A null href renders it disabled rather than hiding it, so
-     the gap is visible instead of forgotten. */
-  { kind: 'item', id: 'travel', label: 'Travel', icon: 'Plane', href: null },
+  { kind: 'item', id: 'rooming', label: 'Hotels & rooming', icon: 'BedDouble', resource: 'operations.rooming', href: (c) => `/operations/${c.tourId}/rooming` },
+  { kind: 'item', id: 'travel', label: 'Travel', icon: 'Plane', href: (c) => `/operations/${c.tourId}/travel` },
   { kind: 'item', id: 'files', label: 'Files', icon: 'FolderOpen', resource: 'operations.files', href: (c) => `/operations/${c.tourId}/files` },
-];
-
-/* ── MONEY scope ──────────────────────────────────────────────────────────── */
-
-/** Budget's tabs are query params, so money items match on ?tab= as well. */
-const budgetTab = (tab: string) => (p: string, s: string) => {
-  if (!/^\/budget\/[^/]+\/?$/.test(p)) return false;
-  const active = new URLSearchParams(s).get('tab') ?? 'budget';
-  return active === tab;
-};
-
-const MONEY_RAIL: RailEntry[] = [
-  g('Plan'),
+  g('Money'),
   {
     kind: 'item', id: 'summary', label: 'Summary', icon: 'LayoutDashboard', resource: 'budget.summary',
     href: (c) => `/budget/${c.tourId}?tab=summary`, match: budgetTab('summary'),
   },
   {
-    kind: 'item', id: 'expenses', label: 'Expenses', icon: 'Table2', badge: 'lines', resource: 'budget.line_items',
-    // 'budget' is the stored tab id for Expenses (budget-tab-utils).
+    kind: 'item', id: 'expenses', label: 'Budget', icon: 'Table2', badge: 'lines', resource: 'budget.line_items',
+    // 'budget' is the stored tab id for the expenses grid (budget-tab-utils).
     href: (c) => `/budget/${c.tourId}?tab=budget`, match: budgetTab('budget'),
   },
   {
-    kind: 'item', id: 'income', label: 'Income', icon: 'TrendingUp',
-    href: (c) => `/budget/${c.tourId}?tab=income`, match: budgetTab('income'),
+    /* Income and Settlements are one job — what the shows pay — so one item.
+       Both pages carry an Income | Settlements switch. */
+    kind: 'item', id: 'income', label: 'Income & settlements', icon: 'TrendingUp', badge: 'unsettled',
+    href: (c) => `/budget/${c.tourId}?tab=income`,
+    match: (p, s) => budgetTab('income')(p, s) || /^\/budget\/[^/]+\/settlement(\/|$)/.test(p),
   },
-  g('Settle & pay'),
-  {
-    kind: 'item', id: 'settlements', label: 'Settlements', icon: 'Scale', badge: 'unsettled',
-    href: (c) => `/budget/${c.tourId}/settlement`,
-  },
-  /* Payroll MOVES here from Operations — it's pay, not ops (IA_CANONICAL). The
-     route still lives under /operations; the rail is what changed, not the URL. */
-  { kind: 'item', id: 'payroll', label: 'Payroll', icon: 'Users', resource: 'operations.payroll', href: (c) => `/operations/${c.tourId}/payroll` },
-  { kind: 'item', id: 'per-diems', label: 'Per diems', icon: 'Coins', href: null },
+  { kind: 'item', id: 'payroll', label: 'Payroll', icon: 'Wallet', resource: 'operations.payroll', href: (c) => `/operations/${c.tourId}/payroll` },
   {
     kind: 'item', id: 'receipts', label: 'Receipts', icon: 'ReceiptText', badge: 'receiptsNeedingDetails', resource: 'budget.receipts',
     href: (c) => `/budget/${c.tourId}?tab=receipts`, match: budgetTab('receipts'),
   },
-  g('Out'),
-  {
-    kind: 'item', id: 'reports', label: 'Reports & workbook', icon: 'FileSpreadsheet',
-    href: (c) => `/budget/${c.tourId}?tab=settings`, match: budgetTab('settings'),
-  },
-];
-
-/* ── PRODUCTION scope ─────────────────────────────────────────────────────── */
-
-const PRODUCTION_RAIL: RailEntry[] = [
-  g('Inventory'),
-  { kind: 'item', id: 'assets', label: 'Assets', icon: 'Package', badge: 'gear', href: (c) => `/operations/${c.tourId}/hire` },
-  { kind: 'item', id: 'spaces', label: 'Spaces & cases', icon: 'Boxes', href: null },
-  { kind: 'item', id: 'movements', label: 'Movements', icon: 'ArrowLeftRight', href: null },
-  g('The show'),
-  /* PATCH IS NOT A SURFACE. IA_CANONICAL lists it as a rail item, but it is
-     built and shipped as a MODE of Channel list — the PATCH toggle swaps
-     <PatchMatrix> in for the input grid. There is no /patch route and never
-     was, so a greyed "Patch — no page yet" was a lie about working software.
-     Dropped so that greyed means one thing only: not built yet. */
+  g('Production'),
+  { kind: 'item', id: 'assets', label: 'Gear', icon: 'Package', badge: 'gear', href: (c) => `/operations/${c.tourId}/hire` },
+  /* Patch is a mode of Channel list, not a page — so it has no item. */
   { kind: 'item', id: 'channel-list', label: 'Channel list', icon: 'ListOrdered', resource: 'operations.channel_list', href: (c) => `/operations/${c.tourId}/channel-list` },
   { kind: 'item', id: 'stage-plot', label: 'Stage plot', icon: 'Shapes', resource: 'operations.stage_plot', href: (c) => `/operations/${c.tourId}/stage-plot` },
   {
@@ -196,9 +166,13 @@ const PRODUCTION_RAIL: RailEntry[] = [
     href: (c) => `/operations/${c.tourId}/riders`,
     match: (p) => /^\/operations\/[^/]+\/riders(\/|$)/.test(p),
   },
-  g('Paper'),
-  { kind: 'item', id: 'manifests', label: 'Manifests & carnet', icon: 'ClipboardList', href: null },
-  { kind: 'item', id: 'templates', label: 'Templates', icon: 'LayoutTemplate', href: null },
+  g('Tour'),
+  {
+    /* Was "Reports & workbook" — but the page is the tour's settings:
+       approval, overheads, commissions, exchange rates, exports. */
+    kind: 'item', id: 'reports', label: 'Tour settings', icon: 'Settings2',
+    href: (c) => `/budget/${c.tourId}?tab=settings`, match: budgetTab('settings'),
+  },
 ];
 
 /* ── ARTIST scope ─────────────────────────────────────────────────────────── */
@@ -224,9 +198,6 @@ const ARTIST_RAIL: RailEntry[] = [
      locked Business as hero tabs). Two rail items on one URL means one of them
      can never light, which is the Patch mistake in another costume. Dropped;
      Overview is the landing, and the landing is the tours list. */
-  g('Across tours'),
-  { kind: 'item', id: 'year-budget', label: 'Year budget', icon: 'CircleDollarSign', href: null },
-  { kind: 'item', id: 'people', label: 'People', icon: 'Users', href: null },
   g('Library'),
   {
     kind: 'item', id: 'riders-specs', label: 'Riders & specs', icon: 'FileText',
@@ -242,9 +213,7 @@ const ARTIST_RAIL: RailEntry[] = [
       /^\/artists\/[^/]+\/(riders|channel-lists|stage-plots)(\/|$)/.test(p) ||
       /^\/rider-packs(\/|$)/.test(p),
   },
-  { kind: 'item', id: 'brand', label: 'Brand & logos', icon: 'Shapes', href: null },
   { kind: 'item', id: 'documents', label: 'Documents', icon: 'FolderOpen', href: (c) => `/artists/${c.artistId}/files` },
-  { kind: 'item', id: 'contacts', label: 'Contacts', icon: 'Contact', href: null },
 ];
 
 /* ── WORKSPACE scope ──────────────────────────────────────────────────────── */
@@ -252,7 +221,7 @@ const ARTIST_RAIL: RailEntry[] = [
 const WORKSPACE_RAIL: RailEntry[] = [
   g('Workspace'),
   { kind: 'item', id: 'artists', label: 'Artists', icon: 'Music2', badge: 'artists', href: () => '/artists' },
-  { kind: 'item', id: 'personnel', label: 'Personnel pool', icon: 'Users', href: () => '/personnel' },
+  { kind: 'item', id: 'personnel', label: 'People', icon: 'Users', href: () => '/personnel' },
   {
     kind: 'item', id: 'equipment', label: 'Equipment & rentals', icon: 'Package',
     href: () => '/assets',
@@ -275,7 +244,6 @@ const YOU_RAIL: RailEntry[] = [
     match: (p) => /^\/settings\/?$/.test(p) || p.startsWith('/settings/ai-limits'),
   },
   { kind: 'item', id: 'team', label: 'Team & roles', icon: 'Users', href: () => '/settings/members' },
-  { kind: 'item', id: 'billing', label: 'Billing', icon: 'CreditCard', href: null },
   { kind: 'item', id: 'bugs', label: 'Report a bug', icon: 'Flag', href: () => '/bugs' },
 ];
 
@@ -370,8 +338,7 @@ const PRODUCTION_SEGMENTS = new Set([
 /** The rail for a scope (and, at tour scope, a mode). */
 export function railFor(scope: Scope, mode: TourMode | null): RailEntry[] {
   if (scope === 'tour') {
-    if (mode === 'money') return MONEY_RAIL;
-    if (mode === 'production') return PRODUCTION_RAIL;
+    void mode; // one rail for every mode — see TOUR_RAIL
     return TOUR_RAIL;
   }
   if (scope === 'artist') return ARTIST_RAIL;
@@ -403,7 +370,6 @@ export function activeItemFor(pathname: string, search = ''): string | null {
   // Longest href-prefix wins, so /budget/x/settlement beats /budget/x.
   let best: { id: string; len: number } | null = null;
   for (const item of items) {
-    if (!item.href) continue;
     const href = item.href(ctx).split('?')[0];
     if (href.length <= 1) continue;
     if (pathname === href || pathname.startsWith(`${href}/`)) {
@@ -411,13 +377,6 @@ export function activeItemFor(pathname: string, search = ''): string | null {
     }
   }
   return best?.id ?? null;
-}
-
-/** Where a mode pill click should land — the mode's first navigable item. */
-export function modeLandingHref(mode: TourMode, tourId: string): string {
-  const ctx: NavContext = { scope: 'tour', artistId: null, tourId, mode };
-  const first = itemsFor('tour', mode).find((i) => i.href);
-  return first?.href ? first.href(ctx) : `/operations/${tourId}/routing`;
 }
 
 /* ============================================
@@ -553,8 +512,8 @@ export type RailView =
       id: string;
       label: string;
       icon: string;
-      /** Already built. Null = no page yet, render disabled. */
-      href: string | null;
+      /** Already built. */
+      href: string;
       badge: string | null;
       active: boolean;
     };
@@ -613,7 +572,7 @@ export function resolveRailView(
       id: entry.id,
       label: entry.label,
       icon: entry.icon,
-      href: entry.href ? entry.href(ctx) : null,
+      href: entry.href(ctx),
       badge: badge == null || badge === '' ? null : String(badge),
       active: entry.id === activeId,
     };
@@ -628,8 +587,7 @@ export function resolveRailView(
 export function allRailResources(): string[] {
   const out = new Set<string>();
   const rails: Array<[Scope, TourMode | null]> = [
-    ['tour', 'tour'], ['tour', 'money'], ['tour', 'production'],
-    ['artist', null], ['workspace', null], ['you', null],
+    ['tour', null], ['artist', null], ['workspace', null], ['you', null],
   ];
   for (const [scope, mode] of rails) {
     for (const item of itemsFor(scope, mode)) if (item.resource) out.add(item.resource);

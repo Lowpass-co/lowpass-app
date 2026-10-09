@@ -14,6 +14,7 @@
 
 import { notFound } from 'next/navigation';
 import { PageHeader } from '@/components/ui/PageHeader';
+import { IncomeSettlementSwitch } from '@/components/budget/IncomeSettlementSwitch';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { SettlementWalkClient } from '@/components/settlement/SettlementWalkClient';
 import { loadTourSettlementWalks } from '@/lib/settlement/loadWalk';
@@ -48,9 +49,9 @@ export default async function BudgetSettlementPage({
   return (
     <div className="flex min-h-0 flex-1 flex-col px-4 pb-12 pt-6">
       <PageHeader
-        eyebrow="Budget · settlement"
-        title="Settlement"
-        subtitle="The Walk — itemized deductions & expenses to Balance due, per show. Log payments and mark Full & Final."
+        title="Income & settlements"
+        subtitle="Settle each show on the night: deductions and expenses down to the balance due, then log the payment and mark it final."
+        actions={<IncomeSettlementSwitch tourId={tourId} active="settlements" />}
         className="mb-4"
       />
       <SettlementWalkClient tourId={tourId} currency={currency} shows={shows} />

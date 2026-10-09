@@ -16,6 +16,9 @@ type FlightRow = {
   passenger_ids: string[] | null;
   notes: string | null;
   show_id: string | null;
+  person_name?: string | null;
+  role?: string | null;
+  confirmation?: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -37,13 +40,17 @@ function mapFlight(row: FlightRow): Flight {
     passengerIds: row.passenger_ids ?? [],
     notes: row.notes,
     showId: row.show_id,
+    personName: row.person_name ?? null,
+    role: row.role ?? null,
+    confirmation: row.confirmation ?? row.pnr ?? null,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
 }
 
 export async function listFlights(tourId: string): Promise<Flight[]> {
-  const res = await fetch(`/api/flights?tour_id=${encodeURIComponent(tourId)}`, { cache: 'no-store' });
+  // 200 is the route's cap; the default (50) silently truncated long tours.
+  const res = await fetch(`/api/flights?tour_id=${encodeURIComponent(tourId)}&limit=200`, { cache: 'no-store' });
   if (!res.ok) throw new Error('Failed to load flights');
   const json = (await res.json()) as { flights?: FlightRow[] };
   return (json.flights ?? []).map(mapFlight);

@@ -144,10 +144,9 @@ export function NavRail({
         {!collapsed ? (
           <>
             <span
-              className="lp-mono"
               style={{
-                fontSize: 10, letterSpacing: '.14em', textTransform: 'uppercase',
-                color: 'var(--lp-text-tertiary)', whiteSpace: 'nowrap',
+                fontSize: 'var(--lp-text-xs)', fontWeight: 600,
+                color: 'var(--lp-text-secondary)', whiteSpace: 'nowrap',
               }}
             >
               {scopeLabel}
@@ -183,18 +182,19 @@ export function NavRail({
                they fold away, hard to trace which is which". Muscle memory only
                works if a thing stays where it was, so the grouping changes
                APPEARANCE on collapse, never position. */
+            /* Sentence case, not spaced caps (Oct 2026 visual pass): a
+               heading you can read at a glance beats one that shouts. */
             <div
               key={`g${i}`}
-              className={collapsed ? undefined : 'lp-label-caps'}
               aria-hidden={collapsed ? true : undefined}
               style={{
                 height: GROUP_H,
                 display: 'flex',
                 alignItems: collapsed ? 'center' : 'flex-end',
                 padding: collapsed ? '0 6px' : '0 8px 5px',
-                fontSize: 'var(--lp-text-2xs)',
+                fontSize: 'var(--lp-text-xs)',
+                fontWeight: 500,
                 color: 'var(--lp-text-tertiary)',
-                letterSpacing: '.1em',
               }}
             >
               {collapsed ? (
@@ -206,13 +206,13 @@ export function NavRail({
           ) : (
             (() => {
               const { active, href, badge } = entry;
-              /* Inside a Link, <PendingSwap> turns this icon into a spinner
-                 while that route loads; outside one (a dead item) it is a
-                 plain icon and the hook never runs. */
+              /* <PendingSwap> turns this icon into a spinner while the route
+                 loads. Every item is a link: the IA has no dead items (Oct
+                 2026), and `href` is non-nullable so one can't be added. */
               const icon = <Icon name={entry.icon} className="h-3.5 w-3.5" />;
               const body = (
                 <>
-                  {href ? <PendingSwap>{icon}</PendingSwap> : icon}
+                  <PendingSwap>{icon}</PendingSwap>
                   {!collapsed ? (
                     <>
                       <span style={{ flex: 1, minWidth: 0 }}>{entry.label}</span>
@@ -232,29 +232,23 @@ export function NavRail({
                 justifyContent: collapsed ? 'center' : undefined,
                 borderRadius: 'var(--lp-radius-md)',
                 fontSize: 'var(--lp-text-sm)',
-                color: active ? 'var(--lp-text)' : href ? 'var(--lp-text-secondary)' : 'var(--lp-text-tertiary)',
+                color: active ? 'var(--lp-text)' : 'var(--lp-text-secondary)',
                 background: active ? 'color-mix(in srgb, var(--lp-orange) 12%, transparent)' : 'transparent',
                 borderLeft: active ? '2px solid var(--lp-orange)' : '2px solid transparent',
                 textDecoration: 'none',
-                cursor: href ? 'pointer' : 'default',
-                opacity: href ? 1 : 0.45,
+                cursor: 'pointer',
                 marginBottom: 1,
               };
-              /* What the tooltip says: the label when collapsed (the icon alone
-                 isn't enough), and why an item is dead when it has no page —
-                 that one matters expanded too, which is what SHELL-07 caught. */
-              const tipText = !href
-                ? `${entry.label} — no page yet`
-                : collapsed
-                  ? entry.label
-                  : null;
+              /* The tooltip names the item when collapsed (the icon alone isn't
+                 enough); expanded, the label is right there. */
+              const tipText = collapsed ? entry.label : null;
               const hover = {
                 onMouseEnter: (e: React.MouseEvent<HTMLElement>) => showTip(e.currentTarget, tipText),
                 onFocus: (e: React.FocusEvent<HTMLElement>) => showTip(e.currentTarget, tipText),
                 onBlur: () => setTip(null),
               };
 
-              return href ? (
+              return (
                 <Link
                   key={entry.id} href={href} style={style} {...hover}
                   data-testid={`nav-item-${entry.id}`}
@@ -292,13 +286,6 @@ export function NavRail({
                   {body}
                   <PendingLive label={entry.label} />
                 </Link>
-              ) : (
-                <span
-                  key={entry.id} style={style} {...hover} tabIndex={0}
-                  data-testid={`nav-item-${entry.id}`} aria-disabled="true"
-                >
-                  {body}
-                </span>
               );
             })()
           ),

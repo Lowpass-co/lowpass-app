@@ -43,7 +43,8 @@ type HotelAssignment = {
 
 interface RoomingViewProps {
   tourId: string;
-  tourName: string;
+  /** No longer shown — the top bar names the tour. Kept so callers needn't change. */
+  tourName?: string;
   currency: string;
   routingDates: { id: string; date: string; venue_name?: string; city?: string; day_type?: string }[];
   hotels: {
@@ -67,7 +68,7 @@ const VIEWS: { id: ViewId; label: string }[] = [
   { id: 'cards', label: 'Cards' },
 ];
 
-export function RoomingView({ tourId, tourName, currency, routingDates, hotels, roster }: RoomingViewProps) {
+export function RoomingView({ tourId, currency, routingDates, hotels, roster }: RoomingViewProps) {
   const [people, setPeople] = useState<RosterPerson[]>(roster);
   const [view, setView] = useState<ViewId>('matrix');
   const [hotelId, setHotelId] = useState<string | null>(null);
@@ -83,7 +84,7 @@ export function RoomingView({ tourId, tourName, currency, routingDates, hotels, 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
-        <PageTitle style={{ fontSize: 22 }}>{tourName} — Rooming</PageTitle>
+        <PageTitle>Hotels &amp; rooming</PageTitle>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
         <RoomingExportButton tourId={tourId} />
         <AddPersonToTourButton

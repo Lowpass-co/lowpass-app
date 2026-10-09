@@ -119,11 +119,21 @@ Where the mounts live:
 - The three tour layouts + `artists/[id]/layout.tsx` (unchanged).
 - The tourless landings /operations, /budget, /advance mount
   `<ShellV3Mount landing>` in their pages: workspace rail visible,
-  top bar GREYED (disabled mode pill + live picker) until a tour is
-  picked.
+  live picker until a tour is picked.
 - The standalone rider editor /rider-packs/[id] is ARTIST scope —
   `RiderPackEditorView` wraps itself in `<ShellV3Mount>` with the
   pack's artist id; the rail lights "Riders & specs".
+
+**ONE TOUR RAIL (Oct 2026 UX simplification — Adam's call).** The tour is
+no longer split into Tour / Money / Production modes behind a top-bar pill:
+the pill is DELETED and `railFor('tour', *)` returns one `TOUR_RAIL`, grouped
+by job — The run · People & logistics · Money · Production · Tour. `TourMode`
+/ `modeForPath` survive only as URL classification (isShelledPath, tests);
+nothing renders a mode. **There are no disabled rail items** — `RailItem.href`
+is non-nullable, so an unbuilt page cannot be added to the nav; build the page
+first. Page titles match the rail labels (Schedule, Crew, Hotels & rooming,
+Travel, Gear, …), use `.lp-page-title` (sans, title case, `--lp-text-2xl`) with
+no per-page fontSize, and never repeat the tour name (the top bar shows it).
 
 **Adding a new surface:** add/extend a rail item in
 `src/lib/nav/ia.ts` (that is the ONLY place nav strings live), put
@@ -296,7 +306,7 @@ Wrong: `'var(--lp-orange)' + '1a'` (concatenation doesn't resolve the var)
 
 ### Tour-internal navigation — the shell layouts handle it
 
-Everything under `/operations/[tourId]/`, `/budget/[tourId]/`, `/advance/[tourId]/` gets its navigation from the layout's `<ShellV3Mount>` (mode pill + rail from ia.ts) — no per-page breadcrumb or chrome mount is needed. The redirects in `next.config.ts` send every `/tours/[id]/*` URL to its product-prefixed equivalent, so the old `<TourBreadcrumb>` component was unreachable and has been **deleted** (P8 hygiene). Don't reintroduce it; a tour-internal surface that needs chrome just lives under the right layout.
+Everything under `/operations/[tourId]/`, `/budget/[tourId]/`, `/advance/[tourId]/` gets its navigation from the layout's `<ShellV3Mount>` (top bar + rail from ia.ts) — no per-page breadcrumb or chrome mount is needed. The redirects in `next.config.ts` send every `/tours/[id]/*` URL to its product-prefixed equivalent, so the old `<TourBreadcrumb>` component was unreachable and has been **deleted** (P8 hygiene). Don't reintroduce it; a tour-internal surface that needs chrome just lives under the right layout.
 
 ## Active project — pipeline complete
 

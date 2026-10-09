@@ -108,41 +108,9 @@ describe('a rail item that is loading says so', () => {
   it('every live item in the rail can show it, not just the one I checked', () => {
     status.pending = true;
     mount(`/operations/${T}/routing`);
-    for (const id of ['routing', 'day-sheets', 'advance', 'crew', 'rooming', 'files']) {
+    for (const id of ['routing', 'day-sheets', 'advance', 'crew', 'rooming', 'travel', 'files', 'payroll', 'expenses']) {
       expect(spinning(`nav-item-${id}`)).toBe(true);
     }
-  });
-});
-
-describe('a dead item never pretends to load', () => {
-  it('Travel has no page, so clicking it can’t be going anywhere', () => {
-    /* It renders as a <span>, not a Link — there is no pending state to read.
-       This asserts the consequence rather than the mechanism. */
-    status.pending = true;
-    mount(`/operations/${T}/routing`);
-    expect(spinning('nav-item-travel')).toBe(false);
-    expect(within(screen.getByTestId('nav-item-travel')).queryByTestId('nav-pending-tint')).toBeNull();
-  });
-});
-
-describe('the mode pill, which is the longest jump in the app', () => {
-  it('shows a spinner where its icon was', () => {
-    status.pending = true;
-    mount(`/operations/${T}/routing`);
-    expect(spinning('mode-money')).toBe(true);
-  });
-
-  it('tints translucently — an opaque fill would paint over the label', () => {
-    status.pending = true;
-    mount(`/operations/${T}/routing`);
-    const tint = within(screen.getByTestId('mode-money')).getByTestId('nav-pending-tint');
-    expect(tint.style.background).toContain('transparent');
-  });
-
-  it('and the label is still readable through it', () => {
-    status.pending = true;
-    mount(`/operations/${T}/routing`);
-    expect(screen.getByTestId('mode-money').textContent).toContain('Money');
   });
 });
 

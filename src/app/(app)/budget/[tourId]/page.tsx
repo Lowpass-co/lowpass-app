@@ -48,6 +48,8 @@ import { reconcileDerivedBudgetLines } from '@/server/budget/reconcileDerivedLin
 import { resolveActiveVersion, getProposedLineMap, getProposedIncomeMap } from '@/server/budget/versions';
 import { loadTourFxRates } from '@/lib/budget/fxRates';
 import { FxMissingRateBanner } from '@/components/budget/FxMissingRateBanner';
+import { PageHeader } from '@/components/ui/PageHeader';
+import { IncomeSettlementSwitch } from '@/components/budget/IncomeSettlementSwitch';
 import { DerivedRefreshBanner } from '@/components/budget/DerivedRefreshBanner';
 import { syncPhoneExpensesToBank } from '@/server/budget/fileReceipt';
 import type { BudgetVersionVm } from '@/components/budget/versioning/versionApi';
@@ -87,6 +89,31 @@ export async function generateMetadata({
     .maybeSingle();
   return { title: tour?.name ? `${tour.name} — Budget` : 'Budget' };
 }
+
+/** Title + one line of "what goes here" per tab, in the sidebar's words. */
+const TAB_HEADER: Record<string, { title: string; subtitle: string }> = {
+  summary: {
+    title: 'Summary',
+    subtitle: 'Where the tour stands: income, costs and what is left over.',
+  },
+  budget: {
+    title: 'Budget',
+    subtitle:
+      'Type planned costs in Proposed. Actuals fill in from receipts. Lines marked Auto come from Crew, Payroll, Hotels, Travel or Gear — change them there.',
+  },
+  income: {
+    title: 'Income & settlements',
+    subtitle: 'What each show is expected to pay. Switch to Settlements to record what was actually paid on the night.',
+  },
+  receipts: {
+    title: 'Receipts',
+    subtitle: 'Drop in receipts, add the missing details, then apply each one to a budget line.',
+  },
+  settings: {
+    title: 'Tour settings',
+    subtitle: 'Approval, commissions, overheads, exchange rates and exports.',
+  },
+};
 
 export default async function BudgetTourPage({
   params,
@@ -452,6 +479,15 @@ export default async function BudgetTourPage({
         {/* Phase 0 — content top matches the section rhythm so the grid isn't
             jammed under the sticky band/burn/phase stack. */}
         <div className="space-y-6 px-4 pt-6">
+          {/* Oct 2026 — every tab says what it is and where to type. The
+              budget used to open straight onto a grid with no title. */}
+          {TAB_HEADER[tab] ? (
+            <PageHeader
+              title={TAB_HEADER[tab].title}
+              subtitle={TAB_HEADER[tab].subtitle}
+              actions={tab === 'income' ? <IncomeSettlementSwitch tourId={tourId} active="income" /> : undefined}
+            />
+          ) : null}
           {tab === 'summary' && dataHealth ? (
             <DataHealthBanner items={dataHealth.items} total={dataHealth.total} />
           ) : null}

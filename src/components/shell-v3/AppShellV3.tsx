@@ -38,7 +38,7 @@
 import { usePathname, useSearchParams } from 'next/navigation';
 import {
   resolveScope, resolveRailView, upFrom, productForPath, hasOwnRail,
-  SCOPE_LABEL, MODE_LABEL,
+  SCOPE_LABEL,
 } from '@/lib/nav/ia';
 import { RememberTourProduct } from '@/components/shell-v2/RememberTourProduct';
 import { NavRail } from './NavRail';
@@ -101,11 +101,8 @@ export function AppShellV3({
   const entries = resolveRailView(ctx, pathname, search, badges ?? {}, visibleResources);
   const up = upFrom(ctx);
 
-  /* At tour scope the rail head names the MODE ("TOUR" / "MONEY" /
-     "PRODUCTION"), matching the mock — the pill and the rail agree on where you
-     are. Elsewhere it names the scope. */
-  const scopeLabel =
-    ctx.scope === 'tour' && ctx.mode ? MODE_LABEL[ctx.mode].toUpperCase() : SCOPE_LABEL[ctx.scope].toUpperCase();
+  /* The rail head names the level you're at: Workspace, Artist, Tour, You. */
+  const scopeLabel = SCOPE_LABEL[ctx.scope];
 
   /* S-2a — "open this tour where I left it". One zero-render island; now keyed
      to the live URL so product memory tracks navigation too. */

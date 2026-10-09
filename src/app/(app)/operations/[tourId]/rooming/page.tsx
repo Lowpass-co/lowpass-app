@@ -151,7 +151,9 @@ export default async function OperationsTourRoomingPage({
   }));
 
   return (
-    <div className="mx-auto max-w-[1600px] space-y-4 pb-12">
+    // px-4 pt-6 — the same gutter as every other tour page (it sat flush
+    // against the sidebar).
+    <div className="mx-auto max-w-[1600px] space-y-4 px-4 pb-12 pt-6">
       <RoomingView
         tourId={tour.id}
         tourName={tour.name}
