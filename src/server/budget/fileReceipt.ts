@@ -15,7 +15,8 @@
       until it is reviewed and applied, exactly like a dropped-in receipt.
 
       `syncPhoneExpensesToBank` backfills expenses captured before this fix
-      (and any whose filing failed). It is idempotent through
+      (and any whose filing failed). A filed expense is marked
+      status='filed', so a receipt you delete from the bank stays deleted. It is idempotent through
       expense_receipts.source_expense_id (migration 269); without that column
       it does nothing, because it would have no way to know what it already
       filed.
@@ -137,6 +138,9 @@ export async function filePhoneExpense(
       return null;
     }
     const receiptId = String(res.row.id);
+    // Mark the expense FILED, so deleting its receipt from the bank is final —
+    // otherwise the backfill would see an unlinked expense and file it again.
+    await supabase.from('expenses').update({ status: 'filed' }).eq('id', e.id);
     if (res.row.receipt_file_url) return receiptId; // already filed earlier
 
     // The photo → the bank's bucket, at the path its readers sign.
@@ -189,7 +193,8 @@ export async function syncPhoneExpensesToBank(
     .from('expenses')
     .select('id, tour_id, workspace_id, amount, currency, category, description, spent_at, city, receipt_url, receipt_filename')
     .eq('tour_id', tourId)
-    .eq('workspace_id', workspaceId);
+    .eq('workspace_id', workspaceId)
+    .neq('status', 'filed');
   if (error) {
     logServerError('syncPhoneExpensesToBank: expenses', error, { tourId });
     return 0;
