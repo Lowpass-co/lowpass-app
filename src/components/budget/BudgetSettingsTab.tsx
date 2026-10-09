@@ -339,7 +339,7 @@ function ProjectionDefaultsCard({ tourId, tourCurrency }: { tourId: string; tour
       <div className="flex items-center gap-1">
         <input
           type="number" min={0} step={0.5}
-          value={s ? +(s[key] * 100).toFixed(2) : 0}
+          value={s ? +(s[key] * 100).toFixed(2) : ''}
           onChange={(e) => save({ [key]: (Number(e.target.value) || 0) / 100 } as Partial<ProjDefaults>)}
           disabled={!s}
           className="w-16"
@@ -366,7 +366,7 @@ function ProjectionDefaultsCard({ tourId, tourCurrency }: { tourId: string; tour
             <span style={{ color: 'var(--lp-text-tertiary)' }}>{native}</span>
             <input
               type="number" min={0} step={0.5}
-              value={s ? +s.default_dollars_per_head.toFixed(2) : 0}
+              value={s ? +s.default_dollars_per_head.toFixed(2) : ''}
               onChange={(e) => save({ default_dollars_per_head: Number(e.target.value) || 0 })}
               disabled={!s}
               className="w-16"
@@ -406,6 +406,10 @@ const BASIS_OPTIONS = [
 function OverheadsCard({ tourId }: { tourId: string }) {
   const { showToast } = useToast();
   const [s, setS] = useState<OverheadSettings | null>(null);
+  /* Oct 2026 — a failed load used to fill the card with 0%, which reads as
+     "this tour has no overheads". Now it says it couldn't load, and the
+     fields stay blank and disabled. */
+  const [loadFailed, setLoadFailed] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -425,16 +429,7 @@ function OverheadsCard({ tourId }: { tourId: string }) {
           accountancy_basis: d.accountancy_basis ?? 'income_gross',
         });
       } catch {
-        if (active)
-          setS({
-            insurance_pct: 0,
-            contingency_pct: 0,
-            accountancy_pct: 0,
-            merch_cogs_pct: 0,
-            insurance_basis: 'income_gross',
-            contingency_basis: 'expenses_pre_contingency',
-            accountancy_basis: 'income_gross',
-          });
+        if (active) setLoadFailed(true);
       }
     })();
     return () => {
@@ -480,7 +475,7 @@ function OverheadsCard({ tourId }: { tourId: string }) {
             type="number"
             min={0}
             step={0.5}
-            value={s ? +(s[pctKey] * 100).toFixed(2) : 0}
+            value={s ? +(s[pctKey] * 100).toFixed(2) : ''}
             onChange={(e) => save({ [pctKey]: (Number(e.target.value) || 0) / 100 } as Partial<OverheadSettings>)}
             disabled={!s}
             className="w-16"
@@ -512,6 +507,11 @@ function OverheadsCard({ tourId }: { tourId: string }) {
         Percentages feed the Summary P&amp;L. Each picks the base it
         applies to (gross income, expenses, or total expenses).
       </p>
+      {loadFailed ? (
+        <p role="alert" className="mt-2" style={{ fontSize: 'var(--lp-text-sm)', color: 'var(--color-lp-error)' }}>
+          Couldn&apos;t load these settings. Reload the page to try again — nothing has been changed.
+        </p>
+      ) : null}
       <div className="mt-3 space-y-2">
         {pctRow('insurance', 'Insurance')}
         {pctRow('contingency', 'Contingency')}
@@ -525,7 +525,7 @@ function OverheadsCard({ tourId }: { tourId: string }) {
               type="number"
               min={0}
               step={0.5}
-              value={s ? +(s.merch_cogs_pct * 100).toFixed(2) : 0}
+              value={s ? +(s.merch_cogs_pct * 100).toFixed(2) : ''}
               onChange={(e) => save({ merch_cogs_pct: (Number(e.target.value) || 0) / 100 })}
               disabled={!s}
               className="w-16"

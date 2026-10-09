@@ -54,7 +54,7 @@ export default async function OperationsTourChannelListPage({
         <div>
           {/* F2 — canonical condensed-caps page title (matches Payroll etc.),
               not the old hand-rolled sentence-case <h1>. */}
-          <PageTitle style={{ fontSize: 22 }}>{`${tour.name ?? tourId} — Channel list`}</PageTitle>
+          <PageTitle>Channel list</PageTitle>
         </div>
         {resolvedSection ? (
           <div className="flex flex-wrap items-start justify-end gap-3">

@@ -21,12 +21,12 @@ const RiderPackDetailsSlideOver = dynamic(
 
 export function RiderPacksTourClient({
   tourId,
-  tourName,
   artistId,
   rows: initialRows,
 }: {
   tourId: string;
-  tourName: string;
+  /** No longer shown — the top bar names the tour. Kept so callers needn't change. */
+  tourName?: string;
   artistId: string;
   rows: RiderPackRowVm[];
 }) {
@@ -179,12 +179,7 @@ export function RiderPacksTourClient({
     <div className="mx-auto flex min-h-0 max-w-[1600px] flex-1 flex-col space-y-5 pb-12">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <p className="text-xs uppercase tracking-wide text-lp-text-tertiary">
-            <Link href={`/tours/${tourId}`} className="hover:text-lp-text">
-              {tourName}
-            </Link>
-          </p>
-          <h1 className="mt-1 text-2xl font-bold text-lp-text">Rider packs</h1>
+          <h1 className="lp-page-title text-lp-text">Riders</h1>
           <p className="mt-1 text-sm text-lp-text-secondary">Open a pack to edit the full canvas.</p>
           {/* A#9 — path from tour Production to the artist-level masters. */}
           <Link

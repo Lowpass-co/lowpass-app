@@ -33,7 +33,8 @@ interface RateTypeRow { id: string; name: string; bucket: string; basis: string;
 
 interface PayrollViewProps {
   tourId: string;
-  tourName: string;
+  /** No longer shown — the top bar names the tour. Kept so callers needn't change. */
+  tourName?: string;
   currency: string;
   routingDates: { id: string; date: string; day_type?: string; venue_name?: string; city?: string }[];
   personnelRates: Record<string, unknown>[];
@@ -69,7 +70,6 @@ function toCanonicalMetas(rows: RateTypeRow[]): RateTypeMeta[] {
 
 export function PayrollView({
   tourId,
-  tourName,
   currency,
   routingDates,
   personnelRates,
@@ -134,7 +134,7 @@ export function PayrollView({
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 12, height: '100%', minHeight: 0 }}>
       <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
-        <PageTitle style={{ fontSize: 22 }}>{tourName} — Payroll</PageTitle>
+        <PageTitle>Payroll</PageTitle>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <PayrollExportButton tourId={tourId} />
           <AddPersonToTourButton

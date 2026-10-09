@@ -117,7 +117,7 @@ export function OperationsStagePlotClient({ tourId, artistId, rows, tourAttachme
   if (list.length === 0) {
     return (
       <div style={{ padding: 32, maxWidth: 560 }}>
-        <PageTitle style={{ fontSize: 22, margin: '0 0 8px' }}>Stage plot</PageTitle>
+        <PageTitle style={{ margin: '0 0 8px' }}>Stage plot</PageTitle>
         <p style={{ color: 'var(--lp-text-secondary)', fontSize: 'var(--lp-text-sm)', margin: '0 0 18px' }}>
           No stage plot for this tour yet. Create one to lay out the stage — instruments, amps, monitors, mics and power — and link it to the channel list.
         </p>
@@ -129,7 +129,7 @@ export function OperationsStagePlotClient({ tourId, artistId, rows, tourAttachme
   return (
     <div style={{ padding: 24 }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18 }}>
-        <PageTitle style={{ fontSize: 22, margin: 0 }}>Stage plots</PageTitle>
+        <PageTitle style={{ margin: 0 }}>Stage plots</PageTitle>
         {createBtn}
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 12 }}>

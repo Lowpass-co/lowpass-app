@@ -192,7 +192,7 @@ export default async function OperationsTourRoutingPage({
             marginBottom: 'var(--lp-space-3)',
           }}
         >
-          <PageTitle style={{ margin: 0 }}>Routing</PageTitle>
+          <PageTitle style={{ margin: 0 }}>Schedule</PageTitle>
           {/* R1 — the five KPI boxes collapse into ONE mono stat line, inline
               with the condensed title (mock header row). */}
           {canRead && readiness ? (

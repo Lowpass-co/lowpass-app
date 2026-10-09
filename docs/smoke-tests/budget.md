@@ -2189,3 +2189,30 @@ test tour only. ✅ = passed live; ⚙ = covered by vitest, not live-run.
 #### BUD-MR-09 — FX: a foreign receipt converts into the line's currency ⚙
 #### BUD-MR-10 — an approved budget's baseline never moves ⚙
 #### BUD-MR-11 — a failed source read leaves lines untouched and shows a banner ⚙
+
+## UX simplification (Oct 2026)
+
+- [ ] **BUD-UX-01 — Each tab says what it is.** Summary, Budget, Income &
+  settlements, Receipts and Tour settings each open with a title and a line of
+  "what goes here".
+
+- [ ] **BUD-UX-02 — Empty automatic lines are tucked away.** On a tour with
+  £0 automatic lines (e.g. "Unassigned Hotel"), Budget shows "Show N automatic
+  lines with no cost" above the grid and those rows are hidden; clicking it
+  shows them, clicking again hides them. Hand-entered £0 lines are still shown.
+  Adding a new line: it appears and stays.
+
+- [ ] **BUD-UX-03 — Reordering with lines hidden.** With automatic lines
+  hidden, drag a visible line in a section that has hidden ones; reload; the
+  order holds, and "Show N…" reveals the hidden ones at the end of the section.
+
+- [ ] **BUD-UX-04 — No "▼0.0%".** A line whose actual equals its planned cost
+  shows an empty Variance cell.
+
+- [ ] **BUD-UX-05 — The spent caption isn't cut off.** On an over-budget tour
+  the header reads "£XK spent · 1NN%" in full, with the % in red.
+
+- [ ] **BUD-UX-06 — Settings don't flash zeros.** Tour settings: while loading,
+  the % boxes are blank, not 0. (If the load fails, the Overheads card says it
+  couldn't load rather than showing 0%.)
+

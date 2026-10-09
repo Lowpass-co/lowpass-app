@@ -640,3 +640,31 @@ return **409** ("Payroll is finalized…") while `tours.payroll_finalized_at` is
 regardless of the UI. **Unlock is admin-only** (`DELETE /api/tours/[id]/payroll/finalize`)
 — a non-admin gets 403; unlock clears the timestamp and writes flow again.
 **Code-verified** (server guards in src/lib/payroll/finalize.ts); **Needs-live**.
+
+## Travel — the flights page (Oct 2026)
+
+- [ ] **OPS-TRV-01 — Travel has a page.** Sidebar → Travel. Title "Travel", an
+  **Add flight** button, and the tour's flights in a list (or "No flights yet").
+
+- [ ] **OPS-TRV-02 — Add a flight.** Add flight → Who (the crew names are
+  suggested), From, To, Date, Departs, Airline, Flight number, Booking ref,
+  Cost → Save flight. It appears in the list with the right date, time and
+  route; the form stays open with Who and Date kept for the next leg.
+
+- [ ] **OPS-TRV-03 — Its cost reaches the budget.** Budget tab: the flight's
+  line is there with an **Auto** chip; hovering the chip says it is filled in
+  from Travel and to edit it there.
+
+- [ ] **OPS-TRV-04 — Editing doesn't move the flight.** Click the flight → the
+  panel shows Who / Route / Booking / Cost / Notes (no "Canonical flight
+  record", no placeholders). Change the cost and Save. Close, reopen: the
+  departure time is **exactly** what it was. *(Before Oct 2026 every save from
+  this panel moved the flight an hour earlier in UK summer time.)*
+
+- [ ] **OPS-TRV-05 — Delete.** In the panel, Delete → Yes, delete. It leaves
+  the list and its line leaves the budget.
+
+- [ ] **OPS-ROOM-UX-01 — Rooming says what the price box does.** Hotels &
+  rooming: the box reads "Price per room-night for the rooms you set next";
+  the page has the same left margin as other pages (not flush to the sidebar).
+

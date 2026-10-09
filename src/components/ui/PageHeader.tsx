@@ -52,10 +52,9 @@ export function PageHeader({ title, subtitle, eyebrow, actions, className }: Pag
             {eyebrow}
           </p>
         ) : null}
-        {/* Stage E · §3 — canonical page title: Barlow Condensed 600, uppercase,
-            tight leading (`.lp-page-title`), at the 28px display scale. Every
-            PageHeader adopter picks this up at once. */}
-        <h1 className="lp-page-title text-[28px] text-lp-text">{title}</h1>
+        {/* Canonical page title (`.lp-page-title`: sans, title case, the
+            --lp-text-2xl token). Every PageHeader adopter picks this up. */}
+        <h1 className="lp-page-title text-lp-text">{title}</h1>
         {subtitle ? (
           <p className="mt-1 text-sm text-lp-text-secondary">{subtitle}</p>
         ) : null}
@@ -82,7 +81,7 @@ export function PageTitle({
   as?: 'h1' | 'h2';
 }) {
   return (
-    <Tag className={cn('lp-page-title text-[28px] text-lp-text', className)} style={style}>
+    <Tag className={cn('lp-page-title text-lp-text', className)} style={style}>
       {children}
     </Tag>
   );

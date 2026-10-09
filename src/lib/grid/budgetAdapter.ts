@@ -213,3 +213,51 @@ export function gridEditToPatch(field: string, value: unknown): Record<string, u
   if (col === 'actual_cost') patch.actual_cost_override = true;
   return patch;
 }
+
+/* ---- declutter (Oct 2026) ----------------------------------------- */
+
+/** An automatic line with nothing on it: no planned cost, no actual, no
+ *  receipts or documents. It can't be edited in the grid (its source page
+ *  owns it), so showing it is pure noise — e.g. ten "Unassigned Hotel" £0
+ *  rows. MANUAL £0 lines are NOT hidden: they're where you type, and a line
+ *  you just added starts at £0 — hiding it would make it vanish on add. */
+export function isEmptyAutoRow(r: Row): boolean {
+  return (
+    r._derived === true &&
+    !(Number(r.est) || 0) &&
+    !(Number(r.act) || 0) &&
+    !(Number(r.txnCount) || 0) &&
+    !(Number(r.docCount) || 0)
+  );
+}
+
+export interface DeclutteredSections {
+  data: Section[];
+  /** section _uid → the hidden row uids, so a reorder of the visible rows can
+   *  append them and keep sort_order a single sequence. */
+  hiddenBySection: Map<string, string[]>;
+  hiddenCount: number;
+}
+
+/** Drop empty automatic rows, and any section that held ONLY those. A section
+ *  that was already empty (no rows at all) is kept — it's somewhere to add. */
+export function hideEmptyAutoRows(sections: Section[]): DeclutteredSections {
+  const hiddenBySection = new Map<string, string[]>();
+  let hiddenCount = 0;
+  const data: Section[] = [];
+  for (const sec of sections) {
+    const keep: Row[] = [];
+    const gone: string[] = [];
+    for (const r of sec.rows) {
+      if (isEmptyAutoRow(r)) gone.push(String(r._uid ?? ''));
+      else keep.push(r);
+    }
+    if (gone.length) {
+      hiddenCount += gone.length;
+      if (sec._uid) hiddenBySection.set(sec._uid, gone);
+    }
+    if (keep.length === 0 && gone.length > 0) continue;
+    data.push(gone.length ? { ...sec, rows: keep } : sec);
+  }
+  return { data, hiddenBySection, hiddenCount };
+}

@@ -40,8 +40,8 @@ export default async function OperationsTourLaborPage({ params }: { params: Prom
     <div style={{ display: 'flex', flexDirection: 'column', minHeight: 0 }}>
       <div className="mx-auto w-full" style={{ flex: 1, minWidth: 0, padding: 'var(--lp-space-4)' }}>
         <header className="mb-3">
-          <h1 style={{ margin: 0, fontSize: 'var(--lp-text-2xl)', fontWeight: 'var(--lp-weight-bold)', color: 'var(--lp-text)' }}>
-            Labor
+          <h1 className="lp-page-title" style={{ margin: 0, color: 'var(--lp-text)' }}>
+            Labor calls
           </h1>
         </header>
         <LaborTourView tourId={tourId} days={days} />

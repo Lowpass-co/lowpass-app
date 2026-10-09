@@ -513,7 +513,7 @@ export function FilesCanvas({ initial, uploadScope, title = 'Files', subtitle }:
       {/* Header */}
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <PageTitle style={{ fontSize: 28 }}>{title}</PageTitle>
+          <PageTitle>{title}</PageTitle>
           <p className="mt-1 text-sm" style={{ color: 'var(--lp-text-secondary)' }}>
             {subtitle ?? 'Folders and files on one canvas. Click a file for the panel (preview when available); drag a file onto a folder to move it.'}
           </p>

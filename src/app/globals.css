@@ -919,20 +919,24 @@ input[type='checkbox'].lp-checkbox:focus-visible {
   --lp-bg-tertiary: #252525;
   --lp-surface: #1A1A1A;
   --lp-surface-hover: #252525;
-  --lp-border: #2E2E2E;
+  /* Oct 2026 "cleaner dark" — a modest contrast lift. Tertiary text was
+     #737373 on #0F0F0F (~4.0:1, under WCAG AA 4.5:1) and it carries every
+     label, heading and hint; now #8A8A8A (~5.5:1). Secondary and borders
+     step up with it so hierarchy is kept. */
+  --lp-border: #313131;
   --lp-border-light: #252525;
   --lp-text: #F5F5F5;
-  --lp-text-secondary: #A3A3A3;
-  --lp-text-tertiary: #737373;
+  --lp-text-secondary: #B3B3B3;
+  --lp-text-tertiary: #8A8A8A;
   --lp-text-inverse: #0F0F0F;
-  --lp-table-header-text: #737373;
+  --lp-table-header-text: #8A8A8A;
 
   /* Sidebar — dark (inverted) */
   --lp-sidebar-bg: #0F0F0F;
   --lp-sidebar-border: #2E2E2E;
-  --lp-sidebar-text: #A3A3A3;
+  --lp-sidebar-text: #B3B3B3;
   --lp-sidebar-text-heading: #F5F5F5;
-  --lp-sidebar-text-muted: #737373;
+  --lp-sidebar-text-muted: #8A8A8A;
   --lp-sidebar-active-bg: rgba(255, 69, 0, 0.028);
   --lp-sidebar-hover-bg: rgba(255, 255, 255, 0.06);
   --lp-sidebar-icon: rgba(255, 69, 0, 0.5);
@@ -976,7 +980,7 @@ input[type='checkbox'].lp-checkbox:focus-visible {
      dark UI eyes need the larger jump to perceive the hover. */
   --lp-panel-hover: color-mix(in srgb, var(--lp-panel) 92%, white 8%);
   --lp-border-subtle: #222222;
-  --lp-border-strong: #333333;
+  --lp-border-strong: #3B3B3B;
   --lp-text-mono: #d1d5db;
   /* Canonical Grid palette — brighter accents for dark surfaces. */
   --lp-violet: #A78BFA;
@@ -1234,23 +1238,17 @@ textarea::selection,
    600, uppercase, tight leading. One class so every page title reads identically
    (adopted via <PageHeader> + <PageTitle>). Size is set by the caller. */
 .lp-page-title {
-  font-family: var(--lp-font-condensed);
+  /* Oct 2026 visual pass ("cleaner dark") — page titles are the body sans in
+     title case, not condensed ALL CAPS. Shouting every page name made the app
+     read as dated and made long names (tour — page) hard to scan. Size lives
+     HERE, on the token, so every title in the app is the same size; callers
+     no longer pass their own fontSize. */
+  font-family: inherit;
   font-weight: 600;
-  text-transform: uppercase;
-  line-height: 1.02;
-  letter-spacing: 0.005em;
-  /* R2-3 — the title was clipped along its top edge. line-height 1.02 makes the
-     line box almost exactly the text height, and Barlow Condensed's caps reach
-     past it, so any ancestor with overflow:hidden shaves the tops off. The
-     shells above these pages DO clip (h-screen + overflow-hidden, so <main> is
-     the only scroll surface).
-
-     Headroom rather than a bigger line-height: raising the leading would loosen
-     every page title in the app to fix one clipped edge. padding + a negative
-     margin of the same size gives the glyph box room to breathe while leaving
-     the title's position and rhythm exactly where they were. */
-  padding-block-start: 0.09em;
-  margin-block-start: -0.09em;
+  font-size: var(--lp-text-2xl);
+  text-transform: none;
+  line-height: 1.25;
+  letter-spacing: -0.01em;
 }
 
 /* ============================================

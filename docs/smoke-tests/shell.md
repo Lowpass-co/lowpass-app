@@ -613,10 +613,9 @@ wrong" from the error boundary, with the page never rendering. If you see that:
 
 - [ ] **SHELL-64 — The tourless landings grey the bar, not the rail.** Open
   /operations (also /budget, /advance) with NO tour remembered. The workspace
-  rail is fully visible and interactive; the top bar shows the mode pill
-  GREYED (not absent, not clickable, tooltip explains) and a live artist/tour
-  picker; the "Select a tour" prompt shows beneath. Picking a tour navigates
-  and the pill comes alive.
+  rail is fully visible and interactive; the top bar shows a live artist/tour
+  picker; the "Select a tour" prompt shows beneath. Picking a tour navigates.
+  *(Oct 2026: the mode pill no longer exists — see SHELL-69.)*
 
 - [ ] **SHELL-65 — A remembered tour still skips the landing.** With a tour in
   context, /operations hard-replaces to /operations/[tourId] as before.
@@ -636,3 +635,33 @@ wrong" from the error boundary, with the page never rendering. If you see that:
   /artists/[id] → a tour → /budget/[tourId] → /settings → /rider-packs/[id]:
   exactly ONE top bar and ONE app rail on every page, and the ⌘K palette,
   bug-report button and toasts still mount once.
+
+## UX simplification — one tour sidebar, cleaner dark (Oct 2026)
+
+- [ ] **SHELL-69 — One sidebar for the whole tour.** Open any tour page. The
+  top bar has NO Tour / Money / Production switch. The left sidebar shows five
+  groups in this order: **The run** (Schedule, Day sheets, Advance) ·
+  **People & logistics** (Crew, Hotels & rooming, Travel, Files) · **Money**
+  (Summary, Budget, Income & settlements, Payroll, Receipts) · **Production**
+  (Gear, Channel list, Stage plot, Riders) · **Tour** (Tour settings). The
+  sidebar stays the same list as you move between them.
+
+- [ ] **SHELL-70 — Nothing in the sidebar is greyed out.** Every item opens a
+  page. (Per diems, Spaces, Movements, Manifests, Templates, Brand, Contacts,
+  Billing — the old dead items — are gone.)
+
+- [ ] **SHELL-71 — Settlements lights its parent.** Open
+  `/budget/[tourId]/settlement` cold: "Income & settlements" is lit. Both that
+  page and Budget → Income show an **Income | Settlements** switch top-right
+  that moves between them.
+
+- [ ] **SHELL-72 — Page titles match the sidebar and don't shout.** Titles are
+  normal case (not condensed ALL CAPS) and no longer include the tour name:
+  Schedule, Crew, Hotels & rooming, Travel, Payroll, Gear, Riders, Channel
+  list, and on Budget each tab (Summary, Budget, Income & settlements,
+  Receipts, Tour settings) has a title and one line saying what goes there.
+
+- [ ] **SHELL-73 — Labels are readable.** Sidebar group headings, table
+  headers and hint text are visibly lighter grey than before and easy to read
+  on the dark background; nothing looks washed out or harsh.
+

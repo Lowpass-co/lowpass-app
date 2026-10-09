@@ -1,34 +1,74 @@
 'use client';
 
+/* ============================================
+   LOWPASS — <FlightSlideOver>
+
+   Edit one flight. Opened from Travel, from a flight chip, or from Advance.
+
+   Oct 2026 pass:
+   - "Who" is editable (it wasn't — the field only existed on create).
+   - Developer placeholders removed ("Canonical flight record", the UX10
+     passenger note, the audit-log placeholder, a raw "Show ID" box).
+   - Delete, with a second click to confirm.
+   - TIMES ARE WALL-CLOCK. Every other flight writer stores the time typed as
+     if it were UTC (`${date}T${time}:00Z`) and every reader slices it back
+     out. This panel used to run the box through `new Date(local)`, i.e. the
+     browser's zone, so each save in BST moved the flight an hour earlier.
+     It now writes the same wall-clock form everyone else reads.
+
+   Every save/delete goes through /api/flights/[id], which refreshes the
+   flight's budget line via the one derived-line writer.
+   ============================================ */
+
 import { useEffect, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
 import { Loader2 } from 'lucide-react';
-import { getFlightById, updateFlight } from '@/lib/api/flights';
+import { deleteFlight, getFlightById, updateFlight } from '@/lib/api/flights';
 import type { Flight } from '@/lib/types/flight';
-import { cn } from '@/lib/utils';
 import { SlideOver } from '@/components/ui/SlideOver';
-
-const IC =
-  'w-full rounded-lg border border-lp-border bg-lp-surface px-3 py-2 text-sm text-lp-text outline-none focus:border-lp-orange';
+import { TextInput } from '@/components/ui/TextInput';
+import { Button } from '@/components/ui/Button';
 
 function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
-    <section className="space-y-2 border-b border-lp-border/70 pb-4">
-      <h3 className="text-[10px] font-bold uppercase tracking-wider text-lp-text-tertiary">{title}</h3>
+    <section className="space-y-3 border-b border-lp-border/70 pb-5">
+      <h3 className="text-sm font-semibold text-lp-text">{title}</h3>
       {children}
     </section>
   );
 }
 
-export default function FlightSlideOver({ id, onClose }: { id: string; onClose: () => void }) {
+/** Stored "2026-10-14T10:05:00+00:00" → the datetime-local box's "2026-10-14T10:05". */
+export function toWallClockInput(iso: string | null | undefined): string {
+  const s = (iso ?? '').slice(0, 16);
+  return /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(s) ? s : '';
+}
+
+/** The box's "2026-10-14T10:05" → the stored wall-clock form, or null. */
+export function fromWallClockInput(v: string): string | null {
+  return /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(v) ? `${v}:00.000Z` : null;
+}
+
+export default function FlightSlideOver({
+  id,
+  onClose,
+  onDeleted,
+}: {
+  id: string;
+  onClose: () => void;
+  onDeleted?: () => void;
+}) {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [savedAt, setSavedAt] = useState<number | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const [flight, setFlight] = useState<Flight | null>(null);
 
+  const [who, setWho] = useState('');
   const [airline, setAirline] = useState('');
   const [flightNumber, setFlightNumber] = useState('');
-  const [pnr, setPnr] = useState('');
+  const [bookingRef, setBookingRef] = useState('');
   const [originAirport, setOriginAirport] = useState('');
   const [destinationAirport, setDestinationAirport] = useState('');
   const [departAt, setDepartAt] = useState('');
@@ -36,7 +76,6 @@ export default function FlightSlideOver({ id, onClose }: { id: string; onClose: 
   const [costAmount, setCostAmount] = useState('');
   const [costCurrency, setCostCurrency] = useState('GBP');
   const [notes, setNotes] = useState('');
-  const [showId, setShowId] = useState('');
 
   useEffect(() => {
     setLoading(true);
@@ -45,17 +84,17 @@ export default function FlightSlideOver({ id, onClose }: { id: string; onClose: 
       .then((f) => {
         if (!f) throw new Error('Flight not found');
         setFlight(f);
+        setWho(f.personName ?? '');
         setAirline(f.airline ?? '');
         setFlightNumber(f.flightNumber ?? '');
-        setPnr(f.pnr ?? '');
+        setBookingRef(f.confirmation ?? f.pnr ?? '');
         setOriginAirport(f.originAirport);
         setDestinationAirport(f.destinationAirport);
-        setDepartAt(f.departAt.slice(0, 16));
-        setArriveAt(f.arriveAt.slice(0, 16));
+        setDepartAt(toWallClockInput(f.departAt));
+        setArriveAt(toWallClockInput(f.arriveAt));
         setCostAmount(f.costAmount != null ? String(f.costAmount) : '');
         setCostCurrency(f.costCurrency || 'GBP');
         setNotes(f.notes ?? '');
-        setShowId(f.showId ?? '');
       })
       .catch((e) => setError((e as Error).message))
       .finally(() => setLoading(false));
@@ -63,30 +102,58 @@ export default function FlightSlideOver({ id, onClose }: { id: string; onClose: 
 
   const title = useMemo(() => {
     if (!flight) return 'Flight';
-    return `${flight.airline ?? 'Flight'} ${flight.flightNumber ?? ''}`.trim();
+    const route = `${flight.originAirport} → ${flight.destinationAirport}`;
+    return flight.personName?.trim() ? `${flight.personName.trim()} · ${route}` : route;
   }, [flight]);
 
   const save = async () => {
+    const cost = costAmount.trim() === '' ? null : Number(costAmount);
+    if (cost != null && (!Number.isFinite(cost) || cost < 0)) {
+      setError('Cost must be a number.');
+      return;
+    }
+    const depart = fromWallClockInput(departAt);
+    if (!depart) {
+      setError('Departure needs a date and time.');
+      return;
+    }
     setSaving(true);
     setError(null);
     try {
       const updated = await updateFlight(id, {
-        airline: airline || null,
-        flight_number: flightNumber || null,
-        pnr: pnr || null,
-        origin_airport: originAirport || 'TBD',
-        destination_airport: destinationAirport || 'TBD',
-        depart_at: departAt ? new Date(departAt).toISOString() : null,
-        arrive_at: arriveAt ? new Date(arriveAt).toISOString() : null,
-        cost_amount: costAmount === '' ? null : Number(costAmount),
-        cost_currency: costCurrency || 'GBP',
-        notes: notes || null,
-        show_id: showId || null,
+        person_name: who.trim(),
+        airline: airline.trim() || null,
+        flight_number: flightNumber.trim() || null,
+        // Both columns carry the booking ref; older rows filled only pnr.
+        confirmation: bookingRef.trim() || null,
+        pnr: bookingRef.trim() || null,
+        origin_airport: originAirport.trim().toUpperCase() || 'TBD',
+        destination_airport: destinationAirport.trim().toUpperCase() || 'TBD',
+        depart_at: depart,
+        // arrive_at is NOT NULL: a blank arrival keeps the departure time.
+        arrive_at: fromWallClockInput(arriveAt) ?? depart,
+        cost_amount: cost,
+        cost_currency: costCurrency.trim().toUpperCase() || 'GBP',
+        notes: notes.trim() || null,
       });
       setFlight(updated);
+      setSavedAt(Date.now());
     } catch (e) {
       setError((e as Error).message);
     } finally {
+      setSaving(false);
+    }
+  };
+
+  const remove = async () => {
+    setSaving(true);
+    setError(null);
+    try {
+      await deleteFlight(id);
+      onDeleted?.();
+      onClose();
+    } catch (e) {
+      setError((e as Error).message);
       setSaving(false);
     }
   };
@@ -98,78 +165,83 @@ export default function FlightSlideOver({ id, onClose }: { id: string; onClose: 
       title={title}
       subtitle={
         <span className="text-xs" style={{ color: 'var(--lp-text-secondary)' }}>
-          Canonical flight record
+          Changes to the cost update the budget.
         </span>
       }
       width="wide"
       backdrop
       footer={
-        <div className="flex items-center justify-end gap-2">
-          <button type="button" className="rounded-md border border-lp-border px-3 py-2 text-sm text-lp-text" onClick={onClose}>
-            Close
-          </button>
-          <button
-            type="button"
-            onClick={() => void save()}
-            disabled={saving || loading}
-            className="rounded-md bg-lp-orange px-3 py-2 text-sm font-medium text-white disabled:opacity-60"
-          >
-            {saving ? 'Saving...' : 'Save flight'}
-          </button>
+        <div className="flex items-center gap-2">
+          {confirmDelete ? (
+            <>
+              <span className="text-sm text-lp-text-secondary">Delete this flight?</span>
+              <Button variant="danger" size="sm" onClick={() => void remove()} disabled={saving}>Yes, delete</Button>
+              <Button variant="ghost" size="sm" onClick={() => setConfirmDelete(false)}>Keep</Button>
+            </>
+          ) : (
+            <Button variant="ghost" size="sm" onClick={() => setConfirmDelete(true)} disabled={loading || saving}>
+              Delete
+            </Button>
+          )}
+          <span className="ml-auto text-xs text-lp-text-tertiary" aria-live="polite">
+            {savedAt && !saving ? 'Saved' : ''}
+          </span>
+          <Button variant="secondary" onClick={onClose}>Close</Button>
+          <Button variant="primary" onClick={() => void save()} disabled={saving || loading} loading={saving}>
+            Save flight
+          </Button>
         </div>
       }
     >
-      <div className="space-y-4">
+      <div className="space-y-5">
         {loading && (
           <div className="flex items-center gap-2 text-sm text-lp-text-secondary">
             <Loader2 className="h-4 w-4 animate-spin" />
-            Loading flight...
+            Loading flight…
           </div>
         )}
-        {error && <div className="rounded border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</div>}
-        {!loading && (
+        {error && (
+          <p role="alert" className="text-sm" style={{ color: 'var(--color-lp-error)' }}>{error}</p>
+        )}
+        {!loading && flight && (
           <>
-            <Section title="Details">
-              <div className="grid gap-3 sm:grid-cols-3">
-                <input className={IC} placeholder="Airline" value={airline} onChange={(e) => setAirline(e.target.value)} />
-                <input className={IC} placeholder="Flight number" value={flightNumber} onChange={(e) => setFlightNumber(e.target.value)} />
-                <input className={IC} placeholder="PNR" value={pnr} onChange={(e) => setPnr(e.target.value)} />
-              </div>
+            <Section title="Who">
+              <TextInput label="Passenger" hideLabel placeholder="Name" value={who} onChange={(e) => setWho(e.target.value)} />
             </Section>
 
             <Section title="Route">
               <div className="grid gap-3 sm:grid-cols-2">
-                <input className={IC} placeholder="Origin airport" value={originAirport} onChange={(e) => setOriginAirport(e.target.value.toUpperCase())} />
-                <input className={IC} placeholder="Destination airport" value={destinationAirport} onChange={(e) => setDestinationAirport(e.target.value.toUpperCase())} />
-                <input className={IC} type="datetime-local" value={departAt} onChange={(e) => setDepartAt(e.target.value)} />
-                <input className={IC} type="datetime-local" value={arriveAt} onChange={(e) => setArriveAt(e.target.value)} />
+                <TextInput label="From" value={originAirport} maxLength={4} onChange={(e) => setOriginAirport(e.target.value.toUpperCase())} />
+                <TextInput label="To" value={destinationAirport} maxLength={4} onChange={(e) => setDestinationAirport(e.target.value.toUpperCase())} />
+                <TextInput label="Departs (local)" type="datetime-local" value={departAt} onChange={(e) => setDepartAt(e.target.value)} />
+                <TextInput label="Arrives (local)" type="datetime-local" value={arriveAt} onChange={(e) => setArriveAt(e.target.value)} />
+              </div>
+            </Section>
+
+            <Section title="Booking">
+              <div className="grid gap-3 sm:grid-cols-3">
+                <TextInput label="Airline" value={airline} onChange={(e) => setAirline(e.target.value)} />
+                <TextInput label="Flight number" value={flightNumber} onChange={(e) => setFlightNumber(e.target.value)} />
+                <TextInput label="Booking ref" value={bookingRef} onChange={(e) => setBookingRef(e.target.value)} />
               </div>
             </Section>
 
             <Section title="Cost">
               <div className="grid gap-3 sm:grid-cols-2">
-                <input className={IC} type="number" step="0.01" placeholder="Amount" value={costAmount} onChange={(e) => setCostAmount(e.target.value)} />
-                <input className={IC} placeholder="Currency" value={costCurrency} onChange={(e) => setCostCurrency(e.target.value.toUpperCase())} />
+                <TextInput label="Amount" type="number" step="0.01" min="0" inputMode="decimal" value={costAmount} onChange={(e) => setCostAmount(e.target.value)} />
+                <TextInput label="Currency" value={costCurrency} maxLength={3} onChange={(e) => setCostCurrency(e.target.value.toUpperCase())} />
               </div>
             </Section>
 
-            <Section title="Passengers">
-              <p className="text-xs text-lp-text-tertiary">
-                Passenger chips/picker are reserved for UX10 canonical person wiring.
-              </p>
-            </Section>
-
-            <Section title="Show">
-              <input className={IC} placeholder="Show ID (optional)" value={showId} onChange={(e) => setShowId(e.target.value)} />
-            </Section>
-
-            <Section title="Notes">
-              <textarea className={cn(IC, 'min-h-24')} placeholder="Notes" value={notes} onChange={(e) => setNotes(e.target.value)} />
-            </Section>
-
-            <Section title="Activity">
-              <p className="text-xs text-lp-text-tertiary">Audit log placeholder for later prompt.</p>
-            </Section>
+            <section className="space-y-3">
+              <h3 className="text-sm font-semibold text-lp-text">Notes</h3>
+              <textarea
+                aria-label="Notes"
+                className="min-h-24 w-full rounded-lg border border-lp-border bg-lp-surface px-3 py-2 text-sm text-lp-text outline-none focus:border-lp-orange"
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+              />
+            </section>
           </>
         )}
       </div>

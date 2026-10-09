@@ -14,6 +14,11 @@ export type Flight = {
   passengerIds: string[];
   notes: string | null;
   showId: string | null;
+  /** Who is flying (free text — flights predate canonical passengers). */
+  personName?: string | null;
+  role?: string | null;
+  /** Booking reference. Falls back to pnr for older rows. */
+  confirmation?: string | null;
   createdAt: string;
   updatedAt: string;
 };

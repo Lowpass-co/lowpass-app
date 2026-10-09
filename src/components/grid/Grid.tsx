@@ -225,6 +225,23 @@ function statusUniverse(columns: Column[], sections: Section[]): string[] {
   return [...set];
 }
 
+/* Oct 2026 — the Auto chip says WHERE to edit the line, in the sidebar's own
+   words. Section source labels ('Rooming', 'Payroll', …) are logic keys
+   elsewhere in this file, so they are mapped here rather than renamed. */
+const AUTO_SOURCE_PAGE: Record<string, string> = {
+  Rooming: 'Hotels & rooming',
+  Payroll: 'Payroll',
+  'Per Diem': 'Payroll',
+  Travel: 'Travel',
+  Gear: 'Gear',
+};
+export function autoChipTitle(source: string): string {
+  const page = AUTO_SOURCE_PAGE[source];
+  return page
+    ? `Filled in automatically from ${page}. To change it, edit it on the ${page} page.`
+    : `Filled in automatically from ${source}.`;
+}
+
 export const Grid = forwardRef<GridHandle, GridProps>(function Grid({
   initialData,
   initialColumns,
@@ -1682,7 +1699,9 @@ export const Grid = forwardRef<GridHandle, GridProps>(function Grid({
     if (t === 'variance') {
       const ev = isFormula(sec) ? formulaEst(row, data()) : Number(row.est) || 0;
       const v = variance(row, ev);
-      if (!v) return <div key={key} className="c num" />;
+      /* A variance that rounds to 0.0% is "on budget", not a down-arrow —
+         "▼0.0%" on every matched line was noise (Oct 2026 declutter). */
+      if (!v || Math.abs(v.pct) < 0.05) return <div key={key} className="c num" />;
       const over = v.d > 0;
       const a = over ? '▲' : '▼';
       return (
@@ -1983,7 +2002,7 @@ export const Grid = forwardRef<GridHandle, GridProps>(function Grid({
           <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, marginLeft: 6, verticalAlign: 'middle' }}>
             {row._provenance === 'auto' ? (
               <span
-                title={`Synced from ${autoSource}`}
+                title={autoChipTitle(autoSource)}
                 style={{ ...CHIP_BASE, color: 'var(--lp-text-tertiary)', background: 'var(--lp-bg-deep)' }}
               >
                 <Lock size={9} aria-hidden /> Auto

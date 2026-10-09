@@ -44,62 +44,59 @@ function mount(pathname: string, search = '', extra: Record<string, unknown> = {
 }
 
 describe('the named acceptance case: cold /budget/[id]/settlement', () => {
-  it('shows Money mode active and Settlements highlighted, with zero interaction', () => {
+  it('lights Income & settlements, with zero interaction', () => {
     mount(`/budget/${T}/settlement`);
-    expect(screen.getByTestId('mode-money').getAttribute('data-active')).toBe('true');
-    expect(screen.getByTestId('mode-tour').getAttribute('data-active')).toBeNull();
-    expect(screen.getByTestId('nav-item-settlements').getAttribute('data-active')).toBe('true');
+    expect(screen.getByTestId('nav-item-income').getAttribute('data-active')).toBe('true');
   });
 
-  it('the rail head names the MODE, so pill and rail agree', () => {
+  it('the rail head names the SCOPE — there are no modes any more', () => {
     mount(`/budget/${T}/settlement`);
-    expect(screen.getByLabelText('MONEY navigation')).toBeTruthy();
+    expect(screen.getByLabelText('Tour navigation')).toBeTruthy();
   });
 });
 
-describe('the mode pill exists ONLY at tour scope', () => {
-  it('present on a tour URL', () => {
-    mount(`/operations/${T}/routing`);
-    expect(screen.getByTestId('mode-pill')).toBeTruthy();
-  });
-
-  it.each(['/artists/a1', '/artists', '/settings'])('absent on %s', (p) => {
+describe('there is no mode pill (Oct 2026 — one tour sidebar)', () => {
+  it.each([`/operations/${T}/routing`, `/budget/${T}`, '/artists/a1', '/artists', '/settings'])('absent on %s', (p) => {
     mount(p);
     expect(screen.queryByTestId('mode-pill')).toBeNull();
   });
 });
 
 describe('each scope renders its own rail', () => {
-  it('tour → Routing; production → Assets; artist → Overview; workspace → Artists', () => {
+  it('tour → Schedule; gear → Gear; artist → Overview; workspace → Artists', () => {
     mount(`/operations/${T}/routing`);
     expect(screen.getByTestId('nav-item-routing').getAttribute('data-active')).toBe('true');
 
     mount(`/operations/${T}/hire`);
-    expect(screen.getAllByTestId('nav-item-assets')[0].getAttribute('data-active')).toBe('true');
+    expect(screen.getAllByTestId('nav-item-assets').at(-1)!.getAttribute('data-active')).toBe('true');
 
     mount('/artists/a1');
-    expect(screen.getAllByTestId('nav-item-overview')[0].getAttribute('data-active')).toBe('true');
+    expect(screen.getAllByTestId('nav-item-overview').at(-1)!.getAttribute('data-active')).toBe('true');
 
     mount('/artists');
-    expect(screen.getAllByTestId('nav-item-artists')[0].getAttribute('data-active')).toBe('true');
+    expect(screen.getAllByTestId('nav-item-artists').at(-1)!.getAttribute('data-active')).toBe('true');
   });
 
-  it('Payroll appears in the MONEY rail from an /operations URL', () => {
-    // The route folder says operations; the rail says Money. Both are right.
+  it('one rail carries every tour page — Payroll and Crew side by side', () => {
     mount(`/operations/${T}/payroll`);
-    expect(screen.getByTestId('mode-money').getAttribute('data-active')).toBe('true');
     expect(screen.getByTestId('nav-item-payroll').getAttribute('data-active')).toBe('true');
+    expect(screen.getByTestId('nav-item-crew')).toBeTruthy();
+    expect(screen.getByTestId('nav-item-expenses')).toBeTruthy();
+    expect(screen.getByTestId('nav-item-assets')).toBeTruthy();
   });
 });
 
-describe('pages that don’t exist yet are visible but not clickable', () => {
-  it('Travel renders disabled and is not a link', () => {
-    /* The REASON used to live in a `title` attribute. The smoke found nothing on
-       hover (SHELL-07), so it's a real tooltip now — asserted below. */
+describe('every rail item is a link', () => {
+  it('Travel is a real page now', () => {
     mount(`/operations/${T}/routing`);
     const travel = screen.getByTestId('nav-item-travel');
-    expect(travel.getAttribute('aria-disabled')).toBe('true');
-    expect(travel.tagName).toBe('SPAN'); // not a link
+    expect(travel.tagName).toBe('A');
+    expect(travel.getAttribute('href')).toBe(`/operations/${T}/travel`);
+  });
+
+  it('nothing in the tour rail is disabled', () => {
+    const { container } = mount(`/operations/${T}/routing`);
+    expect(container.querySelectorAll('[aria-disabled="true"]').length).toBe(0);
   });
 });
 
@@ -142,31 +139,17 @@ describe('the way up', () => {
 
 import { fireEvent } from '@testing-library/react';
 
-describe('SHELL-07 — a dead item explains itself', () => {
-  it('hovering Travel says why it does nothing', () => {
-    mount(`/operations/${T}/routing`);
-    fireEvent.mouseEnter(screen.getByTestId('nav-item-travel'));
-    expect(screen.getByTestId('nav-tooltip').textContent).toBe('Travel — no page yet');
-  });
-
-  it('and it explains itself EXPANDED too, not only collapsed', () => {
-    // The rail is expanded here — the label is visible but the deadness isn't.
-    mount(`/operations/${T}/routing`);
-    expect(screen.getByTestId('nav-rail').getAttribute('data-collapsed')).toBe('false');
-    fireEvent.mouseEnter(screen.getByTestId('nav-item-travel'));
-    expect(screen.getByTestId('nav-tooltip')).toBeTruthy();
-  });
-
-  it('keyboard focus gets the same explanation as the mouse', () => {
-    mount(`/operations/${T}/routing`);
-    fireEvent.focus(screen.getByTestId('nav-item-travel'));
-    expect(screen.getByTestId('nav-tooltip').textContent).toMatch(/no page yet/);
-  });
-
+describe('SHELL-07 — expanded items need no tooltip', () => {
   it('a LIVE item expanded needs no tooltip — its label is right there', () => {
     mount(`/operations/${T}/routing`);
     fireEvent.mouseEnter(screen.getByTestId('nav-item-crew'));
     expect(screen.queryByTestId('nav-tooltip')).toBeNull();
+  });
+
+  it('keyboard focus on a collapsed item names it, same as the mouse', () => {
+    mount(`/operations/${T}/routing`, '', { denseRail: true });
+    fireEvent.focus(screen.getByTestId('nav-item-travel'));
+    expect(screen.getByTestId('nav-tooltip').textContent).toBe('Travel');
   });
 });
 
@@ -211,9 +194,9 @@ describe('SHELL-06 — icons do not move when the rail folds', () => {
       unmount();
       return slots;
     };
-    // Tour mode has two groups; both must reserve a slot in both states.
-    expect(read(false)).toBe(2);
-    expect(read(true)).toBe(2);
+    // The tour rail has five groups; each must reserve a slot in both states.
+    expect(read(false)).toBe(5);
+    expect(read(true)).toBe(5);
   });
 });
 
@@ -256,19 +239,20 @@ describe('S-3b fix — the chrome FOLLOWS soft navigation (the frozen-highlight 
     expect(screen.getByTestId('nav-item-routing').getAttribute('data-active')).toBeNull();
   });
 
-  it('the WHOLE RAIL swaps when navigation crosses a mode — not just the highlight', () => {
-    /* Routing → Payroll stays inside the /operations layout but crosses from
-       the TOUR rail to the MONEY rail. Frozen chrome showed the tour rail with
-       nothing lit; live chrome swaps rail, head label and pill together. */
+  it('the highlight follows a hop from /operations into /budget', () => {
+    /* Routing → Budget crosses product trees. Frozen chrome kept Schedule lit;
+       live chrome moves the highlight within the same single rail. */
     mockPathname = `/operations/${T}/routing`;
+    mockSearch = null;
     const { renav } = mountLive();
-    expect(screen.getByLabelText('TOUR navigation')).toBeTruthy();
+    expect(screen.getByLabelText('Tour navigation')).toBeTruthy();
 
-    mockPathname = `/operations/${T}/payroll`;
+    mockPathname = `/budget/${T}`;
+    mockSearch = new URLSearchParams('tab=budget');
     renav();
-    expect(screen.getByLabelText('MONEY navigation')).toBeTruthy();
-    expect(screen.getByTestId('nav-item-payroll').getAttribute('data-active')).toBe('true');
-    expect(screen.getByTestId('mode-money').getAttribute('data-active')).toBe('true');
+    expect(screen.getByLabelText('Tour navigation')).toBeTruthy();
+    expect(screen.getByTestId('nav-item-expenses').getAttribute('data-active')).toBe('true');
+    expect(screen.getByTestId('nav-item-routing').getAttribute('data-active')).toBeNull();
   });
 
   it('a ?tab= change moves the highlight too — budget tabs are search, not path', () => {
