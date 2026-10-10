@@ -236,7 +236,7 @@ export function BudgetSheetTop({
   const cell = { fontSize: 'var(--lp-text-sm)' } as const;
 
   return (
-    <div className="grid gap-4 xl:grid-cols-[minmax(0,5fr)_minmax(0,6fr)]" data-testid="budget-sheet-top">
+    <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,5fr)_minmax(0,6fr)]" data-testid="budget-sheet-top">
       {/* ── Totals ───────────────────────────────────────────── */}
       <section className="overflow-hidden rounded-lg border border-lp-border bg-lp-surface" aria-label="Budget totals">
         <table className="w-full border-collapse" style={cell}>

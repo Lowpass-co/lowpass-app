@@ -26,7 +26,9 @@ export interface PayrollRateFact {
   offRate: number;
   perDiem: number;
   showDays: number;
-  /** Off + travel days — the template's "# OFF DAY". */
+  /** Every worked day that isn't a show (off, travel, rehearsal, promo) —
+   *  the template's "# OFF DAY". A day-rate person is paid the same on all of
+   *  them, so rate × (show + off days) is their pay. */
   offDays: number;
 }
 
@@ -42,7 +44,7 @@ export function rateFactFor(ctx: TourRateContext, personnelRateId: string, count
     offRate: dayRate ?? a.offRate,
     perDiem: a.perDiem,
     showDays: counts.show,
-    offDays: counts.offTravel + (counts.off ?? 0),
+    offDays: Math.max(0, (counts.active ?? 0) - counts.show),
   };
 }
 

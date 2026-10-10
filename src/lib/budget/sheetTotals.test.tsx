@@ -52,3 +52,19 @@ describe('sheetTotalsBySection', () => {
     expect(rows.every((r) => r.projected < 99999)).toBe(true);
   });
 });
+
+import { rateFactFor } from '@/server/budget/payrollRateFacts';
+import { countDayStatuses } from '@/lib/payroll/fees';
+
+describe('rateFactFor — the days explain a day-rate person\'s pay', () => {
+  it('rehearsal and travel count as off days, so rate × days = pay', () => {
+    const ctx = {
+      types: [],
+      linesByRateId: new Map([['p', [{ rate_type_id: '00000000-0000-0000-0000-0000000000a6', amount: 250 }]]]),
+      legacyByRateId: new Map(),
+    };
+    const counts = countDayStatuses({ d1: 'show', d2: 'show', d3: 'off_travel', d4: 'rehearsal', d5: 'pd_only' });
+    const f = rateFactFor(ctx as never, 'p', counts);
+    expect(f).toMatchObject({ showRate: 250, offRate: 250, showDays: 2, offDays: 2 });
+  });
+});
