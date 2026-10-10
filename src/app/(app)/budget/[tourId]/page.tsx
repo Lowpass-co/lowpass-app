@@ -38,7 +38,8 @@ import { BudgetDensityProvider } from '@/components/budget/BudgetDensityContext'
 import { enrichLinesWithTransactionAggregates, fetchLineVendorFacts, type LineVendorFacts } from '@/lib/budget/transactions';
 import { enrichLinesWithAttachmentCounts } from '@/lib/budget/attachments';
 import { loadTourIncome, toIncomeRows } from '@/lib/budget/income';
-import { BudgetSummaryDashboard } from '@/components/budget/summary-cards/BudgetSummaryDashboard';
+import { BudgetSheetTop } from '@/components/budget/BudgetSheetTop';
+import { loadPayrollRateFacts, type PayrollRateFact } from '@/server/budget/payrollRateFacts';
 import { DataHealthBanner } from '@/components/budget/DataHealthBanner';
 import { computeDataHealth } from '@/server/budget/dataHealth';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
@@ -92,14 +93,10 @@ export async function generateMetadata({
 
 /** Title + one line of "what goes here" per tab, in the sidebar's words. */
 const TAB_HEADER: Record<string, { title: string; subtitle: string }> = {
-  summary: {
-    title: 'Summary',
-    subtitle: 'Where the tour stands: income, costs and what is left over.',
-  },
   budget: {
     title: 'Budget',
     subtitle:
-      'Type planned costs in Proposed. Actuals fill in from receipts. Lines marked Auto come from Crew, Payroll, Hotels, Travel or Gear — change them there.',
+      'Totals, overheads and commissions at the top — type percentages straight in. Every line below: type planned costs in Estimate; actuals fill in from receipts. Lines marked Auto come from Payroll, Hotels, Travel or Gear — change them there.',
   },
   income: {
     title: 'Income & settlements',
@@ -222,7 +219,7 @@ export default async function BudgetTourPage({
   // Phase 3 — the Budget grid's locked formula sections (commissions /
   // insurance / contingency / COGS) compute live from the same P&L inputs
   // as the Summary, so fetch them for the Budget tab too.
-  if (tab === 'summary' || tab === 'budget') {
+  if (tab === 'budget') {
     const [incRes, commRes] = await Promise.all([
       routingIds.length
         ? supabase
@@ -392,8 +389,6 @@ export default async function BudgetTourPage({
   // income grid's currency picker. Unversioned (a conversion assumption).
   const fxRates = await loadTourFxRates(supabase, tourId, workspaceId);
 
-  // #24 — routing_id → show label (venue → city → date) for the per-show brick.
-  const routingLabelById: Record<string, string> = {};
   // Stage-3 parity — routing_id → day_type, for the grid's day-type pill.
   const dayTypeByRouting: Record<string, string> = {};
   for (const r of (routingRes.data ?? []) as Array<{
@@ -405,16 +400,7 @@ export default async function BudgetTourPage({
   }>) {
     if (!r.id) continue;
     if (r.day_type) dayTypeByRouting[r.id] = r.day_type;
-    const label =
-      r.venue_name?.trim() ||
-      r.city?.trim() ||
-      (r.date ? new Date(`${r.date}T12:00:00`).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) : '');
-    if (label) routingLabelById[r.id] = label;
   }
-  // Aligned to incomeRows by index (each carries routing_id at runtime).
-  const showLabels = incomeRows.map(
-    (row) => routingLabelById[(row as { routing_id?: string }).routing_id ?? ''] ?? null,
-  );
 
   // FX unify (Stage 2) — foreign currencies used in the budget that have NO
   // budget_fx_rates entry convert 1:1 (a flagged fallback). Surface them via a
@@ -431,12 +417,16 @@ export default async function BudgetTourPage({
   }
   const fxMissing = [...fxUsed].filter((c) => c && c !== fxTour && fxRates[c] == null).sort();
 
-  // M1-A — data-health banner (Summary tab only, so other tabs don't pay for the
-  // queries). Derivable checks, computed server-side; no new tables.
-  const dataHealth =
-    tab === 'summary'
-      ? await computeDataHealth(supabase, tourId, workspaceId, tourCurrency)
-      : null;
+  // M1-A — data-health banner (budget sheet only, so other tabs don't pay for
+  // the queries). Derivable checks, computed server-side; no new tables.
+  // Oct 2026 — plus the read-only Show/Off rate + day columns for the salary
+  // and per-diem rows (display only; built from the same inputs as the lines).
+  const [dataHealth, rateFacts] = tab === 'budget'
+    ? await Promise.all([
+        computeDataHealth(supabase, tourId, workspaceId, tourCurrency),
+        loadPayrollRateFacts(supabase, tourId, workspaceId),
+      ])
+    : [null, {} as Record<string, PayrollRateFact>];
 
   return (
     /* §B4 — BudgetDensityProvider wraps the whole budget page
@@ -461,7 +451,7 @@ export default async function BudgetTourPage({
           viewedVersionId={viewed?.id ?? null}
           canApprove={canApprove}
           fxRates={fxRates}
-          showMeter={tab !== 'summary'}
+          showMeter
         />
         <DerivedRefreshBanner failed={derivedFailed} detail={derived.errors[0]} />
         <FxMissingRateBanner
@@ -488,21 +478,22 @@ export default async function BudgetTourPage({
               actions={tab === 'income' ? <IncomeSettlementSwitch tourId={tourId} active="income" /> : undefined}
             />
           ) : null}
-          {tab === 'summary' && dataHealth ? (
+          {tab === 'budget' && dataHealth ? (
             <DataHealthBanner items={dataHealth.items} total={dataHealth.total} />
           ) : null}
-          {tab === 'summary' ? (
-            /* #29 — the Summary tab is now the customizable card dashboard.
-               Presentation-only over computeBudgetPnl (same figures as before). */
-            <BudgetSummaryDashboard
+          {/* Oct 2026 — ONE budget sheet, after Adam's SUMMARY tab: totals +
+              overheads + commissions on top (typed in place), every line in the
+              grid below. The separate Summary card dashboard is retired. */}
+          {tab === 'budget' && (lines.length > 0 || sections.length > 0) ? (
+            <BudgetSheetTop
+              tourId={tourId}
+              tourCurrency={tourCurrency}
               lines={lines}
               sections={sections}
               income={incomeRows}
               commissions={commissionRows}
               settings={budgetSettings}
-              tourCurrency={tourCurrency}
               fxRates={fxRates}
-              showLabels={showLabels}
             />
           ) : null}
 
@@ -535,6 +526,7 @@ export default async function BudgetTourPage({
                   vendorTxnByLine={vendorTxnByLine}
                   receiptSourceByLine={receiptSourceByLine}
                   trackPhases={trackPhases}
+                  rateFacts={rateFacts}
                 />
                 {/* RQ-2 — the ONE drop zone. The modal "Receipt Inbox" that used
                     to sit below is retired: two surfaces with different upload

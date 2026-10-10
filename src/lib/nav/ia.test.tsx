@@ -158,7 +158,9 @@ describe('activeItemFor — the deep-link contract', () => {
   });
 
   it('budget tabs resolve from the QUERY, because that is how the route works', () => {
-    expect(activeItemFor(`/budget/${T}`, '?tab=summary')).toBe('summary');
+    // Summary merged into the budget sheet (Oct 2026) — old links light Budget.
+    expect(activeItemFor(`/budget/${T}`, '?tab=summary')).toBe('expenses');
+    expect(activeItemFor(`/budget/${T}`, '?tab=reports')).toBe('expenses');
     expect(activeItemFor(`/budget/${T}`, '?tab=budget')).toBe('expenses');
     expect(activeItemFor(`/budget/${T}`, '?tab=income')).toBe('income');
     expect(activeItemFor(`/budget/${T}`, '?tab=receipts')).toBe('receipts');
@@ -696,7 +698,7 @@ describe('P-1 — resolveRailView filters by the allow-list', () => {
   it('and the rest of Money survives that removal', () => {
     const allowed = allRailResources().filter((r) => r !== 'operations.payroll');
     const shown = ids(resolveRailView(money, `/budget/${T}`, '', {}, allowed));
-    expect(shown).toEqual(expect.arrayContaining(['summary', 'expenses', 'income', 'receipts']));
+    expect(shown).toEqual(expect.arrayContaining(['expenses', 'income', 'receipts']));
   });
 
   it('ungated items survive an EMPTY allow-list — absent means ungated', () => {
@@ -723,4 +725,15 @@ describe('P-1 — resolveRailView filters by the allow-list', () => {
     const allowed = allRailResources().filter((r) => r !== 'operations.payroll');
     expect(railViewIsSerialisable(resolveRailView(money, `/budget/${T}`, '', {}, allowed))).toBe(true);
   });
+});
+
+import { prefersFullWidth } from './ia';
+
+describe('prefersFullWidth — the budget sheet starts with the rail folded', () => {
+  it.each([[`/budget/${T}`, true], [`/budget/${T}/`, true], [`/budget/${T}/settlement`, false], [`/operations/${T}/routing`, false]])(
+    '%s → %s',
+    (p, want) => {
+      expect(prefersFullWidth(p)).toBe(want);
+    },
+  );
 });

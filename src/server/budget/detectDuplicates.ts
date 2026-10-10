@@ -52,6 +52,30 @@ function withinPctOf(target: number, candidate: number, pct: number): boolean {
   return Math.abs(target - candidate) / denom <= pct / 100;
 }
 
+/** Lowercased, punctuation-free, whitespace-collapsed label. */
+function normLabel(line: BudgetLineItem): string {
+  return String(line.label ?? '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
+}
+
+/** Same thing typed twice: equal labels, or one contained in the other
+ *  ("Catering" / "Catering Manchester"). Empty labels never match. */
+function similarLabel(a: BudgetLineItem, b: BudgetLineItem): boolean {
+  const x = normLabel(a);
+  const y = normLabel(b);
+  if (!x || !y) return false;
+  return x === y || x.includes(y) || y.includes(x);
+}
+
+/** An automatic line (salary, hotel, flight, gear…) is written once per
+ *  source by the reconcile — two of them are two different sources by
+ *  construction, never a duplicate. */
+function isDerived(line: BudgetLineItem): boolean {
+  return !!(line as { source_entity_type?: string | null }).source_entity_type;
+}
+
 function withinDays(aIso: string, bIso: string, days: number): boolean {
   const a = new Date(aIso).getTime();
   const b = new Date(bIso).getTime();
@@ -68,6 +92,10 @@ export function detectDuplicates(
       const a = lines[i];
       const b = lines[j];
       if (a.id === b.id) continue;
+      // Oct 2026 — the smoke's "4 possible duplicates" were two crew members'
+      // automatic salaries (£7,000 vs £6,750) and "Flights £5" vs
+      // "Bus / truck £5". Neither pair is a duplicate.
+      if (isDerived(a) || isDerived(b)) continue;
 
       // Phase 4.1 — section_id is the grouping source now (not the
       // retired free-text category). Two lines in the same section are
@@ -80,9 +108,10 @@ export function detectDuplicates(
       const bVendor = pickVendor(b);
       const sameVendor = aVendor != null && aVendor === bVendor;
 
-      // Need EITHER the same section OR the same vendor. Without one of
-      // those signals the amount + date overlap is too thin to flag.
-      if (!sameSection && !sameVendor) continue;
+      // Need EITHER the same vendor, OR the same section AND a matching
+      // label. Same section + similar amount alone flagged unrelated lines
+      // that happen to cost about the same.
+      if (!sameVendor && !(sameSection && similarLabel(a, b))) continue;
 
       const amtA = pickAmount(a);
       const amtB = pickAmount(b);

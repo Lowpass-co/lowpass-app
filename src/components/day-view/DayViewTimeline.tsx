@@ -85,7 +85,8 @@ export function DayViewTimeline({ tour, routingDates }: DayViewTimelineProps) {
   return (
     <>
       <header className="sticky top-0 z-10 -mx-4 flex flex-wrap items-center gap-4 border-b border-lp-border bg-lp-bg/95 px-4 py-3 backdrop-blur-md">
-        <h1 className="text-lg font-bold text-lp-text">{tour.name}</h1>
+        {/* Oct 2026 — the page title matches the sidebar; the top bar names the tour. */}
+        <h1 className="lp-page-title text-lp-text">Day sheets</h1>
         <span className="text-sm text-lp-text-secondary">
           {counts.show} show · {counts.off} off · {counts.travel} travel
         </span>

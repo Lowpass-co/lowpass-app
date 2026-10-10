@@ -504,8 +504,9 @@ function OverheadsCard({ tourId }: { tourId: string }) {
         className="mt-1"
         style={{ fontSize: 'var(--lp-text-sm)', color: 'var(--lp-text-secondary)' }}
       >
-        Percentages feed the Summary P&amp;L. Each picks the base it
-        applies to (gross income, expenses, or total expenses).
+        Percentages feed the budget totals. Each picks the base it applies to
+        (gross income, expenses, or total expenses). You can also type the
+        percentages straight into the totals at the top of the Budget sheet.
       </p>
       {loadFailed ? (
         <p role="alert" className="mt-2" style={{ fontSize: 'var(--lp-text-sm)', color: 'var(--color-lp-error)' }}>
@@ -663,7 +664,8 @@ function CommissionsCard({ tourId }: { tourId: string }) {
         <div>
           <h2 className="lp-h3">Commissions</h2>
           <p className="mt-1" style={{ fontSize: 'var(--lp-text-sm)', color: 'var(--lp-text-secondary)' }}>
-            Manager / agent percentages. Each feeds the Summary P&amp;L on its chosen base.
+            Manager / agent percentages, each on its chosen base. Also editable at the
+            top of the Budget sheet, next to the totals.
           </p>
         </div>
         <button

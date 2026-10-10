@@ -15,7 +15,6 @@
    bookmarks redirect-by-resolution rather than 404 — 'reports' → 'summary'
    (its export lives on the context band), 'actuals'/unknown → 'budget'. */
 export type BudgetTab =
-  | 'summary'
   | 'budget'
   | 'income'
   /* RQ-6 — Receipts is a first-class tab, not a panel buried under the grid.
@@ -29,14 +28,14 @@ export function resolveBudgetTab(
 ): BudgetTab {
   const candidate = Array.isArray(raw) ? raw[0] : raw;
   switch (candidate) {
-    case 'summary':
     case 'income':
     case 'receipts':
     case 'settings':
       return candidate;
-    // Phase 0 — Reports tab removed; stale ?tab=reports lands on Summary.
+    // Oct 2026 — Summary merged into the budget sheet (totals + commissions on
+    // top of the grid). Stale ?tab=summary / ?tab=reports links land there.
+    case 'summary':
     case 'reports':
-      return 'summary';
     case 'budget':
     default:
       return 'budget';

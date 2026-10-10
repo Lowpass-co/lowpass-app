@@ -25,6 +25,7 @@ import { budgetToGridSections, gridEditToPatch, hideEmptyAutoRows } from '@/lib/
 import { convertVia, type FxRateMap } from '@/lib/budget/fxRates';
 import { useToast } from '@/components/ui/Toast';
 import type { BudgetLineItem, BudgetSection } from '@/types';
+import type { PayrollRateFact } from '@/server/budget/payrollRateFacts';
 
 /** DB status set (decision 1 — kept, no migration). */
 const STATUS_OPTIONS = ['draft', 'quoted', 'approved', 'paid', 'disputed'];
@@ -126,6 +127,40 @@ export interface BudgetGridViewProps {
   /** Stage-3 parity — when the tour tracks phases, enable phase grouping in the
    *  Group-by cycle (opt-in; income/demo unaffected). */
   trackPhases?: boolean;
+  /** Oct 2026 — personnel_rates.id → the person's rates and day counts, for
+   *  the read-only Show rate / Off rate / Show days / Off days columns on the
+   *  salary and per-diem rows (Adam's template). Empty → no extra columns. */
+  rateFacts?: Record<string, PayrollRateFact>;
+}
+
+/** The template's rate columns. Read-only: rates are changed on Payroll. */
+const RATE_COLS: Column[] = [
+  { id: 'showRate', label: 'Show rate', type: 'number', w: 90, min: 70, resize: true, ro: true },
+  { id: 'offRate', label: 'Off rate', type: 'number', w: 90, min: 70, resize: true, ro: true },
+  { id: 'showDays', label: 'Show days', type: 'number', w: 90, min: 70, resize: true, ro: true },
+  { id: 'offDays', label: 'Off days', type: 'number', w: 90, min: 70, resize: true, ro: true },
+];
+
+/** Columns for the sheet: the rate columns sit between Item and Estimate,
+ *  as in the template, and only when the tour has payroll rows. */
+export function expenseColumns(withRates: boolean): Column[] {
+  if (!withRates) return EXPENSE_COLS;
+  const at = EXPENSE_COLS.findIndex((c) => c.id === 'est');
+  return [...EXPENSE_COLS.slice(0, at), ...RATE_COLS, ...EXPENSE_COLS.slice(at)];
+}
+
+/** The rate-column values for one derived line, or null for any other line. */
+export function rateCellsFor(
+  line: Pick<BudgetLineItem, 'source_entity_type' | 'source_entity_id'>,
+  facts: Record<string, PayrollRateFact>,
+): { showRate: number; offRate: number; showDays: number; offDays: number } | null {
+  const src = line.source_entity_type;
+  const f = line.source_entity_id ? facts[line.source_entity_id] : undefined;
+  if (!f) return null;
+  if (src === 'payroll') return { showRate: f.showRate, offRate: f.offRate, showDays: f.showDays, offDays: f.offDays };
+  // Per diem is paid per active day — the same amount on show and off days.
+  if (src === 'payroll_per_diem') return { showRate: f.perDiem, offRate: f.perDiem, showDays: f.showDays, offDays: f.offDays };
+  return null;
 }
 
 export function BudgetGridView({
@@ -134,6 +169,7 @@ export function BudgetGridView({
   viewedStatus = 'draft', draftVersionId = null, versions = [], fxRates = {},
   duplicateMap = {}, dayTypeByRouting = {}, vendorByLine = {},
   vendorTxnByLine = {}, receiptSourceByLine = {}, trackPhases = false,
+  rateFacts = {},
 }: BudgetGridViewProps) {
   // Stage-3 parity — count of lines flagged as possible duplicates.
   const duplicateCount = Object.keys(duplicateMap).length;
@@ -202,6 +238,20 @@ export function BudgetGridView({
     return pendingDeletes.size > 0 ? merged.filter((l) => !pendingDeletes.has(l.id)) : merged;
   }, [lines, pendingLines, pendingDeletes]);
   const fullData = budgetToGridSections(allLines, sections, { tourCurrency: native, ungroupedName: 'Uncategorised', dayTypeByRouting });
+  // Oct 2026 — the read-only rate columns (display only; never persisted —
+  // gridFieldToColumn maps none of these ids, so an edit can't write them).
+  const hasRates = Object.keys(rateFacts).length > 0;
+  const columns = useMemo(() => expenseColumns(hasRates), [hasRates]);
+  if (hasRates) {
+    const byId = new Map(allLines.map((l) => [l.id, l]));
+    for (const sec of fullData) {
+      for (const row of sec.rows) {
+        const line = row._uid ? byId.get(row._uid) : undefined;
+        const cells = line ? rateCellsFor(line, rateFacts) : null;
+        if (cells) Object.assign(row, cells);
+      }
+    }
+  }
   /* Oct 2026 declutter — automatic lines with no cost are hidden by default
      (see hideEmptyAutoRows). One toggle above the grid brings them back. */
   const [showEmptyAuto, setShowEmptyAuto] = useState(false);
@@ -611,8 +661,8 @@ export function BudgetGridView({
       <Grid
         // re-init when the line/section COUNT changes (add/delete via a refresh);
         // cell edits don't change counts, so the grid keeps its session state.
-        key={`${tourId}:${lines.length}:${sections.length}:${versionLocked ? 'locked' : 'draft'}:${showEmptyAuto ? 'all' : 'tidy'}`}
-        initialColumns={EXPENSE_COLS}
+        key={`${tourId}:${lines.length}:${sections.length}:${versionLocked ? 'locked' : 'draft'}:${showEmptyAuto ? 'all' : 'tidy'}:${hasRates ? 'rates' : 'plain'}`}
+        initialColumns={columns}
         initialData={data}
         fx={fx}
         slideStatuses={STATUS_CONFIG}

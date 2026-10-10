@@ -2216,3 +2216,36 @@ test tour only. ✅ = passed live; ⚙ = covered by vitest, not live-run.
   the % boxes are blank, not 0. (If the load fails, the Overheads card says it
   couldn't load rather than showing 0%.)
 
+## Budget sheet — one full-screen page after Adam's Sheets template (Oct 2026)
+
+- [ ] **BUD-SHEET-01 — One sheet, no Summary tab.** Sidebar → Money shows
+  Budget, Income & settlements, Payroll, Receipts (no Summary). Budget opens
+  with the sidebar folded to icons. An old `?tab=summary` link opens the sheet
+  with Budget lit.
+
+- [ ] **BUD-SHEET-02 — Totals block.** Top-left: one row per section
+  (Proposed / Actual), then Commissions, Accountancy [%], Insurance [%],
+  Contingency [%], Total expenses, Income, Net (red when negative). The section
+  rows add up to the grid's section subtotals.
+
+- [ ] **BUD-SHEET-03 — Type a % in place.** Change Contingency from 2 to 3 and
+  press Enter: its amount, Total expenses and Net change at once. Reload — it
+  stuck. Tour settings → Overheads shows 3%.
+
+- [ ] **BUD-SHEET-04 — Commissions block.** Top-right: add a commission, name
+  it "Management", 10%, Of = Gross. Its Proposed amount appears and the
+  Commissions line in the totals moves by the same amount. Remove it with ×.
+
+- [ ] **BUD-SHEET-05 — Rate columns.** Salary and per-diem rows show Show
+  rate / Off rate / Show days / Off days (read-only); other rows are blank.
+  A day-rate person shows the same rate in both. The numbers match Payroll.
+
+- [ ] **BUD-SHEET-06 — Health warnings are real.** No "has no rate" for
+  someone paid by any rate type; no "possible duplicates" for two people's
+  salaries or for different items that cost the same.
+
+- [ ] **BUD-SHEET-07 — Deleting after approval (needs migration 270).** On a
+  tour with an approved or superseded version, delete a line in the grid: it
+  goes. Switch the version picker to the old version: its totals are
+  unchanged.
+
