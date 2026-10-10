@@ -276,6 +276,20 @@ entry points, not by name — and each carried its own copy of the money
 formula, which is how the app came to have four commission formulas. Do not
 recreate a `_legacy/` tree: delete dead code instead of parking it.
 
+### Budget sheet — one page (Oct 2026, Adam's Sheets template)
+
+- `/budget/[tourId]?tab=budget` is THE budget: `<BudgetSheetTop>` (totals per
+  section + overhead % typed in place + commissions table) above the grid.
+  The Summary card dashboard is DELETED; `?tab=summary|reports` resolve to
+  `budget`. Sheet figures are `computeBudgetPnl` recomputed client-side;
+  section rows are `sheetTotalsBySection` (Σ pinned to `baseExpenses` by test).
+- Salary / per-diem rows carry READ-ONLY rate columns from
+  `loadPayrollRateFacts` (same inputs as the derived lines). Rates are edited
+  on Payroll only.
+- Saved budget versions are self-contained snapshots (migration 270 dropped
+  the snapshot→live FKs). Deleting a live line/section never touches a saved
+  version; drafts are tidied by trigger.
+
 ### Money — one writer, one formula (money repair, Oct 2026)
 
 - **Automatic budget lines** (hotels, salaries, per diems, flights, gear) are

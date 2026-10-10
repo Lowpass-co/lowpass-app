@@ -136,13 +136,12 @@ const TOUR_RAIL: RailEntry[] = [
   { kind: 'item', id: 'files', label: 'Files', icon: 'FolderOpen', resource: 'operations.files', href: (c) => `/operations/${c.tourId}/files` },
   g('Money'),
   {
-    kind: 'item', id: 'summary', label: 'Summary', icon: 'LayoutDashboard', resource: 'budget.summary',
-    href: (c) => `/budget/${c.tourId}?tab=summary`, match: budgetTab('summary'),
-  },
-  {
+    /* Oct 2026 — ONE budget sheet (totals + commissions on top, every line
+       below), after Adam's Sheets template. Summary is merged in, so old
+       ?tab=summary / ?tab=reports links light this item too. */
     kind: 'item', id: 'expenses', label: 'Budget', icon: 'Table2', badge: 'lines', resource: 'budget.line_items',
-    // 'budget' is the stored tab id for the expenses grid (budget-tab-utils).
-    href: (c) => `/budget/${c.tourId}?tab=budget`, match: budgetTab('budget'),
+    href: (c) => `/budget/${c.tourId}?tab=budget`,
+    match: (p, s) => budgetTab('budget')(p, s) || budgetTab('summary')(p, s) || budgetTab('reports')(p, s),
   },
   {
     /* Income and Settlements are one job — what the shows pay — so one item.
@@ -456,6 +455,16 @@ export function hasOwnRail(pathname: string): boolean {
        context id). Same component, same collapse rule. */
     /^\/rider-packs\/[^/]+/.test(pathname)
   );
+}
+
+/**
+ * Pages whose content is a full-width sheet, so the app rail starts folded to
+ * icons (Oct 2026 — the budget sheet, Adam: "clearer and full screen", like
+ * his Sheets template). Same mechanism as hasOwnRail: a default only — once
+ * the user toggles the rail, their choice persists and wins.
+ */
+export function prefersFullWidth(pathname: string): boolean {
+  return /^\/budget\/[^/]+\/?$/.test(pathname);
 }
 
 /**

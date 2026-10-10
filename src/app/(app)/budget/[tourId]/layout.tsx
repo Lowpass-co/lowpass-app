@@ -16,7 +16,7 @@ import type { ReactNode } from 'react';
 import { notFound } from 'next/navigation';
 import { headers } from 'next/headers';
 import { ShellV3Mount } from '@/components/shell-v3/ShellV3Mount';
-import { hasOwnRail } from '@/lib/nav/ia';
+import { hasOwnRail, prefersFullWidth } from '@/lib/nav/ia';
 import { HydrateTourArtist } from '@/components/shell-v2/HydrateTourArtist';
 import { TourVisitTracker } from '@/components/shell-v2/TourVisitTracker';
 import { loadTourIdentity } from '@/lib/shell/tourIdentity';
@@ -67,7 +67,7 @@ export default async function BudgetTourLayout({
       artistId={identity?.artistId ?? tourRow.artist_id}
       artistName={identity?.artistName ?? null}
       tourName={identity?.tourName ?? null}
-      denseRail={hasOwnRail(pathname)}
+      denseRail={hasOwnRail(pathname) || prefersFullWidth(pathname)}
     >
       <HydrateTourArtist tourId={tourId} artistId={identity?.artistId ?? tourRow.artist_id} />
       <TourVisitTracker tourId={tourId} />

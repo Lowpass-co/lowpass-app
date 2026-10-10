@@ -14,7 +14,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { detectDuplicates } from '@/server/budget/detectDuplicates';
 import type { BudgetLineItem } from '@/types';
-import { loadTourRateContext, rateAmountsFor } from '@/lib/payroll/loadRateLines';
+import { loadTourRateContext, rateLinesFor } from '@/lib/payroll/loadRateLines';
 
 export type HealthKind = 'unsettled_show' | 'income_no_fx' | 'zero_rate' | 'duplicate';
 
@@ -127,11 +127,13 @@ export async function computeDataHealth(
   let zeroRate: string[] = [];
   if (cards.length > 0) {
     const ctx = await loadTourRateContext(supabase, tourId, workspaceId);
+    /* Oct 2026 — "no rate" means no FEE line with an amount, of ANY rate
+       type. It used to look only at show / off / rehearsal, so someone paid
+       by a weekly or custom rate type (Jonny Test: £242 in the budget) was
+       reported as having no rate. This reads the same lines the salary
+       calculation does, so the two can't disagree. */
     zeroRate = cards
-      .filter((c) => {
-        const a = rateAmountsFor(ctx, c.id);
-        return a.showRate === 0 && a.offRate === 0 && a.rehearsalRate === 0;
-      })
+      .filter((c) => !rateLinesFor(ctx, c.id).some((l) => l.bucket === 'fee' && (Number(l.amount) || 0) > 0))
       .map((c) => c.person_name?.trim() || 'Unnamed');
   }
 
