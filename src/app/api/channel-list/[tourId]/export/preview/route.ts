@@ -38,13 +38,14 @@ export async function POST(
       .maybeSingle();
     if (!tour) return NextResponse.json({ error: 'Tour not found' }, { status: 404 });
 
-    const { html } = await buildChannelListExport(
+    const { html, meta } = await buildChannelListExport(
       supabase,
       { id: tour.id as string, name: (tour.name as string) || 'Tour', artist_id: tour.artist_id as string | null },
       profile.workspace_id as string,
       config,
     );
-    return NextResponse.json({ html });
+    // meta: the boxes + editor columns the export dialog offers as choices.
+    return NextResponse.json({ html, meta });
   } catch (err) {
     return exportErrorResponse('channel-list-preview', err);
   }

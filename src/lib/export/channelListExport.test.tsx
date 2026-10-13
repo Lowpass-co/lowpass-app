@@ -266,7 +266,9 @@ describe('§CL-9 — exported columns are the editor’s enabled columns', () =>
     const html = buildChannelListBodyHtml(data, CONFIG);
     const body = html.slice(html.indexOf('<tbody>'), html.indexOf('</tbody>'));
     const firstRow = body.slice(0, body.indexOf('</tr>'));
-    expect((firstRow.match(/<td/g) ?? []).length).toBe(data.columns.length);
+    // One data cell per enabled column, plus the box-colour stripe cell (Oct 2026).
+    expect((firstRow.match(/<td(?! class="lp-cl-stripe")/g) ?? []).length).toBe(data.columns.length);
+    expect((firstRow.match(/<td class="lp-cl-stripe"/g) ?? []).length).toBe(1);
     expect(firstRow).toContain('KICK IN');
     expect(firstRow).toContain('sE BL8');
     expect(firstRow).toContain('Hire'); // provider

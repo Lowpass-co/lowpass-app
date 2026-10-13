@@ -33,8 +33,17 @@ import { buildSettlementBodyHtml } from '@/lib/export/settlement-pdf';
 import { loadDay } from '@/lib/day/loadDay';
 import { buildDaySheetBodyHtml } from '@/lib/export/daysheet-pdf';
 
+/** Oct 2026 — what the channel-list export dialog needs to offer choices:
+ *  the IO boxes to pick from and the editor's own input columns. */
+export interface ChannelListExportMeta {
+  boxes: Array<{ id: string; label: string; colour: string | null }>;
+  editorColumns: string[];
+}
+
 export interface ExportBuild {
   html: string;
+  /** Surface-specific facts for the export dialog (channel-list only today). */
+  meta?: ChannelListExportMeta;
   footerNote: string;
   filename: string;
   /** Phase 2 — footer styling (the route passes this to the page.pdf footer). */
@@ -365,7 +374,7 @@ export async function buildChannelListExport(
   const logoDataUri = config.logo ? await resolveLogo(supabase, workspaceId, config, data.logoUrl) : null;
   const bgDataUri = await fetchExportAssetDataUri(supabase, workspaceId, config.header.bgAssetPath);
 
-  const subtitle = `${data.inputs.length} channel${data.inputs.length === 1 ? '' : 's'}${data.outputs.length ? ` · ${data.outputs.length} output${data.outputs.length === 1 ? '' : 's'}` : ''}`;
+  const subtitle = `${data.inputs.length} channel${data.inputs.length === 1 ? '' : 's'}${data.outputs.length ? ` · ${data.outputs.length} output${data.outputs.length === 1 ? '' : 's'}` : ''}${data.boxes.length ? ` · ${data.boxes.length} IO box${data.boxes.length === 1 ? '' : 'es'}` : ''}`;
 
   const html = renderDocument({
     letterhead: {
@@ -382,12 +391,17 @@ export async function buildChannelListExport(
     general: config.general,
     header: config.header,
     bgDataUri,
+    theme: config.channelList?.theme ?? 'light',
     bodyHtml: buildChannelListBodyHtml(data, config),
   });
 
   const footerNote = `${data.artist?.name ? `${data.artist.name} — ` : ''}${data.tour.name} · Channel list`;
   const filename = `${sanitize(data.artist?.name ?? '', '')} — ${sanitize(data.tour.name, 'Channel list')} — Channel list.pdf`.replace(/^ — /, '');
-  return { html, footerNote, filename, footer: config.footer, runningHeader: config.header.show ? footerNote : null };
+  const meta: ChannelListExportMeta = {
+    boxes: data.boxes.map((b) => ({ id: b.id, label: b.label, colour: b.colour })),
+    editorColumns: data.columns,
+  };
+  return { html, meta, footerNote, filename, footer: config.footer, runningHeader: config.header.show ? footerNote : null };
 }
 
 /** Stage plot — plot-id based (not tour-id; a plot lives in the artist library /

@@ -526,3 +526,42 @@ editor's labels — the phantom column heads **48V** (never `Ph.` / `Phantom`).
 Columns switched OFF (e.g. Loom, Notes) appear in neither file; columns switched
 ON that the old export never printed (Pos, Cable, Gain, Stand, Prov) appear in
 both. Toggle one column off, re-export, confirm it disappears. **Needs-live**.
+
+## Export looks like the editor — colour, light/dark, IO boxes, pulls (feat/channel-list-export) — 2026-10-13
+
+#### CHL-31 — Rows are colour-coded by stage box
+**Do**: Export a channel list whose inputs are patched to coloured stage boxes.
+**Expect**: each input row has its box's colour as a stripe at the left edge
+plus a faint tint across the row, matching the editor; a small legend of the
+boxes sits under the Inputs band. Unpatched rows are plain. Section headings
+are bands with an orange left edge and a count, as on screen. **Needs-live**.
+
+#### CHL-32 — Light / dark
+**Do**: In the export dialog → Channel list → Look, pick **Dark**, download PDF;
+then **Light**.
+**Expect**: Dark prints on the editor's dark palette edge to edge (no white
+border round the page); Light is the default and prints on white. Excel is
+unaffected by the theme but keeps the box colours. **Needs-live**.
+
+#### CHL-33 — IO box sheets
+**Do**: Sections → tick **IO box sheets**. Channel list → IO box sheets → untick
+"Every box", pick two boxes. Download PDF.
+**Expect**: one page per picked box, headed with its name, colour, size and
+"N patched · N spare"; every socket 1→size listed, empty ones as SPARE. A
+channel on the box with no socket number is listed under the table. Change the
+box-sheet columns and the pages follow. In Excel, each box is its own sheet.
+**Needs-live**.
+
+#### CHL-34 — Mic, stand, cable and loom pulls with spares
+**Do**: Tick **Mic & DI pull**, **Stand pull**, **Cable pull**, **Looms**. Set
+spares to 1 mic, 2 cables (or 10%).
+**Expect**: pulls print two to a row with Qty · Spare · Total and a total line.
+A channel with a mic AND a DI counts in both; a stand of "None" isn't counted;
+mics and stands split by who supplies them. **Needs-live**.
+
+#### CHL-35 — Old templates print what they did
+**Do**: Export using a template saved before this change.
+**Expect**: the same sections as before (inputs + outputs); the new sections are
+available but off until ticked. Custom input columns: "Same as the editor" on by
+default; untick it to choose columns for the printout only — the editor's own
+columns don't change.

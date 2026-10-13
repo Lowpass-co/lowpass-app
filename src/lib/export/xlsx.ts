@@ -18,8 +18,9 @@ import { loadRoomingExportData } from '@/lib/export/rooming-data';
 import { loadPayrollExportData } from '@/lib/export/payroll-data';
 import { loadRoutingExportData } from '@/lib/export/routing-data';
 import { loadChannelListExportData, channelExportColumnLabel } from '@/lib/export/channel-list-data';
-import type { ChannelExportCellKey } from '@/lib/export/channel-list-data';
-import type { ExportSurface, TemplateConfig } from '@/lib/export/template-config';
+import type { ChannelExportCellKey, PullRow } from '@/lib/export/channel-list-data';
+import { BOX_COLUMN_LABELS, DEFAULT_CHANNEL_LIST_OPTIONS, type ExportSurface, type TemplateConfig } from '@/lib/export/template-config';
+import { boxesFor, inputColumnsFor, safeColour, sparesFor } from '@/lib/export/channel-list-pdf';
 import type { BudgetExportData } from '@/lib/export/budget-data';
 import type { RoomingExportData } from '@/lib/export/rooming-data';
 import type { PayrollExportData } from '@/lib/export/payroll-data';
@@ -54,6 +55,21 @@ export interface SheetSpec {
   columns: Col[];
   rows: Array<Record<string, string | number | null>>;
   totalLabel?: string; // when set + any column has total, append a totals row
+  /** Oct 2026 — per-row colour (hex, e.g. a stage box's): the row is tinted
+   *  and its first cell filled solid, mirroring the PDF's stripe + tint. */
+  rowColours?: Array<string | null>;
+}
+
+/** '#3B82F6' → 'FF3B82F6'; a tint mixes it toward white (0 = colour, 1 = white). */
+export function argb(hex: string, toWhite = 0): string | null {
+  const m = /^#?([0-9a-fA-F]{6})$/.exec(hex.trim()) ?? /^#?([0-9a-fA-F]{3})$/.exec(hex.trim());
+  if (!m) return null;
+  const h = m[1].length === 3 ? m[1].split('').map((c) => c + c).join('') : m[1];
+  const mix = (i: number) => {
+    const v = parseInt(h.slice(i, i + 2), 16);
+    return Math.round(v + (255 - v) * toWhite).toString(16).padStart(2, '0');
+  };
+  return `FF${(mix(0) + mix(2) + mix(4)).toUpperCase()}`;
 }
 
 function addSheet(wb: ExcelJS.Workbook, spec: SheetSpec): void {
@@ -67,7 +83,18 @@ function addSheet(wb: ExcelJS.Workbook, spec: SheetSpec): void {
   hr.alignment = { vertical: 'middle' };
   ws.autoFilter = { from: { row: 1, column: 1 }, to: { row: 1, column: spec.columns.length } };
 
-  for (const r of spec.rows) ws.addRow(r);
+  spec.rows.forEach((r, i) => {
+    const row = ws.addRow(r);
+    const hex = spec.rowColours?.[i];
+    const solid = hex ? argb(hex) : null;
+    const tint = hex ? argb(hex, 0.85) : null;
+    if (solid && tint) {
+      for (let c = 1; c <= spec.columns.length; c++) {
+        row.getCell(c).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: c === 1 ? solid : tint } };
+      }
+      row.getCell(1).font = { bold: true, color: { argb: 'FFFFFFFF' } };
+    }
+  });
 
   // Number formats per column.
   spec.columns.forEach((c, i) => {
@@ -261,9 +288,11 @@ function routingSheet(data: RoutingExportData): SheetSpec {
  *  §CL-9: the input sheet's columns are the section's OWN enabled set
  *  (`data.columns`), in the editor's order and under the editor's labels — not
  *  a hardcoded list. Don't reintroduce one. */
-export function channelListSheets(data: ChannelListExportData): SheetSpec[] {
-  const cellKeys = data.columns.filter((k): k is ChannelExportCellKey => k !== 'number');
-  const hasNumber = data.columns.includes('number');
+export function channelListSheets(data: ChannelListExportData, config?: TemplateConfig): SheetSpec[] {
+  const opts = config?.channelList ?? DEFAULT_CHANNEL_LIST_OPTIONS;
+  const cols = inputColumnsFor(data, opts);
+  const cellKeys = cols.filter((k): k is ChannelExportCellKey => k !== 'number');
+  const hasNumber = cols.includes('number');
   const inputs: SheetSpec = {
     name: 'Input list',
     columns: [
@@ -274,10 +303,9 @@ export function channelListSheets(data: ChannelListExportData): SheetSpec[] {
       ...(hasNumber ? { index: r.index } : {}),
       ...Object.fromEntries(cellKeys.map((k) => [k, r.cells[k]])),
     })),
+    rowColours: data.inputs.map((r) => safeColour(r.boxColour)),
   };
-  const specs = [inputs];
-  if (data.outputs.length) {
-    specs.push({
+  const outputsSpec: SheetSpec | null = data.outputs.length ? {
       name: 'Outputs',
       columns: [
         { header: '#', key: 'index', numFmt: QTY_FMT },
@@ -288,9 +316,77 @@ export function channelListSheets(data: ChannelListExportData): SheetSpec[] {
         { header: 'Notes', key: 'notes' },
       ],
       rows: data.outputs.map((r) => ({ index: r.index, item: r.item, destination: r.destination, qty: r.qty ?? '', format: `${r.stereo ? 'Stereo' : 'Mono'}${r.position ? ` (${r.position})` : ''}`, notes: r.notes })),
-    });
+  } : null;
+
+  /* Oct 2026 — the same optional sections as the PDF, one sheet each, in the
+     template's order. Without a config (old callers) → inputs + outputs only,
+     exactly as before. */
+  const sp = opts.spares;
+  const pull = (name: string, rows: PullRow[], n: number, withProvider: boolean, itemHeader: string): SheetSpec => ({
+    name,
+    columns: [
+      { header: itemHeader, key: 'item' },
+      ...(withProvider ? [{ header: 'From', key: 'provider' }] : []),
+      { header: 'Qty', key: 'qty', numFmt: QTY_FMT, total: true },
+      { header: 'Spare', key: 'spare', numFmt: QTY_FMT, total: true },
+      { header: 'Total', key: 'total', numFmt: QTY_FMT, total: true },
+    ],
+    rows: rows.map((r) => {
+      const spare = sparesFor(r.qty, n, sp.mode);
+      return { item: r.item, provider: r.provider, qty: r.qty, spare, total: r.qty + spare };
+    }),
+    totalLabel: 'Total',
+  });
+  const builders: Record<string, () => SheetSpec[]> = {
+    inputs: () => [inputs],
+    outputs: () => (outputsSpec ? [outputsSpec] : []),
+    'io-boxes': () =>
+      boxesFor(data, opts).map((b) => ({
+        name: sheetName(`IO ${b.label}`),
+        columns: [
+          { header: 'In', key: 'socket', numFmt: QTY_FMT },
+          ...opts.boxColumns.map((k) => ({ header: BOX_COLUMN_LABELS[k], key: k, ...(k === 'channel' ? { numFmt: QTY_FMT } : {}) })),
+        ],
+        rows: b.sockets.map((s) => ({
+          socket: s.socket,
+          ...Object.fromEntries(
+            opts.boxColumns.map((k) => [
+              k,
+              !s.cells ? (k === 'name' ? 'SPARE' : '')
+                : k === 'channel' ? s.channel
+                : k === 'phantom_power' ? (s.cells.phantom_power === 'On' ? '48V' : '')
+                : s.cells[k as Exclude<typeof k, 'channel'>],
+            ]),
+          ),
+        })),
+        rowColours: b.sockets.map((s) => (s.cells ? safeColour(b.colour) : null)),
+      })),
+    'mic-pull': () => [pull('Mic & DI pull', data.pulls.mics, sp.mics, true, 'Mic / DI')],
+    'stand-pull': () => [pull('Stand pull', data.pulls.stands, sp.stands, true, 'Stand')],
+    'cable-pull': () => [pull('Cable pull', data.pulls.cables, sp.cables, false, 'Length')],
+    'loom-pull': () => [{
+      name: 'Looms',
+      columns: [{ header: 'Loom', key: 'label' }, { header: 'Ways', key: 'capacity', numFmt: QTY_FMT }, { header: 'Used', key: 'used', numFmt: QTY_FMT }],
+      rows: data.pulls.looms.map((l) => ({ label: l.label, capacity: l.capacity, used: l.used })),
+      rowColours: data.pulls.looms.map((l) => safeColour(l.colour)),
+    }],
+  };
+  if (!config) return [inputs, ...(outputsSpec ? [outputsSpec] : [])];
+  const specs = config.sections.filter((s) => s.show && builders[s.id]).flatMap((s) => builders[s.id]());
+  // Excel refuses two sheets with one name (two boxes both called "SB1").
+  const seen = new Map<string, number>();
+  for (const spec of specs) {
+    const key = spec.name.toLowerCase();
+    const n = (seen.get(key) ?? 0) + 1;
+    seen.set(key, n);
+    if (n > 1) spec.name = sheetName(`${spec.name.slice(0, 27)} (${n})`);
   }
-  return specs;
+  return specs.length ? specs : [inputs];
+}
+
+/** Excel sheet names: ≤31 chars, none of : \ / ? * [ ]. */
+function sheetName(raw: string): string {
+  return raw.replace(/[:\\/?*[\]]/g, ' ').slice(0, 31) || 'Sheet';
 }
 
 export interface XlsxBuild {
@@ -332,7 +428,7 @@ export async function buildXlsxExport(
     label = 'Payroll';
   } else if (surface === 'channel-list') {
     const data = await loadChannelListExportData(supabase, tour);
-    specs = channelListSheets(data);
+    specs = channelListSheets(data, config);
     artistName = data.artist?.name ?? null;
     label = 'Channel list';
   } else {

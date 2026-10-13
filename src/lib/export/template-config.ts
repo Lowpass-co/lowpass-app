@@ -136,6 +136,29 @@ export interface DaySheetOptions {
   bigType: boolean;
 }
 
+/** Oct 2026 — channel-list export options (surface 'channel-list' only).
+ *  The PDF reads like the editor: rows colour-coded by stage box, optional
+ *  one-page-per-IO-box sheets and mic / stand / cable / loom pulls. */
+export type ChannelListTheme = 'light' | 'dark';
+/** Columns a per-box socket sheet can print. `socket` is always first. */
+export const BOX_COLUMN_KEYS = ['channel', 'name', 'mic', 'sub_snake', 'phantom_power', 'stand', 'position', 'notes'] as const;
+export type BoxColumnKey = (typeof BOX_COLUMN_KEYS)[number];
+export const BOX_COLUMN_LABELS: Record<BoxColumnKey, string> = {
+  channel: 'Ch', name: 'Name', mic: 'Mic / DI', sub_snake: 'Loom', phantom_power: '48V', stand: 'Stand', position: 'Pos', notes: 'Notes',
+};
+export interface ChannelListOptions {
+  /** PDF only. Light is the default (dark burns ink on a printer). */
+  theme: ChannelListTheme;
+  /** Which IO boxes get a sheet. null = every box. */
+  boxIds: string[] | null;
+  /** Input-list columns. null = the editor's own enabled columns. */
+  inputColumns: string[] | null;
+  /** Columns on each IO box sheet. */
+  boxColumns: BoxColumnKey[];
+  /** Spares added to the pull lists, per line: a count, or a % rounded up. */
+  spares: { mode: 'count' | 'percent'; mics: number; stands: number; cables: number };
+}
+
 export interface TemplateConfig {
   /** Schema version (forward-compat). */
   v: 1;
@@ -163,6 +186,8 @@ export interface TemplateConfig {
   routing: RoutingOptions;
   /** D1-2 — day-sheet options (only meaningful for surface 'daysheet'). */
   daysheet?: DaySheetOptions;
+  /** Oct 2026 — channel-list options (only meaningful for surface 'channel-list'). */
+  channelList?: ChannelListOptions;
 }
 
 /** The section ids each surface's body builder owns (coarse, P1). Additive — new
@@ -171,7 +196,10 @@ export const BUDGET_SECTION_IDS = ['pnl-summary', 'income-detail', 'expense-deta
 export const ROOMING_SECTION_IDS = ['hotels'] as const;
 export const PAYROLL_SECTION_IDS = ['run-sheet', 'statements'] as const;
 export const ROUTING_SECTION_IDS = ['days', 'advance-summary'] as const;
-export const CHANNEL_LIST_SECTION_IDS = ['inputs', 'outputs'] as const;
+export const CHANNEL_LIST_SECTION_IDS = ['inputs', 'outputs', 'io-boxes', 'mic-pull', 'stand-pull', 'cable-pull', 'loom-pull'] as const;
+/** New channel-list sections are OFF by default, so an existing saved template
+ *  prints exactly what it did before until the TM ticks them. */
+const CHANNEL_LIST_DEFAULT_ON = new Set<string>(['inputs', 'outputs']);
 export const STAGE_PLOT_SECTION_IDS = ['stage-diagram', 'input-list'] as const;
 export const DAYSHEET_SECTION_IDS = ['schedule', 'venue', 'hotel', 'flights', 'contacts', 'notes'] as const;
 
@@ -187,6 +215,11 @@ export const SECTION_LABELS: Record<string, string> = {
   'advance-summary': 'Advance summary (per day)',
   inputs: 'Input list',
   outputs: 'Outputs (IEM / mix)',
+  'io-boxes': 'IO box sheets (a page per box)',
+  'mic-pull': 'Mic & DI pull',
+  'stand-pull': 'Stand pull',
+  'cable-pull': 'Cable pull',
+  'loom-pull': 'Looms / sub-snakes',
   'stage-diagram': 'Stage diagram',
   'input-list': 'Input list (combined)',
   schedule: 'Schedule',
@@ -310,19 +343,28 @@ export const DEFAULT_ROUTING_CONFIG: TemplateConfig = {
   routing: DEFAULT_ROUTING_OPTIONS,
 };
 
+export const DEFAULT_CHANNEL_LIST_OPTIONS: ChannelListOptions = {
+  theme: 'light',
+  boxIds: null,
+  inputColumns: null,
+  boxColumns: ['channel', 'name', 'mic', 'sub_snake', 'phantom_power'],
+  spares: { mode: 'count', mics: 0, stands: 0, cables: 0 },
+};
+
 export const DEFAULT_CHANNEL_LIST_CONFIG: TemplateConfig = {
   v: 1,
   surface: 'channel-list',
   format: 'pdf',
   pageSize: 'A4',
   logo: true,
-  sections: CHANNEL_LIST_SECTION_IDS.map((id) => ({ id, show: true })),
+  sections: CHANNEL_LIST_SECTION_IDS.map((id) => ({ id, show: CHANNEL_LIST_DEFAULT_ON.has(id) })),
   general: DEFAULT_GENERAL,
   header: DEFAULT_HEADER,
   footer: DEFAULT_FOOTER,
   dateRange: DEFAULT_DATE_RANGE,
   payroll: DEFAULT_PAYROLL_OPTIONS,
   routing: DEFAULT_ROUTING_OPTIONS,
+  channelList: DEFAULT_CHANNEL_LIST_OPTIONS,
 };
 
 export const DEFAULT_STAGE_PLOT_CONFIG: TemplateConfig = {
@@ -609,6 +651,45 @@ export function normalizeConfig(surface: ExportSurface, input: unknown): Templat
   if (surface === 'payroll') base.payroll = normalizePayroll(c.payroll);
   if (surface === 'routing') base.routing = normalizeRouting(c.routing);
   if (surface === 'daysheet') base.daysheet = normalizeDaySheet(c.daysheet);
+  if (surface === 'channel-list') base.channelList = normalizeChannelList(c.channelList);
+  return base;
+}
+
+const INPUT_COLUMN_KEYS = new Set(['number', 'name', 'position', 'stage_box', 'sub_snake', 'cable_length', 'mic', 'gain', 'stand', 'phantom_power', 'provider', 'notes']);
+const clampInt = (v: unknown, lo: number, hi: number, dflt: number): number => {
+  const n = Math.round(Number(v));
+  return Number.isFinite(n) ? Math.min(hi, Math.max(lo, n)) : dflt;
+};
+function stringList(v: unknown): string[] {
+  return Array.isArray(v) ? Array.from(new Set(v.filter((x): x is string => typeof x === 'string' && x.trim().length > 0))) : [];
+}
+/** Untrusted request body → channel-list options. Unknown column keys are
+ *  dropped; Name always prints (a row with no name is unreadable on paper). */
+export function normalizeChannelList(input: unknown): ChannelListOptions {
+  const d = DEFAULT_CHANNEL_LIST_OPTIONS;
+  const base: ChannelListOptions = { ...d, boxColumns: [...d.boxColumns], spares: { ...d.spares } };
+  if (!input || typeof input !== 'object') return base;
+  const o = input as Partial<ChannelListOptions>;
+  if (o.theme === 'light' || o.theme === 'dark') base.theme = o.theme;
+  base.boxIds = o.boxIds === null || o.boxIds === undefined ? null : stringList(o.boxIds);
+  if (o.inputColumns === null || o.inputColumns === undefined) base.inputColumns = null;
+  else {
+    const cols = stringList(o.inputColumns).filter((k) => INPUT_COLUMN_KEYS.has(k));
+    base.inputColumns = cols.includes('name') ? cols : ['name', ...cols];
+  }
+  if (Array.isArray(o.boxColumns)) {
+    const known = new Set<string>(BOX_COLUMN_KEYS);
+    base.boxColumns = BOX_COLUMN_KEYS.filter((k) => (o.boxColumns as unknown[]).includes(k) && known.has(k));
+  }
+  if (o.spares && typeof o.spares === 'object') {
+    const sp = o.spares as Partial<ChannelListOptions['spares']>;
+    base.spares = {
+      mode: sp.mode === 'percent' ? 'percent' : 'count',
+      mics: clampInt(sp.mics, 0, 100, 0),
+      stands: clampInt(sp.stands, 0, 100, 0),
+      cables: clampInt(sp.cables, 0, 100, 0),
+    };
+  }
   return base;
 }
 
