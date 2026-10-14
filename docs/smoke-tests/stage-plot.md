@@ -194,8 +194,10 @@ icons are the old uniform blue.
 (subtitle, TM name/role/phone/email, version). Export PDF.
 
 **Expect**: A strip under the editor toolbar shows the subtitle + TM
-line; the PDF header shows title + subtitle + TM block + version
-footer. The title bar can't be dragged.
+line. In the export (Oct 2026), the **contact strip** under the
+letterhead shows the subtitle on the left and `ROLE NAME · phone ·
+email · version` on the right (Stage plot panel → "Contact strip").
+The title bar can't be dragged.
 
 **Last verified**:
 
@@ -206,6 +208,88 @@ footer. The title bar can't be dragged.
 
 **Expect**: TM email / phone / role are pulled into the structured
 fields.
+
+**Last verified**:
+
+## Export — drawn like the editor (Oct 2026)
+
+Export dialog on a plot with a riser, a person, a text note, an arrow and
+items linked to channels on two stage boxes.
+
+#### SP-19 — Everything on the canvas prints
+
+**Do**: Export PDF with defaults.
+
+**Expect**: Page 1 is **landscape**: text notes and arrows print; risers
+are a faint outline with `W × D × H ft` (no crossed box); people are
+dots; item names sit where the editor puts them (top/left/right/inside,
+hidden stays hidden, label size honoured; no custom name → the icon's
+name). Rulers / DS cross / centre line follow the plot's settings.
+
+**Last verified**:
+
+#### SP-20 — Channel chips + key
+
+**Do**: Same export.
+
+**Expect**: Linked items carry a chip with their channel number(s) (`1–3`
+for a run, `×N` when long) and a stripe in the **stage box** colour — the
+same colour as that channel's row in the input list. Beside the plot, a
+"Channels" key lists each linked channel → name → item; a muted line
+counts channels not placed on the plot. Chips / key / item names each
+switch off in the Stage plot panel.
+
+**Last verified**:
+
+#### SP-21 — Grid / rulers override
+
+**Do**: Stage plot panel → Grid **Off**, Rulers **On**.
+
+**Expect**: The printout drops the grid and shows rulers, whatever the
+plot has saved. "As the plot" returns to the plot's own setting. The
+editor is unchanged.
+
+**Last verified**:
+
+#### SP-22 — Light / dark
+
+**Do**: Look → **Dark**. Then download the PDF.
+
+**Expect**: Preview sheet turns dark. The PDF is dark edge to edge on
+the landscape plot page AND the portrait list pages after it. Light is
+the default.
+
+**Last verified**:
+
+#### SP-23 — Lists, IO boxes and pulls
+
+**Do**: Sections → tick "Input + output lists", "IO box sheets", the
+pulls. Open "Lists, boxes & pulls" to pick boxes / columns / spares.
+
+**Expect**: After the plot, portrait pages identical to the channel-list
+export (CHL-31..35): coloured input list, one page per picked box with
+every socket, pulls with spares. Reordering sections reorders pages. A
+plot with no channel list paired says so once.
+
+**Last verified**:
+
+#### SP-24 — Old templates unchanged + Share packet
+
+**Do**: Apply a stage-plot template saved before Oct 2026. Separately,
+open an advance → Share and open the stage plot artifact.
+
+**Expect**: The template prints the same pages it did (new sections are
+off); the plot page itself is the new drawing. The Share artifact (no
+template) is the default: landscape plot + contact strip + key + chips.
+
+**Last verified**:
+
+#### SP-25 — Public show link uses the same drawing
+
+**Do**: Open a public show link's stage plot tab.
+
+**Expect**: Text notes, arrows, riser outlines and person dots show, in
+light, without channel chips.
 
 **Last verified**:
 

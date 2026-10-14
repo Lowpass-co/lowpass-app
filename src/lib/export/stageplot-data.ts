@@ -4,10 +4,11 @@
    Loads a stage plot by plot-id (NOT tour-id — a plot lives in the artist library
    and/or a tour rider pack). Reuses `loadStagePlot` (server.ts → EditorPlot +
    EditorItem in editor shapes) + a PER-REQUEST custom-icon map (race-free, not the
-   global registry). When `includeInputList` is on, resolves the channel_list pack
+   global registry). When `includeChannels` is on, resolves the channel_list pack
    paired with the plot (linked pack → tour → artist, same precedence as
    loadPlotChannels) and builds the input/output rows via the shared
-   channelDataFromSection.
+   channelDataFromSection. (Oct 2026: `includeChannels` — chips and the channel
+   key need the list too, not just the input-list section.)
 
    Read-only; RLS scopes on stage_plots.workspace_id (the route verified the plot).
    ============================================ */
@@ -29,7 +30,8 @@ export interface StagePlotExportData {
   plotName: string;
   artist: { name: string } | null;
   logoUrl: string | null;
-  /** The paired channel/input list (when includeInputList + a list exists). */
+  /** The paired channel list — loaded when `includeChannels` (chips, the key
+   *  or a list/box/pull section need it). `hasSection` false = none paired. */
   channel: ChannelListExportData | null;
 }
 
@@ -86,7 +88,7 @@ export async function loadStagePlotExportData(
   supabase: SupabaseClient,
   plotId: string,
   workspaceId: string,
-  opts?: { includeInputList?: boolean },
+  opts?: { includeChannels?: boolean },
 ): Promise<StagePlotExportData | null> {
   const loaded = await loadStagePlot(supabase, plotId);
   if (!loaded) return null;
@@ -114,7 +116,7 @@ export async function loadStagePlotExportData(
   const { artist, logoUrl } = await loadArtist(supabase, riderPackId);
 
   let channel: ChannelListExportData | null = null;
-  if (opts?.includeInputList) {
+  if (opts?.includeChannels) {
     const section = await resolvePairedChannelSection(supabase, riderPackId);
     const { columns, inputs, outputs, boxes, pulls } = channelDataFromSection(section);
     channel = { tour: { id: '', name: plot.name }, artist, logoUrl, columns, inputs, outputs, boxes, pulls, hasSection: section !== null };

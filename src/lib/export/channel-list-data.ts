@@ -42,6 +42,8 @@ export function channelExportColumnLabel(key: ChannelListColumnKey): string {
 }
 
 export interface ChannelInputRow {
+  /** channel_list_rows.id — how a stage-plot item finds its channel. */
+  rowId: string;
   index: number;
   /** Rendered text per column key. Populated for EVERY key; the renderers pick
    *  the enabled subset off `ChannelListExportData.columns`. */
@@ -258,6 +260,7 @@ export function channelDataFromSection(section: ResolvedSection | null): {
 
   const boxById = new Map(stageBoxes.map((b) => [b.id, b]));
   const inputs: ChannelInputRow[] = inputRows.map((r) => ({
+    rowId: r.id,
     index: r.row_index,
     cells: inputCells(r, subSnakes, stageBoxes),
     boxId: r.stage_box_id && boxById.has(r.stage_box_id) ? r.stage_box_id : null,

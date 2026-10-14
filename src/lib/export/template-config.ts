@@ -186,9 +186,40 @@ export interface TemplateConfig {
   routing: RoutingOptions;
   /** D1-2 — day-sheet options (only meaningful for surface 'daysheet'). */
   daysheet?: DaySheetOptions;
-  /** Oct 2026 — channel-list options (only meaningful for surface 'channel-list'). */
+  /** Oct 2026 — channel-list options (surface 'channel-list'; also the IO-box
+   *  and pull sections of 'stage-plot', which print the same tables). */
   channelList?: ChannelListOptions;
+  /** Oct 2026 — stage-plot options (only meaningful for surface 'stage-plot'). */
+  stagePlot?: StagePlotOptions;
 }
+
+/** Oct 2026 — stage-plot export options. The plot page is drawn like the
+ *  editor; these choose what goes on it. `grid` / `rulers`: 'plot' = as the
+ *  plot is saved, else forced on / off for this printout only. */
+export type PlotToggle = 'plot' | 'on' | 'off';
+export interface StagePlotOptions {
+  /** PDF only. Light by default (dark burns ink on a printer). */
+  theme: 'light' | 'dark';
+  /** Subtitle · TM name · role · phone · email · version, under the letterhead. */
+  contact: boolean;
+  /** Channel key beside the plot: chip number → channel → item. */
+  key: boolean;
+  /** Channel-number chips on linked items, striped with the stage-box colour. */
+  chips: boolean;
+  grid: PlotToggle;
+  rulers: PlotToggle;
+  /** Item name pills (each item's own "hidden" still applies). */
+  labels: boolean;
+}
+export const DEFAULT_STAGE_PLOT_OPTIONS: StagePlotOptions = {
+  theme: 'light',
+  contact: true,
+  key: true,
+  chips: true,
+  grid: 'plot',
+  rulers: 'plot',
+  labels: true,
+};
 
 /** The section ids each surface's body builder owns (coarse, P1). Additive — new
  *  ids can be appended later without breaking a saved config. */
@@ -200,7 +231,9 @@ export const CHANNEL_LIST_SECTION_IDS = ['inputs', 'outputs', 'io-boxes', 'mic-p
 /** New channel-list sections are OFF by default, so an existing saved template
  *  prints exactly what it did before until the TM ticks them. */
 const CHANNEL_LIST_DEFAULT_ON = new Set<string>(['inputs', 'outputs']);
-export const STAGE_PLOT_SECTION_IDS = ['stage-diagram', 'input-list'] as const;
+/** `input-list` = inputs + outputs (kept as one id — saved templates use it).
+ *  The IO-box and pull sections are the channel-list export's, unchanged. */
+export const STAGE_PLOT_SECTION_IDS = ['stage-diagram', 'input-list', 'io-boxes', 'mic-pull', 'stand-pull', 'cable-pull', 'loom-pull'] as const;
 export const DAYSHEET_SECTION_IDS = ['schedule', 'venue', 'hotel', 'flights', 'contacts', 'notes'] as const;
 
 /** Human labels for the editor's section list. */
@@ -221,7 +254,7 @@ export const SECTION_LABELS: Record<string, string> = {
   'cable-pull': 'Cable pull',
   'loom-pull': 'Looms / sub-snakes',
   'stage-diagram': 'Stage diagram',
-  'input-list': 'Input list (combined)',
+  'input-list': 'Input + output lists',
   schedule: 'Schedule',
   venue: 'Venue + address',
   hotel: 'Hotel',
@@ -373,16 +406,18 @@ export const DEFAULT_STAGE_PLOT_CONFIG: TemplateConfig = {
   format: 'pdf',
   pageSize: 'A4',
   logo: true,
-  sections: [
-    { id: 'stage-diagram', show: true },
-    { id: 'input-list', show: false },
-  ],
+  // Only the diagram is on by default — every other section (including the
+  // ones added Oct 2026) arrives switched off, so a saved template's page list
+  // is unchanged until the TM ticks more.
+  sections: STAGE_PLOT_SECTION_IDS.map((id) => ({ id, show: id === 'stage-diagram' })),
   general: DEFAULT_GENERAL,
   header: DEFAULT_HEADER,
   footer: DEFAULT_FOOTER,
   dateRange: DEFAULT_DATE_RANGE,
   payroll: DEFAULT_PAYROLL_OPTIONS,
   routing: DEFAULT_ROUTING_OPTIONS,
+  channelList: DEFAULT_CHANNEL_LIST_OPTIONS,
+  stagePlot: DEFAULT_STAGE_PLOT_OPTIONS,
 };
 
 export const DEFAULT_SETTLEMENT_CONFIG: TemplateConfig = {
@@ -651,8 +686,26 @@ export function normalizeConfig(surface: ExportSurface, input: unknown): Templat
   if (surface === 'payroll') base.payroll = normalizePayroll(c.payroll);
   if (surface === 'routing') base.routing = normalizeRouting(c.routing);
   if (surface === 'daysheet') base.daysheet = normalizeDaySheet(c.daysheet);
-  if (surface === 'channel-list') base.channelList = normalizeChannelList(c.channelList);
+  if (surface === 'channel-list' || surface === 'stage-plot') base.channelList = normalizeChannelList(c.channelList);
+  if (surface === 'stage-plot') base.stagePlot = normalizeStagePlot(c.stagePlot);
   return base;
+}
+
+const PLOT_TOGGLES: PlotToggle[] = ['plot', 'on', 'off'];
+/** Untrusted request body → stage-plot options (anything unknown → default). */
+export function normalizeStagePlot(input: unknown): StagePlotOptions {
+  const d = DEFAULT_STAGE_PLOT_OPTIONS;
+  if (!input || typeof input !== 'object') return { ...d };
+  const o = input as Partial<StagePlotOptions>;
+  return {
+    theme: o.theme === 'dark' ? 'dark' : 'light',
+    contact: bool(o.contact, d.contact),
+    key: bool(o.key, d.key),
+    chips: bool(o.chips, d.chips),
+    grid: o.grid && PLOT_TOGGLES.includes(o.grid) ? o.grid : d.grid,
+    rulers: o.rulers && PLOT_TOGGLES.includes(o.rulers) ? o.rulers : d.rulers,
+    labels: bool(o.labels, d.labels),
+  };
 }
 
 const INPUT_COLUMN_KEYS = new Set(['number', 'name', 'position', 'stage_box', 'sub_snake', 'cable_length', 'mic', 'gain', 'stand', 'phantom_power', 'provider', 'notes']);

@@ -21,7 +21,7 @@ import { buildRoutingBodyHtml } from '@/lib/export/routing-pdf';
 import { loadChannelListExportData } from '@/lib/export/channel-list-data';
 import { buildChannelListBodyHtml } from '@/lib/export/channel-list-pdf';
 import { loadStagePlotExportData } from '@/lib/export/stageplot-data';
-import { buildStagePlotBodyHtml } from '@/lib/export/stageplot-pdf';
+import { buildStagePlotBodyHtml, stagePlotNeedsChannels } from '@/lib/export/stageplot-pdf';
 import { renderDocument } from '@/lib/export/shell';
 import { loadGearExportData, type GearExportScope } from '@/lib/export/gear-data';
 import { buildGearManifestBodyHtml, buildCarnetBodyHtml } from '@/lib/export/gear-pdf';
@@ -51,6 +51,9 @@ export interface ExportBuild {
   /** Part B — the reduced running header's left text, or null when the header is
    *  hidden. The route passes it to the page.pdf repeating header. */
   runningHeader: string | null;
+  /** The document sets its own page sizes (e.g. the stage plot's landscape
+   *  plot page) — print with preferCSSPageSize so they're honoured. */
+  cssPageSize?: boolean;
 }
 
 function fmtDate(d: string | null): string | null {
@@ -405,21 +408,26 @@ export async function buildChannelListExport(
 }
 
 /** Stage plot — plot-id based (not tour-id; a plot lives in the artist library /
- *  a rider pack). The "include input list" toggle IS the `input-list` section's
- *  visibility, so we only resolve the paired channel list when that section is on. */
+ *  a rider pack). The paired channel list is only resolved when something prints
+ *  it (chips, the key, or a list / box / pull section). The plot page is a
+ *  landscape CSS named page, so the PDF must render with preferCSSPageSize. */
 export async function buildStagePlotExport(
   supabase: SupabaseClient,
   plotId: string,
   workspaceId: string,
   config: TemplateConfig,
 ): Promise<ExportBuild> {
-  const includeInputList = config.sections.some((s) => s.id === 'input-list' && s.show);
-  const data = await loadStagePlotExportData(supabase, plotId, workspaceId, { includeInputList });
+  const includeChannels = stagePlotNeedsChannels(config);
+  const data = await loadStagePlotExportData(supabase, plotId, workspaceId, { includeChannels });
   if (!data) throw new Error('stage-plot-not-found');
   const logoDataUri = config.logo ? await resolveLogo(supabase, workspaceId, config, data.logoUrl) : null;
   const bgDataUri = await fetchExportAssetDataUri(supabase, workspaceId, config.header.bgAssetPath);
 
-  const subtitle = [`${data.plot.widthFt}′ × ${data.plot.depthFt}′`, includeInputList ? 'with input list' : null].filter(Boolean).join(' · ');
+  const shown = new Set(config.sections.filter((s) => s.show).map((s) => s.id));
+  const size = data.plot.units === 'm'
+    ? `${(data.plot.widthFt * 0.3048).toFixed(1)} × ${(data.plot.depthFt * 0.3048).toFixed(1)} m`
+    : `${data.plot.widthFt}′ × ${data.plot.depthFt}′`;
+  const subtitle = [size, shown.has('input-list') ? 'with input list' : null].filter(Boolean).join(' · ');
 
   const html = renderDocument({
     letterhead: {
@@ -437,11 +445,15 @@ export async function buildStagePlotExport(
     header: config.header,
     bgDataUri,
     bodyHtml: buildStagePlotBodyHtml(data, config),
+    theme: config.stagePlot?.theme,
   });
 
   const footerNote = `${data.artist?.name ? `${data.artist.name} — ` : ''}${data.plotName} · Stage plot`;
   const filename = `${sanitize(data.artist?.name ?? '', '')} — ${sanitize(data.plotName, 'Stage plot')} — Stage plot.pdf`.replace(/^ — /, '');
-  return { html, footerNote, filename, footer: config.footer, runningHeader: config.header.show ? footerNote : null };
+  const meta: ChannelListExportMeta | undefined = data.channel
+    ? { boxes: data.channel.boxes.map((b) => ({ id: b.id, label: b.label, colour: b.colour })), editorColumns: data.channel.columns }
+    : undefined;
+  return { html, meta, footerNote, filename, footer: config.footer, runningHeader: config.header.show ? footerNote : null, cssPageSize: true };
 }
 
 /* ── S1 D-1 — gear manifest + ATA carnet general list ──────────────────────── */
