@@ -18,7 +18,12 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Check, ChevronRight, Eye, EyeOff, FileSpreadsheet, FolderArchive, GripVertical, Globe, Loader2, Maximize2, Trash2, Upload, X, ZoomIn, ZoomOut } from 'lucide-react';
 import { useToast } from '@/components/ui/Toast';
+import { CHANNEL_LIST_COLUMNS } from '@/lib/channel-list/columns';
 import {
+  BOX_COLUMN_KEYS,
+  BOX_COLUMN_LABELS,
+  DEFAULT_CHANNEL_LIST_OPTIONS,
+  type ChannelListOptions,
   defaultConfig,
   HEADER_ELEMENT_LABELS,
   normalizeConfig,
@@ -64,6 +69,17 @@ const ROUTING_VIEWS: ReadonlyArray<{ value: 'list' | 'calendar' | 'map' | 'both'
   { value: 'map', label: 'Map (route)' },
   { value: 'both', label: 'Both (list + map)' },
 ];
+
+const CL_THEMES: ReadonlyArray<{ value: 'light' | 'dark'; label: string }> = [
+  { value: 'light', label: 'Light — best for printing' },
+  { value: 'dark', label: 'Dark — like the editor' },
+];
+const SPARE_MODES: ReadonlyArray<{ value: 'count' | 'percent'; label: string }> = [
+  { value: 'count', label: 'A fixed number per item' },
+  { value: 'percent', label: 'A percentage per item (rounded up)' },
+];
+/* The export's own labels for the editor's columns (48V, not the on-screen +48). */
+const CL_COLUMN_LABEL: Record<string, string> = { phantom_power: '48V' };
 
 const CALENDAR_THEMES: ReadonlyArray<{ value: 'light' | 'dark'; label: string }> = [
   { value: 'light', label: 'Light' },
@@ -182,8 +198,9 @@ export function ExportTemplateEditor({ surface, tourId, versionId = null, initia
             setPreviewing(false);
             return;
           }
-          const { html } = (await res.json()) as { html: string };
+          const { html, meta } = (await res.json()) as { html: string; meta?: { boxes: Array<{ id: string; label: string; colour: string | null }>; editorColumns: string[] } };
           if (id !== reqId.current) return;
+          if (meta) setClMeta(meta);
           setPreviewHtml(html);
           setPreviewError(null);
           setPreviewing(false);
@@ -260,6 +277,30 @@ export function ExportTemplateEditor({ surface, tourId, versionId = null, initia
   const setRouting = useCallback(<K extends keyof TemplateConfig['routing']>(k: K, v: TemplateConfig['routing'][K]) => {
     setConfig((c) => ({ ...c, routing: { ...c.routing, [k]: v } }));
   }, []);
+  const setChannelList = useCallback(<K extends keyof ChannelListOptions>(k: K, v: ChannelListOptions[K]) => {
+    setConfig((c) => ({ ...c, channelList: { ...(c.channelList ?? DEFAULT_CHANNEL_LIST_OPTIONS), [k]: v } }));
+  }, []);
+
+  /* Oct 2026 — the channel list's IO boxes + the editor's own columns, for the
+     pickers below. Arrives with every preview; in Excel mode (no preview) one
+     fetch on open supplies it. */
+  const [clMeta, setClMeta] = useState<{ boxes: Array<{ id: string; label: string; colour: string | null }>; editorColumns: string[] } | null>(null);
+  useEffect(() => {
+    if (surface !== 'channel-list' || clMeta) return;
+    if (config.format !== 'excel') return; // the PDF preview brings it
+    void (async () => {
+      try {
+        const res = await fetch(`${base}/preview`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ config }),
+        });
+        if (res.ok) setClMeta(((await res.json()) as { meta?: typeof clMeta }).meta ?? null);
+      } catch {
+        /* the pickers fall back to "all boxes" / the editor's columns */
+      }
+    })();
+  }, [surface, clMeta, config, base]);
 
   // Part C — the crew roster for the people picker + the zip "Download all".
   const [roster, setRoster] = useState<Array<{ id: string; name: string }>>([]);
@@ -705,6 +746,82 @@ export function ExportTemplateEditor({ surface, tourId, versionId = null, initia
                 ) : null}
               </AccordionGroup>
             ) : null}
+
+            {surface === 'channel-list' ? (() => {
+              const cl = config.channelList ?? DEFAULT_CHANNEL_LIST_OPTIONS;
+              const boxes = clMeta?.boxes ?? [];
+              const editorCols = clMeta?.editorColumns ?? [];
+              const inputCols = cl.inputColumns ?? editorCols;
+              const numStyle: React.CSSProperties = { width: 56, padding: '4px 6px', fontSize: 12, borderRadius: 'var(--lp-radius-md)', border: '1px solid var(--lp-border)', background: 'transparent', color: 'var(--lp-text)', textAlign: 'right' };
+              const setSpare = (k: 'mics' | 'stands' | 'cables', v: string) =>
+                setChannelList('spares', { ...cl.spares, [k]: Math.max(0, Math.min(100, Math.round(Number(v) || 0))) });
+              return (
+                <AccordionGroup id="channel-list" label="Channel list" defaultOpen>
+                  <FieldLabel>Look (PDF)</FieldLabel>
+                  <Segmented options={CL_THEMES} value={cl.theme} onChange={(v) => setChannelList('theme', v)} />
+                  <p style={{ fontSize: 11, color: 'var(--lp-text-tertiary)' }}>Rows are colour-coded by stage box, as in the editor. Turn on extra pages under Sections.</p>
+
+                  <FieldLabel>IO box sheets</FieldLabel>
+                  <Toggle label="Every box" checked={cl.boxIds === null} onChange={(v) => setChannelList('boxIds', v ? null : boxes.map((b) => b.id))} />
+                  {cl.boxIds !== null ? (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4, maxHeight: 168, overflowY: 'auto', paddingLeft: 6, borderLeft: '2px solid var(--lp-border)' }}>
+                      {boxes.length === 0 ? <p style={{ fontSize: 11, color: 'var(--lp-text-tertiary)' }}>No IO boxes on this channel list.</p> : null}
+                      {boxes.map((b) => (
+                        <Toggle
+                          key={b.id}
+                          label={b.label}
+                          checked={cl.boxIds?.includes(b.id) ?? false}
+                          onChange={(v) => {
+                            const cur = cl.boxIds ?? [];
+                            setChannelList('boxIds', v ? Array.from(new Set([...cur, b.id])) : cur.filter((x) => x !== b.id));
+                          }}
+                        />
+                      ))}
+                    </div>
+                  ) : null}
+
+                  <FieldLabel>Input list columns</FieldLabel>
+                  <Toggle label="Same as the editor" checked={cl.inputColumns === null} onChange={(v) => setChannelList('inputColumns', v ? null : [...editorCols])} />
+                  {cl.inputColumns !== null ? (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4, paddingLeft: 6, borderLeft: '2px solid var(--lp-border)' }}>
+                      {CHANNEL_LIST_COLUMNS.filter((c) => c.key !== 'name').map((c) => (
+                        <Toggle
+                          key={c.key}
+                          label={CL_COLUMN_LABEL[c.key] ?? c.label}
+                          checked={inputCols.includes(c.key)}
+                          onChange={(v) => {
+                            const cur = cl.inputColumns ?? [];
+                            setChannelList('inputColumns', v ? Array.from(new Set([...cur, c.key])) : cur.filter((x) => x !== c.key));
+                          }}
+                        />
+                      ))}
+                    </div>
+                  ) : null}
+
+                  <FieldLabel>IO box sheet columns</FieldLabel>
+                  {BOX_COLUMN_KEYS.map((k) => (
+                    <Toggle
+                      key={k}
+                      label={BOX_COLUMN_LABELS[k] === 'Ch' ? 'Channel number' : BOX_COLUMN_LABELS[k]}
+                      checked={cl.boxColumns.includes(k)}
+                      onChange={(v) => setChannelList('boxColumns', BOX_COLUMN_KEYS.filter((x) => (x === k ? v : cl.boxColumns.includes(x))))}
+                    />
+                  ))}
+
+                  <FieldLabel>Spares on the pulls</FieldLabel>
+                  <Segmented options={SPARE_MODES} value={cl.spares.mode} onChange={(v) => setChannelList('spares', { ...cl.spares, mode: v })} />
+                  {(['mics', 'stands', 'cables'] as const).map((k) => (
+                    <label key={k} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 12, color: 'var(--lp-text)' }}>
+                      {k === 'mics' ? 'Mics & DIs' : k === 'stands' ? 'Stands' : 'Cables'}
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                        <input type="number" min={0} max={100} value={cl.spares[k]} onChange={(e) => setSpare(k, e.target.value)} aria-label={`Spare ${k}`} style={numStyle} />
+                        <span style={{ color: 'var(--lp-text-tertiary)', width: 12 }}>{cl.spares.mode === 'percent' ? '%' : ''}</span>
+                      </span>
+                    </label>
+                  ))}
+                </AccordionGroup>
+              );
+            })() : null}
 
             {surface === 'payroll' || surface === 'routing' || surface === 'rooming' ? (
               <AccordionGroup id="daterange" label="Date range">

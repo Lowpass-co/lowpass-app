@@ -46,6 +46,53 @@ export interface ChannelInputRow {
   /** Rendered text per column key. Populated for EVERY key; the renderers pick
    *  the enabled subset off `ChannelListExportData.columns`. */
   cells: Record<ChannelExportCellKey, string>;
+  /** Oct 2026 — the row's stage box and its colour: the editor colour-codes
+   *  every input by its box (ChannelListEditor ChannelBlock), so the export does
+   *  too. Null when the channel isn't patched to a box. */
+  boxId: string | null;
+  boxColour: string | null;
+}
+
+/** One socket on an IO box sheet. `channel` null = nothing patched (SPARE). */
+export interface BoxSocket {
+  socket: number;
+  channel: number | null;
+  cells: Record<ChannelExportCellKey, string> | null;
+}
+
+/** An IO (stage) box, socket by socket — the per-box sheet that gets printed
+ *  and taped to the box. */
+export interface ExportBoxSheet {
+  id: string;
+  label: string;
+  colour: string | null;
+  capacity: number;
+  sockets: BoxSocket[];
+  /** Channels assigned to the box with no socket number yet. */
+  unplaced: Array<{ channel: number; name: string }>;
+}
+
+/** A loom / sub-snake, for the loom pull. */
+export interface ExportLoom {
+  label: string;
+  colour: string | null;
+  capacity: number;
+  used: number;
+}
+
+export interface PullRow {
+  item: string;
+  /** Band / Venue / Hire / '' (unassigned). */
+  provider: string;
+  qty: number;
+}
+
+export interface ChannelPulls {
+  /** Mics AND DIs — a channel with both counts once in each. */
+  mics: PullRow[];
+  stands: PullRow[];
+  cables: PullRow[];
+  looms: ExportLoom[];
 }
 
 export interface ChannelOutputRow {
@@ -66,6 +113,9 @@ export interface ChannelListExportData {
   columns: ChannelListColumnKey[];
   inputs: ChannelInputRow[];
   outputs: ChannelOutputRow[];
+  /** Every stage box in sort order, socket by socket. */
+  boxes: ExportBoxSheet[];
+  pulls: ChannelPulls;
   /** False when no channel_list section resolved for this tour. */
   hasSection: boolean;
 }
@@ -114,6 +164,76 @@ function inputCells(
   };
 }
 
+const byPosition = <T extends { position?: number | null }>(a: T, b: T) => (a.position ?? 0) - (b.position ?? 0);
+
+/** Each box socket by socket: 1 → capacity (or the highest patched socket if
+ *  someone patched past it), every empty socket listed so the sheet doubles as
+ *  a patch check. */
+export function boxSheets(stageBoxes: StageBox[], inputRows: ChannelListRow[], subSnakes: SubSnake[]): ExportBoxSheet[] {
+  return [...stageBoxes].sort(byPosition).map((b) => {
+    const mine = inputRows.filter((r) => r.stage_box_id === b.id);
+    const placed = mine.filter((r) => r.stage_box_position != null);
+    const top = Math.max(Number(b.capacity) || 0, ...placed.map((r) => r.stage_box_position as number), 0);
+    const bySocket = new Map(placed.map((r) => [r.stage_box_position as number, r]));
+    const sockets: BoxSocket[] = [];
+    for (let n = 1; n <= top; n++) {
+      const r = bySocket.get(n);
+      sockets.push(r ? { socket: n, channel: r.row_index, cells: inputCells(r, subSnakes, stageBoxes) } : { socket: n, channel: null, cells: null });
+    }
+    return {
+      id: b.id,
+      label: b.label,
+      colour: b.colour ?? null,
+      capacity: Number(b.capacity) || 0,
+      sockets,
+      unplaced: mine.filter((r) => r.stage_box_position == null).map((r) => ({ channel: r.row_index, name: text(r.channel_name) })),
+    };
+  });
+}
+
+function tally(keys: Array<{ item: string; provider: string }>): PullRow[] {
+  const m = new Map<string, PullRow>();
+  for (const k of keys) {
+    const id = `${k.item}\u0000${k.provider}`;
+    const cur = m.get(id);
+    if (cur) cur.qty += 1;
+    else m.set(id, { item: k.item, provider: k.provider, qty: 1 });
+  }
+  return [...m.values()].sort((a, b) => b.qty - a.qty || a.item.localeCompare(b.item) || a.provider.localeCompare(b.provider));
+}
+
+/** The pull lists. Differences from the editor's inventory panel, on purpose:
+ *  a channel with a mic AND a DI counts in both (the editor counts only the
+ *  mic, so DIs went missing from the pull), and a stand of "None" is not a
+ *  stand. */
+export function channelPulls(inputRows: ChannelListRow[], subSnakes: SubSnake[]): ChannelPulls {
+  const prov = (r: ChannelListRow) => (r.provider ? (PROVIDER_LABELS[r.provider] ?? r.provider) : '');
+  const mics: Array<{ item: string; provider: string }> = [];
+  const stands: Array<{ item: string; provider: string }> = [];
+  const cables: Array<{ item: string; provider: string }> = [];
+  for (const r of inputRows) {
+    for (const v of [r.mic, r.di]) {
+      const item = (v ?? '').trim();
+      if (item) mics.push({ item, provider: prov(r) });
+    }
+    const stand = (r.stand ?? '').trim();
+    if (stand && !/^none$/i.test(stand)) stands.push({ item: stand, provider: prov(r) });
+    const cable = (r.cable_length ?? '').trim();
+    if (cable) cables.push({ item: cable, provider: '' });
+  }
+  return {
+    mics: tally(mics),
+    stands: tally(stands),
+    cables: tally(cables),
+    looms: [...subSnakes].sort(byPosition).map((l) => ({
+      label: l.label,
+      colour: l.colour ?? null,
+      capacity: Number(l.capacity) || 0,
+      used: inputRows.filter((r) => r.sub_snake_id === l.id).length,
+    })),
+  };
+}
+
 /** Map a resolved channel_list section → the export rows + its enabled column
  *  set. Shared by the tour-scoped loader AND the stage-plot "include input
  *  list" combine. */
@@ -121,6 +241,8 @@ export function channelDataFromSection(section: ResolvedSection | null): {
   columns: ChannelListColumnKey[];
   inputs: ChannelInputRow[];
   outputs: ChannelOutputRow[];
+  boxes: ExportBoxSheet[];
+  pulls: ChannelPulls;
 } {
   const subSnakes: SubSnake[] = section?.subSnakes ?? [];
   const stageBoxes: StageBox[] = section?.stageBoxes ?? [];
@@ -134,9 +256,12 @@ export function channelDataFromSection(section: ResolvedSection | null): {
      would drag the lazy pre-metadata derivation off. */
   const columns = getEnabledColumnKeys(section?.metadata ?? null, inputRows);
 
+  const boxById = new Map(stageBoxes.map((b) => [b.id, b]));
   const inputs: ChannelInputRow[] = inputRows.map((r) => ({
     index: r.row_index,
     cells: inputCells(r, subSnakes, stageBoxes),
+    boxId: r.stage_box_id && boxById.has(r.stage_box_id) ? r.stage_box_id : null,
+    boxColour: (r.stage_box_id && boxById.get(r.stage_box_id)?.colour) || null,
   }));
   const outputs: ChannelOutputRow[] = outputRows.map((r) => ({
     index: r.row_index,
@@ -147,7 +272,7 @@ export function channelDataFromSection(section: ResolvedSection | null): {
     position: (r.output_position ?? '').trim(),
     notes: (r.output_notes ?? '').trim(),
   }));
-  return { columns, inputs, outputs };
+  return { columns, inputs, outputs, boxes: boxSheets(stageBoxes, inputRows, subSnakes), pulls: channelPulls(inputRows, subSnakes) };
 }
 
 // NOTE: no workspaceId param — channel_list_rows / sub_snakes / stage_boxes are
@@ -167,7 +292,7 @@ export async function loadChannelListExportData(
   ]);
 
   const section = resolved.section;
-  const { columns, inputs, outputs } = channelDataFromSection(section);
+  const { columns, inputs, outputs, boxes, pulls } = channelDataFromSection(section);
 
   const artistRow = artistRes.data as { id: string; name: string; branding: unknown; spotify_id: string | null; spotify_image_url: string | null } | null;
   const logoUrl = artistRow ? await resolveArtistLogoUrl(artistRow) : null;
@@ -179,6 +304,8 @@ export async function loadChannelListExportData(
     columns,
     inputs,
     outputs,
+    boxes,
+    pulls,
     hasSection: section !== null,
   };
 }

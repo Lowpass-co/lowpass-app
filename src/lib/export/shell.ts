@@ -50,7 +50,26 @@ export interface ShellDocument {
   header?: HeaderStyle;
   /** Phase 2 — the resolved background-image data URI (header.bgAssetPath → logo.ts). */
   bgDataUri?: string | null;
+  /** Oct 2026 — 'dark' prints on the app's dark palette, edge to edge
+   *  (@page background — Chromium ≥131 paints the page margins with it; prod
+   *  ships 148). Absent/'light' → today's output byte for byte. */
+  theme?: 'light' | 'dark';
 }
+
+/** The app's own dark tokens (globals.css .dark), for a dark printout. */
+const DARK_THEME_CSS = `
+:root {
+  --lp-text: #F5F5F5;
+  --lp-text-secondary: #B3B3B3;
+  --lp-text-tertiary: #8A8A8A;
+  --lp-border: #2A2A2A;
+  --lp-border-strong: #3B3B3B;
+  --lp-bg-subtle: #161616;
+  --lp-panel: #111111;
+}
+@page { background: #0F0F0F; }
+html, body { background: #0F0F0F; }
+`;
 
 const esc = (s: string): string =>
   s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c] as string));
@@ -290,9 +309,10 @@ export function renderDocument(doc: ShellDocument): string {
   const pageStyle = doc.pageSize && doc.pageSize !== 'A4' ? `<style>@page { size: ${doc.pageSize}; }</style>` : '';
   const styleOverride = generalOverrideCss(doc.general);
   const letterhead = renderLetterhead(lh, title, subtitle, doc.header, doc.bgDataUri);
+  const dark = doc.theme === 'dark';
   return `<!DOCTYPE html>
-<html lang="en"><head><meta charset="utf-8" /><style>${SHELL_CSS}</style>${pageStyle}${styleOverride}</head>
-<body>
+<html lang="en"><head><meta charset="utf-8" /><style>${SHELL_CSS}</style>${dark ? `<style>${DARK_THEME_CSS}</style>` : ''}${pageStyle}${styleOverride}</head>
+<body${dark ? ' class="lp-theme-dark"' : ''}>
   ${letterhead}
   ${bodyHtml}
 </body></html>`;
