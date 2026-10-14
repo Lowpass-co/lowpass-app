@@ -12,7 +12,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { resolvePack } from '@/lib/rider-packs/resolve';
 import type { RiderPack } from '@/lib/rider-packs/types';
-import { DEFAULT_PLOT, type Channel, type EditorItem, type EditorPlot } from './editor-types';
+import { DEFAULT_PLOT, type Channel, type ChannelSource, type EditorItem, type EditorPlot } from './editor-types';
 
 interface PlotRow {
   id: string;
@@ -179,12 +179,22 @@ export function itemToRow(it: EditorItem, stagePlotId: string, workspaceId: stri
  *  else the artist's), mapped to the editor's Channel shape so the
  *  editor can show the Channels section + tint linked items. */
 export async function loadPlotChannels(supabase: SupabaseClient, riderPackId: string): Promise<Channel[]> {
+  return (await loadPlotChannelsWithSource(supabase, riderPackId)).channels;
+}
+
+/** The paired list's channels AND where to write a new one (its pack +
+ *  channel_list section) — the editor's Channels panel creates real rows. */
+export async function loadPlotChannelsWithSource(
+  supabase: SupabaseClient,
+  riderPackId: string,
+): Promise<{ channels: Channel[]; source: ChannelSource | null }> {
+  const none = { channels: [] as Channel[], source: null };
   const { data: src } = await supabase
     .from('rider_packs')
     .select('tour_id, artist_id, linked_rider_pack_id')
     .eq('id', riderPackId)
     .maybeSingle();
-  if (!src) return [];
+  if (!src) return none;
 
   const pickPack = async (): Promise<RiderPack | null> => {
     if (src.linked_rider_pack_id) {
@@ -203,21 +213,32 @@ export async function loadPlotChannels(supabase: SupabaseClient, riderPackId: st
   };
 
   const clPack = await pickPack();
-  if (!clPack) return [];
+  if (!clPack) return none;
   try {
     const resolved = await resolvePack(supabase, clPack);
     const sec = resolved.sections.find((s) => s.section_type === 'channel_list');
-    if (!sec?.rows) return [];
+    if (!sec) return none;
     const snakeById = new Map((sec.subSnakes ?? []).map((s) => [s.id, s]));
-    return sec.rows
+    const channels = (sec.rows ?? [])
       .filter((r) => r.row_kind !== 'output')
       .sort((a, b) => a.row_index - b.row_index)
-      .map((r, i) => {
+      .map((r) => {
         const sn = r.sub_snake_id ? snakeById.get(r.sub_snake_id) : undefined;
-        return { id: r.id, number: i + 1, label: r.channel_name || `Ch ${i + 1}`, color: sn?.colour ?? null, snakeLabel: sn?.label ?? null };
+        // The number the channel list itself shows (row_index; kept 1..N by
+        // migration 267's normaliser), so editor, list and export agree.
+        return {
+          id: r.id,
+          number: r.row_index,
+          label: r.channel_name || `Ch ${r.row_index}`,
+          color: sn?.colour ?? null,
+          snakeLabel: sn?.label ?? null,
+          mic: r.mic ?? null,
+          di: r.di ?? null,
+        };
       });
+    return { channels, source: { packId: clPack.id, sectionId: sec.id } };
   } catch {
-    return [];
+    return none;
   }
 }
 

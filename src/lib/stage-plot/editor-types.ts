@@ -24,6 +24,17 @@ export interface Channel {
   color: string | null;
   /** Short sub-snake label (the colour-blind badge), e.g. "A". */
   snakeLabel: string | null;
+  /** Oct 2026 — the row's mic / DI text, so a channel dragged onto empty
+   *  stage drops the right icon (iconForChannel). */
+  mic?: string | null;
+  di?: string | null;
+}
+
+/** Where new channels created from the plot editor are written: the paired
+ *  channel list's pack + its channel_list section. Null = no list paired. */
+export interface ChannelSource {
+  packId: string;
+  sectionId: string;
 }
 
 export interface EditorPlot {
@@ -115,6 +126,15 @@ export function extractTitleBarFromItems(items: EditorItem[]): Partial<EditorPlo
   }
   return patch;
 }
+
+/** Item name labels, px at plot scale (22 px = 1 ft). Oct 2026: default 11 → 9
+ *  (Adam: "a little big sometimes" — 11 px is half a foot of text, wider than a
+ *  mic). An item that was sized by hand keeps its labelFontPx. */
+export const DEFAULT_LABEL_PX = 9;
+export const LABEL_PX_MIN = 6;
+export const LABEL_PX_MAX = 18;
+export const labelPx = (it: { labelFontPx?: number }): number =>
+  Math.min(LABEL_PX_MAX, Math.max(LABEL_PX_MIN, it.labelFontPx ?? DEFAULT_LABEL_PX));
 
 export const DEFAULT_PLOT: EditorPlot = {
   name: 'Untitled stage plot',

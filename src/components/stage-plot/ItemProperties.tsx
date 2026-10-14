@@ -13,7 +13,33 @@ import { useEffect, useState } from 'react';
 import { getIcon } from '@/lib/stage-plot/icons';
 import { octantLabel } from '@/lib/stage-plot/geometry';
 import { defaultHeightFt, readExpertDimensions, writeExpertDimensions } from '@/lib/stage-plot/item-dimensions';
-import type { Channel, EditorItem, EditorPlot } from '@/lib/stage-plot/editor-types';
+import { DEFAULT_LABEL_PX, LABEL_PX_MAX, LABEL_PX_MIN, type Channel, type EditorItem, type EditorPlot } from '@/lib/stage-plot/editor-types';
+
+/** Colour picker + a "Default" button that clears the tint (back to the
+ *  neutral line colour). A tint only ever colours the lines. */
+function ColourField({ value, onChange, mixed = false }: { value: string | null | undefined; onChange: (v: string | null) => void; mixed?: boolean }) {
+  const canReset = mixed || Boolean(value);
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+      <input
+        type="color"
+        aria-label="Colour"
+        value={value ?? '#6B7280'}
+        style={{ width: 40, height: 26, border: 'none', background: 'none', opacity: value ? 1 : 0.55 }}
+        onChange={(e) => onChange(e.target.value)}
+      />
+      <button
+        type="button"
+        onClick={() => onChange(null)}
+        disabled={!canReset}
+        title={mixed ? 'Every selected item back to the default colour' : 'Back to the default colour'}
+        style={{ fontSize: 'var(--lp-text-2xs)', padding: '3px 8px', borderRadius: 5, border: '1px solid var(--lp-border)', background: 'var(--lp-surface)', color: canReset ? 'var(--lp-text-secondary)' : 'var(--lp-text-tertiary)', cursor: canReset ? 'pointer' : 'default' }}
+      >
+        Default
+      </button>
+    </div>
+  );
+}
 
 function Row({ label, children }: { label: string; children: React.ReactNode }) {
   return (
@@ -48,8 +74,9 @@ export interface ItemPropertiesProps {
   onUpdateItem: (patch: Partial<EditorItem>) => void;
   onDeleteItem: () => void;
   onUpdatePlot: (patch: Partial<EditorPlot>) => void;
-  /** Create a new channel-list row and return its id (§SP4 / #8). */
-  onAddChannel?: (label: string) => string;
+  /** Create a new channel-list row and resolve to its id (§SP4 / #8). Writes
+   *  a REAL row to the paired list (Oct 2026 — it used to be editor-memory only). */
+  onAddChannel?: (label: string) => Promise<string>;
   /** §SP-FIX-3 — split a composite drum kit into individual pieces. */
   onSplitKit?: () => void;
   /** §SP-FIX-3 — recombine a split kit piece's group into the composite. */
@@ -68,12 +95,28 @@ export interface ItemPropertiesProps {
 
 export function ItemProperties({ plot, item, selectedCount = 0, channels = [], onUpdateItem, onDeleteItem, onUpdatePlot, onAddChannel, onSplitKit, onCombineKit, onReorder, onRotate, onExtractTitleBar, channelListHref }: ItemPropertiesProps) {
   const [newCh, setNewCh] = useState('');
+  const [chBusy, setChBusy] = useState(false);
+  // Writes a real channel-list row, then links it to this item.
+  const addNewChannel = async () => {
+    const name = newCh.trim();
+    if (!name || !onAddChannel || !item || chBusy) return;
+    const base = item.channelRowIds ?? [];
+    setChBusy(true);
+    try {
+      const id = await onAddChannel(name);
+      onUpdateItem({ channelRowIds: [...base, id] });
+      setNewCh('');
+    } catch {
+      /* the row wasn't written — leave the name in the box to retry */
+    } finally {
+      setChBusy(false);
+    }
+  };
   // Expert "custom dimensions" gate (§SP-FIX-2). Off by default → items
   // lock to footprint; on → editable W×D×H. Interim home is localStorage
   // (canonical: workspace settings).
   const [expert, setExpert] = useState(false);
   // localStorage is client-only; read after mount to avoid SSR/hydration mismatch.
-  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => setExpert(readExpertDimensions()), []);
   return (
     <div style={{ height: '100%', overflowY: 'auto', borderLeft: '1px solid var(--lp-border)', background: 'var(--lp-bg)', padding: 14, width: 260 }}>
@@ -82,8 +125,9 @@ export function ItemProperties({ plot, item, selectedCount = 0, channels = [], o
           <h3 style={{ fontSize: 'var(--lp-text-sm)', fontWeight: 600, color: 'var(--lp-text)', margin: '0 0 4px' }}>{selectedCount} items selected</h3>
           <p style={{ fontSize: 'var(--lp-text-2xs)', color: 'var(--lp-text-tertiary)', margin: '0 0 14px' }}>Drag to move them together.</p>
           <Row label="Rotation°"><Num value={0} step={15} onChange={(n) => onUpdateItem({ rotationDeg: n })} /></Row>
-          <Row label="Tint">
-            <input type="color" defaultValue="#000000" style={{ width: 40, height: 26, border: 'none', background: 'none' }} onChange={(e) => onUpdateItem({ colorTint: e.target.value })} />
+          <Row label="Colour">
+            {/* Mixed selection: the picker starts unset; Default clears every one. */}
+            <ColourField mixed value={undefined} onChange={(v) => onUpdateItem({ colorTint: v })} />
           </Row>
           <button type="button" onClick={onDeleteItem} style={{ marginTop: 12, width: '100%', padding: '8px', borderRadius: 6, border: '1px solid var(--lp-border)', background: 'var(--lp-surface)', color: 'var(--lp-text-secondary)', cursor: 'pointer', fontSize: 'var(--lp-text-xs)' }}>
             Delete {selectedCount} items
@@ -195,8 +239,8 @@ export function ItemProperties({ plot, item, selectedCount = 0, channels = [], o
               </Row>
               <Row label="Label size">
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <input type="range" min={8} max={18} step={1} value={item.labelFontPx ?? 11} onChange={(e) => onUpdateItem({ labelFontPx: parseInt(e.target.value, 10) })} style={{ width: 90 }} />
-                  <span style={{ fontSize: 'var(--lp-text-2xs)', color: 'var(--lp-text-tertiary)', width: 28, textAlign: 'right', fontFamily: 'var(--lp-font-numeric)' }}>{item.labelFontPx ?? 11}px</span>
+                  <input type="range" min={LABEL_PX_MIN} max={LABEL_PX_MAX} step={1} value={item.labelFontPx ?? DEFAULT_LABEL_PX} onChange={(e) => onUpdateItem({ labelFontPx: parseInt(e.target.value, 10) })} style={{ width: 90 }} />
+                  <span style={{ fontSize: 'var(--lp-text-2xs)', color: 'var(--lp-text-tertiary)', width: 28, textAlign: 'right', fontFamily: 'var(--lp-font-numeric)' }}>{item.labelFontPx ?? DEFAULT_LABEL_PX}px</span>
                 </div>
               </Row>
               <Row label="Position">
@@ -284,9 +328,9 @@ export function ItemProperties({ plot, item, selectedCount = 0, channels = [], o
                   {onAddChannel && (
                     <div style={{ display: 'flex', gap: 4, marginTop: 4 }}>
                       <input value={newCh} onChange={(e) => setNewCh(e.target.value)} placeholder="New channel…"
-                        onKeyDown={(e) => { if (e.key === 'Enter' && newCh.trim()) { const id = onAddChannel(newCh.trim()); onUpdateItem({ channelRowIds: [...(item.channelRowIds ?? []), id] }); setNewCh(''); } }}
+                        onKeyDown={(e) => { if (e.key === 'Enter') void addNewChannel(); }}
                         style={{ flex: 1, fontSize: 'var(--lp-text-xs)', padding: '4px 6px', borderRadius: 5, border: '1px solid var(--lp-border)', background: 'var(--lp-surface)', color: 'var(--lp-text)' }} />
-                      <button type="button" onClick={() => { if (newCh.trim()) { const id = onAddChannel(newCh.trim()); onUpdateItem({ channelRowIds: [...(item.channelRowIds ?? []), id] }); setNewCh(''); } }}
+                      <button type="button" onClick={() => void addNewChannel()} disabled={chBusy}
                         style={{ fontSize: 'var(--lp-text-xs)', padding: '4px 8px', borderRadius: 5, border: '1px solid var(--lp-border)', background: 'var(--lp-surface)', color: 'var(--lp-text-secondary)', cursor: 'pointer' }}>Add</button>
                     </div>
                   )}
@@ -299,9 +343,8 @@ export function ItemProperties({ plot, item, selectedCount = 0, channels = [], o
           {item.kind === 'arrow' && (
             <Row label="Thickness"><Num value={item.weight ?? 2} step={0.5} min={0.5} onChange={(n) => onUpdateItem({ weight: n })} /></Row>
           )}
-          <Row label={item.kind === 'arrow' ? 'Colour' : 'Tint'}>
-            <input type="color" value={item.colorTint ?? '#000000'} style={{ width: 40, height: 26, border: 'none', background: 'none' }}
-              onChange={(e) => onUpdateItem({ colorTint: e.target.value })} />
+          <Row label="Colour">
+            <ColourField value={item.colorTint} onChange={(v) => onUpdateItem({ colorTint: v })} />
           </Row>
           {item.kind !== 'text' && item.kind !== 'arrow' && (
             <Row label="Locked">

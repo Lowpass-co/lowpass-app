@@ -17,51 +17,51 @@ export const standIcons: IconDescriptor[] = [
     "category": "stands",
     "label": "Mic boom stand",
     "footprint": {
-      "width_ft": 4,
-      "depth_ft": 2.4
+      "width_ft": 3.6,
+      "depth_ft": 2.0
     },
-    "viewBox": "0 0 400 240",
+    "viewBox": "0 0 360 200",
     "keywords": [
       "mic stand",
       "boom",
       "tripod"
     ],
     "outline": true,
-    "body": "<line x1=\"90\" y1=\"190\" x2=\"20\" y2=\"236\" class=\"lp-ico-detail\"/><line x1=\"90\" y1=\"190\" x2=\"160\" y2=\"236\" class=\"lp-ico-detail\"/><line x1=\"90\" y1=\"190\" x2=\"90\" y2=\"238\" class=\"lp-ico-detail\"/><line x1=\"90\" y1=\"190\" x2=\"90\" y2=\"60\" class=\"lp-ico-detail\"/><line x1=\"90\" y1=\"60\" x2=\"370\" y2=\"20\" class=\"lp-ico-detail\"/><line x1=\"90\" y1=\"60\" x2=\"58\" y2=\"72\" class=\"lp-ico-detail\"/><circle cx=\"90\" cy=\"60\" r=\"9\" class=\"lp-ico-tone\"/><circle cx=\"380\" cy=\"18\" r=\"14\" class=\"lp-ico-tone\"/>"
+    "body": "<line x1=\"100\" y1=\"96\" x2=\"100.0\" y2=\"184.0\" class=\"lp-ico-detail\"/><circle cx=\"100.0\" cy=\"184.0\" r=\"4\" class=\"lp-ico-tone\"/><line x1=\"100\" y1=\"96\" x2=\"23.8\" y2=\"52.0\" class=\"lp-ico-detail\"/><circle cx=\"23.8\" cy=\"52.0\" r=\"4\" class=\"lp-ico-tone\"/><line x1=\"100\" y1=\"96\" x2=\"176.2\" y2=\"52.0\" class=\"lp-ico-detail\"/><circle cx=\"176.2\" cy=\"52.0\" r=\"4\" class=\"lp-ico-tone\"/><line x1=\"56.1\" y1=\"96\" x2=\"344\" y2=\"96\" class=\"lp-ico-detail\"/><circle cx=\"344\" cy=\"96\" r=\"12\" class=\"lp-ico-tone\"/><circle cx=\"100\" cy=\"96\" r=\"9\" class=\"lp-ico-tone\"/>"
   },
   {
     "name": "stand-mic-straight",
     "category": "stands",
     "label": "Mic straight stand",
     "footprint": {
-      "width_ft": 1.7,
-      "depth_ft": 3
+      "width_ft": 1.0,
+      "depth_ft": 1.0
     },
-    "viewBox": "0 0 170 300",
+    "viewBox": "0 0 100 100",
     "keywords": [
       "mic stand",
       "straight",
       "round base"
     ],
     "outline": true,
-    "body": "<line x1=\"85\" y1=\"258\" x2=\"25\" y2=\"296\" class=\"lp-ico-detail\"/><line x1=\"85\" y1=\"258\" x2=\"145\" y2=\"296\" class=\"lp-ico-detail\"/><line x1=\"85\" y1=\"258\" x2=\"85\" y2=\"298\" class=\"lp-ico-detail\"/><line x1=\"85\" y1=\"258\" x2=\"85\" y2=\"34\" class=\"lp-ico-detail\"/><circle cx=\"85\" cy=\"150\" r=\"6\" class=\"lp-ico-tone\"/><ellipse cx=\"85\" cy=\"20\" rx=\"13\" ry=\"16\" class=\"lp-ico-tone\"/>"
+    "body": "<circle cx=\"50\" cy=\"50\" r=\"46\" class=\"lp-ico-detail\"/><circle cx=\"50\" cy=\"50\" r=\"38\" class=\"lp-ico-detail\" style=\"stroke-dasharray:2 5\"/><circle cx=\"50\" cy=\"50\" r=\"9\" class=\"lp-ico-tone\"/>"
   },
   {
     "name": "stand-mic-short",
     "category": "stands",
     "label": "Mic short stand",
     "footprint": {
-      "width_ft": 1.5,
-      "depth_ft": 1.4
+      "width_ft": 1.7,
+      "depth_ft": 1.1
     },
-    "viewBox": "0 0 150 140",
+    "viewBox": "0 0 170 110",
     "keywords": [
       "short stand",
       "kick mic stand",
       "amp mic"
     ],
     "outline": true,
-    "body": "<line x1=\"75\" y1=\"108\" x2=\"25\" y2=\"136\" class=\"lp-ico-detail\"/><line x1=\"75\" y1=\"108\" x2=\"125\" y2=\"136\" class=\"lp-ico-detail\"/><line x1=\"75\" y1=\"108\" x2=\"75\" y2=\"138\" class=\"lp-ico-detail\"/><line x1=\"75\" y1=\"108\" x2=\"75\" y2=\"34\" class=\"lp-ico-detail\"/><ellipse cx=\"75\" cy=\"22\" rx=\"12\" ry=\"14\" class=\"lp-ico-tone\"/>"
+    "body": "<line x1=\"52\" y1=\"52\" x2=\"52.0\" y2=\"98.0\" class=\"lp-ico-detail\"/><circle cx=\"52.0\" cy=\"98.0\" r=\"4\" class=\"lp-ico-tone\"/><line x1=\"52\" y1=\"52\" x2=\"12.2\" y2=\"29.0\" class=\"lp-ico-detail\"/><circle cx=\"12.2\" cy=\"29.0\" r=\"4\" class=\"lp-ico-tone\"/><line x1=\"52\" y1=\"52\" x2=\"91.8\" y2=\"29.0\" class=\"lp-ico-detail\"/><circle cx=\"91.8\" cy=\"29.0\" r=\"4\" class=\"lp-ico-tone\"/><line x1=\"32.6\" y1=\"52\" x2=\"160\" y2=\"52\" class=\"lp-ico-detail\"/><circle cx=\"160\" cy=\"52\" r=\"9\" class=\"lp-ico-tone\"/><circle cx=\"52\" cy=\"52\" r=\"9\" class=\"lp-ico-tone\"/>"
   },
   {
     "name": "stand-music",

@@ -293,6 +293,73 @@ light, without channel chips.
 
 **Last verified**:
 
+## Builder fixes (Oct 2026)
+
+#### SP-26 — Colour colours the lines only, and resets
+
+**Do**: Select an amp, pick a colour. Then press **Default**. Repeat with
+three items selected.
+
+**Expect**: Only the outline takes the colour; the drawing's detail stays
+visible (it used to fill solid). Default returns it to grey. In a multi-
+selection, Default resets all of them. The export draws it the same way.
+
+**Last verified**:
+
+#### SP-27 — Copy / cut / paste
+
+**Do**: Select two items (one linked to a channel), ⌘C, ⌘V twice. Then ⌘X
+and ⌘V. Then ⌘C here and ⌘V in another plot's tab. Then click in the Label
+field and ⌘C / ⌘V some text.
+
+**Expect**: Each paste lands 1 ft further on, selected, same look and
+labels, **no channel link**. Cut + paste puts it back in place. Pasting
+works across plots. Typing in a field copies text as normal. ⌘D duplicates
+the same way; a duplicated split-kit piece no longer rejoins the original
+kit on "Composite".
+
+**Last verified**:
+
+#### SP-28 — Smaller labels, smaller power drops
+
+**Do**: Show a label on an item that was never resized. Place a power
+drop. Run migration 271, reload a plot with old power drops / guitars /
+mic stands.
+
+**Expect**: Labels default to 9 px (hand-sized ones keep their size; the
+slider goes 6–18). Power drops are 1.3 ft wide. After 271, old-default
+items take the new sizes; hand-sized ones don't move.
+
+**Last verified**:
+
+#### SP-29 — Mic stands from above, compact guitars
+
+**Do**: Place a boom stand, a straight stand, a short stand, an electric,
+a bass and an acoustic.
+
+**Expect**: Stands are drawn from above (tripod Y + boom line, round
+base), matching the rest of the plot. Guitars are recognisable at ~1.2 ×
+2 ft. Same in the PDF export.
+
+**Last verified**:
+
+#### SP-30 — Channels panel
+
+**Do**: Left column → **Channels**. Drag a channel onto an item; drag the
+same channel onto another item; drag an unplaced channel onto empty stage;
+apply "Link by name"; click a placed channel; add "TALKBACK" with New
+channel; re-pair the plot to another channel list.
+
+**Expect**: Header counts "N of M on the plot". A drag outlines the target
+item in orange; dropping links it, and a second drop MOVES the link. Empty
+stage drops a mic (kick/OH/tom/talkback by name, DI for DI-only) already
+linked. Suggestions only list clear best matches. Clicking selects the
+item. The new channel appears at the end of the paired channel list (open
+it to confirm — it used to vanish on reload). Re-pairing refreshes the
+list without a reload.
+
+**Last verified**:
+
 ## Known broken
 
 _(none recorded yet — populate as smoke runs surface gaps.)_

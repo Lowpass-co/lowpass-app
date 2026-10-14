@@ -17,17 +17,17 @@ export const stringIcons: IconDescriptor[] = [
     "category": "strings",
     "label": "Electric guitar",
     "footprint": {
-      "width_ft": 1.1,
-      "depth_ft": 3.3
+      "width_ft": 1.2,
+      "depth_ft": 2.0
     },
-    "viewBox": "0 0 110 330",
+    "viewBox": "0 0 120 200",
     "keywords": [
       "electric",
       "strat",
       "tele",
       "guitar"
     ],
-    "body": "<path d=\"M42 8 L64 4 L72 54 L46 58 Z\" class=\"lp-ico-tone\"/><rect x=\"48\" y=\"56\" width=\"14\" height=\"132\"/><path d=\"M42 185 C36 172 28 164 22 168 C16 173 22 188 32 198 C10 214 4 246 12 272 C22 306 40 324 55 324 C74 324 90 306 96 278 C102 252 96 224 78 208 C86 196 90 182 84 177 C79 173 70 180 66 188 C58 184 50 184 42 185 Z\"/><line x1=\"48\" y1=\"82\" x2=\"62\" y2=\"82\" class=\"lp-ico-detail\"/><line x1=\"48\" y1=\"106\" x2=\"62\" y2=\"106\" class=\"lp-ico-detail\"/><line x1=\"48\" y1=\"130\" x2=\"62\" y2=\"130\" class=\"lp-ico-detail\"/><line x1=\"48\" y1=\"154\" x2=\"62\" y2=\"154\" class=\"lp-ico-detail\"/><rect x=\"40\" y=\"220\" width=\"30\" height=\"9\" rx=\"4\" class=\"lp-ico-tone\"/><rect x=\"40\" y=\"238\" width=\"30\" height=\"9\" rx=\"4\" class=\"lp-ico-tone\"/><rect x=\"38\" y=\"262\" width=\"34\" height=\"10\" rx=\"3\" class=\"lp-ico-tone\"/><line x1=\"55\" y1=\"56\" x2=\"55\" y2=\"262\" class=\"lp-ico-detail\"/><circle cx=\"80\" cy=\"296\" r=\"5.5\" class=\"lp-ico-detail\"/><circle cx=\"90\" cy=\"282\" r=\"5.5\" class=\"lp-ico-detail\"/>"
+    "body": "<path d=\"M67,120 C72,112 82,102 90,102 C98,102 98,112 96,120 C94,128 100,134 108,144 C118,158 116,184 98,192 C84,199 36,199 22,192 C4,184 2,158 12,146 C20,136 22,128 20,118 C18,104 22,92 30,92 C38,92 48,108 53,120 Z\" transform=\"translate(0 0)\"/><rect x=\"53\" y=\"22\" width=\"14\" height=\"102\" rx=\"2\"/><path d=\"M67,26 L68,8 C68,3 64,1 59,2 L47,5 C42,7 42,13 46,15 L53,18 L53,26 Z\"/><circle cx=\"49\" cy=\"8\" r=\"2\" class=\"lp-ico-tone\"/><circle cx=\"53\" cy=\"6\" r=\"2\" class=\"lp-ico-tone\"/><circle cx=\"57\" cy=\"4\" r=\"2\" class=\"lp-ico-tone\"/><circle cx=\"61\" cy=\"4\" r=\"2\" class=\"lp-ico-tone\"/><circle cx=\"64\" cy=\"6\" r=\"2\" class=\"lp-ico-tone\"/><circle cx=\"65\" cy=\"10\" r=\"2\" class=\"lp-ico-tone\"/><path d=\"M30,150 C30,136 44,128 60,128 L76,128 C88,128 96,140 96,156 C96,172 84,182 70,182 L46,182 C36,182 30,172 30,150 Z\" class=\"lp-ico-detail\"/><rect x=\"51\" y=\"134\" width=\"18\" height=\"5\" rx=\"2\" class=\"lp-ico-tone\"/><rect x=\"51\" y=\"148\" width=\"18\" height=\"5\" rx=\"2\" class=\"lp-ico-tone\"/><rect x=\"51\" y=\"162\" width=\"18\" height=\"5\" rx=\"2\" class=\"lp-ico-tone\"/><rect x=\"48\" y=\"174\" width=\"24\" height=\"6\" rx=\"1.5\" class=\"lp-ico-tone\"/><circle cx=\"86\" cy=\"168\" r=\"4\" class=\"lp-ico-tone\"/><circle cx=\"90\" cy=\"180\" r=\"4\" class=\"lp-ico-tone\"/>"
   },
   {
     "name": "string-acoustic-guitar",
@@ -35,32 +35,32 @@ export const stringIcons: IconDescriptor[] = [
     "label": "Acoustic guitar",
     "footprint": {
       "width_ft": 1.3,
-      "depth_ft": 3.4
+      "depth_ft": 2.0
     },
-    "viewBox": "0 0 130 340",
+    "viewBox": "0 0 130 200",
     "keywords": [
       "acoustic",
       "dreadnought",
       "guitar"
     ],
-    "body": "<rect x=\"48\" y=\"4\" width=\"34\" height=\"54\" rx=\"6\" class=\"lp-ico-tone\"/><circle cx=\"56\" cy=\"16\" r=\"2.6\" class=\"lp-ico-detail\"/><circle cx=\"56\" cy=\"28\" r=\"2.6\" class=\"lp-ico-detail\"/><circle cx=\"56\" cy=\"40\" r=\"2.6\" class=\"lp-ico-detail\"/><circle cx=\"74\" cy=\"16\" r=\"2.6\" class=\"lp-ico-detail\"/><circle cx=\"74\" cy=\"28\" r=\"2.6\" class=\"lp-ico-detail\"/><circle cx=\"74\" cy=\"40\" r=\"2.6\" class=\"lp-ico-detail\"/><rect x=\"58\" y=\"58\" width=\"14\" height=\"120\"/><line x1=\"58\" y1=\"86\" x2=\"72\" y2=\"86\" class=\"lp-ico-detail\"/><line x1=\"58\" y1=\"112\" x2=\"72\" y2=\"112\" class=\"lp-ico-detail\"/><line x1=\"58\" y1=\"138\" x2=\"72\" y2=\"138\" class=\"lp-ico-detail\"/><line x1=\"58\" y1=\"162\" x2=\"72\" y2=\"162\" class=\"lp-ico-detail\"/><path d=\"M65 176 C48 176 36 186 33 202 C30 216 37 228 30 242 C12 268 14 306 42 326 C57 337 73 337 88 326 C116 306 118 268 100 242 C93 228 100 216 97 202 C94 186 82 176 65 176 Z\"/><circle cx=\"65\" cy=\"238\" r=\"26\" class=\"lp-ico-tone\"/><circle cx=\"65\" cy=\"238\" r=\"31\" class=\"lp-ico-detail\"/><rect x=\"43\" y=\"284\" width=\"44\" height=\"11\" rx=\"4\" class=\"lp-ico-tone\"/><line x1=\"65\" y1=\"58\" x2=\"65\" y2=\"284\" class=\"lp-ico-detail\"/>"
+    "body": "<path d=\"M65,92 C82,92 102,94 104,110 C106,124 96,130 98,140 C100,150 124,156 124,176 C124,194 104,198 65,198 C26,198 6,194 6,176 C6,156 30,150 32,140 C34,130 24,124 26,110 C28,94 48,92 65,92 Z\"/><rect x=\"58\" y=\"22\" width=\"14\" height=\"74\" rx=\"2\"/><path d=\"M57,25 L55,5 C55,2 58,1 65,1 C72,1 75,2 75,5 L73,25 Z\"/><circle cx=\"52\" cy=\"8\" r=\"2.4\" class=\"lp-ico-tone\"/><circle cx=\"52\" cy=\"15\" r=\"2.4\" class=\"lp-ico-tone\"/><circle cx=\"52\" cy=\"22\" r=\"2.4\" class=\"lp-ico-tone\"/><circle cx=\"78\" cy=\"8\" r=\"2.4\" class=\"lp-ico-tone\"/><circle cx=\"78\" cy=\"15\" r=\"2.4\" class=\"lp-ico-tone\"/><circle cx=\"78\" cy=\"22\" r=\"2.4\" class=\"lp-ico-tone\"/><circle cx=\"65\" cy=\"128\" r=\"14\" class=\"lp-ico-detail\"/><rect x=\"50\" y=\"168\" width=\"30\" height=\"7\" rx=\"2\" class=\"lp-ico-tone\"/>"
   },
   {
     "name": "string-bass-guitar",
     "category": "strings",
     "label": "Bass guitar",
     "footprint": {
-      "width_ft": 1.1,
-      "depth_ft": 3.8
+      "width_ft": 1.2,
+      "depth_ft": 2.24
     },
-    "viewBox": "0 0 110 380",
+    "viewBox": "0 0 120 224",
     "keywords": [
       "bass",
       "p-bass",
       "jazz bass",
       "4-string"
     ],
-    "body": "<path d=\"M42 8 L62 4 L68 50 L46 54 Z\" class=\"lp-ico-tone\"/><circle cx=\"50\" cy=\"14\" r=\"2.6\" class=\"lp-ico-detail\"/><circle cx=\"52\" cy=\"26\" r=\"2.6\" class=\"lp-ico-detail\"/><circle cx=\"54\" cy=\"38\" r=\"2.6\" class=\"lp-ico-detail\"/><circle cx=\"56\" cy=\"48\" r=\"2.6\" class=\"lp-ico-detail\"/><rect x=\"48\" y=\"52\" width=\"13\" height=\"212\"/><line x1=\"48\" y1=\"86\" x2=\"61\" y2=\"86\" class=\"lp-ico-detail\"/><line x1=\"48\" y1=\"122\" x2=\"61\" y2=\"122\" class=\"lp-ico-detail\"/><line x1=\"48\" y1=\"158\" x2=\"61\" y2=\"158\" class=\"lp-ico-detail\"/><line x1=\"48\" y1=\"194\" x2=\"61\" y2=\"194\" class=\"lp-ico-detail\"/><line x1=\"48\" y1=\"230\" x2=\"61\" y2=\"230\" class=\"lp-ico-detail\"/><path d=\"M41 258 C35 244 26 236 20 240 C14 246 20 262 31 272 C12 288 8 318 16 340 C26 366 42 376 56 376 C74 376 88 364 93 340 C98 318 92 292 76 278 C84 266 88 252 82 247 C77 243 68 250 64 258 C56 254 48 254 41 258 Z\"/><rect x=\"38\" y=\"298\" width=\"16\" height=\"9\" rx=\"3\" class=\"lp-ico-tone\"/><rect x=\"56\" y=\"290\" width=\"16\" height=\"9\" rx=\"3\" class=\"lp-ico-tone\"/><rect x=\"40\" y=\"330\" width=\"32\" height=\"10\" rx=\"3\" class=\"lp-ico-tone\"/><line x1=\"54.5\" y1=\"52\" x2=\"54.5\" y2=\"330\" class=\"lp-ico-detail\"/><circle cx=\"78\" cy=\"352\" r=\"5\" class=\"lp-ico-detail\"/><circle cx=\"88\" cy=\"338\" r=\"5\" class=\"lp-ico-detail\"/>"
+    "body": "<path d=\"M67,120 C72,112 82,102 90,102 C98,102 98,112 96,120 C94,128 100,134 108,144 C118,158 116,184 98,192 C84,199 36,199 22,192 C4,184 2,158 12,146 C20,136 22,128 20,118 C18,104 22,92 30,92 C38,92 48,108 53,120 Z\" transform=\"translate(0 24)\"/><rect x=\"54\" y=\"20\" width=\"12\" height=\"128\" rx=\"2\"/><path d=\"M54,24 L52,6 C52,2 56,0 60,1 L74,6 C78,8 78,14 74,16 L66,20 L66,24 Z\"/><circle cx=\"70\" cy=\"6\" r=\"2.6\" class=\"lp-ico-tone\"/><circle cx=\"72\" cy=\"10\" r=\"2.6\" class=\"lp-ico-tone\"/><circle cx=\"73\" cy=\"14\" r=\"2.6\" class=\"lp-ico-tone\"/><circle cx=\"74\" cy=\"18\" r=\"2.6\" class=\"lp-ico-tone\"/><rect x=\"46\" y=\"160\" width=\"12\" height=\"6\" rx=\"2\" class=\"lp-ico-tone\"/><rect x=\"62\" y=\"170\" width=\"12\" height=\"6\" rx=\"2\" class=\"lp-ico-tone\"/><rect x=\"48\" y=\"196\" width=\"24\" height=\"7\" rx=\"1.5\" class=\"lp-ico-tone\"/><circle cx=\"90\" cy=\"198\" r=\"4\" class=\"lp-ico-tone\"/><circle cx=\"94\" cy=\"208\" r=\"4\" class=\"lp-ico-tone\"/>"
   },
   {
     "name": "string-classical-guitar",
@@ -68,32 +68,32 @@ export const stringIcons: IconDescriptor[] = [
     "label": "Classical guitar",
     "footprint": {
       "width_ft": 1.3,
-      "depth_ft": 3.3
+      "depth_ft": 2.0
     },
-    "viewBox": "0 0 130 330",
+    "viewBox": "0 0 130 200",
     "keywords": [
       "classical",
       "nylon",
       "spanish",
       "guitar"
     ],
-    "body": "<rect x=\"48\" y=\"4\" width=\"34\" height=\"52\" rx=\"5\" class=\"lp-ico-tone\"/><rect x=\"54\" y=\"11\" width=\"8\" height=\"36\" rx=\"4\" class=\"lp-ico-detail\"/><rect x=\"68\" y=\"11\" width=\"8\" height=\"36\" rx=\"4\" class=\"lp-ico-detail\"/><rect x=\"57\" y=\"56\" width=\"16\" height=\"120\"/><line x1=\"57\" y1=\"84\" x2=\"73\" y2=\"84\" class=\"lp-ico-detail\"/><line x1=\"57\" y1=\"108\" x2=\"73\" y2=\"108\" class=\"lp-ico-detail\"/><line x1=\"57\" y1=\"132\" x2=\"73\" y2=\"132\" class=\"lp-ico-detail\"/><line x1=\"57\" y1=\"156\" x2=\"73\" y2=\"156\" class=\"lp-ico-detail\"/><path d=\"M65 174 C48 174 36 184 33 200 C30 214 36 226 30 238 C14 262 16 298 40 320 C54 332 76 332 90 320 C114 298 116 262 100 238 C94 226 100 214 97 200 C94 184 82 174 65 174 Z\"/><circle cx=\"65\" cy=\"230\" r=\"27\" class=\"lp-ico-tone\"/><rect x=\"44\" y=\"282\" width=\"42\" height=\"9\" class=\"lp-ico-tone\"/><line x1=\"65\" y1=\"56\" x2=\"65\" y2=\"282\" class=\"lp-ico-detail\"/>"
+    "body": "<path d=\"M65,92 C82,92 102,94 104,110 C106,124 96,130 98,140 C100,150 124,156 124,176 C124,194 104,198 65,198 C26,198 6,194 6,176 C6,156 30,150 32,140 C34,130 24,124 26,110 C28,94 48,92 65,92 Z\"/><rect x=\"58\" y=\"22\" width=\"14\" height=\"74\" rx=\"2\"/><path d=\"M57,25 L56,3 L74,3 L73,25 Z\"/><line x1=\"62\" y1=\"7\" x2=\"62\" y2=\"21\" class=\"lp-ico-detail\"/><line x1=\"68\" y1=\"7\" x2=\"68\" y2=\"21\" class=\"lp-ico-detail\"/><circle cx=\"65\" cy=\"128\" r=\"13\" class=\"lp-ico-detail\"/><circle cx=\"65\" cy=\"128\" r=\"18\" class=\"lp-ico-detail\"/><rect x=\"50\" y=\"168\" width=\"30\" height=\"7\" rx=\"2\" class=\"lp-ico-tone\"/>"
   },
   {
     "name": "string-12-string",
     "category": "strings",
     "label": "12-string",
     "footprint": {
-      "width_ft": 1.35,
-      "depth_ft": 3.5
+      "width_ft": 1.3,
+      "depth_ft": 2.0
     },
-    "viewBox": "0 0 135 350",
+    "viewBox": "0 0 130 200",
     "keywords": [
       "12 string",
       "twelve",
       "guitar"
     ],
-    "body": "<rect x=\"45\" y=\"4\" width=\"45\" height=\"58\" rx=\"6\" class=\"lp-ico-tone\"/><circle cx=\"54\" cy=\"14\" r=\"2.4\" class=\"lp-ico-detail\"/><circle cx=\"54\" cy=\"25\" r=\"2.4\" class=\"lp-ico-detail\"/><circle cx=\"54\" cy=\"36\" r=\"2.4\" class=\"lp-ico-detail\"/><circle cx=\"54\" cy=\"47\" r=\"2.4\" class=\"lp-ico-detail\"/><circle cx=\"81\" cy=\"14\" r=\"2.4\" class=\"lp-ico-detail\"/><circle cx=\"81\" cy=\"25\" r=\"2.4\" class=\"lp-ico-detail\"/><circle cx=\"81\" cy=\"36\" r=\"2.4\" class=\"lp-ico-detail\"/><circle cx=\"81\" cy=\"47\" r=\"2.4\" class=\"lp-ico-detail\"/><rect x=\"60\" y=\"62\" width=\"15\" height=\"120\"/><line x1=\"60\" y1=\"90\" x2=\"75\" y2=\"90\" class=\"lp-ico-detail\"/><line x1=\"60\" y1=\"116\" x2=\"75\" y2=\"116\" class=\"lp-ico-detail\"/><line x1=\"60\" y1=\"142\" x2=\"75\" y2=\"142\" class=\"lp-ico-detail\"/><line x1=\"60\" y1=\"166\" x2=\"75\" y2=\"166\" class=\"lp-ico-detail\"/><path d=\"M67 180 C50 180 38 190 35 206 C32 220 39 232 32 246 C14 272 16 310 44 330 C59 341 75 341 90 330 C118 310 120 272 102 246 C95 232 102 220 99 206 C96 190 84 180 67 180 Z\"/><circle cx=\"67\" cy=\"242\" r=\"26\" class=\"lp-ico-tone\"/><rect x=\"45\" y=\"288\" width=\"44\" height=\"11\" rx=\"4\" class=\"lp-ico-tone\"/><line x1=\"64\" y1=\"62\" x2=\"64\" y2=\"288\" class=\"lp-ico-detail\"/><line x1=\"70\" y1=\"62\" x2=\"70\" y2=\"288\" class=\"lp-ico-detail\"/>"
+    "body": "<path d=\"M65,92 C82,92 102,94 104,110 C106,124 96,130 98,140 C100,150 124,156 124,176 C124,194 104,198 65,198 C26,198 6,194 6,176 C6,156 30,150 32,140 C34,130 24,124 26,110 C28,94 48,92 65,92 Z\"/><rect x=\"58\" y=\"22\" width=\"14\" height=\"74\" rx=\"2\"/><path d=\"M55,25 L52,4 C52,1 57,0 65,0 C73,0 78,1 78,4 L75,25 Z\"/><circle cx=\"48\" cy=\"4\" r=\"1.9\" class=\"lp-ico-tone\"/><circle cx=\"48\" cy=\"8\" r=\"1.9\" class=\"lp-ico-tone\"/><circle cx=\"48\" cy=\"12\" r=\"1.9\" class=\"lp-ico-tone\"/><circle cx=\"48\" cy=\"16\" r=\"1.9\" class=\"lp-ico-tone\"/><circle cx=\"48\" cy=\"20\" r=\"1.9\" class=\"lp-ico-tone\"/><circle cx=\"48\" cy=\"24\" r=\"1.9\" class=\"lp-ico-tone\"/><circle cx=\"82\" cy=\"4\" r=\"1.9\" class=\"lp-ico-tone\"/><circle cx=\"82\" cy=\"8\" r=\"1.9\" class=\"lp-ico-tone\"/><circle cx=\"82\" cy=\"12\" r=\"1.9\" class=\"lp-ico-tone\"/><circle cx=\"82\" cy=\"16\" r=\"1.9\" class=\"lp-ico-tone\"/><circle cx=\"82\" cy=\"20\" r=\"1.9\" class=\"lp-ico-tone\"/><circle cx=\"82\" cy=\"24\" r=\"1.9\" class=\"lp-ico-tone\"/><circle cx=\"65\" cy=\"128\" r=\"14\" class=\"lp-ico-detail\"/><rect x=\"50\" y=\"168\" width=\"30\" height=\"7\" rx=\"2\" class=\"lp-ico-tone\"/>"
   },
   {
     "name": "string-resonator",
@@ -101,15 +101,15 @@ export const stringIcons: IconDescriptor[] = [
     "label": "Resonator",
     "footprint": {
       "width_ft": 1.3,
-      "depth_ft": 3.3
+      "depth_ft": 2.0
     },
-    "viewBox": "0 0 130 330",
+    "viewBox": "0 0 130 200",
     "keywords": [
       "resonator",
       "dobro",
       "steel"
     ],
-    "body": "<rect x=\"48\" y=\"4\" width=\"34\" height=\"52\" rx=\"5\" class=\"lp-ico-tone\"/><rect x=\"58\" y=\"56\" width=\"14\" height=\"118\"/><line x1=\"58\" y1=\"84\" x2=\"72\" y2=\"84\" class=\"lp-ico-detail\"/><line x1=\"58\" y1=\"108\" x2=\"72\" y2=\"108\" class=\"lp-ico-detail\"/><line x1=\"58\" y1=\"132\" x2=\"72\" y2=\"132\" class=\"lp-ico-detail\"/><line x1=\"58\" y1=\"156\" x2=\"72\" y2=\"156\" class=\"lp-ico-detail\"/><path d=\"M65 172 C46 172 33 184 31 202 C29 216 34 226 30 238 C16 262 18 298 42 318 C55 330 75 330 88 318 C112 298 114 262 100 238 C96 226 101 216 99 202 C97 184 84 172 65 172 Z\"/><circle cx=\"65\" cy=\"248\" r=\"34\" class=\"lp-ico-tone\"/><circle cx=\"65\" cy=\"248\" r=\"15\" class=\"lp-ico-detail\"/><circle cx=\"44\" cy=\"198\" r=\"8\" class=\"lp-ico-detail\"/><circle cx=\"86\" cy=\"198\" r=\"8\" class=\"lp-ico-detail\"/><line x1=\"65\" y1=\"56\" x2=\"65\" y2=\"220\" class=\"lp-ico-detail\"/>"
+    "body": "<path d=\"M65,92 C82,92 102,94 104,110 C106,124 96,130 98,140 C100,150 124,156 124,176 C124,194 104,198 65,198 C26,198 6,194 6,176 C6,156 30,150 32,140 C34,130 24,124 26,110 C28,94 48,92 65,92 Z\"/><rect x=\"58\" y=\"22\" width=\"14\" height=\"74\" rx=\"2\"/><path d=\"M57,25 L55,5 C55,2 58,1 65,1 C72,1 75,2 75,5 L73,25 Z\"/><circle cx=\"52\" cy=\"8\" r=\"2.4\" class=\"lp-ico-tone\"/><circle cx=\"52\" cy=\"15\" r=\"2.4\" class=\"lp-ico-tone\"/><circle cx=\"52\" cy=\"22\" r=\"2.4\" class=\"lp-ico-tone\"/><circle cx=\"78\" cy=\"8\" r=\"2.4\" class=\"lp-ico-tone\"/><circle cx=\"78\" cy=\"15\" r=\"2.4\" class=\"lp-ico-tone\"/><circle cx=\"78\" cy=\"22\" r=\"2.4\" class=\"lp-ico-tone\"/><circle cx=\"65\" cy=\"158\" r=\"28\" class=\"lp-ico-detail\"/><circle cx=\"65\" cy=\"158\" r=\"20\" class=\"lp-ico-detail\"/><circle cx=\"65\" cy=\"158\" r=\"5\" class=\"lp-ico-tone\"/><circle cx=\"42\" cy=\"114\" r=\"4\" class=\"lp-ico-detail\"/><circle cx=\"88\" cy=\"114\" r=\"4\" class=\"lp-ico-detail\"/>"
   },
   {
     "name": "string-ukulele",

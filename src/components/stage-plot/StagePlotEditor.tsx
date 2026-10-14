@@ -15,7 +15,10 @@ import type { IconDescriptor } from '@/lib/stage-plot/icons/types';
 import { IconPalette } from '@/components/stage-plot/IconPalette';
 import { ItemProperties } from '@/components/stage-plot/ItemProperties';
 import { StageCanvas } from '@/components/stage-plot/StageCanvas';
+import { ChannelsPanel } from '@/components/stage-plot/ChannelsPanel';
+import { iconForChannel, linkChannel, type LinkSuggestion } from '@/lib/stage-plot/channelLinks';
 import { DEFAULT_PLOT, extractTitleBarFromItems, type Channel, type EditorItem, type EditorPlot } from '@/lib/stage-plot/editor-types';
+import { cloneForPaste, parseClip, serializeClip } from '@/lib/stage-plot/clipboard';
 
 const uid = (): string =>
   typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `i${Date.now()}${Math.round(Math.random() * 1e6)}`;
@@ -33,8 +36,12 @@ const toolBtn: React.CSSProperties = {
 export interface StagePlotEditorProps {
   initialPlot?: EditorPlot;
   initialItems?: EditorItem[];
-  /** Channel-list rows from the paired channel_list pack (§SP4). */
+  /** Channel-list rows from the paired channel_list pack (§SP4). The host owns
+   *  them (it re-fetches after a channel is created or the list is re-paired). */
   channels?: Channel[];
+  /** Write a new row to the paired channel list; resolves to its id. Absent
+   *  = no list paired, so new channels can't be created here. */
+  onCreateChannel?: (label: string) => Promise<string>;
   /** Workspace custom / AI icons (§SP10) — registered for getIcon + shown in the palette. */
   initialCustomIcons?: IconDescriptor[];
   onChange?: (plot: EditorPlot, items: EditorItem[]) => void;
@@ -44,10 +51,10 @@ export interface StagePlotEditorProps {
   channelListHref?: string;
 }
 
-export function StagePlotEditor({ initialPlot, initialItems, channels: initialChannels = [], initialCustomIcons = [], onChange, actions, channelListHref }: StagePlotEditorProps) {
+export function StagePlotEditor({ initialPlot, initialItems, channels = [], onCreateChannel, initialCustomIcons = [], onChange, actions, channelListHref }: StagePlotEditorProps) {
   const [plot, setPlot] = useState<EditorPlot>(initialPlot ?? DEFAULT_PLOT);
   const [items, setItems] = useState<EditorItem[]>(initialItems ?? []);
-  const [channels, setChannels] = useState<Channel[]>(initialChannels);
+  const [leftTab, setLeftTab] = useState<'icons' | 'channels'>('icons');
   const [customIcons, setCustomIcons] = useState<IconDescriptor[]>(initialCustomIcons);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
 
@@ -62,13 +69,46 @@ export function StagePlotEditor({ initialPlot, initialItems, channels: initialCh
     setCustomIcons((prev) => [icon, ...prev.filter((c) => c.name !== icon.name)]);
   }, []);
 
-  // Create a new channel-list row on the fly (mics often aren't on the
-  // plot, so you patch an instrument to channels you add here). Returns
-  // the new id so the caller can link it immediately.
-  const addChannel = useCallback((label: string): string => {
-    const id = uid();
-    setChannels((prev) => [...prev, { id, number: prev.length + 1, label, color: null, snakeLabel: null }]);
-    return id;
+  // Create a new channel on the fly. Oct 2026: this used to add the channel
+  // to the editor's memory ONLY — nothing wrote it to the channel list, so it
+  // vanished on reload and left a dead link. It now writes a real row via the
+  // host (onCreateChannel) and resolves to that row's id.
+  const addChannel = onCreateChannel;
+
+  /* Oct 2026 — Channels panel. Dropped on an item: link it there (moving it
+     off any other item). Dropped on empty stage: a mic / DI, already linked. */
+  const dropChannel = useCallback(
+    (channelId: string, itemId: string | null, xFt: number, yFt: number) => {
+      const ch = channels.find((c) => c.id === channelId);
+      if (!ch) return;
+      if (itemId) {
+        setItems((prev) => linkChannel(prev, channelId, itemId));
+        setSelectedIds([itemId]);
+        return;
+      }
+      const iconName = iconForChannel(ch);
+      const icon = getIcon(iconName);
+      const id = uid();
+      setItems((prev) =>
+        linkChannel(
+          [
+            ...prev,
+            {
+              id, iconName, xFt, yFt, rotationDeg: 0,
+              widthFt: icon?.footprint.width_ft, depthFt: icon?.footprint.depth_ft,
+              layer: 'main' as const, label: ch.label, labelPosition: 'hidden' as const,
+            },
+          ],
+          channelId,
+          id,
+        ),
+      );
+      setSelectedIds([id]);
+    },
+    [channels],
+  );
+  const applySuggestions = useCallback((links: LinkSuggestion[]) => {
+    setItems((prev) => links.reduce((acc, l) => linkChannel(acc, l.channelId, l.itemId), prev));
   }, []);
 
   const selectItem = useCallback((id: string | null, additive?: boolean) => {
@@ -153,15 +193,63 @@ export function StagePlotEditor({ initialPlot, initialItems, channels: initialCh
     setSelectedIds([]);
   }, [selectedIds]);
 
+  // ⌘D — same rules as paste (cloneForPaste): fresh ids, fresh group ids (a
+  // duplicated kit piece used to share the original's group, so "Composite"
+  // merged both), 1 ft offset, channel links dropped.
   const duplicateSelected = useCallback(() => {
     setItems((prev) => {
-      const clones = prev
-        .filter((it) => selectedIds.includes(it.id))
-        .map((src) => ({ ...src, id: uid(), xFt: +(src.xFt + 1).toFixed(2), yFt: +(src.yFt + 1).toFixed(2) }));
+      const clones = cloneForPaste(prev.filter((it) => selectedIds.includes(it.id)), 1, uid);
       if (clones.length) setSelectedIds(clones.map((c) => c.id));
       return [...prev, ...clones];
     });
   }, [selectedIds]);
+
+  /* Oct 2026 — ⌘C / ⌘X / ⌘V. Uses the browser's copy / cut / paste EVENTS
+     (clipboardData), not navigator.clipboard: no permission prompt, and the
+     system clipboard carries the items between tabs and plots. Typing in a
+     field keeps normal text copy/paste. Repeated pastes step 1 ft further
+     each time; a cut pastes back in place first. */
+  const clipRef = useRef<{ text: string | null; pastes: number }>({ text: null, pastes: 0 });
+  useEffect(() => {
+    const typing = () => {
+      const el = document.activeElement as HTMLElement | null;
+      return Boolean(el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT' || el.isContentEditable));
+    };
+    const onCopyOrCut = (e: ClipboardEvent) => {
+      if (typing() || selectedIds.length === 0 || !e.clipboardData) return;
+      const sel = items.filter((it) => selectedIds.includes(it.id));
+      if (sel.length === 0) return;
+      const text = serializeClip(sel);
+      e.clipboardData.setData('text/plain', text);
+      e.preventDefault();
+      const cut = e.type === 'cut';
+      clipRef.current = { text, pastes: cut ? -1 : 0 };
+      if (cut) {
+        setItems((prev) => prev.filter((it) => !selectedIds.includes(it.id)));
+        setSelectedIds([]);
+      }
+    };
+    const onPaste = (e: ClipboardEvent) => {
+      if (typing() || !e.clipboardData) return;
+      const text = e.clipboardData.getData('text/plain');
+      const parsed = parseClip(text);
+      if (!parsed) return;
+      e.preventDefault();
+      if (clipRef.current.text !== text) clipRef.current = { text, pastes: 0 };
+      clipRef.current.pastes += 1;
+      const clones = cloneForPaste(parsed, clipRef.current.pastes, uid);
+      setItems((prev) => [...prev, ...clones]);
+      setSelectedIds(clones.map((c) => c.id));
+    };
+    document.addEventListener('copy', onCopyOrCut);
+    document.addEventListener('cut', onCopyOrCut);
+    document.addEventListener('paste', onPaste);
+    return () => {
+      document.removeEventListener('copy', onCopyOrCut);
+      document.removeEventListener('cut', onCopyOrCut);
+      document.removeEventListener('paste', onPaste);
+    };
+  }, [items, selectedIds]);
 
   // §SP-FIX-3 — split a composite kit into individual pieces at their
   // canonical offsets (rotated with the kit), tagged with a shared group.
@@ -307,8 +395,36 @@ export function StagePlotEditor({ initialPlot, initialItems, channels: initialCh
         </div>
       )}
       <div style={{ flex: 1, minHeight: 0, display: 'flex' }}>
-        <div style={{ width: 240, minWidth: 240 }}>
-          <IconPalette onAdd={addItem} customIcons={customIcons} onCustomGenerated={onCustomGenerated} />
+        <div style={{ width: 240, minWidth: 240, display: 'flex', flexDirection: 'column', borderRight: '1px solid var(--lp-border)' }}>
+          <div role="tablist" style={{ display: 'flex', borderBottom: '1px solid var(--lp-border)' }}>
+            {([['icons', 'Icons'], ['channels', `Channels${channels.length ? ` · ${channels.length}` : ''}`]] as const).map(([k, label]) => (
+              <button
+                key={k}
+                type="button"
+                role="tab"
+                aria-selected={leftTab === k}
+                onClick={() => setLeftTab(k)}
+                style={{ flex: 1, padding: '8px 6px', fontSize: 'var(--lp-text-xs)', border: 'none', borderBottom: leftTab === k ? '2px solid var(--lp-orange)' : '2px solid transparent', background: 'transparent', color: leftTab === k ? 'var(--lp-text)' : 'var(--lp-text-tertiary)', fontWeight: leftTab === k ? 600 : 400, cursor: 'pointer' }}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          <div style={{ flex: 1, minHeight: 0 }}>
+            {leftTab === 'icons' ? (
+              <IconPalette onAdd={addItem} customIcons={customIcons} onCustomGenerated={onCustomGenerated} />
+            ) : (
+              <ChannelsPanel
+                channels={channels}
+                items={items}
+                canCreate={Boolean(onCreateChannel)}
+                onCreate={async (label) => { await onCreateChannel?.(label); }}
+                onApplySuggestions={applySuggestions}
+                onSelectItems={setSelectedIds}
+                channelListHref={channelListHref}
+              />
+            )}
+          </div>
         </div>
         <div style={{ flex: 1, minWidth: 0 }}>
           <StageCanvas
@@ -329,6 +445,7 @@ export function StagePlotEditor({ initialPlot, initialItems, channels: initialCh
             onSelectItem={selectItem}
             onUpdateItem={updateItem}
             onDropIcon={(iconName, xFt, yFt) => addItem(iconName, { xFt, yFt })}
+            onDropChannel={dropChannel}
             onReorderItem={reorderItem}
             onDeleteItem={(id) => { setItems((prev) => prev.filter((it) => it.id !== id)); setSelectedIds((prev) => prev.filter((x) => x !== id)); }}
           />
