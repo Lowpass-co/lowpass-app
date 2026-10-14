@@ -421,7 +421,9 @@ export function ExportTemplateEditor({ surface, tourId, versionId = null, initia
         body: JSON.stringify({ surface, name, config }),
       });
       if (!res.ok) {
-        showToast('Could not save the template', 'error');
+        // Say WHY — the generic toast hid a rejected surface for months.
+        const j = (await res.json().catch(() => ({}))) as { error?: unknown };
+        showToast(typeof j.error === 'string' && j.error ? `Could not save the template: ${j.error}` : 'Could not save the template', 'error');
         return false;
       }
       const { template } = (await res.json()) as { template?: { id: string } };
@@ -816,11 +818,13 @@ export function ExportTemplateEditor({ surface, tourId, versionId = null, initia
                     </>
                   )}
 
-                  <FieldLabel>IO box sheets</FieldLabel>
-                  <Toggle label="Every box" checked={cl.boxIds === null} onChange={(v) => setChannelList('boxIds', v ? null : boxes.map((b) => b.id))} />
+                  <FieldLabel>Stage box sheets</FieldLabel>
+                  {/* Unticking starts from EVERY box picked, never an empty pick. If the
+                      boxes haven't loaded yet, stay on "Every box" rather than save []. */}
+                  <Toggle label="Every box" checked={cl.boxIds === null} onChange={(v) => setChannelList('boxIds', v || boxes.length === 0 ? null : boxes.map((b) => b.id))} />
                   {cl.boxIds !== null ? (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 4, maxHeight: 168, overflowY: 'auto', paddingLeft: 6, borderLeft: '2px solid var(--lp-border)' }}>
-                      {boxes.length === 0 ? <p style={{ fontSize: 11, color: 'var(--lp-text-tertiary)' }}>No IO boxes on this channel list.</p> : null}
+                      {boxes.length === 0 ? <p style={{ fontSize: 11, color: 'var(--lp-text-tertiary)' }}>No stage boxes on this channel list.</p> : null}
                       {boxes.map((b) => (
                         <Toggle
                           key={b.id}
@@ -853,7 +857,7 @@ export function ExportTemplateEditor({ surface, tourId, versionId = null, initia
                     </div>
                   ) : null}
 
-                  <FieldLabel>IO box sheet columns</FieldLabel>
+                  <FieldLabel>Stage box sheet columns</FieldLabel>
                   {BOX_COLUMN_KEYS.map((k) => (
                     <Toggle
                       key={k}

@@ -10,7 +10,7 @@
        edge plus a faint tint across the row — exactly the editor's coding
        (ChannelListEditor ChannelBlock colours rows by stage box), with a legend;
      · monospace channel numbers and box positions, as on screen;
-     · optional sections: one page per IO box (socket by socket, spares
+     · optional sections: one page per stage box (socket by socket, spares
        listed), and mic/DI, stand, cable and loom pulls with spares.
    Light or dark (config.channelList.theme) — the dark tokens are the app's
    own dark palette, applied by the shell (renderDocument theme).
@@ -241,7 +241,11 @@ function renderBox(b: ExportBoxSheet, opts: ChannelListOptions): string {
 
 function renderBoxes(data: ChannelListExportData, opts: ChannelListOptions): string {
   const boxes = boxesFor(data, opts);
-  if (boxes.length === 0) return `${band('IO boxes')}<p class="lp-native">No IO boxes on this channel list.</p>`;
+  if (boxes.length === 0) {
+    return data.boxes.length === 0
+      ? `${band('Stage boxes')}<p class="lp-native">No stage boxes on this channel list.</p>`
+      : `${band('Stage boxes')}<p class="lp-native">No stage boxes picked — tick them under “Stage box sheets”, or turn on “Every box”.</p>`;
+  }
   /* Every box starts on its own page (CSS .lp-cl-box) so each sheet can be
      printed and taped to its box. */
   return boxes.map((b) => renderBox(b, opts)).join('');

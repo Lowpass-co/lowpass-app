@@ -360,6 +360,18 @@ list without a reload.
 
 **Last verified**:
 
+#### SP-31 — Stage box sheets on the stage plot export (Oct 2026)
+
+**Do**: Stage plot export → turn OFF channel key + channel numbers, then
+open "Lists, boxes & pulls" → untick "Every box" → tick Stage box sheets
+under Sections.
+
+**Expect**: Every stage box is listed and ticked (the picker always has
+the boxes now — it used to be empty here, saving an empty pick that printed
+"No IO boxes"). One page per box.
+
+**Last verified**:
+
 ## Known broken
 
 _(none recorded yet — populate as smoke runs surface gaps.)_

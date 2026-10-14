@@ -144,6 +144,22 @@ other ports' dropdowns (or shows as already assigned).
 
 **Last verified**: 2026-06-02 ✅
 
+#### CHL-36 — Templates save; stage box naming (Oct 2026)
+
+**Do**: After migration 272, export dialog → Templates → name it → Save.
+Reload, open the dialog again. Then look at the editor's header cards.
+
+**Expect**: "Template saved"; it's listed next time (this always failed for
+channel list / stage plot / settlement / day sheet / gear / carnet before
+272). A failed save now says why in the toast. The export says **Stage
+boxes** ("Stage box sheets", "6 stage boxes" in the subtitle, Excel tabs
+"Box <name>"). The editor's header card reads **Stage boxes** with the real
+count (it said "Sub-snakes (boxes)" and counted looms, so it showed 0).
+Unticking "Every box" starts with every box ticked; an empty pick prints
+"No stage boxes picked", never "No stage boxes on this channel list".
+
+**Last verified**:
+
 ## Known broken
 
 Tests that currently fail or are partially working. Move OUT of this

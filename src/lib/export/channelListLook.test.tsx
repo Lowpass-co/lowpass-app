@@ -100,7 +100,15 @@ describe('light / dark', () => {
   });
 });
 
-describe('IO box sheets', () => {
+describe('stage box sheets', () => {
+  it('an empty pick says so — it never claims the list has no boxes', () => {
+    const html = buildChannelListBodyHtml(data, cfg(['io-boxes'], { boxIds: [] }));
+    expect(html).toContain('No stage boxes picked');
+    expect(html).not.toContain('No stage boxes on this channel list');
+    const none = { ...data, boxes: [] };
+    expect(buildChannelListBodyHtml(none, cfg(['io-boxes']))).toContain('No stage boxes on this channel list');
+  });
+
   it('one sheet per box, every socket, SPARE for empties', () => {
     const html = buildChannelListBodyHtml(data, cfg(['io-boxes']));
     expect((html.match(/class="lp-cl-box"/g) ?? []).length).toBe(2);
@@ -201,7 +209,7 @@ describe('customising', () => {
 describe('Excel', () => {
   it('the same sections become sheets, in order, with box colours on the rows', () => {
     const specs = channelListSheets(data, cfg(['inputs', 'io-boxes', 'mic-pull']));
-    expect(specs.map((s) => s.name)).toEqual(['Input list', 'IO SB1', 'IO SB2', 'Mic & DI pull']);
+    expect(specs.map((s) => s.name)).toEqual(['Input list', 'Box SB1', 'Box SB2', 'Mic & DI pull']);
     expect(specs[0].rowColours).toEqual(['#3B82F6', '#3B82F6', '#10B981', '#10B981', null]);
     expect(specs[1].rows[1]).toMatchObject({ socket: 2, name: 'SPARE' });
   });

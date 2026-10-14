@@ -18,7 +18,7 @@ import { buildStagePlotSvg, chipText } from '@/lib/stage-plot/stageplot-svg';
 import type { EditorItem, EditorPlot } from '@/lib/stage-plot/editor-types';
 import { getIcon } from '@/lib/stage-plot/icons';
 import { channelDataFromSection } from './channel-list-data';
-import { buildStagePlotBodyHtml, channelKey, plotChannelMap, stagePlotNeedsChannels } from './stageplot-pdf';
+import { buildStagePlotBodyHtml, channelKey, plotChannelMap } from './stageplot-pdf';
 import type { StagePlotExportData } from './stageplot-data';
 import {
   DEFAULT_STAGE_PLOT_OPTIONS,
@@ -208,11 +208,6 @@ describe('list, box and pull pages', () => {
     expect((html.match(/No channel list is paired/g) ?? []).length).toBe(1);
   });
 
-  it('the channel list is only loaded when something prints it', () => {
-    expect(stagePlotNeedsChannels(cfg(['stage-diagram'], { chips: false, key: false }))).toBe(false);
-    expect(stagePlotNeedsChannels(cfg(['stage-diagram']))).toBe(true);
-    expect(stagePlotNeedsChannels(cfg(['stage-diagram', 'cable-pull'], { chips: false, key: false }))).toBe(true);
-  });
 });
 
 describe('templates', () => {

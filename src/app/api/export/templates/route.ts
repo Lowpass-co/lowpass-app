@@ -18,12 +18,11 @@
 import { NextResponse } from 'next/server';
 import { requireWrite } from '@/lib/auth/workspace-check';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
-import { normalizeConfig, type ExportSurface } from '@/lib/export/template-config';
+import { EXPORT_SURFACES, normalizeConfig, type ExportSurface } from '@/lib/export/template-config';
 
 export const dynamic = 'force-dynamic';
 
-const SURFACES: ExportSurface[] = ['budget', 'rooming', 'payroll', 'routing'];
-const isSurface = (s: unknown): s is ExportSurface => typeof s === 'string' && SURFACES.includes(s as ExportSurface);
+const isSurface = (s: unknown): s is ExportSurface => typeof s === 'string' && (EXPORT_SURFACES as readonly string[]).includes(s);
 
 type Ctx =
   | { ok: false; response: NextResponse }

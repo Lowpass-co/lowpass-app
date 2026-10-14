@@ -686,7 +686,9 @@ export default function ChannelListEditor({
           {[
             { k: 'channels', label: 'Channels', value: String(rows.length) },
             { k: 'wireless', label: 'Wireless / RF (hint)', value: String(countWirelessHint(rows)) },
-            { k: 'boxes', label: 'Sub-snakes (boxes)', value: String(subSnakes.length) },
+            // Oct 2026 — this said "Sub-snakes (boxes)" but counted LOOMS, so a list
+            // with six stage boxes and no looms read 0. It counts stage boxes now.
+            { k: 'boxes', label: 'Stage boxes', value: String(stageBoxes.length) },
             { k: 'di', label: 'DI / cable (filled)', value: String(countDiFilled(rows)) },
           ].map((c) => (
             <div

@@ -42,13 +42,6 @@ const LIST_SECTIONS: Record<string, string[]> = {
   'loom-pull': ['loom-pull'],
 };
 
-/** Does this export need the paired channel list loaded at all? */
-export function stagePlotNeedsChannels(config: TemplateConfig): boolean {
-  const o = config.stagePlot ?? DEFAULT_STAGE_PLOT_OPTIONS;
-  const shown = config.sections.filter((s) => s.show).map((s) => s.id);
-  return shown.some((id) => id in LIST_SECTIONS) || (shown.includes('stage-diagram') && (o.chips || o.key));
-}
-
 const toggle = (t: PlotToggle): boolean | undefined => (t === 'on' ? true : t === 'off' ? false : undefined);
 
 /** channel_list_rows.id → what a chip / key row prints. */
