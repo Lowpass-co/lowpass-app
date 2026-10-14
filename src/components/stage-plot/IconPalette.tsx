@@ -88,7 +88,7 @@ export function IconPalette({ onAdd, customIcons = [], onCustomGenerated }: Icon
   }, [query]);
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', borderRight: '1px solid var(--lp-border)', background: 'var(--lp-bg)' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', background: 'var(--lp-bg)' }}>
       <div style={{ padding: 10, borderBottom: '1px solid var(--lp-border)', display: 'flex', gap: 8, alignItems: 'center' }}>
         <input
           value={query}

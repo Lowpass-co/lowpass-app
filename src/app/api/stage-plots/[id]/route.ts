@@ -10,7 +10,7 @@
 import { NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { requireUserAndWorkspace, requireWrite } from '@/lib/auth/workspace-check';
-import { loadStagePlot, loadPlotChannels, saveStagePlot } from '@/lib/stage-plot/server';
+import { loadStagePlot, loadPlotChannelsWithSource, saveStagePlot } from '@/lib/stage-plot/server';
 import type { EditorItem, EditorPlot } from '@/lib/stage-plot/editor-types';
 
 export const dynamic = 'force-dynamic';
@@ -22,7 +22,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
   if ('error' in auth) return auth.error;
   const data = await loadStagePlot(supabase, id);
   if (!data) return NextResponse.json({ error: 'Not found' }, { status: 404 });
-  const channels = await loadPlotChannels(supabase, data.riderPackId);
+  const { channels, source: channelSource } = await loadPlotChannelsWithSource(supabase, data.riderPackId);
 
   // B2 — the current channel-list link + candidate channel-list packs on this
   // tour, so the editor can offer a link/unlink control (RLS scopes candidates).
@@ -45,6 +45,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
   return NextResponse.json({
     ...data,
     channels,
+    channelSource,
     linkedRiderPackId: (packRow?.linked_rider_pack_id as string | null) ?? null,
     linkCandidates,
   });

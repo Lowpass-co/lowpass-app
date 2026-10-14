@@ -131,6 +131,15 @@ describe('channel chips', () => {
   });
 });
 
+describe('colour', () => {
+  it('a tint colours the lines only — the shape keeps its faint wash', () => {
+    const s = svg({}, plot, [item('x', 'amp-cab-4x12', { colorTint: '#E11D48' })]);
+    expect(s).toContain('stroke:#E11D48');
+    expect(s).not.toContain('fill:#E11D48');
+    expect(s).toMatch(/fill:color-mix\(in srgb, #6B7280 \d+%, transparent\);stroke:#E11D48/);
+  });
+});
+
 describe('safety + theme', () => {
   it('a hostile colour from the database never reaches the SVG', () => {
     const bad = [item('x', 'amp-cab-4x12', { colorTint: 'red;}</style><script>alert(1)</script>' }), item('t', '', { kind: 'text', text: 'hi', colorTint: '"><script>' })];

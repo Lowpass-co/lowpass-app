@@ -28,7 +28,7 @@
 import { getIcon, getCategory } from './icons';
 import { ICON_BRAND_TINT_PCT, type IconDescriptor } from './icons/types';
 import { ft } from './geometry';
-import type { EditorItem, EditorPlot } from './editor-types';
+import { labelPx, type EditorItem, type EditorPlot } from './editor-types';
 
 const esc = (s: string): string =>
   s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -286,7 +286,8 @@ export function buildStagePlotSvg(
     const isRiser = it.iconName.startsWith('infra-riser-');
     const tint = hex(it.colorTint);
     const stroke = tint ?? p.text2;
-    const fill = icon.outline ? 'none' : tint ?? `color-mix(in srgb, ${brand} ${ICON_BRAND_TINT_PCT}%, transparent)`;
+    // A tint colours the lines only (as the editor) — never a solid fill.
+    const fill = icon.outline ? 'none' : `color-mix(in srgb, ${brand} ${ICON_BRAND_TINT_PCT}%, transparent)`;
 
     let body: string;
     if (isPerson) {
@@ -310,7 +311,7 @@ export function buildStagePlotSvg(
     const labelPos = it.labelPosition ?? 'bottom';
     const labelText = it.label ?? icon.label;
     if (showLabels && labelPos !== 'hidden' && labelText) {
-      const px = Math.min(18, Math.max(8, it.labelFontPx ?? 11));
+      const px = labelPx(it);
       overlay.push(labelPill(p, cx, cy, halfW, halfH, labelText, px, labelPos, isPerson));
     }
   }

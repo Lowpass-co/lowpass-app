@@ -223,8 +223,8 @@ export const infrastructureIcons: IconDescriptor[] = [
     "category": "infrastructure",
     "label": "Power drop ×1",
     "footprint": {
-      "width_ft": 1.65,
-      "depth_ft": 1.65
+      "width_ft": 1.3,
+      "depth_ft": 1.3
     },
     "viewBox": "0 0 165 165",
     "keywords": [
@@ -241,8 +241,8 @@ export const infrastructureIcons: IconDescriptor[] = [
     "category": "infrastructure",
     "label": "Power drop ×2",
     "footprint": {
-      "width_ft": 2.4,
-      "depth_ft": 1.5
+      "width_ft": 1.3,
+      "depth_ft": 0.81
     },
     "viewBox": "0 0 240 150",
     "keywords": [
@@ -257,8 +257,8 @@ export const infrastructureIcons: IconDescriptor[] = [
     "category": "infrastructure",
     "label": "Power drop ×4",
     "footprint": {
-      "width_ft": 2.1,
-      "depth_ft": 2.1
+      "width_ft": 1.3,
+      "depth_ft": 1.3
     },
     "viewBox": "0 0 210 210",
     "keywords": [
@@ -273,8 +273,8 @@ export const infrastructureIcons: IconDescriptor[] = [
     "category": "infrastructure",
     "label": "Power drop ×8",
     "footprint": {
-      "width_ft": 2.85,
-      "depth_ft": 1.8
+      "width_ft": 1.3,
+      "depth_ft": 0.82
     },
     "viewBox": "0 0 285 180",
     "keywords": [

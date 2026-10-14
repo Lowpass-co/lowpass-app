@@ -17,7 +17,10 @@ import { useCallback, useEffect, useRef, useState, type CSSProperties } from 're
 import { getCategory, getIcon } from '@/lib/stage-plot/icons';
 import { ICON_BRAND_TINT_PCT } from '@/lib/stage-plot/icons/types';
 import { DEFAULT_VIEW, ft, fitView, snapToGrid, zoomAt, type ViewTransform } from '@/lib/stage-plot/geometry';
-import type { Channel, EditorItem } from '@/lib/stage-plot/editor-types';
+import { labelPx as labelPxFor, type Channel, type EditorItem } from '@/lib/stage-plot/editor-types';
+
+/** Drag payload type for a channel dragged from the Channels panel. */
+export const CHANNEL_DRAG_TYPE = 'application/x-lowpass-channel';
 
 // VIS-SP-02 — neutral brand default (was #FF4500 orange). Orange = selection only.
 const DEFAULT_BRAND = '#6B7280';
@@ -66,6 +69,9 @@ export interface StageCanvasProps {
   onSelectItem?: (id: string | null, additive?: boolean) => void;
   onUpdateItem?: (id: string, patch: Partial<EditorItem>) => void;
   onDropIcon?: (iconName: string, xFt: number, yFt: number) => void;
+  /** Oct 2026 — a channel dropped from the Channels panel: onto an item
+   *  (itemId) to link it, or onto empty stage (itemId null) at x/y. */
+  onDropChannel?: (channelId: string, itemId: string | null, xFt: number, yFt: number) => void;
   /** §SP-FIX-5 — right-click z-order actions. */
   onReorderItem?: (id: string, op: 'front' | 'back' | 'forward' | 'backward') => void;
   onDeleteItem?: (id: string) => void;
@@ -96,6 +102,7 @@ export function StageCanvas({
   onSelectItem,
   onUpdateItem,
   onDropIcon,
+  onDropChannel,
   onReorderItem,
   onDeleteItem,
   className,
@@ -266,9 +273,39 @@ export function StageCanvas({
     setPanning(false);
   }, [items]);
 
+  // The item a channel is being dragged over (outlined as a drop target).
+  const [dropTarget, setDropTarget] = useState<string | null>(null);
+  const itemUnder = useCallback(
+    (target: EventTarget | null): string | null => {
+      const el = (target as Element | null)?.closest?.('[data-canvas-item]');
+      const id = el?.getAttribute('data-canvas-item') ?? null;
+      const it = id ? items.find((i) => i.id === id) : undefined;
+      // Text notes and arrows can't carry a channel.
+      return it && it.kind !== 'text' && it.kind !== 'arrow' ? it.id : null;
+    },
+    [items],
+  );
+  const onDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    if (e.dataTransfer.types.includes(CHANNEL_DRAG_TYPE)) {
+      e.dataTransfer.dropEffect = 'link';
+      const id = itemUnder(e.target);
+      if (id !== dropTarget) setDropTarget(id);
+    }
+  };
+
   const onDrop = useCallback(
     (e: React.DragEvent) => {
       e.preventDefault();
+      setDropTarget(null);
+      const channelId = e.dataTransfer.getData(CHANNEL_DRAG_TYPE);
+      if (channelId && onDropChannel) {
+        const c = toFt(e.clientX, e.clientY);
+        const xFt = snap ? snapToGrid(ft(c.xFt), gridSizeFt) / ft(1) : c.xFt;
+        const yFt = snap ? snapToGrid(ft(c.yFt), gridSizeFt) / ft(1) : c.yFt;
+        onDropChannel(channelId, itemUnder(e.target), +xFt.toFixed(2), +yFt.toFixed(2));
+        return;
+      }
       const iconName = e.dataTransfer.getData('text/plain');
       if (!iconName || !onDropIcon) return;
       const c = toFt(e.clientX, e.clientY);
@@ -276,7 +313,7 @@ export function StageCanvas({
       const yFt = snap ? snapToGrid(ft(c.yFt), gridSizeFt) / ft(1) : c.yFt;
       onDropIcon(iconName, +xFt.toFixed(2), +yFt.toFixed(2));
     },
-    [onDropIcon, toFt, snap, gridSizeFt],
+    [onDropIcon, onDropChannel, toFt, snap, gridSizeFt, itemUnder],
   );
 
   const stageW = ft(widthFt);
@@ -299,8 +336,9 @@ export function StageCanvas({
       onPointerUp={endInteraction}
       onPointerCancel={endInteraction}
       onContextMenu={onContextMenu}
-      onDragOver={onDropIcon ? (e) => e.preventDefault() : undefined}
-      onDrop={onDropIcon ? onDrop : undefined}
+      onDragOver={onDropIcon || onDropChannel ? onDragOver : undefined}
+      onDragLeave={() => setDropTarget(null)}
+      onDrop={onDropIcon || onDropChannel ? onDrop : undefined}
     >
       <svg width={size.w} height={size.h} style={{ display: 'block' }}>
         <defs>
@@ -418,22 +456,23 @@ export function StageCanvas({
             // the whole item (it moves to the stripe-tick chip, VIS-SP-03). The
             // fill is a faint neutral brand wash (brandColor now defaults neutral).
             // Orange is reserved for selection only.
+            // Oct 2026 — a tint colours the LINES only. It used to fill the
+            // shape too, which buried the drawing's detail in a solid block.
             const stroke = it.colorTint ?? 'var(--lp-text-secondary)';
-            const fill = icon.outline
-              ? 'none'
-              : it.colorTint ?? `color-mix(in srgb, ${brandColor} ${ICON_BRAND_TINT_PCT}%, transparent)`;
+            const fill = icon.outline ? 'none' : `color-mix(in srgb, ${brandColor} ${ICON_BRAND_TINT_PCT}%, transparent)`;
             const style = { fill, stroke, '--lp-cat': stroke } as CSSProperties & Record<string, string>;
             const bx = cx + wpx / 2;
             const by = cy - hpx / 2;
             const labelPos = (it.labelPosition ?? 'bottom') as LabelPosition;
             const labelText = it.label ?? icon.label;
-            const labelPx = it.labelFontPx ?? 11;
+            const labelPx = labelPxFor(it);
             const halfW = isPerson ? 5 : wpx / 2;
             const halfH = isPerson ? 5 : hpx / 2;
             return (
               <g key={it.id} data-canvas-item={it.id} style={{ cursor: interactive ? 'move' : undefined }}>
                 <g transform={`rotate(${it.rotationDeg ?? 0} ${cx} ${cy})`}>
                   {sel && <rect x={cx - halfW - 4} y={cy - halfH - 4} width={halfW * 2 + 8} height={halfH * 2 + 8} rx={3} fill="none" stroke="var(--lp-orange)" strokeWidth={1.5} strokeDasharray="4 3" vectorEffect="non-scaling-stroke" />}
+                  {dropTarget === it.id && <rect x={cx - halfW - 6} y={cy - halfH - 6} width={halfW * 2 + 12} height={halfH * 2 + 12} rx={4} fill="color-mix(in srgb, var(--lp-orange) 10%, transparent)" stroke="var(--lp-orange)" strokeWidth={2} vectorEffect="non-scaling-stroke" pointerEvents="none" />}
                   {isPerson ? (
                     /* §SP-FIX-4: person marker = neutral position dot (not a silhouette). */
                     <circle cx={cx} cy={cy} r={5} fill="var(--lp-text-secondary)" stroke="var(--lp-bg)" strokeWidth={1.25} />
