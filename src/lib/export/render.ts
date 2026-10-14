@@ -56,6 +56,8 @@ export interface ExportDoc {
    *  When set, a slim repeating header band is printed on every page (page 1's full
    *  banner sits below it in the content). Null/absent → no running header. */
   runningHeader?: string | null;
+  /** Honour the document's own @page sizes (mixed portrait / landscape). */
+  cssPageSize?: boolean;
 }
 
 /** Build the doc (loaders + html) then render + stream it. The `build` callback is
@@ -66,7 +68,7 @@ export interface ExportDoc {
  *  doc response AND the payroll zip (multiple docs in one request). `surface` only
  *  tags the log. */
 export async function renderPdfBuffer(surface: string, doc: ExportDoc): Promise<Uint8Array> {
-  const { html, footerNote, markDataUri, footer, runningHeader } = doc;
+  const { html, footerNote, markDataUri, footer, runningHeader, cssPageSize } = doc;
   const browser = await getBrowser();
   const page = await browser.newPage();
   try {
@@ -81,12 +83,12 @@ export async function renderPdfBuffer(surface: string, doc: ExportDoc): Promise<
     // banner sits in the content below this slim margin band.
     const headerTemplate = runningHeader ? pdfRunningHeaderTemplate(runningHeader) : PDF_HEADER_TEMPLATE;
     try {
-      return await page.pdf({ ...PAGE_PDF_OPTIONS, headerTemplate, footerTemplate });
+      return await page.pdf({ ...PAGE_PDF_OPTIONS, headerTemplate, footerTemplate, preferCSSPageSize: cssPageSize === true });
     } catch (footerErr) {
       // The header/footer templates are the only thing this does beyond the
       // proven-good rider route — if Chromium rejects them, render plain.
       console.error(`[export:${surface}] header/footer render failed, retrying plain:`, footerErr instanceof Error ? footerErr.message : footerErr);
-      return await page.pdf({ format: 'A4', printBackground: true, margin: { top: '16mm', right: '14mm', bottom: '16mm', left: '14mm' } });
+      return await page.pdf({ format: 'A4', printBackground: true, margin: { top: '16mm', right: '14mm', bottom: '16mm', left: '14mm' }, preferCSSPageSize: cssPageSize === true });
     }
   } finally {
     await closePage(page);

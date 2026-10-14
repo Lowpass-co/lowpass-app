@@ -23,7 +23,10 @@ import {
   BOX_COLUMN_KEYS,
   BOX_COLUMN_LABELS,
   DEFAULT_CHANNEL_LIST_OPTIONS,
+  DEFAULT_STAGE_PLOT_OPTIONS,
   type ChannelListOptions,
+  type PlotToggle,
+  type StagePlotOptions,
   defaultConfig,
   HEADER_ELEMENT_LABELS,
   normalizeConfig,
@@ -113,6 +116,25 @@ const PAGE_PX: Record<PageSize, { w: number; h: number }> = {
  *  content inside these so the on-screen page reads like a printed sheet AND the
  *  content wraps at the SAME width the PDF prints (true WYSIWYG). */
 const MARGIN_PX = { top: 60, side: 53, bottom: 76 };
+
+/** The preview sheet. The stage plot's plot page prints LANDSCAPE, so when it
+ *  leads the document the sheet turns sideways (pages after it still print
+ *  portrait — the single scrolling preview can't mix the two). Dark exports
+ *  get a dark sheet so the preview's margins match the PDF's. */
+function previewSheet(surface: ExportSurface, config: TemplateConfig): { w: number; h: number; bg: string } {
+  const p = PAGE_PX[config.pageSize];
+  const landscape = surface === 'stage-plot' && config.sections.find((s) => s.show)?.id === 'stage-diagram';
+  const dark =
+    (surface === 'stage-plot' && config.stagePlot?.theme === 'dark') ||
+    (surface === 'channel-list' && config.channelList?.theme === 'dark');
+  return { w: landscape ? p.h : p.w, h: landscape ? p.w : p.h, bg: dark ? '#0F0F0F' : '#fff' };
+}
+
+const PLOT_TOGGLES: ReadonlyArray<{ value: PlotToggle; label: string }> = [
+  { value: 'plot', label: 'As the plot' },
+  { value: 'on', label: 'On' },
+  { value: 'off', label: 'Off' },
+];
 
 const ls = {
   get(key: string): string | null {
@@ -279,6 +301,9 @@ export function ExportTemplateEditor({ surface, tourId, versionId = null, initia
   }, []);
   const setChannelList = useCallback(<K extends keyof ChannelListOptions>(k: K, v: ChannelListOptions[K]) => {
     setConfig((c) => ({ ...c, channelList: { ...(c.channelList ?? DEFAULT_CHANNEL_LIST_OPTIONS), [k]: v } }));
+  }, []);
+  const setStagePlot = useCallback(<K extends keyof StagePlotOptions>(k: K, v: StagePlotOptions[K]) => {
+    setConfig((c) => ({ ...c, stagePlot: { ...(c.stagePlot ?? DEFAULT_STAGE_PLOT_OPTIONS), [k]: v } }));
   }, []);
 
   /* Oct 2026 — the channel list's IO boxes + the editor's own columns, for the
@@ -519,23 +544,24 @@ export function ExportTemplateEditor({ surface, tourId, versionId = null, initia
   }, [doDownload, onClose]);
 
   // Fit-to-width: scale the page so its width fills the preview pane (recomputed on
-  // resize + page-size change). zoom === null → use this fit scale.
+  // resize + page-size / orientation change). zoom === null → use this fit scale.
+  const sheetW = previewSheet(surface, config).w;
   useEffect(() => {
     const el = previewWrapRef.current;
     if (!el) return;
     const compute = () => {
       const avail = el.clientWidth - 32;
-      const pageW = PAGE_PX[config.pageSize].w;
+      const pageW = sheetW;
       if (avail > 0) setFitScale(Math.max(0.2, Math.min(2, avail / pageW)));
     };
     compute();
     const ro = new ResizeObserver(compute);
     ro.observe(el);
     return () => ro.disconnect();
-  }, [config.pageSize]);
+  }, [sheetW]);
 
   const scale = zoom ?? fitScale;
-  const page = PAGE_PX[config.pageSize];
+  const page = previewSheet(surface, config);
   const isExcel = config.format === 'excel';
   // ONE pill: even if the data has a stale duplicate, only the first workspace
   // default for this surface shows the "Default" pill.
@@ -615,13 +641,13 @@ export function ExportTemplateEditor({ surface, tourId, versionId = null, initia
                   ) : (
                     <div style={{ width: page.w * scale, height: (docHeight + MARGIN_PX.top + MARGIN_PX.bottom) * scale, flex: '0 0 auto' }}>
                       {/* the page sheet — white, with the PDF's print margins as padding */}
-                      <div style={{ width: page.w, transform: `scale(${scale})`, transformOrigin: 'top left', boxShadow: '0 2px 24px rgba(0,0,0,0.25)', background: '#fff', borderRadius: 2, padding: `${MARGIN_PX.top}px ${MARGIN_PX.side}px ${MARGIN_PX.bottom}px`, boxSizing: 'border-box' }}>
+                      <div style={{ width: page.w, transform: `scale(${scale})`, transformOrigin: 'top left', boxShadow: '0 2px 24px rgba(0,0,0,0.25)', background: page.bg, borderRadius: 2, padding: `${MARGIN_PX.top}px ${MARGIN_PX.side}px ${MARGIN_PX.bottom}px`, boxSizing: 'border-box' }}>
                         <iframe
                           ref={iframeRef}
                           title="Export preview"
                           srcDoc={previewHtml}
                           onLoad={measureDoc}
-                          style={{ width: page.w - MARGIN_PX.side * 2, height: docHeight, border: 0, display: 'block', background: '#fff' }}
+                          style={{ width: page.w - MARGIN_PX.side * 2, height: docHeight, border: 0, display: 'block', background: page.bg }}
                         />
                       </div>
                     </div>
@@ -747,7 +773,30 @@ export function ExportTemplateEditor({ surface, tourId, versionId = null, initia
               </AccordionGroup>
             ) : null}
 
-            {surface === 'channel-list' ? (() => {
+            {surface === 'stage-plot' ? (() => {
+              const sp = config.stagePlot ?? DEFAULT_STAGE_PLOT_OPTIONS;
+              return (
+                <AccordionGroup id="stage-plot" label="Stage plot" defaultOpen>
+                  <FieldLabel>Look (PDF)</FieldLabel>
+                  <Segmented options={CL_THEMES} value={sp.theme} onChange={(v) => setStagePlot('theme', v)} />
+                  <p style={{ fontSize: 11, color: 'var(--lp-text-tertiary)' }}>The plot prints on a landscape page, drawn as in the editor; lists after it print portrait.</p>
+
+                  <FieldLabel>On the plot page</FieldLabel>
+                  <Toggle label="Contact strip (subtitle, TM, phone, email, version)" checked={sp.contact} onChange={(v) => setStagePlot('contact', v)} />
+                  <Toggle label="Channel key beside the plot" checked={sp.key} onChange={(v) => setStagePlot('key', v)} />
+                  <Toggle label="Channel numbers on items" checked={sp.chips} onChange={(v) => setStagePlot('chips', v)} />
+                  <Toggle label="Item names" checked={sp.labels} onChange={(v) => setStagePlot('labels', v)} />
+
+                  <FieldLabel>Grid</FieldLabel>
+                  <Segmented options={PLOT_TOGGLES} value={sp.grid} onChange={(v) => setStagePlot('grid', v)} />
+                  <FieldLabel>Rulers</FieldLabel>
+                  <Segmented options={PLOT_TOGGLES} value={sp.rulers} onChange={(v) => setStagePlot('rulers', v)} />
+                </AccordionGroup>
+              );
+            })() : null}
+
+            {surface === 'channel-list' || surface === 'stage-plot' ? (() => {
+              const isPlot = surface === 'stage-plot';
               const cl = config.channelList ?? DEFAULT_CHANNEL_LIST_OPTIONS;
               const boxes = clMeta?.boxes ?? [];
               const editorCols = clMeta?.editorColumns ?? [];
@@ -756,10 +805,16 @@ export function ExportTemplateEditor({ surface, tourId, versionId = null, initia
               const setSpare = (k: 'mics' | 'stands' | 'cables', v: string) =>
                 setChannelList('spares', { ...cl.spares, [k]: Math.max(0, Math.min(100, Math.round(Number(v) || 0))) });
               return (
-                <AccordionGroup id="channel-list" label="Channel list" defaultOpen>
-                  <FieldLabel>Look (PDF)</FieldLabel>
-                  <Segmented options={CL_THEMES} value={cl.theme} onChange={(v) => setChannelList('theme', v)} />
-                  <p style={{ fontSize: 11, color: 'var(--lp-text-tertiary)' }}>Rows are colour-coded by stage box, as in the editor. Turn on extra pages under Sections.</p>
+                <AccordionGroup id="channel-list" label={isPlot ? 'Lists, boxes & pulls' : 'Channel list'} defaultOpen={!isPlot}>
+                  {isPlot ? (
+                    <p style={{ fontSize: 11, color: 'var(--lp-text-tertiary)' }}>The paired channel list&apos;s pages, printed exactly as the channel list export prints them. Turn them on under Sections.</p>
+                  ) : (
+                    <>
+                      <FieldLabel>Look (PDF)</FieldLabel>
+                      <Segmented options={CL_THEMES} value={cl.theme} onChange={(v) => setChannelList('theme', v)} />
+                      <p style={{ fontSize: 11, color: 'var(--lp-text-tertiary)' }}>Rows are colour-coded by stage box, as in the editor. Turn on extra pages under Sections.</p>
+                    </>
+                  )}
 
                   <FieldLabel>IO box sheets</FieldLabel>
                   <Toggle label="Every box" checked={cl.boxIds === null} onChange={(v) => setChannelList('boxIds', v ? null : boxes.map((b) => b.id))} />

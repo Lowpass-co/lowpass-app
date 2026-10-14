@@ -298,20 +298,15 @@ function renderLooms(data: ChannelListExportData): string {
   </div>`;
 }
 
-/** Inputs + outputs tables, unconditionally — for the stage-plot "include input
- *  list" combine (which renders the diagram, then this beneath). Carries its
- *  own CSS so the stage-plot body needs nothing extra. */
-export function renderChannelListInputsOutputs(data: ChannelListExportData): string {
-  return `<style>${CL_CSS}</style><div class="lp-cl">${renderInputs(data, DEFAULT_CHANNEL_LIST_OPTIONS) + renderOutputs(data)}</div>`;
-}
+const PULL_IDS = new Set(['mic-pull', 'stand-pull', 'cable-pull', 'loom-pull']);
 
-/** Template builder. `config.sections` (order + visibility) drives WHICH blocks
- *  render. Consecutive pull sections sit two to a row. Presentation only. */
-export function buildChannelListBodyHtml(data: ChannelListExportData, config: TemplateConfig): string {
-  if (!data.hasSection) return `<p class="lp-native">No channel list found on this tour's rider packs.</p>`;
-  const opts = optionsOf(config);
+/** The channel-list blocks for `ids`, in order, inside the shared CSS wrapper.
+ *  Ids: inputs · outputs · io-boxes · mic-pull · stand-pull · cable-pull ·
+ *  loom-pull (unknown ids are skipped). Consecutive pulls sit two to a row.
+ *  Shared by the channel-list export and the stage-plot export, so both print
+ *  the same tables from the same code. Presentation only. */
+export function channelListBlocks(data: ChannelListExportData, ids: string[], opts: ChannelListOptions): string {
   const sp = opts.spares;
-  const PULLS = new Set(['mic-pull', 'stand-pull', 'cable-pull', 'loom-pull']);
   const sections: Record<string, () => string> = {
     inputs: () => renderInputs(data, opts),
     outputs: () => renderOutputs(data),
@@ -327,15 +322,22 @@ export function buildChannelListBodyHtml(data: ChannelListExportData, config: Te
     if (pullRun.length) out.push(`<div class="lp-cl-pulls">${pullRun.join('')}</div>`);
     pullRun = [];
   };
-  for (const s of config.sections) {
-    if (!s.show || !sections[s.id]) continue;
-    if (PULLS.has(s.id)) {
-      pullRun.push(sections[s.id]());
+  for (const id of ids) {
+    if (!sections[id]) continue;
+    if (PULL_IDS.has(id)) {
+      pullRun.push(sections[id]());
     } else {
       flush();
-      out.push(sections[s.id]());
+      out.push(sections[id]());
     }
   }
   flush();
   return `<style>${CL_CSS}</style><div class="lp-cl">${out.join('')}</div>`;
+}
+
+/** Template builder. `config.sections` (order + visibility) drives WHICH blocks
+ *  render. Presentation only. */
+export function buildChannelListBodyHtml(data: ChannelListExportData, config: TemplateConfig): string {
+  if (!data.hasSection) return `<p class="lp-native">No channel list found on this tour's rider packs.</p>`;
+  return channelListBlocks(data, config.sections.filter((s) => s.show).map((s) => s.id), optionsOf(config));
 }

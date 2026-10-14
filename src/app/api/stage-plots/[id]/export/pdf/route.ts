@@ -32,14 +32,14 @@ export async function POST(
     if ('error' in auth) return auth.error;
 
     return exportPdfResponse('stage-plot', async () => {
-      const { html, footerNote, filename, footer, runningHeader } = await buildStagePlotExport(
+      const { html, footerNote, filename, footer, runningHeader, cssPageSize } = await buildStagePlotExport(
         supabase,
         id,
         auth.workspaceId,
         config,
       );
       const markDataUri = await lowpassMarkDataUri();
-      return { html, footerNote, markDataUri, filename, footer, runningHeader };
+      return { html, footerNote, markDataUri, filename, footer, runningHeader, cssPageSize };
     });
   } catch (err) {
     return exportErrorResponse('stage-plot', err);

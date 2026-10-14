@@ -28,8 +28,8 @@ export async function POST(
     const auth = await requireUserAndWorkspace(supabase);
     if ('error' in auth) return auth.error;
 
-    const { html } = await buildStagePlotExport(supabase, id, auth.workspaceId, config);
-    return NextResponse.json({ html });
+    const { html, meta } = await buildStagePlotExport(supabase, id, auth.workspaceId, config);
+    return NextResponse.json({ html, meta });
   } catch (err) {
     return exportErrorResponse('stage-plot-preview', err);
   }
