@@ -105,7 +105,7 @@ export function linkedChannels(it: EditorItem, channels: Map<string, PlotChannel
 
 /** StageCanvas ItemLabel: a pill (8% text tint) + text, UNROTATED, placed
  *  around the item. */
-function labelPill(p: Palette, cx: number, cy: number, halfW: number, halfH: number, text: string, px: number, position: string, heavy: boolean): string {
+function labelBox(cx: number, cy: number, halfW: number, halfH: number, text: string, px: number, position: string) {
   const gap = 4;
   const pw = text.length * px * 0.58 + px * 0.9;
   const ph = px * 1.5;
@@ -115,6 +115,11 @@ function labelPill(p: Palette, cx: number, cy: number, halfW: number, halfH: num
   else if (position === 'top') ly = cy - halfH - gap - ph / 2;
   else if (position === 'left') lx = cx - halfW - gap - pw / 2;
   else if (position === 'right') lx = cx + halfW + gap + pw / 2;
+  return { lx, ly, pw, ph };
+}
+
+function labelPill(p: Palette, cx: number, cy: number, halfW: number, halfH: number, text: string, px: number, position: string, heavy: boolean): string {
+  const { lx, ly, pw, ph } = labelBox(cx, cy, halfW, halfH, text, px, position);
   return (
     `<rect x="${lx - pw / 2}" y="${ly - ph / 2}" width="${pw}" height="${ph}" rx="${ph / 2}" fill="${p.text}" fill-opacity="0.08"/>` +
     `<text x="${lx}" y="${ly}" font-size="${px}" fill="${p.text}" text-anchor="middle" dominant-baseline="central" font-weight="${heavy ? 600 : 500}">${esc(text)}</text>`
@@ -131,9 +136,11 @@ function rot(x: number, y: number, cx: number, cy: number, deg: number): [number
 
 /** Channel chip: neutral pill + a colour stripe tick (stage box) + number(s).
  *  Drawn upright at the item's (rotated) top-right corner so it stays readable. */
+const chipWidth = (label: string) => Math.max(20, label.length * 5.2 + 11);
+
 function chip(p: Palette, x: number, y: number, linked: PlotChannelRef[]): string {
   const label = chipText(linked.map((c) => c.number));
-  const w = Math.max(20, label.length * 5.2 + 11);
+  const w = chipWidth(label);
   const stripe = hex(linked[0]?.colour) ?? p.text3;
   return (
     `<g class="lp-sp-chip">` +
@@ -198,7 +205,18 @@ export function buildStagePlotSvg(
   const mR = 34;
   const mTop = 30;
   const mBot = 52;
-  const vb = `${-mL} ${-mTop} ${stageW + mL + mR} ${stageH + mTop + mBot}`;
+  // Oct 2026 — the drawing area GROWS to whatever is placed. It used to be the
+  // stage + these margins only, so anything off stage left / right (a drum
+  // riser in the wings, side-fills, a monitor world) was cut off the export.
+  const bounds = { x0: -mL, y0: -mTop, x1: stageW + mR, y1: stageH + mBot };
+  const PAD = 10;
+  const grow = (x0: number, y0: number, x1: number, y1: number) => {
+    if (![x0, y0, x1, y1].every(Number.isFinite)) return;
+    bounds.x0 = Math.min(bounds.x0, x0 - PAD);
+    bounds.y0 = Math.min(bounds.y0, y0 - PAD);
+    bounds.x1 = Math.max(bounds.x1, x1 + PAD);
+    bounds.y1 = Math.max(bounds.y1, y1 + PAD);
+  };
 
   const out: string[] = [];
   out.push(`<rect x="0" y="0" width="${stageW}" height="${stageH}" rx="4" fill="${p.stageFill}" stroke="${p.stageStroke}" stroke-width="1.5"/>`);
@@ -267,10 +285,18 @@ export function buildStagePlotSvg(
   for (const it of items) {
     if (it.kind === 'arrow') {
       out.push(arrow(p, it));
+      const x1 = ft(it.xFt), y1 = ft(it.yFt), x2 = ft(it.x2Ft ?? it.xFt + 3), y2 = ft(it.y2Ft ?? it.yFt);
+      const h = 3 + (it.weight ?? 2) * 1.2;
+      grow(Math.min(x1, x2) - h, Math.min(y1, y2) - h, Math.max(x1, x2) + h, Math.max(y1, y2) + h);
       continue;
     }
     if (it.kind === 'text') {
-      if (it.text) out.push(textNote(p, it));
+      if (it.text) {
+        out.push(textNote(p, it));
+        const fs = ft(it.fontSizeFt ?? 0.7);
+        const hw = (it.text.length * fs * 0.62) / 2;
+        grow(ft(it.xFt) - hw, ft(it.yFt) - fs * 0.7, ft(it.xFt) + hw, ft(it.yFt) + fs * 0.7);
+      }
       continue;
     }
     const icon = customIcons?.get(it.iconName) ?? getIcon(it.iconName);
@@ -303,19 +329,28 @@ export function buildStagePlotSvg(
 
     const halfW = isPerson ? 5 : wpx / 2;
     const halfH = isPerson ? 5 : hpx / 2;
+    // The rotated item's own box.
+    const r = (deg * Math.PI) / 180;
+    const ex = Math.abs(halfW * Math.cos(r)) + Math.abs(halfH * Math.sin(r));
+    const ey = Math.abs(halfW * Math.sin(r)) + Math.abs(halfH * Math.cos(r));
+    grow(cx - ex, cy - ey, cx + ex, cy + ey);
     const linked = showChips ? linkedChannels(it, opts.channels) : [];
     if (linked.length > 0) {
       const [x, y] = rot(cx + halfW, cy - halfH, cx, cy, deg);
       overlay.push(chip(p, x, y, linked));
+      grow(x - 8, y - 7, x - 8 + chipWidth(chipText(linked.map((c) => c.number))), y + 5);
     }
     const labelPos = it.labelPosition ?? 'bottom';
     const labelText = it.label ?? icon.label;
     if (showLabels && labelPos !== 'hidden' && labelText) {
       const px = labelPx(it);
       overlay.push(labelPill(p, cx, cy, halfW, halfH, labelText, px, labelPos, isPerson));
+      const b = labelBox(cx, cy, halfW, halfH, labelText, px, labelPos);
+      grow(b.lx - b.pw / 2, b.ly - b.ph / 2, b.lx + b.pw / 2, b.ly + b.ph / 2);
     }
   }
   out.push(...overlay);
+  const vb = [bounds.x0, bounds.y0, bounds.x1 - bounds.x0, bounds.y1 - bounds.y0].map((n) => +n.toFixed(1)).join(' ');
 
   return (
     `<svg class="lp-plot-svg" viewBox="${vb}" xmlns="http://www.w3.org/2000/svg" font-family="Inter, 'Helvetica Neue', Arial, sans-serif">` +

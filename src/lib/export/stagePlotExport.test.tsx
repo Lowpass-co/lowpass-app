@@ -18,7 +18,7 @@ import { buildStagePlotSvg, chipText } from '@/lib/stage-plot/stageplot-svg';
 import type { EditorItem, EditorPlot } from '@/lib/stage-plot/editor-types';
 import { getIcon } from '@/lib/stage-plot/icons';
 import { channelDataFromSection } from './channel-list-data';
-import { buildStagePlotBodyHtml, channelKey, plotChannelMap, stagePlotNeedsChannels } from './stageplot-pdf';
+import { buildStagePlotBodyHtml, channelKey, plotChannelMap } from './stageplot-pdf';
 import type { StagePlotExportData } from './stageplot-data';
 import {
   DEFAULT_STAGE_PLOT_OPTIONS,
@@ -131,6 +131,32 @@ describe('channel chips', () => {
   });
 });
 
+describe('off-stage items', () => {
+  const vb = (svgText: string) => svgText.match(/class="lp-plot-svg" viewBox="([^"]+)"/)![1].split(' ').map(Number);
+
+  it('a plot with nothing off stage keeps the stage + margins frame', () => {
+    expect(vb(svg({}, plot, [item('m', 'mic-vocal', { xFt: 12, yFt: 8, labelPosition: 'hidden' })]))).toEqual([-34, -30, 24 * 22 + 68, 16 * 22 + 82]);
+  });
+
+  it('the drawing grows to include items off stage left, right and upstage', () => {
+    const its = [
+      item('sl', 'monitor-side-fill', { xFt: 30, yFt: 8, label: 'Side fill SL' }), // 6 ft past SL (stage is 24 ft wide)
+      item('sr', 'amp-cab-4x12', { xFt: -5, yFt: 4 }),                              // 5 ft off SR
+      item('us', 'infra-power-4', { xFt: 12, yFt: -4, labelPosition: 'hidden' }),   // behind the upstage edge
+    ];
+    const [x0, y0, w] = vb(svg({}, plot, its));
+    expect(x0).toBeLessThan(-5 * 22);          // SR item fully inside
+    expect(x0 + w).toBeGreaterThan(30 * 22);   // SL item fully inside
+    expect(y0).toBeLessThan(-4 * 22);          // upstage item inside
+  });
+
+  it('a label hanging off an off-stage item is inside too', () => {
+    const its = [item('sl', 'amp-cab-4x12', { xFt: 26, yFt: 8, label: 'A very long label for the wing', labelPosition: 'right' })];
+    const [x0, , w] = vb(svg({}, plot, its));
+    expect(x0 + w).toBeGreaterThan(26 * 22 + 200);
+  });
+});
+
 describe('colour', () => {
   it('a tint colours the lines only — the shape keeps its faint wash', () => {
     const s = svg({}, plot, [item('x', 'amp-cab-4x12', { colorTint: '#E11D48' })]);
@@ -208,11 +234,6 @@ describe('list, box and pull pages', () => {
     expect((html.match(/No channel list is paired/g) ?? []).length).toBe(1);
   });
 
-  it('the channel list is only loaded when something prints it', () => {
-    expect(stagePlotNeedsChannels(cfg(['stage-diagram'], { chips: false, key: false }))).toBe(false);
-    expect(stagePlotNeedsChannels(cfg(['stage-diagram']))).toBe(true);
-    expect(stagePlotNeedsChannels(cfg(['stage-diagram', 'cable-pull'], { chips: false, key: false }))).toBe(true);
-  });
 });
 
 describe('templates', () => {

@@ -21,7 +21,7 @@ import { buildRoutingBodyHtml } from '@/lib/export/routing-pdf';
 import { loadChannelListExportData } from '@/lib/export/channel-list-data';
 import { buildChannelListBodyHtml } from '@/lib/export/channel-list-pdf';
 import { loadStagePlotExportData } from '@/lib/export/stageplot-data';
-import { buildStagePlotBodyHtml, stagePlotNeedsChannels } from '@/lib/export/stageplot-pdf';
+import { buildStagePlotBodyHtml } from '@/lib/export/stageplot-pdf';
 import { renderDocument } from '@/lib/export/shell';
 import { loadGearExportData, type GearExportScope } from '@/lib/export/gear-data';
 import { buildGearManifestBodyHtml, buildCarnetBodyHtml } from '@/lib/export/gear-pdf';
@@ -377,7 +377,7 @@ export async function buildChannelListExport(
   const logoDataUri = config.logo ? await resolveLogo(supabase, workspaceId, config, data.logoUrl) : null;
   const bgDataUri = await fetchExportAssetDataUri(supabase, workspaceId, config.header.bgAssetPath);
 
-  const subtitle = `${data.inputs.length} channel${data.inputs.length === 1 ? '' : 's'}${data.outputs.length ? ` · ${data.outputs.length} output${data.outputs.length === 1 ? '' : 's'}` : ''}${data.boxes.length ? ` · ${data.boxes.length} IO box${data.boxes.length === 1 ? '' : 'es'}` : ''}`;
+  const subtitle = `${data.inputs.length} channel${data.inputs.length === 1 ? '' : 's'}${data.outputs.length ? ` · ${data.outputs.length} output${data.outputs.length === 1 ? '' : 's'}` : ''}${data.boxes.length ? ` · ${data.boxes.length} stage box${data.boxes.length === 1 ? '' : 'es'}` : ''}`;
 
   const html = renderDocument({
     letterhead: {
@@ -417,8 +417,11 @@ export async function buildStagePlotExport(
   workspaceId: string,
   config: TemplateConfig,
 ): Promise<ExportBuild> {
-  const includeChannels = stagePlotNeedsChannels(config);
-  const data = await loadStagePlotExportData(supabase, plotId, workspaceId, { includeChannels });
+  // Always load the paired channel list: besides chips / key / list pages, the
+  // export dialog's IO-box picker needs its boxes (meta). Skipping it when
+  // nothing printed it left the picker empty, so unticking "Every box" saved
+  // an empty pick and the box sheets later printed "No IO boxes".
+  const data = await loadStagePlotExportData(supabase, plotId, workspaceId, { includeChannels: true });
   if (!data) throw new Error('stage-plot-not-found');
   const logoDataUri = config.logo ? await resolveLogo(supabase, workspaceId, config, data.logoUrl) : null;
   const bgDataUri = await fetchExportAssetDataUri(supabase, workspaceId, config.header.bgAssetPath);

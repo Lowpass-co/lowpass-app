@@ -342,7 +342,7 @@ export function channelListSheets(data: ChannelListExportData, config?: Template
     outputs: () => (outputsSpec ? [outputsSpec] : []),
     'io-boxes': () =>
       boxesFor(data, opts).map((b) => ({
-        name: sheetName(`IO ${b.label}`),
+        name: sheetName(`Box ${b.label}`),
         columns: [
           { header: 'In', key: 'socket', numFmt: QTY_FMT },
           ...opts.boxColumns.map((k) => ({ header: BOX_COLUMN_LABELS[k], key: k, ...(k === 'channel' ? { numFmt: QTY_FMT } : {}) })),

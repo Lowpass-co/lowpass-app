@@ -16,7 +16,12 @@
    here later with no rework.
    ============================================ */
 
-export type ExportSurface = 'budget' | 'rooming' | 'payroll' | 'routing' | 'channel-list' | 'stage-plot' | 'settlement' | 'daysheet' | 'gear-manifest' | 'carnet';
+/** Every export surface. The ONE list: the type, the templates API and the
+ *  export_templates.surface CHECK (migration 272, pinned by a test) all derive
+ *  from it — the API and the CHECK used to hold their own copy of the first
+ *  four, so templates could never be saved for any surface added later. */
+export const EXPORT_SURFACES = ['budget', 'rooming', 'payroll', 'routing', 'channel-list', 'stage-plot', 'settlement', 'daysheet', 'gear-manifest', 'carnet'] as const;
+export type ExportSurface = (typeof EXPORT_SURFACES)[number];
 export type PageSize = 'A4' | 'Letter';
 /** Output format — a styled print PDF, or a flat machine-readable Excel grid. */
 export type ExportFormat = 'pdf' | 'excel';
@@ -149,11 +154,11 @@ export const BOX_COLUMN_LABELS: Record<BoxColumnKey, string> = {
 export interface ChannelListOptions {
   /** PDF only. Light is the default (dark burns ink on a printer). */
   theme: ChannelListTheme;
-  /** Which IO boxes get a sheet. null = every box. */
+  /** Which stage boxes get a sheet. null = every box. */
   boxIds: string[] | null;
   /** Input-list columns. null = the editor's own enabled columns. */
   inputColumns: string[] | null;
-  /** Columns on each IO box sheet. */
+  /** Columns on each stage box sheet. */
   boxColumns: BoxColumnKey[];
   /** Spares added to the pull lists, per line: a count, or a % rounded up. */
   spares: { mode: 'count' | 'percent'; mics: number; stands: number; cables: number };
@@ -248,7 +253,7 @@ export const SECTION_LABELS: Record<string, string> = {
   'advance-summary': 'Advance summary (per day)',
   inputs: 'Input list',
   outputs: 'Outputs (IEM / mix)',
-  'io-boxes': 'IO box sheets (a page per box)',
+  'io-boxes': 'Stage box sheets (a page per box)',
   'mic-pull': 'Mic & DI pull',
   'stand-pull': 'Stand pull',
   'cable-pull': 'Cable pull',

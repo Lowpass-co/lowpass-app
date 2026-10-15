@@ -360,6 +360,30 @@ list without a reload.
 
 **Last verified**:
 
+#### SP-31 — Stage box sheets on the stage plot export (Oct 2026)
+
+**Do**: Stage plot export → turn OFF channel key + channel numbers, then
+open "Lists, boxes & pulls" → untick "Every box" → tick Stage box sheets
+under Sections.
+
+**Expect**: Every stage box is listed and ticked (the picker always has
+the boxes now — it used to be empty here, saving an empty pick that printed
+"No IO boxes"). One page per box.
+
+**Last verified**:
+
+#### SP-32 — Off-stage items are on the export (Oct 2026)
+
+**Do**: Place something past stage left, something past stage right and
+something behind the upstage edge (e.g. side-fills, a wing rack). Export.
+
+**Expect**: Everything placed is on the page — the drawing grows to fit
+(it used to stop at the stage edge plus a small margin, cutting wing gear
+off). Labels and channel numbers on off-stage items are inside too. A plot
+with nothing off stage looks exactly as before.
+
+**Last verified**:
+
 ## Known broken
 
 _(none recorded yet — populate as smoke runs surface gaps.)_
