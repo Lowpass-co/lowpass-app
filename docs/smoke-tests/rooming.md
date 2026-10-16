@@ -105,3 +105,21 @@ sets any of these → `BudgetGridView.tsx`, `BudgetIncomeGrid.tsx`,
   keep their room when one is removed.
 - **MTX-09** **Budget grid (Expenses + Income) + `/grid-demo` visually +
   behaviourally identical** — the invariant.
+
+## Rooming — the sheet look (Oct 2026)
+
+- [ ] **ROOM-07 — Role, Forename, Surname.** The matrix's frozen columns are
+  Role · Forename · Surname (split from the full name at the first space).
+  They stay put while the nights scroll sideways. No toolbar, no "Roster"
+  bar, no keyboard-help strip above or below the matrix.
+
+- [ ] **ROOM-08 — Header band.** A black band above the matrix shows
+  **Assumed rate / room-night** (typed in, large), **Estimated total**
+  (rate × room-nights; "—" until a rate is typed) and **Room-nights**. A room
+  set after typing a rate carries that price into the budget's hotel lines.
+
+- [ ] **ROOM-09 — A colour per room.** SGL green, DBL (A) lime, (B) peach,
+  (C) blue, (D) lilac, filling the whole cell; "—" for no room. Each night's
+  header shows the date, city and day type in its colour. The Cards view's
+  cards use the same colours. Dark mode: darker versions, text readable.
+

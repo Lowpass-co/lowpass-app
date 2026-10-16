@@ -8,7 +8,7 @@
    ============================================ */
 
 import { buildRateLines, type RateTypeMeta, type RateLineRow } from '@/lib/payroll/rateLines';
-import { computeTotals, type DayCounts, type RateLine } from '@/lib/payroll/fees';
+import { computeTotals, countDayStatuses, type DayCounts, type RateLine } from '@/lib/payroll/fees';
 
 /** One personnel_rate_lines row as loaded/threaded through the client. */
 export interface RateLineRecord {
@@ -51,4 +51,26 @@ export function personTotals(
   counts: DayCounts,
 ): { totalFee: number; totalPerDiem: number } {
   return computeTotals(personLines(map, personnelRateId, types), counts);
+}
+
+/** Oct 2026 — the week blocks' TOTAL FEE / TOTAL PD (Adam's weekly payroll
+ *  tabs). Only DAY-DRIVEN lines count: one-off amounts (flat tour, advance —
+ *  basis flat_once) and per-week lines belong to the tour, not to any one week,
+ *  and show in the Summary. So Σ weeks + one-offs === the tour total. */
+export function weekTotals(
+  map: LineAmountMap,
+  personnelRateId: string,
+  types: RateTypeMeta[],
+  statusesThisWeek: Record<string, string>,
+): { fee: number; perDiem: number } {
+  const lines = personLines(map, personnelRateId, types).filter((l) => l.basis !== 'flat_once' && l.basis !== 'per_week');
+  const t = computeTotals(lines, countDayStatuses(statusesThisWeek));
+  return { fee: t.totalFee, perDiem: t.totalPerDiem };
+}
+
+/** The tour-level part the weeks leave out (flat tour fee, advance, per-week). */
+export function oneOffTotals(map: LineAmountMap, personnelRateId: string, types: RateTypeMeta[], counts: DayCounts): { fee: number; perDiem: number } {
+  const lines = personLines(map, personnelRateId, types).filter((l) => l.basis === 'flat_once' || l.basis === 'per_week');
+  const t = computeTotals(lines, counts);
+  return { fee: t.totalFee, perDiem: t.totalPerDiem };
 }

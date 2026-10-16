@@ -13,6 +13,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useToast } from '@/components/ui/Toast';
+import { roomSwatch, ROOM_SWATCH_CODES } from '@/lib/sheetPalette';
 
 export const ROOM_OPTIONS = [
   { value: 'SGL', label: 'SGL' },
@@ -45,24 +46,27 @@ export function isNightAway(dayType?: string): boolean {
   return !HOME_TYPES.has(first);
 }
 
-/** MTX-03 — ONE token-based hue per room code so a matrix is scannable by
- *  colour (previously SGL=blue, every DBL=violet → indistinguishable). The
- *  matrix uses these solid hues as cell-fill `optColors`; the Cards view tints
- *  them via `roomCodeTint`. Token-clean (canonical day hues). */
-export const ROOM_CODE_HUE: Record<string, string> = {
-  SGL: 'var(--color-lp-day-travel)', // blue
-  'DBL (A)': 'var(--color-lp-day-show)', // green
-  'DBL (B)': 'var(--color-lp-day-press)', // pink
-  'DBL (C)': 'var(--color-lp-day-radio)', // amber
-  'DBL (D)': 'var(--color-lp-day-tv)', // red
-};
+/** Room code → Adam's sheet colours (Oct 2026; was MTX-03's day hues). One
+ *  colour per shared room so a matrix reads at a glance: SGL green, DBL (A)
+ *  lime, (B) peach, (C) blue, (D) lilac — dark-tuned in dark mode. Tokens:
+ *  --lp-sheet-room-* (globals.css), resolved via sheetPalette.roomSwatch. */
+export const ROOM_FILL: Record<string, { bg: string; fg: string }> = Object.fromEntries(
+  ROOM_SWATCH_CODES.map((code) => {
+    const s = roomSwatch(code)!;
+    return [code, { bg: s.bg, fg: s.fg }];
+  }),
+);
 
-/** Colour-key a room code via tokens — the Cards-view tint (the matrix uses the
- *  solid `ROOM_CODE_HUE` directly as its dropdown `optColors`). Token-clean. */
+/** The solid colour per room code (dots / keys). */
+export const ROOM_CODE_HUE: Record<string, string> = Object.fromEntries(
+  Object.entries(ROOM_FILL).map(([code, f]) => [code, f.bg]),
+);
+
+/** The Cards-view card background: the room colour, softened into the panel. */
 export function roomCodeTint(code: string): string | undefined {
   const hue = ROOM_CODE_HUE[code];
   if (!hue) return undefined;
-  return `color-mix(in srgb, ${hue} 16%, transparent)`;
+  return `color-mix(in srgb, ${hue} 60%, var(--lp-panel))`;
 }
 
 interface GridPerson {

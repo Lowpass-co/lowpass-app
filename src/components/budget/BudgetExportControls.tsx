@@ -14,13 +14,33 @@
 
 'use client';
 
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { ChevronDown } from 'lucide-react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { ExportButton } from '@/components/export/ExportButton';
 import { WorkbookImportModal } from '@/components/budget/WorkbookImportModal';
 
-/** X1-A — the six-sheet Tour Accounting Workbook (.xlsx an accountant can edit). */
-function WorkbookButton({ tourId, versionId }: { tourId: string; versionId: string | null }) {
+/** X1-A — the six-sheet Tour Accounting Workbook (.xlsx an accountant can edit).
+ *  Oct 2026 — export + import now share ONE "Workbook" menu (was two buttons
+ *  beside Export…, three look-alike buttons in a row). */
+function WorkbookMenu({ tourId, versionId, onImport }: { tourId: string; versionId: string | null; onImport: () => void }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: PointerEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setOpen(false);
+    };
+    document.addEventListener('pointerdown', onDown);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('pointerdown', onDown);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [open]);
   const [busy, setBusy] = useState(false);
   async function download() {
     setBusy(true);
@@ -50,18 +70,42 @@ function WorkbookButton({ tourId, versionId }: { tourId: string; versionId: stri
       setBusy(false);
     }
   }
+  const item: React.CSSProperties = {
+    display: 'block', width: '100%', textAlign: 'left', padding: '8px 12px', fontSize: 'var(--lp-text-sm)',
+    color: 'var(--lp-text)', background: 'transparent', border: 0, cursor: 'pointer', whiteSpace: 'nowrap',
+  };
   return (
-    <button
-      type="button"
-      data-testid="budget-export-workbook"
-      onClick={() => void download()}
-      disabled={busy}
-      className="btn-transition rounded-md border px-3 py-1.5 text-sm"
-      style={{ borderColor: 'var(--lp-border-strong)', color: 'var(--lp-text-secondary)', background: 'transparent', cursor: 'pointer' }}
-      title="Export the whole tour as a six-sheet accounting workbook (.xlsx)"
-    >
-      {busy ? 'Building…' : 'Export workbook…'}
-    </button>
+    <div ref={ref} style={{ position: 'relative' }}>
+      <button
+        type="button"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        onClick={() => setOpen((o) => !o)}
+        className="btn-transition inline-flex items-center gap-1 rounded-md border px-3 py-1.5 text-sm"
+        style={{ borderColor: 'var(--lp-border-strong)', color: 'var(--lp-text-secondary)', background: 'transparent', cursor: 'pointer' }}
+        title="The accounting workbook (.xlsx) — export it, or import an edited copy"
+      >
+        {busy ? 'Building…' : 'Workbook'} <ChevronDown size={14} aria-hidden />
+      </button>
+      {open ? (
+        <div
+          role="menu"
+          style={{
+            position: 'absolute', right: 0, top: 'calc(100% + 6px)', zIndex: 'var(--lp-z-dropdown)', minWidth: 260,
+            background: 'var(--lp-panel)', border: '1px solid var(--lp-border-strong)', borderRadius: 'var(--lp-radius-md)',
+            boxShadow: 'var(--lp-shadow-md)', padding: '4px 0',
+          }}
+        >
+          <button type="button" role="menuitem" data-testid="budget-export-workbook" disabled={busy} style={item} onClick={() => { setOpen(false); void download(); }}>
+            Export accounting workbook (.xlsx)
+          </button>
+          <button type="button" role="menuitem" data-testid="budget-import-workbook" style={item} onClick={() => { setOpen(false); onImport(); }}>
+            Import an edited workbook…
+            <span style={{ display: 'block', fontSize: 'var(--lp-text-xs)', color: 'var(--lp-text-tertiary)' }}>Nothing changes until you review and accept</span>
+          </button>
+        </div>
+      ) : null}
+    </div>
   );
 }
 
@@ -103,16 +147,8 @@ export function BudgetExportControls({ tourCurrency, tourId }: BudgetExportContr
 
   return (
     <div className="flex flex-wrap items-center gap-2">
-      <span
-        className="text-xs"
-        style={{
-          color: 'var(--lp-text-tertiary)',
-          fontWeight: 'var(--lp-weight-semibold)',
-          letterSpacing: 'var(--lp-tracking-caps)',
-          textTransform: 'uppercase',
-        }}
-      >
-        Display
+      <span className="text-sm" style={{ color: 'var(--lp-text-tertiary)' }}>
+        Show in
       </span>
       <select
         value={display}
@@ -129,17 +165,7 @@ export function BudgetExportControls({ tourCurrency, tourId }: BudgetExportContr
       </select>
 
       <div className="ml-auto flex items-center gap-2">
-        <button
-          type="button"
-          data-testid="budget-import-workbook"
-          onClick={() => setImportOpen(true)}
-          className="btn-transition rounded-md border px-3 py-1.5 text-sm"
-          style={{ borderColor: 'var(--lp-border-strong)', color: 'var(--lp-text-secondary)', background: 'transparent', cursor: 'pointer' }}
-          title="Import an edited workbook (review-queued — nothing writes until you accept)"
-        >
-          Import workbook…
-        </button>
-        <WorkbookButton tourId={tourId} versionId={viewedVersionId} />
+        <WorkbookMenu tourId={tourId} versionId={viewedVersionId} onImport={() => setImportOpen(true)} />
         <ExportButton surface="budget" tourId={tourId} versionId={viewedVersionId} title="Export the budget (PDF or Excel)" />
       </div>
       {importOpen ? <WorkbookImportModal tourId={tourId} onClose={() => setImportOpen(false)} /> : null}

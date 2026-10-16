@@ -83,10 +83,10 @@ export function PayrollView({
   const [rates, setRates] = useState<Record<string, unknown>[]>(personnelRates);
 
   // PAY-09 deep-link — land on Payroll with a person focused (Personnel rate
-  // click). The Rates disclosure opens and both the rate row and the matrix row
+  // click). The Summary (open by default) and the week rows
   // flash the orange ring; seeded from the server prop at mount (the page
   // remounts per navigation), then the effect fades the ring after ~2s.
-  const [ratesOpen, setRatesOpen] = useState<boolean>(!!focusRateId);
+  const [ratesOpen, setRatesOpen] = useState<boolean>(true);
   const [flashKey, setFlashKey] = useState<string | null>(focusRateId);
   useEffect(() => {
     if (!focusRateId) return;
@@ -147,13 +147,12 @@ export function PayrollView({
 
       <FinalizeBar tourId={tourId} finalizedAt={finalizedAt} />
 
-      {/* G2-1b — the DAYS MATRIX is the work surface and dominates. Rates + Summary
-          collapse to disclosures (Rates is reference while painting; Summary is
-          read-only derived data), so opening Payroll shows the matrix ready to
-          work with rates/summary one click away. */}
+      {/* Oct 2026 — Adam's SUMMARY tab: everyone's rates, show / off-travel
+          days and totals, OPEN at the top (it was a collapsed "Rates" panel).
+          Rates are typed straight in; the weeks below are where days are set. */}
       <Disclosure
-        label="Rates"
-        hint={`${rates.length} ${rates.length === 1 ? 'person' : 'people'} · click to edit rates & types`}
+        label="Summary"
+        hint={`${rates.length} ${rates.length === 1 ? 'person' : 'people'} · rates, days and totals — type rates straight in`}
         open={ratesOpen}
         onToggle={setRatesOpen}
       >
@@ -252,19 +251,19 @@ function Disclosure({ label, hint, children, open, onToggle }: { label: string; 
     <details
       open={open}
       onToggle={onToggle ? (e) => onToggle((e.currentTarget as HTMLDetailsElement).open) : undefined}
-      style={{ border: '1px solid var(--lp-border)', borderRadius: 'var(--lp-radius-md)', background: 'var(--lp-panel)' }}
+      style={{ border: '1px solid var(--lp-border)', borderRadius: 'var(--lp-radius-md)', background: 'var(--lp-bg)', overflow: 'hidden' }}
     >
       <summary
         style={{
-          cursor: 'pointer', padding: '8px 12px', display: 'flex', alignItems: 'baseline', gap: 8,
-          fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em',
-          color: 'var(--lp-text-secondary)',
+          cursor: 'pointer', padding: '8px 14px', display: 'flex', alignItems: 'baseline', gap: 8,
+          fontSize: 'var(--lp-text-md)', fontWeight: 800, letterSpacing: '0.02em', textTransform: 'uppercase',
+          background: 'var(--lp-sheet-band-bg)', color: 'var(--lp-sheet-band-fg)',
         }}
       >
         {label}
-        {hint ? <span style={{ fontSize: 11, fontWeight: 400, textTransform: 'none', letterSpacing: 0, color: 'var(--lp-text-tertiary)' }}>· {hint}</span> : null}
+        {hint ? <span style={{ fontSize: 'var(--lp-text-xs)', fontWeight: 400, textTransform: 'none', letterSpacing: 0, opacity: 0.75 }}>· {hint}</span> : null}
       </summary>
-      <div style={{ padding: '4px 12px 12px' }}>{children}</div>
+      <div style={{ padding: '8px 12px 12px' }}>{children}</div>
     </details>
   );
 }

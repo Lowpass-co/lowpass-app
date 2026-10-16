@@ -63,9 +63,9 @@ const rtColTypeId = (colId: string) => (colId.startsWith(RT_COL_PREFIX) ? colId.
 /** Identity/meta columns before the rate columns. */
 function buildLeadColumns(canSeeCommission: boolean): GridColumn<PersonnelRate>[] {
   const cols: GridColumn<PersonnelRate>[] = [
-    { id: 'person_name', header: 'Person', accessor: 'person_name', type: { kind: 'text' }, width: 160, flex: true },
-    { id: 'role', header: 'Role', accessor: 'role', type: { kind: 'text' }, width: 128 },
-    { id: 'person_type', header: 'Employment', accessor: 'person_type', type: { kind: 'select', options: PT_OPTIONS }, width: 144 },
+    // Oct 2026 — Adam's SUMMARY order: role, name, then rates → days → totals.
+    { id: 'role', header: 'Role', accessor: 'role', type: { kind: 'text' }, width: 130 },
+    { id: 'person_name', header: 'Name', accessor: 'person_name', type: { kind: 'text' }, width: 150, flex: true },
   ];
   if (canSeeCommission) {
     cols.push({ id: 'commission', header: 'Comm. %', accessor: 'commission', type: { kind: 'percent', decimals: 2 }, align: 'right', width: 80 });
@@ -88,21 +88,14 @@ function buildRateTypeColumns(rateTypes: RateTypeMeta[], amountMap: LineAmountMa
       },
       type: { kind: 'currency' as const, currency: ccy, decimals: 2 },
       align: 'right' as const,
-      width: 104,
+      // Lump sums (flat tour, advance) run to thousands; day rates don't.
+      width: t.basis === 'flat_once' ? 108 : 88,
     }));
 }
 
-/** Compact day-count summary: "9S · 4T · 2R · 1P · 3O · 2PD". */
-function daysSummary(c: DayCounts): string {
-  const bits = [
-    c.show ? `${c.show}S` : null,
-    c.offTravel ? `${c.offTravel}T` : null,
-    c.rehearsal ? `${c.rehearsal}R` : null,
-    c.promo ? `${c.promo}P` : null,
-    c.off ? `${c.off}O` : null,
-    c.pdOnly ? `${c.pdOnly}PD` : null,
-  ].filter(Boolean);
-  return bits.length ? bits.join(' · ') : '—';
+/** Every worked day that isn't a show — travel, off, rehearsal, promo. */
+function otherDays(c: DayCounts): number {
+  return Math.max(0, (c.active ?? 0) - (c.show ?? 0));
 }
 
 const EMPTY_COUNTS: DayCounts = { show: 0, offTravel: 0, rehearsal: 0, promo: 0, off: 0, pdOnly: 0, active: 0, assigned: 0, weeks: 0 };
@@ -116,18 +109,29 @@ function buildTotalsColumns(
 ): GridColumn<PersonnelRate>[] {
   const ccy = currency.trim().toUpperCase() || 'GBP';
   const money = new Intl.NumberFormat('en-GB', { style: 'currency', currency: ccy, minimumFractionDigits: 0 });
+  // Computed cells render italic + muted by default (read-only cue); the
+  // summary's counts and totals are the point of the table, so print them plain.
+  const plain = (text: string, strong = false) => (
+    <span style={{ fontStyle: 'normal', color: 'var(--lp-text)', fontWeight: strong ? 700 : 400, fontVariantNumeric: 'tabular-nums' }}>{text}</span>
+  );
   return [
+    // Oct 2026 — split like Adam's SUMMARY tab: SHOW DAYS · OFF/TRAVEL DAYS
+    // (every other worked day, the same rule the budget sheet uses).
     {
-      id: 'days', header: 'Days', accessor: (r) => countsFor(r.id).assigned ?? 0, align: 'right', width: 110,
-      type: { kind: 'computed', render: (r) => daysSummary(countsFor((r as PersonnelRate).id)) },
+      id: 'show_days', header: 'Shows', accessor: (r) => countsFor(r.id).show ?? 0, align: 'right', width: 72,
+      type: { kind: 'computed', render: (r) => plain(String(countsFor((r as PersonnelRate).id).show ?? 0)) },
     },
     {
-      id: 'total_fee', header: 'Total fee', accessor: (r) => personTotals(amountMap, r.id, rateTypes, countsFor(r.id)).totalFee, align: 'right', width: 120,
-      type: { kind: 'computed', render: (r) => { const row = r as PersonnelRate; return money.format(personTotals(amountMap, row.id, rateTypes, countsFor(row.id)).totalFee); } },
+      id: 'other_days', header: 'Off / travel', accessor: (r) => otherDays(countsFor(r.id)), align: 'right', width: 84,
+      type: { kind: 'computed', render: (r) => { const c = countsFor((r as PersonnelRate).id); return plain(`${otherDays(c)}${c.pdOnly ? ` +${c.pdOnly} PD` : ''}`); } },
     },
     {
-      id: 'total_pd', header: 'Total PD', accessor: (r) => personTotals(amountMap, r.id, rateTypes, countsFor(r.id)).totalPerDiem, align: 'right', width: 110,
-      type: { kind: 'computed', render: (r) => { const row = r as PersonnelRate; return money.format(personTotals(amountMap, row.id, rateTypes, countsFor(row.id)).totalPerDiem); } },
+      id: 'total_fee', header: 'Total fee', accessor: (r) => personTotals(amountMap, r.id, rateTypes, countsFor(r.id)).totalFee, align: 'right', width: 104,
+      type: { kind: 'computed', render: (r) => { const row = r as PersonnelRate; return plain(money.format(personTotals(amountMap, row.id, rateTypes, countsFor(row.id)).totalFee), true); } },
+    },
+    {
+      id: 'total_pd', header: 'Total PD', accessor: (r) => personTotals(amountMap, r.id, rateTypes, countsFor(r.id)).totalPerDiem, align: 'right', width: 96,
+      type: { kind: 'computed', render: (r) => { const row = r as PersonnelRate; return plain(money.format(personTotals(amountMap, row.id, rateTypes, countsFor(row.id)).totalPerDiem), true); } },
     },
   ];
 }
@@ -201,8 +205,9 @@ export function PayrollRatesSpreadsheet({
     };
     const rtCols = buildRateTypeColumns(rateTypes, amountMap, ccy);
     const totals = buildTotalsColumns(currency, rateTypes, amountMap, safeCountsFor);
+    const employment: GridColumn<PersonnelRate> = { id: 'person_type', header: 'Employment', accessor: 'person_type', type: { kind: 'select', options: PT_OPTIONS }, width: 130 };
     const notes: GridColumn<PersonnelRate> = { id: 'base_rate_note', header: 'Notes', accessor: 'base_rate_note', type: { kind: 'text' }, width: 192 };
-    return [...lead, flag, ...rtCols, ...totals, notes];
+    return [...lead, flag, ...rtCols, ...totals, employment, notes];
   }, [currency, ccy, canSeeCommission, rateTypes, amountMap, safeCountsFor, conflictOf]);
 
   // Sort rows by group; build section headers.

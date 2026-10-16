@@ -2249,3 +2249,22 @@ test tour only. ✅ = passed live; ⚙ = covered by vitest, not live-run.
   goes. Switch the version picker to the old version: its totals are
   unchanged.
 
+## Budget — calmer and clearer (Oct 2026)
+
+- [ ] **BUD-SHEET-08 — One row of page controls.** The top bar shows: version,
+  the remaining meter, ONE density toggle, "Show in" currency, **Workbook ▾**
+  (export the accounting workbook / import an edited one) and **Export…**.
+  Switching density resizes the budget grid's rows and text (it used to do
+  nothing to it).
+
+- [ ] **BUD-SHEET-09 — Grid toolbar.** Above the grid: Search · **+ Add line** ·
+  + Add section · Filter · the row/total counts · **More**. More holds
+  Group by, Show / hide columns, Reset column widths, Show keyboard
+  shortcuts and **Delete "<the selected line>"** (named, in red). Income's
+  grid has the same calmer toolbar.
+
+- [ ] **BUD-SHEET-10 — Readable.** Grid text is a step larger (14px at the
+  default density); section names bold; the open-line ↗ button is grey at
+  rest and turns orange on row hover. The Totals and Commissions tables sit
+  under black title bands and Net is larger.
+

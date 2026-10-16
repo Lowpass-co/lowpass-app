@@ -231,9 +231,12 @@ export function BudgetSheetTop({
 
   const num = 'px-3 py-1.5 text-right tabular-nums whitespace-nowrap';
   const lbl = 'px-3 py-1.5 text-lp-text';
-  const head = 'px-3 pb-1.5 pt-2 text-left font-medium text-lp-text-tertiary';
+  // Oct 2026 — Adam's sheet look: a black title band over each table (dark-
+  // tuned in dark mode), and one step larger text.
+  const head = 'px-3 py-2 text-left font-bold uppercase tracking-wide';
+  const band = { background: 'var(--lp-sheet-band-bg)', color: 'var(--lp-sheet-band-fg)', fontSize: 'var(--lp-text-xs)' } as const;
   const totalRow = 'border-t border-lp-border font-semibold';
-  const cell = { fontSize: 'var(--lp-text-sm)' } as const;
+  const cell = { fontSize: 'var(--lp-text-base)' } as const;
 
   return (
     <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,5fr)_minmax(0,6fr)]" data-testid="budget-sheet-top">
@@ -241,7 +244,7 @@ export function BudgetSheetTop({
       <section className="overflow-hidden rounded-lg border border-lp-border bg-lp-surface" aria-label="Budget totals">
         <table className="w-full border-collapse" style={cell}>
           <thead>
-            <tr>
+            <tr style={band}>
               <th className={head}>Totals</th>
               <th className={`${head} text-right`}>Proposed</th>
               <th className={`${head} text-right`}>Actual</th>
@@ -294,7 +297,7 @@ export function BudgetSheetTop({
               <td className={`${num} text-lp-text-secondary`}>{money(pnl.grossIncome.projected, ccy)}</td>
               <td className={`${num} text-lp-text-secondary`}>{money(pnl.grossIncome.actual, ccy)}</td>
             </tr>
-            <tr className={totalRow} data-testid="sheet-net">
+            <tr className={totalRow} data-testid="sheet-net" style={{ fontSize: 'var(--lp-text-md)' }}>
               <td className={lbl}>Net</td>
               {(['projected', 'actual'] as const).map((k) => (
                 <td
@@ -314,7 +317,7 @@ export function BudgetSheetTop({
       <section className="overflow-hidden rounded-lg border border-lp-border bg-lp-surface" aria-label="Commissions">
         <table className="w-full border-collapse" style={cell}>
           <thead>
-            <tr>
+            <tr style={band}>
               <th className={head}>Commissions</th>
               <th className={`${head} text-right`}>%</th>
               <th className={head}>Of</th>

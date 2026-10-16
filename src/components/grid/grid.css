@@ -39,7 +39,9 @@
   --gr-orange-22: color-mix(in srgb, var(--lp-orange) 22%, transparent);
   /* density (app-wide density tokens) */
   --gr-row-h: var(--lp-row-comfortable);
-  --gr-fs: var(--lp-text-sm);
+  /* Oct 2026 — one step larger across the board (Adam: "small / cramped
+     text"): comfortable 13→14px, compact 12→13, spacious 14→15. */
+  --gr-fs: var(--lp-text-base);
   --gr-pad-x: var(--lp-space-3);
   --ease: cubic-bezier(0.2, 0.7, 0.3, 1);
 
@@ -50,12 +52,12 @@
 }
 .lp-grid[data-density='compact'] {
   --gr-row-h: var(--lp-row-compact);
-  --gr-fs: var(--lp-text-xs);
+  --gr-fs: var(--lp-text-sm);
   --gr-pad-x: var(--lp-space-2);
 }
 .lp-grid[data-density='spacious'] {
   --gr-row-h: var(--lp-row-cozy);
-  --gr-fs: var(--lp-text-base);
+  --gr-fs: var(--lp-text-md);
   --gr-pad-x: var(--lp-space-4);
 }
 
@@ -96,11 +98,11 @@
   align-items: center;
   padding: 0 var(--gr-pad-x);
   position: relative;
-  color: var(--gr-text-3);
-  font-size: var(--lp-text-2xs);
-  letter-spacing: 0.09em;
+  color: var(--gr-text-2);
+  font-size: var(--lp-text-xs);
+  letter-spacing: 0.04em;
   text-transform: uppercase;
-  font-weight: 600;
+  font-weight: 700;
   border-right: 1px solid var(--gr-border-soft);
   cursor: grab;
 }
@@ -220,16 +222,16 @@
   color: var(--gr-text-3);
   font-size: var(--lp-text-sm);
   letter-spacing: -2px;
-  opacity: 0.5;
+  opacity: 0; /* Oct 2026 — calmer: the grip shows on hover only */
   transition: 0.15s;
 }
 .lp-grid .sec-head:hover .grip-dots { opacity: 1; color: var(--gr-text-2); }
 .lp-grid .sh-title {
-  font-size: var(--lp-text-2xs);
-  letter-spacing: 0.09em;
+  font-size: var(--lp-text-sm);
+  letter-spacing: 0.05em;
   text-transform: uppercase;
-  font-weight: 700;
-  color: var(--gr-text-2);
+  font-weight: 800;
+  color: var(--gr-text);
 }
 .lp-grid .sh-count { color: var(--gr-text-3); font-weight: 600; }
 .lp-grid .badge {
@@ -261,7 +263,7 @@
   justify-self: end;
   padding: 0 var(--gr-pad-x);
   color: var(--gr-text-3);
-  font-size: var(--lp-text-2xs);
+  font-size: var(--lp-text-xs);
   font-variant-numeric: tabular-nums;
 }
 .lp-grid .sh-sub b { color: var(--gr-text-2); font-weight: 600; }
@@ -314,20 +316,28 @@
   gap: 4px;
   min-width: 24px;
   height: 20px;
-  /* C6 — clearly visible at rest (was a faint 0.7 that read as grey). */
+  /* C6 made this orange at rest so it was findable; with an orange button on
+     every row the sheet read as busy (Oct 2026). Now: a quiet grey outline at
+     rest — still visible on every row — and orange on row hover / focus. */
   opacity: 1;
-  color: var(--lp-orange);
+  color: var(--gr-text-3);
   font-size: var(--lp-text-xs);
   font-weight: 700;
   line-height: 20px;
-  background: var(--gr-orange-16);
-  border: 1px solid color-mix(in srgb, var(--lp-orange) 55%, transparent);
+  background: transparent;
+  border: 1px solid var(--gr-border);
   border-radius: var(--lp-radius-md);
   padding: 0 6px;
   cursor: pointer;
   transition: 0.16s var(--ease);
 }
-.lp-grid .row:hover .openbtn { opacity: 1; }
+.lp-grid .row:hover .openbtn,
+.lp-grid .openbtn:focus-visible {
+  opacity: 1;
+  color: var(--lp-orange);
+  background: var(--gr-orange-16);
+  border-color: color-mix(in srgb, var(--lp-orange) 55%, transparent);
+}
 .lp-grid .openbtn .ow {
   max-width: 0;
   opacity: 0;
@@ -688,8 +698,8 @@
   background: var(--gr-surface);
   color: var(--gr-text-2);
   border-radius: var(--lp-radius-lg);
-  padding: 8px 12px;
-  font-size: var(--lp-text-xs);
+  padding: 7px 12px;
+  font-size: var(--lp-text-sm);
   cursor: pointer;
   display: inline-flex;
   align-items: center;
@@ -702,22 +712,8 @@
 .lp-grid .chip .muted { color: var(--gr-text-3); }
 .lp-grid .chip .accent { color: var(--lp-orange); font-weight: 600; }
 .lp-grid .gr-spacer { margin-left: auto; }
-.lp-grid .gr-counts { color: var(--gr-text-3); font-size: var(--lp-text-xs); }
+.lp-grid .gr-counts { color: var(--gr-text-3); font-size: var(--lp-text-sm); }
 .lp-grid .gr-counts b { color: var(--gr-text-2); font-weight: 600; }
-.lp-grid .gr-density { display: inline-flex; gap: 5px; }
-.lp-grid .gr-density button {
-  width: 32px;
-  height: 28px;
-  border: 1px solid var(--gr-border);
-  background: var(--gr-surface);
-  border-radius: var(--lp-radius-lg);
-  color: var(--gr-text-3);
-  cursor: pointer;
-  display: grid;
-  place-items: center;
-  font-size: var(--lp-text-sm);
-}
-.lp-grid .gr-density button.active { color: var(--lp-orange); border-color: var(--lp-orange); background: var(--gr-orange-12); }
 .lp-grid .gr-help {
   margin-top: var(--lp-space-4);
   color: var(--gr-text-3);
@@ -1175,6 +1171,19 @@
 }
 .lp-grid[data-wide][data-frozen2] .gridhead .hc:nth-child(2) { z-index: var(--lp-z-sticky); }
 
+/* Optional THIRD frozen column (rooming: Role · Forename · Surname). Gated on
+   [data-frozen3]; offset is the first two columns' widths (--frz3-left). */
+.lp-grid[data-wide][data-frozen3] .gridhead .hc:nth-child(3),
+.lp-grid[data-wide][data-frozen3] #gr-sections .row .c:nth-child(3),
+.lp-grid[data-wide][data-frozen3] .gr-foot .c:nth-child(3) {
+  position: sticky;
+  left: var(--frz3-left, 0px);
+  background: var(--gr-panel);
+  border-right: 1px solid var(--gr-border);
+  z-index: 2;
+}
+.lp-grid[data-wide][data-frozen3] .gridhead .hc:nth-child(3) { z-index: var(--lp-z-sticky); }
+
 /* Frozen-column bleed fix — the selection/active tint (selStyle) is an INLINE
    semi-transparent background that OVERRIDES the frozen cell's own opaque
    background, so on a selected row the horizontally-scrolling day cells bled
@@ -1184,7 +1193,8 @@
    underlay for .selected/.active so it stays visible. Body rows only — the
    header/footer frozen cells carry no selection tint. */
 .lp-grid[data-wide] #gr-sections .row .c:first-child::before,
-.lp-grid[data-wide][data-frozen2] #gr-sections .row .c:nth-child(2)::before {
+.lp-grid[data-wide][data-frozen2] #gr-sections .row .c:nth-child(2)::before,
+.lp-grid[data-wide][data-frozen3] #gr-sections .row .c:nth-child(3)::before {
   content: '';
   position: absolute;
   inset: 0;
@@ -1193,13 +1203,20 @@
   pointer-events: none;
 }
 .lp-grid[data-wide] #gr-sections .row .c.selected:first-child::before,
-.lp-grid[data-wide][data-frozen2] #gr-sections .row .c.selected:nth-child(2)::before {
+.lp-grid[data-wide][data-frozen2] #gr-sections .row .c.selected:nth-child(2)::before,
+.lp-grid[data-wide][data-frozen3] #gr-sections .row .c.selected:nth-child(3)::before {
   background: linear-gradient(#FF450017, #FF450017), var(--gr-panel);
 }
 .lp-grid[data-wide] #gr-sections .row .c.active:first-child::before,
-.lp-grid[data-wide][data-frozen2] #gr-sections .row .c.active:nth-child(2)::before {
+.lp-grid[data-wide][data-frozen2] #gr-sections .row .c.active:nth-child(2)::before,
+.lp-grid[data-wide][data-frozen3] #gr-sections .row .c.active:nth-child(3)::before {
   background: linear-gradient(#FF450021, #FF450021), var(--gr-panel);
 }
+
+/* Bare chrome (rooming): no section header bar, and a header row tall enough
+   for a date · city · day-type stack. Gated on [data-bare]. */
+.lp-grid[data-bare] .sec-head { display: none; }
+.lp-grid[data-bare] .gridhead .hc { height: auto; min-height: 34px; align-items: flex-end; padding-bottom: 6px; }
 
 /* Optional per-column footer row (rooms-per-night etc.), aligned to --cols. */
 .lp-grid .gr-foot {
@@ -1234,7 +1251,8 @@
   height: 100%;
   width: 100%;
   font-weight: 600;
-  color: var(--lp-text);
+  /* inherit: a solid sheet fill (optFill) sets the cell's text colour */
+  color: inherit;
 }
 
 /* ============================================================
