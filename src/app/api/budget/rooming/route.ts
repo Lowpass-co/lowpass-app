@@ -50,6 +50,16 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: 'Tour not found' }, { status: 404 });
   }
 
+  // Migration 273 — when rooming last changed (trigger-maintained on hotels,
+  // rooms and room_assignments). Its own query so that, before 273 is pasted,
+  // the missing column only costs the stamp (null), never the grid.
+  const { data: stampRow } = await supabase
+    .from('tours')
+    .select('rooming_updated_at')
+    .eq('id', tourId)
+    .maybeSingle();
+  const roomingUpdatedAt = (stampRow as { rooming_updated_at?: string | null } | null)?.rooming_updated_at ?? null;
+
   const { data: routingRows, error: routingError } = await supabase
     .from('routing')
     .select('id, date, venue_name, city')
@@ -67,6 +77,7 @@ export async function GET(request: Request) {
     return NextResponse.json({
       grid_by_person: [],
       routing_dates: routingDates,
+      rooming_updated_at: roomingUpdatedAt,
     });
   }
 
@@ -133,6 +144,7 @@ export async function GET(request: Request) {
   return NextResponse.json({
     grid_by_person: gridByPerson,
     routing_dates: routingDates,
+    rooming_updated_at: roomingUpdatedAt,
   });
 }
 

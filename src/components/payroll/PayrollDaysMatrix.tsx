@@ -28,7 +28,7 @@ import type { RoutingDay, PayrollPerson } from './usePayrollGrid';
 /** Fee-shape flags for a person, from their amounts (replaces the retired
  *  rate_type). When NO per-day fee is set, painting days doesn't scale the fee
  *  — cells dim and a note explains why (flat tour / per-diem-only people). */
-function feeShapeOf(map: LineAmountMap, personnelRateId: string): { perDayFee: boolean; note: string | null } {
+function feeShapeOf(map: LineAmountMap, personnelRateId: string): { perDayFee: boolean; note: string | null; tag?: string } {
   const id = DEFAULT_RATE_TYPE_IDS;
   const perDayFee =
     amountOf(map, personnelRateId, id.dayRate) > 0 ||
@@ -37,8 +37,8 @@ function feeShapeOf(map: LineAmountMap, personnelRateId: string): { perDayFee: b
     amountOf(map, personnelRateId, id.rehearsal) > 0 ||
     amountOf(map, personnelRateId, id.pressRadio) > 0;
   if (perDayFee) return { perDayFee, note: null };
-  if (amountOf(map, personnelRateId, id.flatTour) > 0) return { perDayFee, note: 'days don’t change the flat fee — per diem still counts' };
-  if (amountOf(map, personnelRateId, id.perDiem) > 0) return { perDayFee, note: 'per diem only — no daily fee' };
+  if (amountOf(map, personnelRateId, id.flatTour) > 0) return { perDayFee, note: 'days don’t change the flat fee — per diem still counts', tag: 'flat fee' };
+  if (amountOf(map, personnelRateId, id.perDiem) > 0) return { perDayFee, note: 'per diem only — no daily fee', tag: 'PD only' };
   return { perDayFee, note: null };
 }
 
@@ -428,7 +428,7 @@ export function PayrollDaysMatrix({
                         </div>
                         <div style={{ ...bodyCell, boxShadow: ring || undefined, fontSize: 'var(--lp-text-base)', fontWeight: 500, color: 'var(--lp-text)' }} title={rowFlat && shape.note ? `${p.person_name} — ${shape.note}` : p.person_name}>
                           <span style={ellipsis}>{p.person_name || '—'}</span>
-                          {rowFlat ? <span title={shape.note ?? undefined} style={{ marginLeft: 6, fontSize: 'var(--lp-text-2xs)', color: 'var(--lp-text-tertiary)', fontStyle: 'italic', whiteSpace: 'nowrap' }}>flat</span> : null}
+                          {rowFlat ? <span title={shape.note ?? undefined} style={{ marginLeft: 6, fontSize: 'var(--lp-text-2xs)', color: 'var(--lp-text-tertiary)', fontStyle: 'italic', whiteSpace: 'nowrap' }}>{shape.tag ?? 'flat'}</span> : null}
                         </div>
                         {wk.slots.map((slot, i) => {
                           if (!slot) return <div key={i} style={{ ...bodyCell, background: OUT_OF_TOUR }} aria-hidden />;

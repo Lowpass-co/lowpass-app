@@ -94,6 +94,9 @@ export function useRoomingGrid(
   const router = useRouter();
   const [gridByPerson, setGridByPerson] = useState<GridPerson[]>([]);
   const [loading, setLoading] = useState(true);
+  // Migration 273 — when this tour's rooming last changed (server stamp; null
+  // before the migration is pasted). Bumped locally on each successful write.
+  const [updatedAt, setUpdatedAt] = useState<string | null>(null);
   const [overrides, setOverrides] = useState<Map<string, string>>(new Map());
 
   const fetchGrid = useCallback(async () => {
@@ -103,6 +106,7 @@ export function useRoomingGrid(
       if (!res.ok) throw new Error('Failed to load rooming');
       const json = await res.json();
       setGridByPerson(json.grid_by_person ?? []);
+      setUpdatedAt(typeof json.rooming_updated_at === 'string' ? json.rooming_updated_at : null);
       setOverrides(new Map());
     } finally {
       setLoading(false);
@@ -156,6 +160,7 @@ export function useRoomingGrid(
           }),
         });
         if (!res.ok) throw new Error('Save failed');
+        setUpdatedAt(new Date().toISOString());
         // Keep the server-rendered Nights view in sync (see ROOT CAUSE above).
         router.refresh();
       } catch {
@@ -253,6 +258,7 @@ export function useRoomingGrid(
     allRows,
     roomNights,
     roomNightsOn,
+    updatedAt,
     refetch: fetchGrid,
   };
 }
