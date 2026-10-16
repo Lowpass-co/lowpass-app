@@ -1792,3 +1792,68 @@ input[type='radio'] {
   background-size: 14px 14px;
   cursor: pointer;
 }
+
+/* ============================================================
+   Sheet palette (Oct 2026) — Adam's Google Sheets colour language for the
+   payroll, rooming and budget grids. LIGHT is his sheets exactly (black title
+   band, pastel day types, solid room-pair colours, black text); DARK keeps the
+   same hues at dark-safe strength with light text. Consumed through
+   src/lib/sheetPalette.ts — components never hard-code these.
+   ============================================================ */
+:root {
+  --lp-sheet-band-bg: #000000;
+  --lp-sheet-band-fg: #FFFFFF;
+  --lp-sheet-ink: #111111;
+
+  --lp-sheet-show-bg: #8CFF9F;      --lp-sheet-show-fg: #111111;
+  --lp-sheet-travel-bg: #EFEFEF;    --lp-sheet-travel-fg: #111111;
+  --lp-sheet-off-bg: #F4CCCC;       --lp-sheet-off-fg: #111111;
+  --lp-sheet-rehearsal-bg: #FFF2CC; --lp-sheet-rehearsal-fg: #111111;
+  --lp-sheet-prep-bg: #CFE2F3;      --lp-sheet-prep-fg: #111111;
+  --lp-sheet-promo-bg: #FCE5CD;     --lp-sheet-promo-fg: #111111;
+  --lp-sheet-pd-bg: #E8E8EC;        --lp-sheet-pd-fg: #444444;
+
+  --lp-sheet-room-sgl-bg: #93C47D;  --lp-sheet-room-sgl-fg: #111111;
+  --lp-sheet-room-a-bg: #ADF78C;    --lp-sheet-room-a-fg: #111111;
+  --lp-sheet-room-b-bg: #F9CB9C;    --lp-sheet-room-b-fg: #111111;
+  --lp-sheet-room-c-bg: #9FC5E8;    --lp-sheet-room-c-fg: #111111;
+  --lp-sheet-room-d-bg: #B4A7D6;    --lp-sheet-room-d-fg: #111111;
+}
+
+.dark {
+  --lp-sheet-band-bg: #262626;
+  --lp-sheet-band-fg: #FFFFFF;
+  --lp-sheet-ink: #F5F5F5;
+
+  --lp-sheet-show-bg: #1F5130;      --lp-sheet-show-fg: #B4F7C0;
+  --lp-sheet-travel-bg: #383838;    --lp-sheet-travel-fg: #E2E2E2;
+  --lp-sheet-off-bg: #522A2A;       --lp-sheet-off-fg: #F6D2D2;
+  --lp-sheet-rehearsal-bg: #4D4118; --lp-sheet-rehearsal-fg: #FFE9A8;
+  --lp-sheet-prep-bg: #213A55;      --lp-sheet-prep-fg: #D2E5F6;
+  --lp-sheet-promo-bg: #52361A;     --lp-sheet-promo-fg: #FAD3AA;
+  --lp-sheet-pd-bg: #2B2B31;        --lp-sheet-pd-fg: #B8B8B8;
+
+  --lp-sheet-room-sgl-bg: #31502A;  --lp-sheet-room-sgl-fg: #C5E9B3;
+  --lp-sheet-room-a-bg: #375A22;    --lp-sheet-room-a-fg: #D2F8BE;
+  --lp-sheet-room-b-bg: #5A3D1F;    --lp-sheet-room-b-fg: #FAD3AA;
+  --lp-sheet-room-c-bg: #23435F;    --lp-sheet-room-c-fg: #C5DEF3;
+  --lp-sheet-room-d-bg: #3D3558;    --lp-sheet-room-d-fg: #D7CEF0;
+}
+
+/* Payroll SUMMARY (Oct 2026) — the shared grid's headers are 12px CAPS with
+   wide tracking and density padding, which wrapped "FLAT / DAY", "PRESS / / RADIO"
+   into a header taller than two rows (Adam: "payroll titles are huge"). Here:
+   sentence case, no tracking, tight padding, bottom-aligned — like a sheet's
+   header row. Scoped to the payroll summary only. */
+.lp-sheet-summary thead th {
+  text-transform: none;
+  letter-spacing: 0;
+  font-size: var(--lp-text-xs);
+  line-height: 1.25;
+  vertical-align: bottom;
+  padding-top: 6px !important;
+  padding-bottom: 6px !important;
+  color: var(--lp-text-secondary) !important;
+}
+.lp-sheet-summary thead th > span > svg { display: none; }
+

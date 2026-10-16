@@ -25,9 +25,10 @@
 import './grid.css';
 import { cloneElement, forwardRef, useCallback, useEffect, useImperativeHandle, useLayoutEffect, useMemo, useReducer, useRef, useState, type CSSProperties } from 'react';
 import { createPortal } from 'react-dom';
-import type { Column, Density, GridFx, GridLineApi, GridStatusConfig, GroupBy, Row, Section, Sel, Snapshot } from './types';
+import type { Column, GridFx, GridLineApi, GridStatusConfig, GroupBy, Row, Section, Sel, Snapshot } from './types';
 import { colourForDayType, labelForDayType } from '@/lib/routing/dayType';
-import { Lock, Search, Trash2, Filter } from 'lucide-react';
+import { Lock, Search, Trash2, Filter, MoreHorizontal } from 'lucide-react';
+import { useAppDensity } from '@/lib/density/appDensity';
 import {
   ACCENTS,
   STATUSES,
@@ -128,6 +129,10 @@ export interface GridProps {
   /** Custom header content per column id (e.g. the matrix's date·city·day-type
       pill). Falls back to the column label. Additive. */
   headerFor?: (colId: string) => React.ReactNode;
+  /** Sheet-plain chrome: no toolbar, no section header bars, no keyboard-help
+      strip — just the grid. Rooming (one fixed roster, nothing to group, add or
+      total) passes it; budget / income / demo don't, so they're unchanged. */
+  bare?: boolean;
   /** Optional footer row (rendered on the same --cols grid) — one cell per
       column id (e.g. rooming rooms-per-night). Additive — only when passed.
       Grid-v2: receives the Grid's LIVE flat rows as a 2nd arg so the footer can
@@ -262,6 +267,7 @@ export const Grid = forwardRef<GridHandle, GridProps>(function Grid({
   wide = false,
   frozenCols = 0,
   headerFor,
+  bare = false,
   columnFooter,
   fillHandle = false,
   clickTwiceToOpen = false,
@@ -390,7 +396,14 @@ export const Grid = forwardRef<GridHandle, GridProps>(function Grid({
   const widthsRef = useRef<Record<string, number>>({});
   const calcFns = useRef<Record<string, (row: Row) => number>>({});
   const selRef = useRef<Sel>({ ar: 0, ac: 0, fr: 0, fc: 0 });
-  const densityRef = useRef<Density>('comfortable');
+  // Oct 2026 — the grid follows the ONE app-wide density (the toggle in the
+  // page toolbar). It used to keep its own private density with a second set
+  // of buttons, so the budget page had two density controls and the page one
+  // didn't touch the budget grid at all.
+  const appDensity = useAppDensity().density;
+  const gridDensity = appDensity === 'cozy' ? 'spacious' : appDensity;
+  // Keyboard-help strip — off by default (it's in the More menu).
+  const helpRef = useRef(false);
   const groupRef = useRef<GroupBy>('section');
   const queryRef = useRef('');
   // Seed the status filter with the SURFACE's full status set (all checked),
@@ -410,7 +423,7 @@ export const Grid = forwardRef<GridHandle, GridProps>(function Grid({
   const promptRef = useRef<PromptState | null>(null);
   const warnRef = useRef<WarnState | null>(null);
   /** toolbar popovers. */
-  const popRef = useRef<'filter' | 'cols' | 'addcol' | null>(null);
+  const popRef = useRef<'filter' | 'cols' | 'addcol' | 'more' | null>(null);
   const popAnchorRef = useRef<{ left: number; bottom: number }>({ left: 0, bottom: 0 });
   /** open slide-over target (Phase 2). */
   const slideRef = useRef<{ si: number; ri: number } | null>(null);
@@ -1354,14 +1367,15 @@ export const Grid = forwardRef<GridHandle, GridProps>(function Grid({
   };
 
   /* ---- toolbar / popovers ---- */
-  const openPop = (which: 'filter' | 'cols' | 'addcol', e: React.MouseEvent) => {
+  const openPop = (which: 'filter' | 'cols' | 'addcol' | 'more', e: React.MouseEvent) => {
     if (popRef.current === which) {
       popRef.current = null;
       render();
       return;
     }
     const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
-    popAnchorRef.current = { left: r.left, bottom: r.bottom + 6 };
+    // The More menu sits at the toolbar's right edge — open it leftwards.
+    popAnchorRef.current = { left: which === 'more' ? Math.max(8, r.right - 240) : r.left, bottom: r.bottom + 6 };
     popRef.current = which;
     render();
   };
@@ -1412,10 +1426,6 @@ export const Grid = forwardRef<GridHandle, GridProps>(function Grid({
     selRef.current = { ar: 0, ac: 0, fr: 0, fc: 0 };
     render();
   };
-  const setDensity = (d: Density) => {
-    densityRef.current = d;
-    render();
-  };
   const removeCol = (id: string) => {
     pushUndo();
     colsRef.current = cols().filter((c) => c.id !== id);
@@ -1456,6 +1466,9 @@ export const Grid = forwardRef<GridHandle, GridProps>(function Grid({
   // never set `wide`, so this is inert there.
   const frozen2 = wide && frozenCols >= 2 && vis.length >= 2;
   const frozen2Left = frozen2 ? Number(widths()[vis[0].id] ?? vis[0].w) || 0 : 0;
+  // …and a THIRD (rooming: Role · Forename · Surname), offset by the first two.
+  const frozen3 = wide && frozenCols >= 3 && vis.length >= 3;
+  const frozen3Left = frozen3 ? frozen2Left + (Number(widths()[vis[1].id] ?? vis[1].w) || 0) : 0;
 
   // Selection visuals as INLINE styles (#1) — the orange active ring + the
   // range tint. Inline so no stylesheet cascade / specificity issue can
@@ -1898,6 +1911,7 @@ export const Grid = forwardRef<GridHandle, GridProps>(function Grid({
     // Wide mode (matrices): fill the whole cell with the optColor tint. The
     // selection style (active/selected) takes precedence (spread last).
     const wideTint = wide && t === 'dropdown' ? col.optColors?.[String(row[id])] : null;
+    const wideFill = wide && t === 'dropdown' ? col.optFill?.[String(row[id])] : null;
     // #28 — right-click an override-capable output to set/clear the override;
     // an overridden cell wears a distinct ✎ marker (NOT the header ƒ).
     const overridable = isOverrideCol(id);
@@ -1907,8 +1921,19 @@ export const Grid = forwardRef<GridHandle, GridProps>(function Grid({
         key={key}
         className={`c cell${numCls}${mut}${cls}${overridden ? ' cell-override' : ''}`}
         style={{
-          ...(wideTint ? { background: `color-mix(in srgb, ${wideTint} 20%, transparent)` } : null),
+          ...(wideFill
+            ? { background: wideFill.bg, color: wideFill.fg }
+            : wideTint
+              ? { background: `color-mix(in srgb, ${wideTint} 20%, transparent)` }
+              : null),
           ...selStyle(isActive, selected),
+          // A frozen (sticky) matrix cell must KEEP position:sticky — the
+          // active ring's inline position:relative used to unstick it, so the
+          // selected person's name scrolled away with the nights (Adam:
+          // "rooming scroll seems broken").
+          ...(wide && vis.findIndex((c) => c.id === id) < frozenCols && vis.findIndex((c) => c.id === id) >= 0
+            ? { position: undefined, zIndex: undefined }
+            : null),
         }}
         data-r={fi}
         data-c={ci}
@@ -2286,14 +2311,17 @@ export const Grid = forwardRef<GridHandle, GridProps>(function Grid({
   return (
     <div
       className="lp-grid"
-      data-density={densityRef.current}
+      data-density={gridDensity}
       data-wide={wide && frozenCols > 0 ? '' : undefined}
       data-frozen2={frozen2 ? '' : undefined}
+      data-frozen3={frozen3 ? '' : undefined}
+      data-bare={bare ? '' : undefined}
       data-filling={filling ? '' : undefined}
       ref={rootRef}
-      style={{ '--cols': colsTemplate, '--frz2-left': `${frozen2Left}px` } as React.CSSProperties}
+      style={{ '--cols': colsTemplate, '--frz2-left': `${frozen2Left}px`, '--frz3-left': `${frozen3Left}px` } as React.CSSProperties}
     >
       {/* toolbar */}
+      {bare ? null : (
       <div className="gr-toolbar">
         <div className="gr-search">
           <Search size={14} aria-hidden style={{ flexShrink: 0, opacity: 0.6 }} />
@@ -2306,49 +2334,27 @@ export const Grid = forwardRef<GridHandle, GridProps>(function Grid({
             }}
           />
         </div>
-        {allowAddRows ? (
-          <>
-            <span className="chip" onClick={toggleGroup} role="button">
-              <span className="muted">Group</span>
-              <span className="accent">{groupRef.current === 'section' ? 'Section' : groupRef.current === 'phase' ? 'Phase' : 'Status'}</span>
-            </span>
-            <span className="chip" onClick={addSection} role="button">
-              ＋ Add section
-            </span>
-            {/* VIS-BG-06 — prominent toolbar add-line (opt-in; budget only).
-                Targets the last normal section; the per-section ghost stays. */}
-            {toolbarAddLine ? (
-              <span
-                className="chip accent"
-                role="button"
-                onClick={() => {
-                  const d = data();
-                  let si = -1;
-                  for (let i = 0; i < d.length; i++) if (d[i].kind === 'normal') si = i;
-                  if (si >= 0) addLine(si);
-                }}
-                style={{ borderColor: 'var(--lp-orange)', color: 'var(--lp-orange)', fontWeight: 600 }}
-              >
-                ＋ Add line
-              </span>
-            ) : null}
-          </>
-        ) : null}
-        <span className="chip" onClick={resetWidths} role="button">
-          ⇄ Reset widths
-        </span>
-        {onDeleteRow ? (
+        {/* Oct 2026 — calmer toolbar (Adam: "busy UI"): the everyday actions
+            stay out (add, filter); grouping, columns, widths, delete and the
+            keyboard help moved into More. Density follows the page toggle. */}
+        {allowAddRows && toolbarAddLine ? (
           <span
-            className="chip"
+            className="chip accent"
             role="button"
-            title="Delete the active line"
             onClick={() => {
-              const o = flat()[sel().fr];
-              if (o?.row._uid) onDeleteRow(o.row._uid);
+              const d = data();
+              let si = -1;
+              for (let i = 0; i < d.length; i++) if (d[i].kind === 'normal') si = i;
+              if (si >= 0) addLine(si);
             }}
+            style={{ borderColor: 'var(--lp-orange)', color: 'var(--lp-orange)', fontWeight: 600 }}
           >
-            <Trash2 size={13} aria-hidden style={{ display: 'inline', verticalAlign: '-2px', marginRight: 4 }} />
-            Delete line
+            ＋ Add line
+          </span>
+        ) : null}
+        {allowAddRows ? (
+          <span className="chip" onClick={addSection} role="button">
+            ＋ Add section
           </span>
         ) : null}
         {statusUniverse(cols(), data()).length > 0 ? (
@@ -2357,27 +2363,22 @@ export const Grid = forwardRef<GridHandle, GridProps>(function Grid({
             Filter
           </span>
         ) : null}
-        <span className={`chip${popRef.current === 'cols' || popRef.current === 'addcol' ? ' on' : ''}`} onClick={(e) => openPop('cols', e)} role="button">
-          ▦ Columns
-        </span>
         <span className="gr-spacer" />
         <span className="gr-counts">
           <b>{flat().length} rows</b> · est <b>{fmtC(cEst)}</b> · act <b>{fmtC(cAct)}</b>
         </span>
-        <div className="gr-density">
-          {(['compact', 'comfortable', 'spacious'] as Density[]).map((d) => (
-            <button
-              key={d}
-              type="button"
-              title={d}
-              className={densityRef.current === d ? 'active' : ''}
-              onClick={() => setDensity(d)}
-            >
-              {d === 'compact' ? '≡' : d === 'comfortable' ? '▤' : '☰'}
-            </button>
-          ))}
-        </div>
+        <span
+          className={`chip${popRef.current === 'more' || popRef.current === 'cols' || popRef.current === 'addcol' ? ' on' : ''}`}
+          onClick={(e) => openPop('more', e)}
+          role="button"
+          aria-haspopup="menu"
+          title="Group, columns, widths, delete, shortcuts"
+        >
+          <MoreHorizontal size={14} aria-hidden style={{ display: 'inline', verticalAlign: '-2px', marginRight: 4 }} />
+          More
+        </span>
       </div>
+      )}
 
       {/* grid */}
       <div className="gridwrap">
@@ -2428,6 +2429,7 @@ export const Grid = forwardRef<GridHandle, GridProps>(function Grid({
         </div>
       </div>
 
+      {bare || !helpRef.current ? null : (
       <div className="gr-help">
         <span>
           <kbd>↑↓←→</kbd> move · <kbd>Shift</kbd> extend · drag to select
@@ -2442,6 +2444,7 @@ export const Grid = forwardRef<GridHandle, GridProps>(function Grid({
           drag <b>section</b> / <b>#</b> / <b>column header</b> to reorder
         </span>
       </div>
+      )}
 
       {/* drag overlays — state-driven + portaled (#6), inline-styled so no
           cascade can hide them (matches the selection-ring fix). */}
@@ -2454,6 +2457,43 @@ export const Grid = forwardRef<GridHandle, GridProps>(function Grid({
           filter={filterRef.current}
           statusList={statusUniverse(cols(), data())}
           onChange={() => render()}
+          onClose={closePop}
+        />
+      ) : null}
+      {popRef.current === 'more' ? (
+        <MorePop
+          anchor={popAnchorRef.current}
+          groupLabel={allowAddRows ? (groupRef.current === 'section' ? 'Section' : groupRef.current === 'phase' ? 'Phase' : 'Status') : null}
+          onGroup={() => {
+            toggleGroup();
+          }}
+          onColumns={() => {
+            popRef.current = 'cols';
+            render();
+          }}
+          onResetWidths={() => {
+            resetWidths();
+            closePop();
+          }}
+          onDeleteLine={
+            onDeleteRow
+              ? () => {
+                  const o = flat()[sel().fr];
+                  closePop();
+                  if (o?.row._uid) onDeleteRow(o.row._uid);
+                }
+              : null
+          }
+          deleteLabel={(() => {
+            const o = flat()[sel().fr];
+            const name = o ? String(o.row.item ?? o.row.venue ?? '').trim() : '';
+            return name ? `Delete “${name.length > 28 ? name.slice(0, 27) + '…' : name}”` : 'Delete selected line';
+          })()}
+          helpOn={helpRef.current}
+          onHelp={() => {
+            helpRef.current = !helpRef.current;
+            closePop();
+          }}
           onClose={closePop}
         />
       ) : null}
@@ -2647,6 +2687,59 @@ function PopShell({
       {children}
     </div>,
     document.body,
+  );
+}
+
+/** The toolbar's More menu — the occasional actions, out of the way. */
+function MorePop({
+  anchor,
+  groupLabel,
+  onGroup,
+  onColumns,
+  onResetWidths,
+  onDeleteLine,
+  deleteLabel,
+  helpOn,
+  onHelp,
+  onClose,
+}: {
+  anchor: { left: number; bottom: number };
+  /** null = this grid has no grouping (income). */
+  groupLabel: string | null;
+  onGroup: () => void;
+  onColumns: () => void;
+  onResetWidths: () => void;
+  onDeleteLine: (() => void) | null;
+  deleteLabel: string;
+  helpOn: boolean;
+  onHelp: () => void;
+  onClose: () => void;
+}) {
+  return (
+    <PopShell anchor={anchor} onClose={onClose}>
+      <div style={{ minWidth: 224 }}>
+        {groupLabel ? (
+          <div className="mi" role="menuitem" onClick={onGroup}>
+            Group by: <b>{groupLabel}</b> <span style={{ opacity: 0.6 }}>(click to change)</span>
+          </div>
+        ) : null}
+        <div className="mi" role="menuitem" onClick={onColumns}>
+          Show / hide columns…
+        </div>
+        <div className="mi" role="menuitem" onClick={onResetWidths}>
+          Reset column widths
+        </div>
+        <div className="mi" role="menuitem" onClick={onHelp}>
+          {helpOn ? 'Hide' : 'Show'} keyboard shortcuts
+        </div>
+        {onDeleteLine ? (
+          <div className="mi" role="menuitem" onClick={onDeleteLine} style={{ color: 'var(--color-lp-error)', borderTop: '1px solid var(--gr-border-soft)', marginTop: 4, paddingTop: 8 }}>
+            <Trash2 size={13} aria-hidden style={{ display: 'inline', verticalAlign: '-2px', marginRight: 6 }} />
+            {deleteLabel}
+          </div>
+        ) : null}
+      </div>
+    </PopShell>
   );
 }
 

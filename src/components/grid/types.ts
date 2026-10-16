@@ -47,6 +47,9 @@ export interface Column {
       value is unchanged; only the cell text is prettied. Additive — budget uses
       `status`, not `dropdown`, so it's unaffected. */
   optLabels?: Record<string, string>;
+  /** Wide mode only: a SOLID fill + text colour per option value (Adam's
+      sheet colours on rooming). Wins over the 20% `optColors` tint. */
+  optFill?: Record<string, { bg: string; fg: string }>;
   /** number-formula column: result = row[a] (op) row[b]. Serialisable. */
   formula?: { a: string; op: FormulaOp; b: string };
   /** computed column. NOT serialised into undo snapshots — re-hydrated by

@@ -537,7 +537,12 @@ Adam live-test script (on preview, a tour with an existing routing grid):
 
 ## Retired
 
-(None yet.)
+- **PAY-12**, **PAY-14**, **PAY-15** — the one long day strip with a frozen
+  left block (numbers, inline rate, single totals bar) is gone. Superseded by
+  PAY-17…PAY-20 (Oct 2026): a Summary table at the top + one Mon–Sun block per
+  week, after Adam's Sheets.
+- **OPS-ROOM-UX-01** — the price box is now the "Assumed rate / room-night"
+  figure in the rooming header band. Superseded by ROOM-08.
 
 ## Rates SSOT — Part A executed (2026-07-03)
 
@@ -667,4 +672,29 @@ regardless of the UI. **Unlock is admin-only** (`DELETE /api/tours/[id]/payroll/
 - [ ] **OPS-ROOM-UX-01 — Rooming says what the price box does.** Hotels &
   rooming: the box reads "Price per room-night for the rooms you set next";
   the page has the same left margin as other pages (not flush to the sidebar).
+
+## Payroll — Summary + weeks, after Adam's Sheets (Oct 2026)
+
+- [ ] **PAY-17 — Summary at the top, open.** Payroll opens with a black
+  **SUMMARY** band over a table: Role · Name · the rate columns (type straight
+  in) · Shows · Off / travel · **Total fee** · **Total PD** (bold) ·
+  Employment · Notes. At 1440 wide, Total PD is visible without scrolling.
+  The band still collapses when clicked.
+
+- [ ] **PAY-18 — One block per week.** Below: a black band per week reading
+  "W/C 12 Oct" with that week's fee and PD on the right; under it Role ·
+  Name · Monday…Sunday · Total fee · Total PD. Each day header shows the
+  weekday, date, city and the day type in its colour. Days outside the tour
+  are hatched and say "No tour".
+
+- [ ] **PAY-19 — Days in words, in the sheet colours.** Cells read SHOW,
+  TRAVEL, OFF, REHEARSAL, PROMO, PD ONLY in full, on Adam's colours (show
+  green, travel grey, off pink, rehearsal yellow). Painting still works:
+  click / drag / Shift+click, the brush row, Fill all. Dark mode: same
+  layout, darker versions of the same colours, text readable.
+
+- [ ] **PAY-20 — The weeks add up.** For any person, the sum of their weekly
+  Total fee + any advance / flat tour fee (named in the note under the weeks)
+  equals Total fee in the Summary; the same for PD. A flat-fee person's week
+  fee shows "—" and their cells are dimmed with a "flat" tag.
 

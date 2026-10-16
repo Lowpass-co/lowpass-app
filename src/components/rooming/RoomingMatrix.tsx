@@ -16,26 +16,58 @@ import { useMemo, useState } from 'react';
 import { X } from 'lucide-react';
 import { Grid } from '@/components/grid/Grid';
 import type { Column, Row, Section } from '@/components/grid/types';
-import { colourForDayType, labelForDayType } from '@/lib/routing/dayType';
-import { ROOM_OPTIONS, ROOM_CODE_HUE, useRoomingGrid, type RoutingNight, type RosterPerson } from './useRoomingGrid';
+import { dayTypeSwatch } from '@/lib/sheetPalette';
+import { ROOM_OPTIONS, ROOM_FILL, useRoomingGrid, type RoutingNight, type RosterPerson } from './useRoomingGrid';
 
 const ROOM_CODES = ROOM_OPTIONS.map((o) => o.value);
-// MTX-03 — one distinct token hue per room code (shared with the Cards view).
-const ROOM_OPTCOLORS: Record<string, string> = ROOM_CODE_HUE;
+const WEEKDAY = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+const MONTH = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
-function DayHeader({ night }: { night: RoutingNight }) {
-  const dt = (night.day_type ?? '').trim();
-  const d = night.date ? night.date.slice(5) : '';
+/** "Wed 14 Oct" from an ISO date, without a timezone shift. */
+function nightLabel(iso: string | undefined): string {
+  if (!iso) return '';
+  const [y, m, d] = iso.slice(0, 10).split('-').map(Number);
+  if (!y || !m || !d) return iso;
+  return `${WEEKDAY[new Date(Date.UTC(y, m - 1, d)).getUTCDay()]} ${d} ${MONTH[m - 1]}`;
+}
+
+/** "Sam Whitfield-Jones" → ["Sam", "Whitfield-Jones"]; one word → [word, ""]. */
+export function splitName(full: string): [string, string] {
+  const parts = full.trim().split(/\s+/);
+  if (parts.length <= 1) return [parts[0] ?? '', ''];
+  return [parts[0], parts.slice(1).join(' ')];
+}
+
+/** Like Adam's sheet: the date, the city, then the day type in its colour. */
+function NightHeader({ night }: { night: RoutingNight }) {
+  const sw = dayTypeSwatch(night.day_type);
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, lineHeight: 1.15, padding: '2px 0' }}>
-      <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--lp-text)' }}>{d}</span>
-      {night.city ? <span style={{ fontSize: 9, color: 'var(--lp-text-tertiary)', maxWidth: 76, overflow: 'hidden', textOverflow: 'ellipsis' }}>{night.city}</span> : null}
-      {dt ? (
-        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, fontSize: 8, fontWeight: 600, color: colourForDayType(dt) }}>
-          <span style={{ width: 5, height: 5, borderRadius: '50%', background: colourForDayType(dt) }} />
-          {labelForDayType(dt) || dt}
-        </span>
-      ) : null}
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'stretch', gap: 3, width: '100%', lineHeight: 1.2, padding: '4px 0 0', textTransform: 'none', letterSpacing: 0 }}>
+      <span style={{ fontSize: 'var(--lp-text-xs)', fontWeight: 700, color: 'var(--lp-text)', textAlign: 'center' }}>{nightLabel(night.date)}</span>
+      <span
+        title={night.city ?? undefined}
+        style={{ fontSize: 'var(--lp-text-xs)', fontWeight: 500, color: 'var(--lp-text-secondary)', textAlign: 'center', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+      >
+        {night.city || '\u00a0'}
+      </span>
+      <span
+        style={{
+          fontSize: 'var(--lp-text-2xs)', fontWeight: 800, letterSpacing: '0.04em', textAlign: 'center', padding: '2px 0',
+          background: sw?.bg ?? 'transparent', color: sw?.fg ?? 'var(--lp-text-tertiary)',
+        }}
+      >
+        {sw?.label ?? '\u00a0'}
+      </span>
+    </div>
+  );
+}
+
+/** One big figure in the header band. */
+function BandFigure({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+      <span style={{ fontSize: 'var(--lp-text-2xs)', fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', opacity: 0.7 }}>{label}</span>
+      <span style={{ fontSize: 'var(--lp-text-2xl)', fontWeight: 800, lineHeight: 1.1, fontVariantNumeric: 'tabular-nums' }}>{children}</span>
     </div>
   );
 }
@@ -58,23 +90,28 @@ export function RoomingMatrix({
   const nightById = useMemo(() => new Map(nights.map((n) => [n.id, n])), [nights]);
   const people = useMemo(
     () => [
-      ...rosterPeople.map((p) => ({ name: p.person_name, off: false })),
-      ...offRoster.map((p) => ({ name: p.person_name, off: true })),
+      ...rosterPeople.map((p) => ({ name: p.person_name, role: p.role ?? '', off: false })),
+      ...offRoster.map((p) => ({ name: p.person_name, role: p.role ?? '', off: true })),
     ],
     [rosterPeople, offRoster],
   );
 
+  // Oct 2026 — Adam's sheet columns: Role · Forename · Surname, all frozen.
+  // The row key stays the full name (the write path keys on person_name).
   const columns: Column[] = useMemo(
     () => [
-      { id: 'person', label: 'Person', type: 'text', ro: true, w: 180, min: 130, resize: true },
-      ...nights.map<Column>((n) => ({ id: n.id, label: n.date?.slice(5) ?? n.id, type: 'dropdown', options: ROOM_CODES, optColors: ROOM_OPTCOLORS, optLabels: { '-': '—' }, w: 88, min: 72, resize: true })),
+      { id: 'role', label: 'Role', type: 'text', ro: true, w: 150, min: 90, resize: true },
+      { id: 'forename', label: 'Forename', type: 'text', ro: true, w: 110, min: 80, resize: true },
+      { id: 'surname', label: 'Surname', type: 'text', ro: true, w: 130, min: 80, resize: true },
+      ...nights.map<Column>((n) => ({ id: n.id, label: n.date?.slice(5) ?? n.id, type: 'dropdown', options: ROOM_CODES, optFill: ROOM_FILL, optLabels: { '-': '—' }, w: 104, min: 80, resize: true })),
     ],
     [nights],
   );
 
   const data: Section[] = useMemo(() => {
     const rows: Row[] = people.map((p) => {
-      const row: Row = { _uid: p.name, person: p.name };
+      const [forename, surname] = splitName(p.name);
+      const row: Row = { _uid: p.name, role: p.role, forename, surname };
       if (p.off) row._rowClass = 'offroster';
       for (const n of nights) row[n.id] = cellOf(p.name, n.id);
       return row;
@@ -88,30 +125,50 @@ export function RoomingMatrix({
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-      <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 12, fontSize: 13 }}>
-        {/* Oct 2026 — this was labelled "Assumed rate", which read like a
-            scratch estimate. It is the nightly price written onto every room
-            you set from here on (useRoomingGrid → cost_amount → the budget).
-            It is not remembered between visits, so the label says "next". */}
-        <label htmlFor="rooming-rate" style={{ color: 'var(--lp-text-secondary)' }}>Price per room-night for the rooms you set next</label>
-        <span style={{ color: 'var(--lp-text-tertiary)' }}>{currency}</span>
-        <input
-          id="rooming-rate"
-          type="number"
-          step="0.01"
-          min="0"
-          placeholder="0.00"
-          value={assumedRate || ''}
-          onChange={(e) => setAssumedRate(parseFloat(e.target.value) || 0)}
-          style={{ width: 96, textAlign: 'right', padding: '4px 8px', borderRadius: 'var(--lp-radius-md)', border: '1px solid var(--lp-border)', background: 'var(--lp-surface)', color: 'var(--lp-text)' }}
-        />
-        <span style={{ marginLeft: 'auto', fontWeight: 600, color: 'var(--lp-text)' }}>
-          Estimated at this price: {new Intl.NumberFormat('en-GB', { style: 'currency', currency, minimumFractionDigits: 0 }).format(estTotal)}
+      {/* Oct 2026 — Adam's sheet header block: the rate, the estimate and the
+          room count, large, in the black title band. The rate is the nightly
+          price written onto every room you set from here on (useRoomingGrid →
+          cost_amount → the budget); it isn't remembered between visits. */}
+      <div
+        style={{
+          display: 'flex', flexWrap: 'wrap', alignItems: 'flex-end', gap: 28, padding: '12px 16px',
+          borderRadius: 'var(--lp-radius-md)', background: 'var(--lp-sheet-band-bg)', color: 'var(--lp-sheet-band-fg)',
+        }}
+      >
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+          <label htmlFor="rooming-rate" style={{ fontSize: 'var(--lp-text-2xs)', fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', opacity: 0.7 }}>
+            Assumed rate / room-night
+          </label>
+          <span style={{ display: 'inline-flex', alignItems: 'baseline', gap: 6 }}>
+            <span style={{ fontSize: 'var(--lp-text-base)', fontWeight: 700, opacity: 0.7 }}>{currency}</span>
+            <input
+              id="rooming-rate"
+              type="number"
+              step="0.01"
+              min="0"
+              placeholder="0.00"
+              value={assumedRate || ''}
+              onChange={(e) => setAssumedRate(parseFloat(e.target.value) || 0)}
+              title="Written onto every room you set from here on. Not remembered between visits."
+              style={{
+                width: 120, fontSize: 'var(--lp-text-2xl)', fontWeight: 800, padding: '2px 8px', textAlign: 'right', fontVariantNumeric: 'tabular-nums',
+                borderRadius: 'var(--lp-radius-md)', border: '1px solid color-mix(in srgb, var(--lp-sheet-band-fg) 35%, transparent)',
+                background: 'color-mix(in srgb, var(--lp-sheet-band-fg) 10%, transparent)', color: 'var(--lp-sheet-band-fg)',
+              }}
+            />
+          </span>
+        </div>
+        <BandFigure label="Estimated total">
+          {assumedRate > 0 ? new Intl.NumberFormat('en-GB', { style: 'currency', currency, minimumFractionDigits: 0 }).format(estTotal) : '—'}
+        </BandFigure>
+        <BandFigure label="Room-nights">{roomNights}</BandFigure>
+        <span style={{ marginLeft: 'auto', fontSize: 'var(--lp-text-xs)', opacity: 0.7, maxWidth: 320 }}>
+          The rate is written onto each room you set from here on. Room colours: SGL, then one colour per shared room (DBL A–D).
         </span>
       </div>
 
       {offRoster.length > 0 ? (
-        <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8, fontSize: 12 }}>
+        <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8, fontSize: 'var(--lp-text-xs)' }}>
           <span style={{ color: 'var(--lp-text-tertiary)' }}>Off-roster (holds a room, not on this tour):</span>
           {offRoster.map((p) => (
             <span key={p.person_name} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '2px 6px 2px 9px', borderRadius: 'var(--lp-radius-full)', background: 'var(--lp-panel)', border: '1px solid var(--lp-border)', color: 'var(--lp-text-secondary)' }}>
@@ -129,22 +186,26 @@ export function RoomingMatrix({
         initialColumns={columns}
         initialData={data}
         wide
-        frozenCols={1}
+        bare
+        frozenCols={3}
         allowAddRows={false}
         fillHandle
         clickTwiceToOpen
         tabOpensMenu
         onEdit={(personName, colId, value) => {
-          if (colId === 'person') return;
+          if (colId === 'role' || colId === 'forename' || colId === 'surname') return;
           saveCell(String(personName), colId, String(value));
         }}
         headerFor={(colId) => {
-          if (colId === 'person') return 'Person';
+          if (colId === 'role') return 'Role';
+          if (colId === 'forename') return 'Forename';
+          if (colId === 'surname') return 'Surname';
           const n = nightById.get(colId);
-          return n ? <DayHeader night={n} /> : colId;
+          return n ? <NightHeader night={n} /> : colId;
         }}
         columnFooter={(colId) => {
-          if (colId === 'person') return 'Rooms / night';
+          if (colId === 'role') return 'Rooms / night';
+          if (colId === 'forename' || colId === 'surname') return '';
           return roomNightsOn(colId) || '';
         }}
       />
