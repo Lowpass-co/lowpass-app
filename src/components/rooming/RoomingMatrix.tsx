@@ -62,6 +62,18 @@ function NightHeader({ night }: { night: RoutingNight }) {
   );
 }
 
+/** "16 Oct, 13:20" (this year) / "16 Oct 2025" (older) in the viewer's time; "—" when unknown. */
+export function lastUpdatedLabel(iso: string | null, now: Date = new Date()): string {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '—';
+  const sameYear = d.getFullYear() === now.getFullYear();
+  const date = d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', ...(sameYear ? {} : { year: 'numeric' }) });
+  if (!sameYear) return date;
+  const time = d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+  return `${date}, ${time}`;
+}
+
 /** One big figure in the header band. */
 function BandFigure({ label, children }: { label: string; children: React.ReactNode }) {
   return (
@@ -84,7 +96,7 @@ export function RoomingMatrix({
   roster: RosterPerson[];
 }) {
   const [assumedRate, setAssumedRate] = useState(0);
-  const { loading, cellOf, saveCell, offRoster, deleteOffRoster, rosterPeople, roomNights, roomNightsOn } =
+  const { loading, cellOf, saveCell, offRoster, deleteOffRoster, rosterPeople, roomNights, roomNightsOn, updatedAt } =
     useRoomingGrid(tourId, nights, roster, assumedRate);
 
   const nightById = useMemo(() => new Map(nights.map((n) => [n.id, n])), [nights]);
@@ -162,6 +174,9 @@ export function RoomingMatrix({
           {assumedRate > 0 ? new Intl.NumberFormat('en-GB', { style: 'currency', currency, minimumFractionDigits: 0 }).format(estTotal) : '—'}
         </BandFigure>
         <BandFigure label="Room-nights">{roomNights}</BandFigure>
+        <BandFigure label="Last updated">
+          <span title={updatedAt ? new Date(updatedAt).toString() : 'No change recorded yet'}>{lastUpdatedLabel(updatedAt)}</span>
+        </BandFigure>
         <span style={{ marginLeft: 'auto', fontSize: 'var(--lp-text-xs)', opacity: 0.7, maxWidth: 320 }}>
           The rate is written onto each room you set from here on. Room colours: SGL, then one colour per shared room (DBL A–D).
         </span>

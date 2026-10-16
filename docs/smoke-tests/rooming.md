@@ -123,3 +123,9 @@ sets any of these → `BudgetGridView.tsx`, `BudgetIncomeGrid.tsx`,
   header shows the date, city and day type in its colour. The Cards view's
   cards use the same colours. Dark mode: darker versions, text readable.
 
+- [ ] **ROOM-10 — Last updated (needs migration 273).** The header band shows
+  **Last updated** with a date and time (hover for the full timestamp). Set a
+  room, change one, or clear one ("—") and reload: the time moves to now. A
+  change made from the Cards or Nights view moves it too. Before 273 is
+  pasted it shows "—" and nothing else breaks.
+
