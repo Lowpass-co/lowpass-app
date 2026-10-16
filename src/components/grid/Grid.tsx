@@ -1927,6 +1927,13 @@ export const Grid = forwardRef<GridHandle, GridProps>(function Grid({
               ? { background: `color-mix(in srgb, ${wideTint} 20%, transparent)` }
               : null),
           ...selStyle(isActive, selected),
+          // A frozen (sticky) matrix cell must KEEP position:sticky — the
+          // active ring's inline position:relative used to unstick it, so the
+          // selected person's name scrolled away with the nights (Adam:
+          // "rooming scroll seems broken").
+          ...(wide && vis.findIndex((c) => c.id === id) < frozenCols && vis.findIndex((c) => c.id === id) >= 0
+            ? { position: undefined, zIndex: undefined }
+            : null),
         }}
         data-r={fi}
         data-c={ci}

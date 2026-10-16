@@ -1111,6 +1111,41 @@
 .lp-gso .pill.reconciled { color: var(--color-lp-info); background: color-mix(in srgb, var(--color-lp-info) 14%, transparent); border-color: color-mix(in srgb, var(--color-lp-info) 32%, transparent); }
 .lp-gso .pill.refunded { color: var(--color-lp-warning); background: color-mix(in srgb, var(--color-lp-warning) 14%, transparent); border-color: color-mix(in srgb, var(--color-lp-warning) 32%, transparent); }
 
+/* Oct 2026 — the line panel, calmer and readable (Adam: "make it look good").
+   A black title band like the sheet, labels in plain words at 12px (were 9.5px
+   tracked caps), section headings as plain bold words with a rule above, and
+   the two money boxes large. Later rules in this file win over the base ones
+   above; everything stays scoped to .lp-gso. */
+.lp-gso { font-size: var(--lp-text-base); }
+.lp-gso .so-head { background: var(--lp-sheet-band-bg); color: var(--lp-sheet-band-fg); border-bottom: 0; }
+.lp-gso .so-bc { color: inherit; opacity: 0.75; font-size: var(--lp-text-xs); letter-spacing: 0.06em; }
+.lp-gso .so-head .so-close {
+  background: transparent;
+  color: var(--lp-sheet-band-fg);
+  border-color: color-mix(in srgb, var(--lp-sheet-band-fg) 30%, transparent);
+}
+.lp-gso .so-head .so-close:hover { border-color: var(--lp-sheet-band-fg); color: var(--lp-sheet-band-fg); }
+.lp-gso .so-body { gap: 20px; padding: 20px; }
+.lp-gso .so-field label,
+.lp-gso .so-metric label {
+  font-size: var(--lp-text-xs);
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--lp-text-secondary);
+  font-weight: 600;
+}
+.lp-gso .so-2col > * { min-width: 0; }
+.lp-gso .moneyin input { min-width: 0; }
+.lp-gso .so-2col .so-field .moneyin input,
+.lp-gso .so-2col .so-ro { font-size: var(--lp-text-lg); font-weight: 700; font-variant-numeric: tabular-nums; }
+.lp-gso .so-sec-h { border-top: 1px solid var(--lp-border-subtle); padding-top: 16px; margin-bottom: 10px; }
+.lp-gso .so-sec-h h5 { font-size: var(--lp-text-sm); letter-spacing: 0; text-transform: none; color: var(--lp-text); font-weight: 700; }
+.lp-gso .so-add { font-size: var(--lp-text-sm); }
+.lp-gso .so-empty,
+.lp-gso .so-note,
+.lp-gso .so-link { font-size: var(--lp-text-sm); }
+.lp-gso .pill { font-size: var(--lp-text-xs); }
+
 /* scan + memo-viewer modals (portaled, above the slide) */
 .lp-gso-modal-ovl {
   position: fixed; inset: 0; background: color-mix(in srgb, #000 55%, transparent);

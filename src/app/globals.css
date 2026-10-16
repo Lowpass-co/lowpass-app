@@ -1839,3 +1839,21 @@ input[type='radio'] {
   --lp-sheet-room-c-bg: #23435F;    --lp-sheet-room-c-fg: #C5DEF3;
   --lp-sheet-room-d-bg: #3D3558;    --lp-sheet-room-d-fg: #D7CEF0;
 }
+
+/* Payroll SUMMARY (Oct 2026) — the shared grid's headers are 12px CAPS with
+   wide tracking and density padding, which wrapped "FLAT / DAY", "PRESS / / RADIO"
+   into a header taller than two rows (Adam: "payroll titles are huge"). Here:
+   sentence case, no tracking, tight padding, bottom-aligned — like a sheet's
+   header row. Scoped to the payroll summary only. */
+.lp-sheet-summary thead th {
+  text-transform: none;
+  letter-spacing: 0;
+  font-size: var(--lp-text-xs);
+  line-height: 1.25;
+  vertical-align: bottom;
+  padding-top: 6px !important;
+  padding-bottom: 6px !important;
+  color: var(--lp-text-secondary) !important;
+}
+.lp-sheet-summary thead th > span > svg { display: none; }
+

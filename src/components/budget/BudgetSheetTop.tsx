@@ -5,14 +5,15 @@
 
    The top of the budget sheet, laid out like the Google Sheets template:
 
-     ┌ TOTALS ──────────── PROPOSED  ACTUAL ┐  ┌ COMMISSIONS ─ % · base · PROPOSED · ACTUAL ┐
-     │ one row per section                   │  │ Management / Agency / Legal / Merch …       │
-     │ Commissions                           │  │ + Add commission            TOTAL           │
-     │ Accountancy [ 0 %]                    │  └─────────────────────────────────────────────┘
-     │ Insurance   [ 0 %]                    │
-     │ Contingency [ 2 %]                    │
-     │ TOTAL EXPENSES                        │
-     │ Income · Net                          │
+     ┌ INCOME · proposed │ TOTAL EXPENSES · proposed │ NET · proposed ┐  ← bottom line first
+     └ actual so far     │ actual so far             │ actual so far  ┘
+     ┌ TOTALS ─────── % ─ PROPOSED ─ ACTUAL ┐  ┌ COMMISSIONS ─ % ─ OF ─ PROPOSED ┐
+     │ one row per section                   │  │ Management / Agency / Legal …    │
+     │ Commissions                           │  │ + Add commission        TOTAL    │
+     │ Accountancy    [ 0 %]                 │  └──────────────────────────────────┘
+     │ Insurance      [ 0 %]   (% boxes in   │
+     │ Contingency    [ 2 %]    one column)  │
+     │ TOTAL EXPENSES · Income · NET         │
      └───────────────────────────────────────┘
 
    WHERE THINGS ARE TYPED. Overhead percentages and commissions are entered
@@ -117,7 +118,7 @@ function PctInput({
           if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
           if (e.key === 'Escape') setDraft(null);
         }}
-        className="w-12 rounded border border-lp-border bg-lp-bg px-1.5 py-0.5 text-right tabular-nums text-lp-text outline-none focus:border-lp-orange disabled:opacity-60"
+        className="h-7 w-12 rounded border border-lp-border bg-lp-bg px-1.5 text-right tabular-nums text-lp-text outline-none focus:border-lp-orange disabled:opacity-60"
         style={{ fontSize: 'var(--lp-text-sm)' }}
       />
       <span className="text-lp-text-tertiary" style={{ fontSize: 'var(--lp-text-sm)' }}>%</span>
@@ -229,187 +230,243 @@ export function BudgetSheetTop({
     })();
   };
 
-  const num = 'px-3 py-1.5 text-right tabular-nums whitespace-nowrap';
-  const lbl = 'px-3 py-1.5 text-lp-text';
-  // Oct 2026 — Adam's sheet look: a black title band over each table (dark-
-  // tuned in dark mode), and one step larger text.
-  const head = 'px-3 py-2 text-left font-bold uppercase tracking-wide';
+  // Oct 2026 — Adam: "the accountancy, insurance etc figures are out of line".
+  // Every row is one fixed height and every % box sits in its own column, so
+  // nothing shifts with the label's length. The bottom line leads (headline
+  // band); the totals table is the wide column; commissions — set once and
+  // rarely touched — sit narrower on the right. No tabs: changing a % should
+  // move the totals in view, not on another tab.
+  const num = 'px-3 text-right tabular-nums whitespace-nowrap';
+  const lbl = 'px-3 text-lp-text whitespace-nowrap';
+  const pctCell = 'px-2 text-right';
+  const tr = 'h-9 border-t border-lp-border/60';
+  const head = 'h-9 px-3 text-left font-bold uppercase tracking-wide';
   const band = { background: 'var(--lp-sheet-band-bg)', color: 'var(--lp-sheet-band-fg)', fontSize: 'var(--lp-text-xs)' } as const;
-  const totalRow = 'border-t border-lp-border font-semibold';
+  const totalRow = 'h-10 border-t border-lp-border font-semibold';
   const cell = { fontSize: 'var(--lp-text-base)' } as const;
+  const negative = (n: number) => (n < 0 ? 'var(--color-lp-error)' : undefined);
+
+  const figures: Array<{ id: string; label: string; v: { projected: number; actual: number } }> = [
+    { id: 'income', label: 'Income', v: pnl.grossIncome },
+    { id: 'expenses', label: 'Total expenses', v: pnl.totalExpenses },
+    { id: 'net', label: 'Net', v: pnl.net },
+  ];
 
   return (
-    <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,5fr)_minmax(0,6fr)]" data-testid="budget-sheet-top">
-      {/* ── Totals ───────────────────────────────────────────── */}
-      <section className="overflow-hidden rounded-lg border border-lp-border bg-lp-surface" aria-label="Budget totals">
-        <table className="w-full border-collapse" style={cell}>
-          <thead>
-            <tr style={band}>
-              <th className={head}>Totals</th>
-              <th className={`${head} text-right`}>Proposed</th>
-              <th className={`${head} text-right`}>Actual</th>
-            </tr>
-          </thead>
-          <tbody>
-            {sectionRows.map((r) => (
-              <tr key={r.id} className="border-t border-lp-border/60">
-                <td className={lbl}>{r.name}</td>
-                <td className={num}>{money(r.projected, ccy)}</td>
-                <td className={num}>{money(r.actual, ccy)}</td>
+    <div className="space-y-4" data-testid="budget-sheet-top">
+      {/* ── The bottom line ─────────────────────────────────── */}
+      <section
+        aria-label="Bottom line"
+        className="grid grid-cols-3 overflow-hidden rounded-lg"
+        style={{ background: 'var(--lp-sheet-band-bg)', color: 'var(--lp-sheet-band-fg)' }}
+      >
+        {figures.map((f, i) => (
+          <div
+            key={f.id}
+            data-testid={`sheet-headline-${f.id}`}
+            className="flex flex-col gap-0.5 px-5 py-3"
+            style={i > 0 ? { borderLeft: '1px solid color-mix(in srgb, var(--lp-sheet-band-fg) 18%, transparent)' } : undefined}
+          >
+            <span className="font-bold uppercase tracking-wide" style={{ fontSize: 'var(--lp-text-xs)', opacity: 0.7 }}>
+              {f.label} <span className="font-normal normal-case tracking-normal">· proposed</span>
+            </span>
+            <span
+              className="font-extrabold tabular-nums"
+              style={{ fontSize: 'var(--lp-text-2xl)', lineHeight: 1.15, color: f.id === 'net' ? negative(f.v.projected) : undefined }}
+            >
+              {money(f.v.projected, ccy)}
+            </span>
+            <span className="tabular-nums" style={{ fontSize: 'var(--lp-text-sm)', opacity: 0.75 }}>
+              Actual so far {money(f.v.actual, ccy)}
+            </span>
+          </div>
+        ))}
+      </section>
+
+      <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
+        {/* ── Totals ─────────────────────────────────────────── */}
+        <section className="overflow-hidden rounded-lg border border-lp-border bg-lp-surface" aria-label="Budget totals">
+          <table className="w-full table-fixed border-collapse" style={cell}>
+            <colgroup>
+              <col />
+              <col style={{ width: 84 }} />
+              <col style={{ width: 136 }} />
+              <col style={{ width: 136 }} />
+            </colgroup>
+            <thead>
+              <tr style={band}>
+                <th className={head}>Totals</th>
+                <th className={`${head} text-right`}>%</th>
+                <th className={`${head} text-right`}>Proposed</th>
+                <th className={`${head} text-right`}>Actual</th>
               </tr>
-            ))}
-            <tr className="border-t border-lp-border/60">
-              <td className={lbl}>Commissions</td>
-              <td className={num}>{money(pnl.commissions.projected, ccy)}</td>
-              <td className={num}>{money(pnl.commissions.actual, ccy)}</td>
-            </tr>
-            {OVERHEADS.map((o) => (
-              <tr key={o.key} className="border-t border-lp-border/60">
-                <td className={lbl}>
-                  <span className="inline-flex items-center gap-2">
-                    {o.label}
+            </thead>
+            <tbody>
+              {sectionRows.map((r) => (
+                <tr key={r.id} className={tr}>
+                  <td className={lbl}>{r.name}</td>
+                  <td />
+                  <td className={num}>{money(r.projected, ccy)}</td>
+                  <td className={num}>{money(r.actual, ccy)}</td>
+                </tr>
+              ))}
+              <tr className={tr}>
+                <td className={lbl}>Commissions</td>
+                <td />{/* each commission has its own % in the Commissions table */}
+                <td className={num}>{money(pnl.commissions.projected, ccy)}</td>
+                <td className={num}>{money(pnl.commissions.actual, ccy)}</td>
+              </tr>
+              {OVERHEADS.map((o) => (
+                <tr key={o.key} className={tr}>
+                  <td className={lbl}>{o.label}</td>
+                  <td className={pctCell}>
                     <PctInput
                       label={o.label}
                       value={Number(settings[`${o.key}_pct`]) || 0}
                       disabled={readOnly}
                       onCommit={(f) => saveOverhead(o.key, f)}
                     />
-                  </span>
-                </td>
-                <td className={num}>{money(pnl[o.key].projected, ccy)}</td>
-                <td className={num}>{money(pnl[o.key].actual, ccy)}</td>
-              </tr>
-            ))}
-            {pnl.cogs.projected !== 0 || pnl.cogs.actual !== 0 ? (
-              <tr className="border-t border-lp-border/60">
-                <td className={lbl}>Merch cost of goods</td>
-                <td className={num}>{money(pnl.cogs.projected, ccy)}</td>
-                <td className={num}>{money(pnl.cogs.actual, ccy)}</td>
-              </tr>
-            ) : null}
-            <tr className={totalRow} data-testid="sheet-total-expenses">
-              <td className={lbl}>Total expenses</td>
-              <td className={num}>{money(pnl.totalExpenses.projected, ccy)}</td>
-              <td className={num}>{money(pnl.totalExpenses.actual, ccy)}</td>
-            </tr>
-            <tr className="border-t border-lp-border/60">
-              <td className={`${lbl} text-lp-text-secondary`}>Income</td>
-              <td className={`${num} text-lp-text-secondary`}>{money(pnl.grossIncome.projected, ccy)}</td>
-              <td className={`${num} text-lp-text-secondary`}>{money(pnl.grossIncome.actual, ccy)}</td>
-            </tr>
-            <tr className={totalRow} data-testid="sheet-net" style={{ fontSize: 'var(--lp-text-md)' }}>
-              <td className={lbl}>Net</td>
-              {(['projected', 'actual'] as const).map((k) => (
-                <td
-                  key={k}
-                  className={num}
-                  style={{ color: pnl.net[k] < 0 ? 'var(--color-lp-error)' : 'var(--lp-text)' }}
-                >
-                  {money(pnl.net[k], ccy)}
-                </td>
+                  </td>
+                  <td className={num}>{money(pnl[o.key].projected, ccy)}</td>
+                  <td className={num}>{money(pnl[o.key].actual, ccy)}</td>
+                </tr>
               ))}
-            </tr>
-          </tbody>
-        </table>
-      </section>
-
-      {/* ── Commissions ──────────────────────────────────────── */}
-      <section className="overflow-hidden rounded-lg border border-lp-border bg-lp-surface" aria-label="Commissions">
-        <table className="w-full border-collapse" style={cell}>
-          <thead>
-            <tr style={band}>
-              <th className={head}>Commissions</th>
-              <th className={`${head} text-right`}>%</th>
-              <th className={head}>Of</th>
-              <th className={`${head} text-right`}>Proposed</th>
-              <th className={`${head} text-right`}>Actual</th>
-              <th className={head} aria-label="Remove" />
-            </tr>
-          </thead>
-          <tbody>
-            {rows.length === 0 ? (
-              <tr className="border-t border-lp-border/60">
-                <td colSpan={6} className="px-3 py-3 text-lp-text-tertiary">
-                  No commissions. Add management, agency, legal or merch below.
-                </td>
+              {pnl.cogs.projected !== 0 || pnl.cogs.actual !== 0 ? (
+                <tr className={tr}>
+                  <td className={lbl}>Merch cost of goods</td>
+                  <td />
+                  <td className={num}>{money(pnl.cogs.projected, ccy)}</td>
+                  <td className={num}>{money(pnl.cogs.actual, ccy)}</td>
+                </tr>
+              ) : null}
+              <tr className={totalRow} data-testid="sheet-total-expenses">
+                <td className={lbl}>Total expenses</td>
+                <td />
+                <td className={num}>{money(pnl.totalExpenses.projected, ccy)}</td>
+                <td className={num}>{money(pnl.totalExpenses.actual, ccy)}</td>
               </tr>
-            ) : (
-              rows.map((r) => {
-                const c = commByid.get(r.id);
-                return (
-                  <tr key={r.id} className="border-t border-lp-border/60" data-testid="sheet-commission-row">
-                    <td className="px-2 py-1">
-                      <input
-                        aria-label="Commission name"
-                        defaultValue={r.label}
-                        disabled={readOnly}
-                        onBlur={(e) => {
-                          const v = e.target.value.trim();
-                          if (v && v !== r.label) patchCommission(r.id, { label: v });
-                        }}
-                        onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
-                        className="w-full min-w-0 rounded border border-transparent bg-transparent px-1 py-0.5 text-lp-text outline-none hover:border-lp-border focus:border-lp-orange"
-                      />
-                    </td>
-                    <td className="px-2 py-1 text-right">
-                      <PctInput
-                        label={r.label}
-                        value={r.percentage}
-                        disabled={readOnly}
-                        onCommit={(f) => patchCommission(r.id, { percentage: f })}
-                      />
-                    </td>
-                    <td className="px-2 py-1">
-                      <select
-                        aria-label={`${r.label} is a percentage of`}
-                        value={r.basis}
-                        disabled={readOnly}
-                        onChange={(e) => patchCommission(r.id, { basis: e.target.value })}
-                        className="rounded border border-lp-border bg-lp-bg px-1.5 py-0.5 text-lp-text outline-none focus:border-lp-orange"
-                      >
-                        {COMMISSION_BASES.map((b) => (
-                          <option key={b.value} value={b.value}>{b.label}</option>
-                        ))}
-                      </select>
-                    </td>
-                    <td className={num}>{money(c?.projected ?? 0, ccy)}</td>
-                    <td className={num}>{money(c?.actual ?? 0, ccy)}</td>
-                    <td className="px-1 py-1 text-right">
-                      {!readOnly ? (
-                        <button
-                          type="button"
-                          aria-label={`Remove ${r.label}`}
-                          onClick={() => removeCommission(r)}
-                          className="rounded p-1 text-lp-text-tertiary hover:text-lp-text"
+              <tr className={tr}>
+                <td className={`${lbl} text-lp-text-secondary`}>Income</td>
+                <td />
+                <td className={`${num} text-lp-text-secondary`}>{money(pnl.grossIncome.projected, ccy)}</td>
+                <td className={`${num} text-lp-text-secondary`}>{money(pnl.grossIncome.actual, ccy)}</td>
+              </tr>
+              <tr className={totalRow} data-testid="sheet-net" style={{ fontSize: 'var(--lp-text-md)' }}>
+                <td className={lbl}>Net</td>
+                <td />
+                {(['projected', 'actual'] as const).map((k) => (
+                  <td key={k} className={num} style={{ color: negative(pnl.net[k]) ?? 'var(--lp-text)' }}>
+                    {money(pnl.net[k], ccy)}
+                  </td>
+                ))}
+              </tr>
+            </tbody>
+          </table>
+        </section>
+
+        {/* ── Commissions ────────────────────────────────────── */}
+        <section className="overflow-hidden rounded-lg border border-lp-border bg-lp-surface" aria-label="Commissions">
+          <table className="w-full table-fixed border-collapse" style={cell}>
+            <colgroup>
+              <col />
+              <col style={{ width: 76 }} />
+              <col style={{ width: 104 }} />
+              <col style={{ width: 112 }} />
+              <col style={{ width: 36 }} />
+            </colgroup>
+            <thead>
+              <tr style={band}>
+                <th className={head}>Commissions</th>
+                <th className={`${head} text-right`}>%</th>
+                <th className={head}>Of</th>
+                <th className={`${head} text-right`}>Proposed</th>
+                <th className={head} aria-label="Remove" />
+              </tr>
+            </thead>
+            <tbody>
+              {rows.length === 0 ? (
+                <tr className={tr}>
+                  <td colSpan={5} className="px-3 text-lp-text-tertiary" style={{ fontSize: 'var(--lp-text-sm)' }}>
+                    None yet — management, agency, legal or merch.
+                  </td>
+                </tr>
+              ) : (
+                rows.map((r) => {
+                  const c = commByid.get(r.id);
+                  return (
+                    <tr key={r.id} className={tr} data-testid="sheet-commission-row">
+                      <td className="px-2">
+                        <input
+                          aria-label="Commission name"
+                          defaultValue={r.label}
+                          disabled={readOnly}
+                          onBlur={(e) => {
+                            const v = e.target.value.trim();
+                            if (v && v !== r.label) patchCommission(r.id, { label: v });
+                          }}
+                          onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
+                          className="h-7 w-full min-w-0 rounded border border-transparent bg-transparent px-1 text-lp-text outline-none hover:border-lp-border focus:border-lp-orange"
+                        />
+                      </td>
+                      <td className={pctCell}>
+                        <PctInput
+                          label={r.label}
+                          value={r.percentage}
+                          disabled={readOnly}
+                          onCommit={(f) => patchCommission(r.id, { percentage: f })}
+                        />
+                      </td>
+                      <td className="px-2">
+                        <select
+                          aria-label={`${r.label} is a percentage of`}
+                          value={r.basis}
+                          disabled={readOnly}
+                          onChange={(e) => patchCommission(r.id, { basis: e.target.value })}
+                          className="h-7 w-full rounded border border-lp-border bg-lp-bg px-1 text-lp-text outline-none focus:border-lp-orange"
+                          style={{ fontSize: 'var(--lp-text-sm)' }}
                         >
-                          <X className="h-3.5 w-3.5" />
-                        </button>
-                      ) : null}
-                    </td>
-                  </tr>
-                );
-              })
-            )}
-            <tr className={totalRow}>
-              <td className="px-2 py-1.5" colSpan={3}>
-                {!readOnly ? (
-                  <button
-                    type="button"
-                    onClick={() => void addCommission()}
-                    disabled={busy}
-                    className="inline-flex items-center gap-1 rounded px-1 py-0.5 font-medium text-lp-text-secondary hover:text-lp-text disabled:opacity-50"
-                  >
-                    <Plus className="h-3.5 w-3.5" /> Add commission
-                  </button>
-                ) : null}
-              </td>
-              <td className={num}>{money(pnl.commissions.projected, ccy)}</td>
-              <td className={num}>{money(pnl.commissions.actual, ccy)}</td>
-              <td />
-            </tr>
-          </tbody>
-        </table>
-      </section>
+                          {COMMISSION_BASES.map((b) => (
+                            <option key={b.value} value={b.value}>{b.label}</option>
+                          ))}
+                        </select>
+                      </td>
+                      <td className={num} title={`Actual ${money(c?.actual ?? 0, ccy)}`}>{money(c?.projected ?? 0, ccy)}</td>
+                      <td className="px-1 text-right">
+                        {!readOnly ? (
+                          <button
+                            type="button"
+                            aria-label={`Remove ${r.label}`}
+                            onClick={() => removeCommission(r)}
+                            className="rounded p-1 text-lp-text-tertiary hover:text-lp-text"
+                          >
+                            <X className="h-3.5 w-3.5" />
+                          </button>
+                        ) : null}
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
+              <tr className={totalRow}>
+                <td className="px-2" colSpan={3}>
+                  {!readOnly ? (
+                    <button
+                      type="button"
+                      onClick={() => void addCommission()}
+                      disabled={busy}
+                      className="inline-flex items-center gap-1 rounded px-1 py-0.5 font-medium text-lp-text-secondary hover:text-lp-text disabled:opacity-50"
+                    >
+                      <Plus className="h-3.5 w-3.5" /> Add commission
+                    </button>
+                  ) : null}
+                </td>
+                <td className={num}>{money(pnl.commissions.projected, ccy)}</td>
+                <td />
+              </tr>
+            </tbody>
+          </table>
+        </section>
+      </div>
     </div>
   );
 }

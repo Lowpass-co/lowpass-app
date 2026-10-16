@@ -156,6 +156,7 @@ export function PayrollView({
         open={ratesOpen}
         onToggle={setRatesOpen}
       >
+        <div className="lp-sheet-summary">
         <PayrollRatesSpreadsheet
           currency={currency}
           initialRates={rates as unknown as PersonnelRate[]}
@@ -167,6 +168,7 @@ export function PayrollView({
           highlightRowId={flashKey}
           finalized={finalized}
         />
+        </div>
       </Disclosure>
 
       <section style={{ display: 'flex', flexDirection: 'column', gap: 6, flex: 1, minHeight: 0 }}>
