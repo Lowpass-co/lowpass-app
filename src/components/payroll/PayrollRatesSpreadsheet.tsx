@@ -20,7 +20,7 @@
    Zero amounts render blank (not $0.00 noise); cells stay editable.
    ============================================ */
 
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 
 import { SpreadsheetGrid } from '@/components/spreadsheet-grid/SpreadsheetGrid';
 import type { GridColumn, GridRow, SectionHeader } from '@/components/spreadsheet-grid/types';
@@ -168,6 +168,22 @@ export function PayrollRatesSpreadsheet({
   const [personOpen, setPersonOpen] = useState<string | null>(null);
   const ccy = currency.trim().toUpperCase() || 'GBP';
 
+  // Oct 2026 — like Adam's sheet, show only the rate types this tour uses
+  // (any non-zero amount), so Total fee / Total PD fit on screen. "Show all"
+  // brings back the rest to type a new kind of rate. A type stays shown once
+  // seen this visit, so clearing its last amount doesn't yank the column away
+  // mid-edit. Totals always use the full catalog.
+  const [showAllTypes, setShowAllTypes] = useState(false);
+  const seenTypes = useRef<Set<string>>(new Set());
+  const shownTypes = useMemo(() => {
+    for (const t of rateTypes) {
+      if (rates.some((r) => amountOf(amountMap, r.id, t.id) !== 0)) seenTypes.current.add(t.id);
+    }
+    const used = rateTypes.filter((t) => seenTypes.current.has(t.id));
+    return showAllTypes || used.length === 0 ? rateTypes : used;
+  }, [rateTypes, rates, amountMap, showAllTypes]);
+  const hiddenTypeCount = rateTypes.length - shownTypes.length;
+
   const safeCountsFor = useCallback(
     (id: string): DayCounts => countsFor(id) ?? EMPTY_COUNTS,
     [countsFor],
@@ -203,12 +219,12 @@ export function PayrollRatesSpreadsheet({
           ),
       },
     };
-    const rtCols = buildRateTypeColumns(rateTypes, amountMap, ccy);
+    const rtCols = buildRateTypeColumns(shownTypes, amountMap, ccy);
     const totals = buildTotalsColumns(currency, rateTypes, amountMap, safeCountsFor);
     const employment: GridColumn<PersonnelRate> = { id: 'person_type', header: 'Employment', accessor: 'person_type', type: { kind: 'select', options: PT_OPTIONS }, width: 130 };
     const notes: GridColumn<PersonnelRate> = { id: 'base_rate_note', header: 'Notes', accessor: 'base_rate_note', type: { kind: 'text' }, width: 192 };
     return [...lead, flag, ...rtCols, ...totals, employment, notes];
-  }, [currency, ccy, canSeeCommission, rateTypes, amountMap, safeCountsFor, conflictOf]);
+  }, [currency, ccy, canSeeCommission, rateTypes, shownTypes, amountMap, safeCountsFor, conflictOf]);
 
   // Sort rows by group; build section headers.
   const { gridRows, sectionHeaders } = useMemo(() => {
@@ -293,6 +309,18 @@ export function PayrollRatesSpreadsheet({
       className={cn('rounded-xl border border-lp-border shadow-sm', 'print:break-inside-avoid print:border-lp-border')}
       style={{ background: 'var(--lp-panel)' }}
     >
+      {hiddenTypeCount > 0 || showAllTypes ? (
+        <div className="flex items-center justify-end gap-2 px-3 pt-2" style={{ fontSize: 'var(--lp-text-xs)', color: 'var(--lp-text-tertiary)' }}>
+          {showAllTypes ? 'Showing every rate type.' : `${hiddenTypeCount} unused rate type${hiddenTypeCount === 1 ? '' : 's'} hidden.`}
+          <button
+            type="button"
+            onClick={() => setShowAllTypes((v) => !v)}
+            className="rounded border border-lp-border px-2 py-0.5 text-lp-text-secondary hover:text-lp-text"
+          >
+            {showAllTypes ? 'Hide unused' : 'Show all rate types'}
+          </button>
+        </div>
+      ) : null}
       <SpreadsheetGrid<PersonnelRate>
         columns={columns}
         rows={gridRows}
@@ -301,7 +329,7 @@ export function PayrollRatesSpreadsheet({
         onRowOpen={onRowOpen}
         cellReadOnly={() => finalized /* M1-C — whole grid read-only when finalized. */}
         ariaLabel="Personnel rate cards"
-        columnWidthsKey="lp-cols-payroll-v2"
+        columnWidthsKey="lp-cols-payroll-v3" /* v3 — Oct 2026 summary layout; old saved widths no longer apply */
         highlightRowId={highlightRowId}
       />
       {personOpen ? <PersonSlideOver id={personOpen} onClose={() => setPersonOpen(null)} /> : null}

@@ -102,7 +102,7 @@ export function RoomingMatrix({
     () => [
       { id: 'role', label: 'Role', type: 'text', ro: true, w: 150, min: 90, resize: true },
       { id: 'forename', label: 'Forename', type: 'text', ro: true, w: 110, min: 80, resize: true },
-      { id: 'surname', label: 'Surname', type: 'text', ro: true, w: 130, min: 80, resize: true },
+      { id: 'surname', label: 'Surname', type: 'text', ro: true, w: 170, min: 80, resize: true },
       ...nights.map<Column>((n) => ({ id: n.id, label: n.date?.slice(5) ?? n.id, type: 'dropdown', options: ROOM_CODES, optFill: ROOM_FILL, optLabels: { '-': '—' }, w: 104, min: 80, resize: true })),
     ],
     [nights],
