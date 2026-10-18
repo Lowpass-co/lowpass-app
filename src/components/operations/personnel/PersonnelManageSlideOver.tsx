@@ -48,6 +48,7 @@ const STATUS_OPTIONS: ReadonlyArray<{ value: PersonnelStatus; label: string }> =
 interface PersonnelManageSlideOverProps {
   open: boolean;
   tourId: string;
+  tourCurrency?: string;
   member: PersonnelListItem | null;
   onClose: () => void;
   onSaved: () => void;
@@ -61,9 +62,6 @@ interface EditState {
   startsOn: string;
   endsOn: string;
   status: PersonnelStatus;
-  rateAmount: string;
-  rateCurrency: string;
-  ratePeriod: string;
 }
 
 function memberToState(m: PersonnelListItem): EditState {
@@ -73,17 +71,13 @@ function memberToState(m: PersonnelListItem): EditState {
     startsOn: m.starts_on ?? '',
     endsOn: m.ends_on ?? '',
     status: m.status,
-    // Rates SSOT — the retired tour_personnel daily-rate column is no longer
-    // read (pay reads personnel_rate_lines). This field is vestigial UI state.
-    rateAmount: '',
-    rateCurrency: m.rate_currency ?? 'GBP',
-    ratePeriod: m.rate_period ?? 'day',
   };
 }
 
 export function PersonnelManageSlideOver({
   open,
   tourId,
+  tourCurrency = 'GBP',
   member,
   onClose,
   onSaved,
@@ -105,6 +99,7 @@ export function PersonnelManageSlideOver({
       key={`${member.id}:${open ? 'open' : 'closed'}`}
       open={open}
       tourId={tourId}
+      tourCurrency={tourCurrency}
       member={member}
       onClose={onClose}
       onSaved={onSaved}
@@ -121,6 +116,7 @@ export function PersonnelManageSlideOver({
 interface EditorProps {
   open: boolean;
   tourId: string;
+  tourCurrency: string;
   member: PersonnelListItem;
   onClose: () => void;
   onSaved: () => void;
@@ -135,6 +131,7 @@ interface EditorProps {
 function PersonnelManageEditor({
   open,
   tourId,
+  tourCurrency,
   member,
   onClose,
   onSaved,
@@ -538,26 +535,15 @@ function PersonnelManageEditor({
             </div>
           ) : null}
 
-          {/* §P2 — payroll rates (show / travel / per-diem +
-              admin-only internal "Lowpass" rate). Targets
-              personnel_rates, separate from the single
-              daily-rate field above which lives on
-              tour_personnel. Self-contained: own fetch +
-              per-field auto-save. Currency hint from the
-              assignment's rate currency (falls back to GBP). */}
+          {/* The person's rates on this tour, read-only, linking to their
+              row in Payroll → Summary — the ONE place rates are typed. */}
           <div
             style={{
               paddingTop: 'var(--lp-space-3)',
               borderTop: '1px solid var(--lp-border)',
             }}
           >
-            <PersonnelRatesSection
-              tourId={tourId}
-              memberId={member.id}
-              personId={member.person_id}
-              currency={state.rateCurrency || 'GBP'}
-              readOnly
-            />
+            <PersonnelRatesSection tourId={tourId} memberId={member.id} currency={tourCurrency} />
           </div>
 
           {/* Footer — Save button is gone; SaveStatus pill is the

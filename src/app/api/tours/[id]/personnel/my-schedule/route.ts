@@ -2,7 +2,7 @@
    LOWPASS — /api/tours/[id]/personnel/my-schedule (Sprint 9 §6)
 
    GET — returns the caller's tour_personnel rows for this tour
-         (joined to tour + routing) + their daily rate. Used by
+         (joined to tour + routing) + their pay (Payroll's figures). Used by
          the crew read-only view at /operations/[tourId]/personnel.
 
    Resolution path:
@@ -21,9 +21,8 @@ import {
   fetchActiveGrants,
   canAccess,
 } from '@/lib/permissions/server';
-// Rates SSOT (Part A) — crew pay now reads personnel_rate_lines, not the
-// competing frozen tour_personnel daily-rate column. See RATES_SSOT_DISCOVERY_2026-07-03 §3.
-import { loadTourRateContext, rateAmountsFor } from '@/lib/payroll/loadRateLines';
+// Crew pay = Payroll's own per-person figures (Oct 2026).
+import { loadPayrollExportData } from '@/lib/export/payroll-data';
 
 export const dynamic = 'force-dynamic';
 
@@ -46,12 +45,15 @@ interface MyScheduleResponse {
     ends_on: string | null;
     status: string;
   } | null;
+  /** Oct 2026 — the SAME figures Payroll shows for this person (one formula,
+   *  one place rates are typed), in the tour's currency. Null when there's no
+   *  rate card or it couldn't be computed. */
   pay: {
-    dailyRate: number | null;
-    rate_currency: string | null;
-    rate_period: string | null;
+    currency: string;
+    fee: number | null;
+    perDiem: number | null;
+    total: number | null;
     days_in_window: number;
-    total_expected: number | null;
   };
   shows: ShowEntry[];
 }
@@ -91,12 +93,14 @@ export async function GET(
 
   const { data: tour } = await supabase
     .from('tours')
-    .select('id, name, start_date, end_date')
+    .select('id, name, start_date, end_date, currency, artist_id')
     .eq('id', tourId)
     .maybeSingle();
   if (!tour) {
     return NextResponse.json({ error: 'Tour not found' }, { status: 404 });
   }
+  const tourFull = tour as { id: string; name: string; start_date: string | null; end_date: string | null; currency: string | null; artist_id: string | null };
+  const tourCurrency = (tourFull.currency || 'GBP').toUpperCase();
   const tourRow = tour as {
     id: string;
     name: string;
@@ -125,13 +129,7 @@ export async function GET(
       tour: tourRow,
       person: { id: '', display_name: user.email ?? 'You' },
       assignment: null,
-      pay: {
-        dailyRate: null,
-        rate_currency: null,
-        rate_period: null,
-        days_in_window: 0,
-        total_expected: null,
-      },
+      pay: { currency: tourCurrency, fee: null, perDiem: null, total: null, days_in_window: 0 },
       shows: [],
     });
   }
@@ -140,13 +138,7 @@ export async function GET(
 
   let displayName = pn.name;
   let assignment: MyScheduleResponse['assignment'] = null;
-  let pay: MyScheduleResponse['pay'] = {
-    dailyRate: null,
-    rate_currency: null,
-    rate_period: null,
-    days_in_window: 0,
-    total_expected: null,
-  };
+  let pay: MyScheduleResponse['pay'] = { currency: tourCurrency, fee: null, perDiem: null, total: null, days_in_window: 0 };
 
   if (personId) {
     const { data: person } = await supabase
@@ -168,7 +160,7 @@ export async function GET(
       .select(
         // The frozen daily-rate column is intentionally NOT selected — crew pay
         // reads the SSOT (personnel_rate_lines) below; it is retired in migration 231.
-        'role, employment_type, rate_currency, rate_period, starts_on, ends_on, status',
+        'role, employment_type, starts_on, ends_on, status',
       )
       .eq('tour_id', tourId)
       .eq('person_id', personId)
@@ -178,8 +170,6 @@ export async function GET(
     if (tp) {
       const a = tp as {
         role: string;
-        rate_currency: string | null;
-        rate_period: string | null;
         starts_on: string | null;
         ends_on: string | null;
         status: string;
@@ -192,32 +182,33 @@ export async function GET(
       };
       const days = daysBetweenInclusive(a.starts_on, a.ends_on);
 
-      // Rates SSOT — the daily fee comes from the person's rate lines (via
-      // rateAmountsFor): a day-rate card's flat daily is its a6 line (surfaced
-      // as offRate), a split card's is its a1 "Show" line. The ctx carries the
-      // legacy-column fallback so no column is named here.
-      const { data: card } = await supabase
+      // Oct 2026 — pay is Payroll's own figure for this person (the export
+      // loader runs the same fees engine over the same rate lines and painted
+      // days), not a separate "daily rate × calendar days" estimate.
+      const { data: cards } = await supabase
         .from('personnel_rates')
-        .select('id, rate_type')
+        .select('id')
         .eq('tour_id', tourId)
-        .eq('person_id', personId)
-        .maybeSingle<{ id: string; rate_type: string | null }>();
-      let dailyRate = 0;
-      if (card?.id) {
-        const rateCtx = await loadTourRateContext(supabase, tourId, membership.workspace_id);
-        const amounts = rateAmountsFor(rateCtx, card.id);
-        dailyRate = (card.rate_type ?? '') === 'day_rate' ? amounts.offRate : amounts.showRate;
+        .or(`person_id.eq.${personId},roster_personnel_id.eq.${personId}`)
+        .limit(1);
+      const cardId = ((cards ?? []) as Array<{ id: string }>)[0]?.id ?? null;
+      let fee: number | null = null;
+      let perDiem: number | null = null;
+      let total: number | null = null;
+      if (cardId) {
+        try {
+          const data = await loadPayrollExportData(supabase, tourFull, membership.workspace_id, { selectedIds: [cardId] });
+          const me = data.persons.find((x) => x.id === cardId);
+          if (me) {
+            fee = me.fee;
+            perDiem = me.perDiemTotal;
+            total = me.total;
+          }
+        } catch {
+          /* pay stays null — the schedule itself still renders */
+        }
       }
-      // Basis unchanged: daily rate × calendar days in the assignment window,
-      // gated on a day-period assignment exactly as before.
-      const total = dailyRate > 0 && a.rate_period === 'day' && days > 0 ? dailyRate * days : null;
-      pay = {
-        dailyRate: dailyRate > 0 ? dailyRate : null,
-        rate_currency: a.rate_currency,
-        rate_period: a.rate_period,
-        days_in_window: days,
-        total_expected: total,
-      };
+      pay = { currency: tourCurrency, fee, perDiem, total, days_in_window: days };
     }
   }
 

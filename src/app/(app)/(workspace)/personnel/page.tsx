@@ -240,9 +240,6 @@ export default async function PersonnelPage() {
         email: p.email,
         phone: p.phone,
         homeAirport: p.home_airport,
-        standardRates: p.standard_rates as
-          | { show_day_rate?: number | null }
-          | null,
         ext: parseExtendedProfile(p.extended_profile),
       },
       { canSeePay: viewerCanSeePay },
@@ -281,7 +278,7 @@ export default async function PersonnelPage() {
         <h1 className="text-2xl font-bold text-lp-text">Personnel</h1>
         <p className="mt-1 text-sm text-lp-text-secondary">
           Workspace roster with LP-IDs. Click a row to open passport
-          info, emergency contacts, files, and pay rates.
+          info, emergency contacts, files, and their rates on each tour.
         </p>
       </div>
       <Suspense

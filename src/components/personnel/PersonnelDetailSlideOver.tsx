@@ -45,6 +45,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { ExternalLink, FileText, ImageIcon, Loader2, Plus, Trash2, X } from 'lucide-react';
 import type { Personnel, PersonnelRates } from '@/types';
+import { PersonRatesByTour } from './PersonRatesByTour';
 import type {
   PersonnelDietaryType,
   PersonnelDietaryV2,
@@ -73,7 +74,6 @@ import {
   syncPassportsLegacy,
 } from '@/lib/personnel-extended-profile';
 import { cn } from '@/lib/utils';
-import { BrandedSelect } from '@/components/ui/BrandedSelect';
 import { useAutoSave } from '@/lib/forms/useAutoSave';
 import { SaveStatus } from '@/components/forms/SaveStatus';
 import { IntakeLinkButton } from './IntakeLinkButton';
@@ -103,7 +103,6 @@ const IC =
    line-height of the font ≈ 38px. Applied alongside `IC` so
    selects stay flush in any horizontal grid. */
 const SELECT_HEIGHT_PX = 38;
-const CUR = ['GBP', 'EUR', 'USD'] as const;
 
 function Section({
   id,
@@ -464,11 +463,11 @@ function buildPersonnelPayload(s: EditState, opts: PayloadOptions): Record<strin
     ? cleanedMerch.map((m) => `${m.garment.replace(/_/g, ' ')}: ${m.size}`).join('; ')
     : (s.merchSize.trim() || null);
 
-  /* Sprint 9 §13.B.1 / Q5 — Pay section is gated; strip
-     standard_rates from the payload when the viewer can't see
-     it so a non-admin can't accidentally zero out rates by
-     saving from a panel where the Pay section was hidden. */
-  const standard_rates = opts.viewerCanSeePay ? { ...s.rates } : undefined;
+  /* Oct 2026 — standard_rates ("Default day rates") is no longer written from
+     here: rates are typed in ONE place, Payroll → Summary, and a new tour card
+     copies the person's last tour. (opts.viewerCanSeePay now only gates the
+     read-only "Rates by tour" list.) */
+  void opts;
   const payload: Record<string, unknown> = {
     name: s.name.trim(),
     role: s.role,
@@ -481,7 +480,6 @@ function buildPersonnelPayload(s: EditState, opts: PayloadOptions): Record<strin
     passport_info,
     extended_profile: extWithV2,
   };
-  if (standard_rates !== undefined) payload.standard_rates = standard_rates;
   return payload;
 }
 
@@ -830,8 +828,6 @@ function PersonnelDetailForm({
     dietary,
     merchSize,
     preferences,
-    rates,
-    rateInputs,
     lpId,
     pp,
     ext,
@@ -860,22 +856,6 @@ function PersonnelDetailForm({
   // forward compatibility if a future field needs them.
   void ((v: string) => set((p) => ({ ...p, dietary: v })));
   void ((v: string) => set((p) => ({ ...p, merchSize: v })));
-
-  const setRates = (updater: PersonnelRates | ((prev: PersonnelRates) => PersonnelRates)) =>
-    set((p) => ({
-      ...p,
-      rates: typeof updater === 'function' ? (updater as (prev: PersonnelRates) => PersonnelRates)(p.rates) : updater,
-    }));
-  const setRateInputs = (
-    updater: Record<string, string> | ((prev: Record<string, string>) => Record<string, string>),
-  ) =>
-    set((p) => ({
-      ...p,
-      rateInputs:
-        typeof updater === 'function'
-          ? (updater as (prev: Record<string, string>) => Record<string, string>)(p.rateInputs)
-          : updater,
-    }));
 
   type ExtUpdater = PersonnelExtendedProfile | ((prev: PersonnelExtendedProfile) => PersonnelExtendedProfile);
   const setExt = (updater: ExtUpdater) =>
@@ -1601,57 +1581,8 @@ function PersonnelDetailForm({
         </Section>
 
         {viewerCanSeePay ? (
-          <Section id="pay" title="Default day rates">
-            <div>
-              <L>Currency</L>
-              <BrandedSelect
-                value={rates.currency}
-                onChange={(v) => setRates((r) => ({ ...r, currency: v }))}
-                className="w-full"
-                triggerClassName="w-full"
-                ariaLabel="Currency"
-                options={CUR.map((c) => ({ value: c, label: c }))}
-              />
-            </div>
-            <div className="grid gap-3 sm:grid-cols-2">
-              {(
-                [
-                  ['show_day_rate', 'Show day'],
-                  ['off_day_rate', 'Off day'],
-                  ['travel_day_rate', 'Travel / rehearsal'],
-                  ['per_diem_rate', 'Per diem'],
-                ] as const
-              ).map(([key, label]) => (
-                <div key={key}>
-                  <L>{label}</L>
-                  <input
-                    type="text"
-                    inputMode="decimal"
-                    value={rateInputs[key] ?? String(rates[key])}
-                    placeholder="0"
-                    onChange={(e) => {
-                      const raw = e.target.value;
-                      setRateInputs((m) => ({ ...m, [key]: raw }));
-                      if (raw === '') {
-                        setRates((r) => ({ ...r, [key]: 0 }));
-                        return;
-                      }
-                      const parsed = Number(raw);
-                      if (!Number.isNaN(parsed)) {
-                        setRates((r) => ({ ...r, [key]: parsed }));
-                      }
-                    }}
-                    onBlur={() => {
-                      setRateInputs((m) => ({
-                        ...m,
-                        [key]: String(rates[key]),
-                      }));
-                    }}
-                    className={IC}
-                  />
-                </div>
-              ))}
-            </div>
+          <Section id="pay" title="Rates by tour">
+            <PersonRatesByTour personId={personnelId} />
           </Section>
         ) : null}
 

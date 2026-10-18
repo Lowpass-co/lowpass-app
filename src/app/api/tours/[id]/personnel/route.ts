@@ -20,10 +20,9 @@ import {
   fetchActiveGrants,
   canAccess,
 } from '@/lib/permissions/server';
-// Rates SSOT (Part A) — seed the per-tour rate card + its SSOT rate lines from
-// the person's library defaults (personnel.standard_rates), NOT a hand-typed
-// daily rate. See RATES_SSOT_DISCOVERY_2026-07-03 §3.
-import { DEFAULT_RATE_TYPE_IDS } from '@/lib/payroll/rateLines';
+// Rates SSOT — a new card is seeded from the person's LAST tour (Oct 2026);
+// rates are only ever typed in Payroll → Summary.
+import { lastTourSeed, insertSeedLines } from '@/server/payroll/seedRateCard';
 import { tourFromParams, withDerivedRefresh } from '@/server/budget/withDerivedRefresh';
 
 export const dynamic = 'force-dynamic';
@@ -342,20 +341,10 @@ async function postHandler(
         .maybeSingle();
       rateCard = data as Record<string, unknown> | null;
     } else {
-      // Rates SSOT — seed the card + its lines from the person's LIBRARY defaults
-      // (personnel.standard_rates), not a hand-typed rate. This is phase X's
-      // fold-in: rate entry's only home is the Payroll Rates grid.
-      const { data: lib } = await supabase
-        .from('personnel')
-        .select('standard_rates')
-        .eq('id', personId)
-        .eq('workspace_id', tourWorkspaceId)
-        .maybeSingle();
-      const sr = ((lib as { standard_rates?: Record<string, unknown> } | null)?.standard_rates ?? {}) as Record<string, unknown>;
-      const showSeed = Number(sr.show_day_rate) || 0;
-      const offSeed = Number(sr.off_day_rate) || 0;
-      const travelSeed = Number(sr.travel_day_rate) || 0;
-      const pdSeed = Number(sr.per_diem_rate) || 0;
+      // Rates are typed in ONE place (Payroll → Summary). A new card starts
+      // from the person's LAST tour (Adam, Oct 2026) — blank if they've never
+      // toured — not from the retired library "Default day rates".
+      const seed = await lastTourSeed(supabase, { workspaceId: tourWorkspaceId, tourId, personId });
 
       const { data } = await supabase
         .from('personnel_rates')
@@ -367,28 +356,16 @@ async function postHandler(
           person_type: 'crew',
           person_id: personId,
           tour_personnel_id: inserted.id,
-          // Rates SSOT — the card's amounts live in personnel_rate_lines (seeded
-          // below), not the legacy mirror columns; only per_diem (not gated) and
-          // identity are set here.
-          per_diem: pdSeed,
+          // The amounts live in personnel_rate_lines (seeded below); per_diem is
+          // the one legacy mirror still set here.
+          per_diem: seed.perDiem,
         })
         .select('*')
         .maybeSingle();
       rateCard = data as Record<string, unknown> | null;
 
-      // Seed the SSOT rate lines (a1–a5) from the same library defaults so the
-      // new person has explicit lines immediately (RATE-03). a6/day-rate is left
-      // for the Payroll grid; advance (a5) starts at 0. Best-effort.
       const cardId = (rateCard as { id?: string } | null)?.id;
-      if (cardId) {
-        await supabase.from('personnel_rate_lines').insert([
-          { tour_id: tourId, workspace_id: tourWorkspaceId, personnel_rate_id: cardId, rate_type_id: DEFAULT_RATE_TYPE_IDS.show, amount: showSeed },
-          { tour_id: tourId, workspace_id: tourWorkspaceId, personnel_rate_id: cardId, rate_type_id: DEFAULT_RATE_TYPE_IDS.offTravel, amount: offSeed },
-          { tour_id: tourId, workspace_id: tourWorkspaceId, personnel_rate_id: cardId, rate_type_id: DEFAULT_RATE_TYPE_IDS.rehearsal, amount: travelSeed },
-          { tour_id: tourId, workspace_id: tourWorkspaceId, personnel_rate_id: cardId, rate_type_id: DEFAULT_RATE_TYPE_IDS.perDiem, amount: pdSeed },
-          { tour_id: tourId, workspace_id: tourWorkspaceId, personnel_rate_id: cardId, rate_type_id: DEFAULT_RATE_TYPE_IDS.advance, amount: 0 },
-        ]);
-      }
+      if (cardId) await insertSeedLines(supabase, { workspaceId: tourWorkspaceId, tourId, cardId, seed });
     }
   } catch {
     /* rate-card seed is best-effort — the roster row is what matters */

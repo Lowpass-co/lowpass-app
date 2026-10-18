@@ -1,5 +1,5 @@
 /* ============================================
-   LOWPASS — GET/PUT /api/tours/[id]/personnel/[memberId]/rates
+   LOWPASS — GET /api/tours/[id]/personnel/[memberId]/rates (read-only since Oct 2026)
    (Payroll Sprint §P2)
 
    Reads + upserts the personnel_rates row for one tour
@@ -25,11 +25,10 @@
    ============================================ */
 
 import { NextResponse } from 'next/server';
-import { requireWrite } from '@/lib/auth/workspace-check';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { getActiveMembership } from '@/lib/permissions/server';
-import { writeRates } from '@/server/payroll/writeRates';
 import { loadTourRateContext, rateAmountsFor } from '@/lib/payroll/loadRateLines';
+import { CANONICAL_RATE_TYPE_IDS } from '@/lib/payroll/rateLines';
 
 export const dynamic = 'force-dynamic';
 
@@ -95,12 +94,16 @@ export async function GET(
   const r = await resolve(supabase, tourId, memberId);
   if (!r.ok) return r.response;
 
-  const { data: card } = await supabase
+  // A card names its person by person_id and/or roster_personnel_id (shared
+  // UUIDs; cards made by a roster add carry only person_id — matching on
+  // roster_personnel_id alone showed those people with £0 rates).
+  const { data: cards } = await supabase
     .from('personnel_rates')
     .select('id, internal_rate')
     .eq('tour_id', tourId)
-    .eq('roster_personnel_id', r.personId)
-    .maybeSingle<{ id: string; internal_rate: number | null }>();
+    .or(`person_id.eq.${r.personId},roster_personnel_id.eq.${r.personId}`)
+    .limit(1);
+  const card = ((cards ?? []) as Array<{ id: string; internal_rate: number | null }>)[0] ?? null;
 
   // Rates SSOT — the individual amounts come from personnel_rate_lines
   // (rateAmountsFor), never the legacy columns. internal_rate (admin-only, not a
@@ -108,7 +111,16 @@ export async function GET(
   const rateCtx = await loadTourRateContext(supabase, tourId, r.workspaceId);
   const a = card ? rateAmountsFor(rateCtx, card.id) : null;
 
+  // Every non-zero line, named — the same figures Payroll → Summary shows.
+  const lines = card
+    ? (rateCtx.linesByRateId.get(card.id) ?? [])
+        .filter((l) => CANONICAL_RATE_TYPE_IDS.includes(l.rate_type_id) && (Number(l.amount) || 0) !== 0)
+        .map((l) => ({ name: rateCtx.types.find((t) => t.id === l.rate_type_id)?.name ?? 'Rate', amount: Number(l.amount) || 0 }))
+    : [];
+
   return NextResponse.json({
+    card_id: card?.id ?? null,
+    lines,
     rates: {
       showRate: a?.showRate ?? 0,
       offRate: a?.offRate ?? 0,
@@ -120,59 +132,5 @@ export async function GET(
   });
 }
 
-export async function PUT(
-  request: Request,
-  { params }: { params: Promise<{ id: string; memberId: string }> },
-): Promise<NextResponse> {
-  const { id: tourId, memberId } = await params;
-  const supabase = await createServerSupabaseClient();
-  const auth = await requireWrite(supabase);
-  if ('error' in auth) return auth.error;
-  const r = await resolve(supabase, tourId, memberId);
-  if (!r.ok) return r.response;
-
-  let body: {
-    showRate?: unknown;
-    offRate?: unknown;
-    perDiem?: unknown;
-    internal_rate?: unknown;
-  };
-  try {
-    body = (await request.json()) as typeof body;
-  } catch {
-    return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
-  }
-
-  const num = (v: unknown): number | undefined => {
-    if (v === undefined) return undefined;
-    const n = Number(v);
-    return Number.isFinite(n) && n >= 0 ? n : undefined;
-  };
-
-  const show = num(body.showRate);
-  const off = num(body.offRate);
-  const pd = num(body.perDiem);
-  /* §P2 — internal_rate only writable by admin/manager. A non-admin sending it is
-     dropped silently (no error) so the auto-save loop doesn't fail. */
-  const internalRate =
-    r.isAdmin && body.internal_rate !== undefined
-      ? body.internal_rate === null
-        ? null
-        : num(body.internal_rate) ?? null
-      : undefined;
-
-  // Stage 1 — the ONE rate writer: keeps personnel_rate_lines (SSOT) + the legacy
-  // mirror columns in lockstep, keyed by (tour_id, roster_personnel_id). Only the
-  // provided rate keys are written (undefined = preserved).
-  const result = await writeRates(supabase, {
-    tourId,
-    workspaceId: r.workspaceId,
-    rosterPersonnelId: r.personId,
-    identity: { person_name: r.displayName },
-    rates: { showRate: show, offRate: off, perDiem: pd },
-    internalRate,
-  });
-  if (result.error) return NextResponse.json({ error: result.error }, { status: 500 });
-
-  return NextResponse.json({ ok: true });
-}
+/* PUT removed (Oct 2026): rates are typed in ONE place — Payroll → Summary
+   (/api/budget/rate-lines). This route is read-only, for the Crew panel. */

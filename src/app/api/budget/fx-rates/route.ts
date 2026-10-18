@@ -4,13 +4,11 @@
    Per-tour, UNVERSIONED conversion assumptions (1 <currency> = rate <tour ccy>),
    used to total per-show foreign income into the tour currency in the P&L.
 
-   GET    ?tour_id=        → { rates: [{currency, rate_to_tour_currency}] }
-   POST   { tour_id, currency, rate } → upsert on (tour_id, currency)
-   DELETE { tour_id, currency }       → remove a currency's rate
+   GET    ?tour_id=        → { rates: [{currency, rate_to_tour_currency, updated_at}] }
+   (read-only since Oct 2026 — rates are fetched live, see liveFx.ts)
    ============================================ */
 
 import { NextResponse } from 'next/server';
-import { requireWrite } from '@/lib/auth/workspace-check';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 
 async function ws(supabase: Awaited<ReturnType<typeof createServerSupabaseClient>>) {
@@ -37,51 +35,6 @@ export async function GET(request: Request) {
   return NextResponse.json({ rates: data ?? [] });
 }
 
-export async function POST(request: Request) {
-  const supabase = await createServerSupabaseClient();
-  const auth = await requireWrite(supabase);
-  if ('error' in auth) return auth.error;
-  const w = await ws(supabase);
-  if ('error' in w) return NextResponse.json({ error: w.error }, { status: w.status });
-  let body: { tour_id?: string; currency?: string; rate?: number };
-  try { body = await request.json(); } catch { return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 }); }
-  const tourId = body.tour_id;
-  const currency = body.currency?.trim().toUpperCase();
-  const rate = Number(body.rate);
-  if (!tourId || !currency) return NextResponse.json({ error: 'tour_id and currency are required' }, { status: 400 });
-  if (!Number.isFinite(rate) || rate <= 0) return NextResponse.json({ error: 'rate must be a positive number' }, { status: 400 });
-
-  // workspace-scope the tour
-  const { data: tour } = await supabase.from('tours').select('id').eq('id', tourId).eq('workspace_id', w.workspaceId).maybeSingle();
-  if (!tour) return NextResponse.json({ error: 'Tour not found' }, { status: 404 });
-
-  const { data, error } = await supabase
-    .from('budget_fx_rates')
-    .upsert(
-      { tour_id: tourId, workspace_id: w.workspaceId, currency, rate_to_tour_currency: rate, updated_at: new Date().toISOString() },
-      { onConflict: 'tour_id,currency' },
-    )
-    .select()
-    .maybeSingle();
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json(data);
-}
-
-export async function DELETE(request: Request) {
-  const supabase = await createServerSupabaseClient();
-  const auth = await requireWrite(supabase);
-  if ('error' in auth) return auth.error;
-  const w = await ws(supabase);
-  if ('error' in w) return NextResponse.json({ error: w.error }, { status: w.status });
-  let body: { tour_id?: string; currency?: string };
-  try { body = await request.json(); } catch { return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 }); }
-  const tourId = body.tour_id;
-  const currency = body.currency?.trim().toUpperCase();
-  if (!tourId || !currency) return NextResponse.json({ error: 'tour_id and currency are required' }, { status: 400 });
-  const { error } = await supabase
-    .from('budget_fx_rates')
-    .delete()
-    .eq('tour_id', tourId).eq('workspace_id', w.workspaceId).eq('currency', currency);
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return new Response(null, { status: 204 });
-}
+/* POST / DELETE removed (Oct 2026): exchange rates are LIVE, never typed. The
+   budget page refreshes them hourly and Settings → "Refresh now" refetches on
+   demand — both via src/server/budget/liveFx.ts (/api/budget/exchange-rate). */

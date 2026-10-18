@@ -25,7 +25,7 @@
    crew member without leaving the tour context.
 
    On click of a search result, the slide-over expands to show
-   the full assignment form (role / window / status / rate).
+   the full assignment form (role / window / status; rates live in Payroll).
    Submit POSTs to /api/tours/[id]/personnel.
    ============================================ */
 
@@ -97,8 +97,6 @@ export function AddPersonnelSlideOver({
   // Rates SSOT (phase X) — no competing rate-amount input here; the tour rate is
   // set only in the Payroll Rates grid, seeded from the person's library defaults.
   // Currency + period stay as assignment metadata (the crew "my schedule" estimate).
-  const [rateCurrency, setRateCurrency] = useState('GBP');
-  const [ratePeriod, setRatePeriod] = useState('day');
 
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -127,8 +125,6 @@ export function AddPersonnelSlideOver({
     setStartsOn(tourStartDate ?? '');
     setEndsOn(tourEndDate ?? '');
     setStatus('confirmed');
-    setRateCurrency('GBP');
-    setRatePeriod('day');
     setSubmitting(false);
     setError(null);
     setCreateOpen(false);
@@ -253,9 +249,9 @@ export function AddPersonnelSlideOver({
           ends_on: endsOn || null,
           status,
           // Rates SSOT — no daily-rate column; the card + lines seed from the
-          // person's standard_rates server-side. Currency/period are assignment meta.
-          rate_currency: rateCurrency || null,
-          rate_period: ratePeriod || null,
+          // person's LAST tour server-side (Oct 2026); rates are typed in Payroll.
+          rate_currency: null,
+          rate_period: null,
         }),
       });
       const body = (await res.json().catch(() => null)) as
@@ -600,7 +596,7 @@ export function AddPersonnelSlideOver({
                   >
                     {tourStartDate && tourEndDate
                       ? `Will be assigned for the full tour window (${tourStartDate} → ${tourEndDate}) with status “Confirmed”. Edit later from the manage panel.`
-                      : 'Will be assigned with status “Confirmed”. Edit dates + rate later from the manage panel.'}
+                      : 'Will be assigned with status “Confirmed”. Edit dates later from the manage panel; rates are set in Payroll.'}
                   </p>
                   {createError ? (
                     <div
@@ -908,62 +904,16 @@ export function AddPersonnelSlideOver({
               </div>
             </fieldset>
 
-            {/* Pay period — the rate itself is set in Payroll (Rates SSOT). */}
-            <div>
-              <div
-                className="lp-label-caps"
-                style={{
-                  marginBottom: 'var(--lp-space-1)',
-                  fontSize: 'var(--lp-text-2xs)',
-                  color: 'var(--lp-text-secondary)',
-                }}
-              >
-                Pay period (optional) — set the rate in Payroll → Rates
-              </div>
-              <div
-                style={{
-                  display: 'grid',
-                  gridTemplateColumns: '80px 110px',
-                  gap: 'var(--lp-space-2)',
-                }}
-              >
-                <input
-                  type="text"
-                  value={rateCurrency}
-                  onChange={(e) => setRateCurrency(e.target.value.toUpperCase().slice(0, 3))}
-                  placeholder="GBP"
-                  maxLength={3}
-                  style={{
-                    padding: 'var(--lp-space-2) var(--lp-space-3)',
-                    fontSize: 'var(--lp-text-sm)',
-                    textAlign: 'center',
-                    color: 'var(--lp-text)',
-                    background: 'var(--lp-bg)',
-                    border: '1px solid var(--lp-border-strong)',
-                    borderRadius: 'var(--lp-radius-md)',
-                    outline: 'none',
-                  }}
-                />
-                <select
-                  value={ratePeriod}
-                  onChange={(e) => setRatePeriod(e.target.value)}
-                  style={{
-                    padding: 'var(--lp-space-2) var(--lp-space-3)',
-                    fontSize: 'var(--lp-text-sm)',
-                    color: 'var(--lp-text)',
-                    background: 'var(--lp-bg)',
-                    border: '1px solid var(--lp-border-strong)',
-                    borderRadius: 'var(--lp-radius-md)',
-                    outline: 'none',
-                  }}
-                >
-                  <option value="day">per day</option>
-                  <option value="week">per week</option>
-                  <option value="flat">flat</option>
-                  <option value="hour">per hour</option>
-                </select>
-              </div>
-            </div>
+            {/* Oct 2026 — no pay fields here. Rates are typed in ONE place,
+                Payroll → Summary; a new person's card starts from their last
+                tour (blank if none). */}
+            <p style={{ margin: 0, fontSize: 'var(--lp-text-sm)', color: 'var(--lp-text-secondary)' }}>
+              Rates: copied from their last tour, edit in{' '}
+              <a href={`/operations/${tourId}/payroll`} style={{ color: 'var(--lp-orange)' }}>
+                Payroll
+              </a>
+              .
+            </p>
 
             {error ? (
               <div

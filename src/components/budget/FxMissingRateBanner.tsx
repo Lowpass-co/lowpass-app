@@ -1,10 +1,10 @@
 /* ============================================
    LOWPASS — FX missing-rate banner (FX unify · Stage 2)
 
-   When a budget line / income row is in a foreign currency that has NO entry in
-   the tour's budget_fx_rates, the P&L converts it 1:1 (a FLAGGED fallback, never
-   silent stale-table math). This banner surfaces that: it lists the currencies
-   used in the data that lack a rate and links to Settings → FX rates.
+   Rates are fetched live (hourly) — never typed (Oct 2026). If the live fetch
+   failed and there is no earlier rate, the P&L converts that currency 1:1 (a
+   FLAGGED fallback, never silent). This banner lists those currencies and links
+   to Settings → Exchange rates, where "Refresh now" retries.
 
    Presentational — the page computes the missing set (it has the lines + income)
    and passes it in.
@@ -37,7 +37,7 @@ export function FxMissingRateBanner({
     >
       <AlertTriangle className="h-4 w-4 shrink-0" style={{ color: 'var(--color-lp-warning)' }} aria-hidden />
       <span style={{ color: 'var(--lp-text)' }}>
-        No FX rate for{' '}
+        Couldn&apos;t get a live exchange rate for{' '}
         {missing.map((c, i) => (
           <span key={c} style={{ fontWeight: 'var(--lp-weight-medium)' }}>
             {c}
@@ -51,7 +51,7 @@ export function FxMissingRateBanner({
         className="btn-transition rounded px-2 py-0.5"
         style={{ color: 'var(--color-lp-orange)', fontWeight: 'var(--lp-weight-medium)' }}
       >
-        Set rates →
+        Retry in Settings →
       </Link>
     </div>
   );

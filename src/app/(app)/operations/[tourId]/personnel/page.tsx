@@ -130,7 +130,7 @@ export default async function OperationsTourPersonnelPage({
           role: r.role,
           rate_type: r.rate_type,
           // Primary daily fee: day-rate card → its flat day amount (off), else
-          // the split Show rate — mirrors TourPersonnelClient's Rate column.
+          // the split Show rate.
           rate: r.rate_type === 'day_rate' ? a.offRate : a.showRate,
           perDiem: a.perDiem,
         };
@@ -195,6 +195,7 @@ function ManagerSurface({
       </header>
       <PersonnelManagerClient
         tourId={tourId}
+        tourCurrency={currency}
         tourStartDate={tourStartDate}
         tourEndDate={tourEndDate}
         conflictsOnly={conflictsOnly}

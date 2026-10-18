@@ -306,6 +306,15 @@ recreate a `_legacy/` tree: delete dead code instead of parking it.
   or transactions that may differ in currency.
 - **Payroll paints** send only the changed cells (`changes`); the server merges
   them (`payroll_merge_day_statuses`, migration 269).
+- **Rates are typed in ONE place: Payroll → Summary** (`/api/budget/rate-lines`).
+  Every other surface (Crew panel, person library, crew My schedule) shows them
+  read-only and links to Payroll (`?focus=<card id>`). A new tour card is seeded
+  from the person's last tour (`src/server/payroll/seedRateCard.ts`); the library
+  "Default day rates" (`standard_rates`) are retired. Don't add a rate input
+  anywhere else (Oct 2026, Adam).
+- **FX is live, never typed.** `budget_fx_rates` is filled by
+  `src/server/budget/liveFx.ts` (hourly on budget load + Settings "Refresh now");
+  there is no manual FX endpoint. Actuals keep their `locked_fx_rate`.
 - Tests for all of the above run against `src/test-utils/fakeSupabase.ts`.
 
 ### Auth + RLS

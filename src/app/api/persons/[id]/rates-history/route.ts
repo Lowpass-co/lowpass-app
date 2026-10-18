@@ -20,6 +20,7 @@ import { NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { getActiveMembership } from '@/lib/permissions/server';
 import { loadMultiTourRateContext, rateAmountsFor } from '@/lib/payroll/loadRateLines';
+import { CANONICAL_RATE_TYPE_IDS, canonicalOrderOf } from '@/lib/payroll/rateLines';
 
 export const dynamic = 'force-dynamic';
 
@@ -28,7 +29,7 @@ interface HistoryRow {
   tour_id: string;
   internal_rate: number | null;
   updated_at: string;
-  tours: { name: string | null } | { name: string | null }[] | null;
+  tours: { name: string | null; currency: string | null } | { name: string | null; currency: string | null }[] | null;
 }
 
 export async function GET(
@@ -52,10 +53,15 @@ export async function GET(
   const url = new URL(request.url);
   const excludeTour = url.searchParams.get('exclude');
 
+  // A card names its person by person_id and/or roster_personnel_id (shared
+  // UUIDs; a roster add sets only person_id). Match either, so every tour shows.
+  if (!/^[0-9a-f-]{36}$/i.test(personId)) {
+    return NextResponse.json({ error: 'Bad id' }, { status: 400 });
+  }
   const { data } = await supabase
     .from('personnel_rates')
-    .select('id, tour_id, internal_rate, updated_at, tours(name)')
-    .eq('roster_personnel_id', personId)
+    .select('id, tour_id, internal_rate, updated_at, tours(name, currency)')
+    .or(`person_id.eq.${personId},roster_personnel_id.eq.${personId}`)
     .eq('workspace_id', membership.workspace_id)
     .order('updated_at', { ascending: false })
     .limit(20);
@@ -72,9 +78,19 @@ export async function GET(
   const history = rows.map((row) => {
     const tour = Array.isArray(row.tours) ? row.tours[0] : row.tours;
     const a = rateCtx ? rateAmountsFor(rateCtx, row.id) : null;
+    // Every non-zero canonical line, named — what Payroll → Summary shows.
+    const lines = rateCtx
+      ? (rateCtx.linesByRateId.get(row.id) ?? [])
+          .filter((l) => CANONICAL_RATE_TYPE_IDS.includes(l.rate_type_id) && (Number(l.amount) || 0) !== 0)
+          .sort((x, y) => canonicalOrderOf(x.rate_type_id) - canonicalOrderOf(y.rate_type_id))
+          .map((l) => ({ name: rateCtx.types.find((t) => t.id === l.rate_type_id)?.name ?? 'Rate', amount: Number(l.amount) || 0 }))
+      : [];
     return {
       tour_id: row.tour_id,
       tour_name: tour?.name ?? 'Untitled tour',
+      card_id: row.id,
+      currency: tour?.currency ?? null,
+      lines,
       showRate: a?.showRate ?? 0,
       offRate: a?.offRate ?? 0,
       perDiem: a?.perDiem ?? 0,

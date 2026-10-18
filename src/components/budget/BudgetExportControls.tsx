@@ -19,6 +19,7 @@ import { ChevronDown } from 'lucide-react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { ExportButton } from '@/components/export/ExportButton';
 import { WorkbookImportModal } from '@/components/budget/WorkbookImportModal';
+import { DISPLAY_CURRENCIES } from '@/lib/budget/displayCurrencies';
 
 /** X1-A — the six-sheet Tour Accounting Workbook (.xlsx an accountant can edit).
  *  Oct 2026 — export + import now share ONE "Workbook" menu (was two buttons
@@ -109,13 +110,7 @@ function WorkbookMenu({ tourId, versionId, onImport }: { tourId: string; version
   );
 }
 
-const DISPLAY_OPTIONS: ReadonlyArray<{ code: string; label: string }> = [
-  { code: 'GBP', label: '£ GBP' },
-  { code: 'USD', label: '$ USD' },
-  { code: 'EUR', label: '€ EUR' },
-  { code: 'CAD', label: 'C$ CAD' },
-  { code: 'AUD', label: 'A$ AUD' },
-];
+const DISPLAY_OPTIONS = DISPLAY_CURRENCIES;
 
 export type BudgetExportControlsProps = {
   tourCurrency: string;
