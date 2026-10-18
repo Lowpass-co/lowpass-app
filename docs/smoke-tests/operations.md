@@ -698,3 +698,24 @@ regardless of the UI. **Unlock is admin-only** (`DELETE /api/tours/[id]/payroll/
   equals Total fee in the Summary; the same for PD. A flat-fee person's week
   fee shows "—" and their cells are dimmed with a "flat" tag.
 
+## One place for rates (Oct 2026)
+
+- [ ] **PAY-21 — Payroll is the only rate editor.** Payroll → Summary takes
+  typed rates. Crew → a person → Manage shows their non-zero rates read-only
+  with **Edit in Payroll** (lands on their row, highlighted). Crew → Add
+  personnel has no pay fields ("Rates: copied from their last tour, edit in
+  Payroll"). Payroll → click a name: no currency / period boxes.
+
+- [ ] **PAY-22 — New tour copies the last one.** Add someone who was on an
+  earlier tour: their Payroll row arrives with that tour's rates (Flat day,
+  per diem, etc.). Someone who has never toured arrives blank.
+
+- [ ] **PAY-23 — Workspace person shows rates by tour.** Personnel → a person
+  → "Rates by tour": one row per tour with its rates, each opening that
+  tour's Payroll on their row. No editable "Default day rates"; their profile
+  ring no longer counts pay.
+
+- [ ] **PAY-24 — Crew see Payroll's numbers.** As a crew member, My schedule →
+  Pay shows Fees / Per diem / Total in the tour currency, matching their
+  Payroll Summary row.
+

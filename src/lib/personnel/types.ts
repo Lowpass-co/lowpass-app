@@ -94,13 +94,13 @@ export interface MyScheduleResponse {
     ends_on: string | null;
     status: string;
   } | null;
+  /** Oct 2026 — Payroll's own figures for the caller, in the tour currency. */
   pay: {
-    /** Rates SSOT — the caller's single daily fee from personnel_rate_lines. */
-    dailyRate: number | null;
-    rate_currency: string | null;
-    rate_period: string | null;
+    currency: string;
+    fee: number | null;
+    perDiem: number | null;
+    total: number | null;
     days_in_window: number;
-    total_expected: number | null;
   };
   shows: MyScheduleShow[];
 }

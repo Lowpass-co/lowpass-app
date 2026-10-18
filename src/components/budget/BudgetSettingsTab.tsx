@@ -22,6 +22,7 @@ import {
   Copy,
   Loader2,
   Plus,
+  RefreshCw,
   Trash2,
 } from 'lucide-react';
 import { useToast } from '@/components/ui/Toast';
@@ -89,20 +90,25 @@ export function BudgetSettingsTab({
 }
 
 /* -------------------------------------------------- */
-/* FX rates — per-tour currency map (Income Phase 2). */
-/* Converts each show's foreign income → tour currency */
-/* in the Summary P&L. Unversioned (a conversion       */
-/* assumption, like the overhead %s above).            */
+/* Exchange rates — LIVE, never typed (Oct 2026).      */
+/* Every foreign currency the tour uses is fetched     */
+/* from the live vendors and refreshed when over an    */
+/* hour old (src/server/budget/liveFx.ts). Actuals     */
+/* keep the rate locked on the day they were entered.  */
 /* -------------------------------------------------- */
 type FxRate = { currency: string; rate_to_tour_currency: number; updated_at?: string | null };
 
+function fxWhen(iso: string | null | undefined): string {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  return d.toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+}
+
 function FxRatesCard({ tourId, tourCurrency }: { tourId: string; tourCurrency: string }) {
   const { showToast } = useToast();
-  const { requestConfirm, dialog } = useBudgetConfirm();
   const native = (tourCurrency || 'GBP').toUpperCase();
   const [rates, setRates] = useState<FxRate[] | null>(null);
-  const [currency, setCurrency] = useState('');
-  const [rate, setRate] = useState('');
   const [busy, setBusy] = useState(false);
 
   const load = useCallback(async () => {
@@ -120,68 +126,43 @@ function FxRatesCard({ tourId, tourCurrency }: { tourId: string; tourCurrency: s
     void load();
   }, [load]);
 
-  const add = async () => {
-    const c = currency.trim().toUpperCase();
-    const r = Number(rate);
-    if (!c || !Number.isFinite(r) || r <= 0) {
-      showToast('Enter a currency and a positive rate.', 'error');
-      return;
-    }
-    if (c === native) {
-      showToast('The tour currency is always 1:1.', 'error');
-      return;
-    }
+  const refresh = async () => {
     setBusy(true);
     try {
-      const res = await fetch('/api/budget/fx-rates', {
+      const res = await fetch('/api/budget/exchange-rate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tour_id: tourId, currency: c, rate: r }),
+        body: JSON.stringify({ tour_id: tourId }),
       });
-      if (!res.ok) {
-        const b = (await res.json().catch(() => ({}))) as { error?: string };
-        throw new Error(b.error ?? `Save failed (${res.status})`);
-      }
-      setCurrency('');
-      setRate('');
+      const b = (await res.json().catch(() => ({}))) as { refreshed?: string[]; failed?: string[]; error?: string };
+      if (!res.ok && !b.refreshed?.length) throw new Error(b.error ?? 'The live rate service didn’t answer — try again shortly.');
+      if (b.failed?.length) showToast(`Couldn’t refresh ${b.failed.join(', ')} — kept the last rate.`, 'error');
       await load();
     } catch (err) {
-      showToast(err instanceof Error ? err.message : 'Save failed', 'error');
+      showToast(err instanceof Error ? err.message : 'Refresh failed', 'error');
     } finally {
       setBusy(false);
     }
   };
 
-  const remove = (c: string) =>
-    requestConfirm({
-      title: 'Remove FX rate?',
-      message: `Remove the ${c} rate? Shows in ${c} will fall back to a 1:1 conversion in the P&L.`,
-      confirmLabel: 'Remove rate',
-      onConfirm: () => {
-        const before = rates;
-        setRates((prev) => prev?.filter((x) => x.currency !== c) ?? prev);
-        void (async () => {
-          try {
-            const res = await fetch('/api/budget/fx-rates', {
-              method: 'DELETE',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ tour_id: tourId, currency: c }),
-            });
-            if (!res.ok) throw new Error(`Delete failed (${res.status})`);
-          } catch (err) {
-            if (before) setRates(before);
-            showToast(err instanceof Error ? err.message : 'Delete failed', 'error');
-          }
-        })();
-      },
-    });
-
   return (
     <section className="rounded-lg border p-4" style={cardStyle}>
-      <h2 className="lp-h3">FX rates</h2>
+      <div className="flex items-center justify-between gap-3">
+        <h2 className="lp-h3">Exchange rates</h2>
+        <button
+          type="button"
+          disabled={busy || !rates?.length}
+          onClick={() => void refresh()}
+          className="btn-transition inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5"
+          style={{ borderColor: 'var(--lp-border-strong)', color: 'var(--lp-text-secondary)', fontSize: 'var(--lp-text-sm)', opacity: busy ? 0.6 : 1 }}
+        >
+          <RefreshCw className={`h-3.5 w-3.5${busy ? ' animate-spin' : ''}`} aria-hidden /> Refresh now
+        </button>
+      </div>
       <p className="mt-1" style={{ fontSize: 'var(--lp-text-sm)', color: 'var(--lp-text-secondary)' }}>
-        Convert each show&apos;s foreign income to {native} in the Summary P&amp;L. A rate is{' '}
-        <em>1 unit of the currency in {native}</em> (e.g. EUR 1.17). Shows with no rate convert 1:1.
+        Live rates for every currency this tour uses (and the &ldquo;Show in&rdquo; currencies), refreshed every
+        hour — nothing to type. Planned figures use the latest rate; an actual keeps the rate from the day it was
+        entered.
       </p>
 
       <ul className="mt-3 space-y-1.5">
@@ -189,7 +170,8 @@ function FxRatesCard({ tourId, tourCurrency }: { tourId: string; tourCurrency: s
           <li style={{ fontSize: 'var(--lp-text-sm)', color: 'var(--lp-text-tertiary)' }}>Loading…</li>
         ) : rates.length === 0 ? (
           <li style={{ fontSize: 'var(--lp-text-sm)', color: 'var(--lp-text-tertiary)' }}>
-            No FX rates yet — foreign income totals 1:1 in {native}.
+            Everything is in {native} — no exchange rates needed. Use another currency on a line or show and its live
+            rate appears here.
           </li>
         ) : (
           rates.map((r) => (
@@ -201,74 +183,16 @@ function FxRatesCard({ tourId, tourCurrency }: { tourId: string; tourCurrency: s
               <span className="w-12 shrink-0" style={{ fontSize: 'var(--lp-text-base)', fontWeight: 'var(--lp-weight-medium)', color: 'var(--lp-text)' }}>
                 {r.currency}
               </span>
-              <span style={{ fontSize: 'var(--lp-text-sm)', color: 'var(--lp-text-secondary)' }}>
-                1 {r.currency} = {r.rate_to_tour_currency} {native}
+              <span className="tabular-nums" style={{ fontSize: 'var(--lp-text-sm)', color: 'var(--lp-text-secondary)' }}>
+                1 {r.currency} = {Number(r.rate_to_tour_currency).toFixed(4)} {native}
               </span>
-              {r.updated_at ? (
-                <span style={{ fontSize: 'var(--lp-text-xs)', color: 'var(--lp-text-tertiary)' }}>
-                  updated {new Date(r.updated_at).toLocaleDateString('en-GB')}
-                </span>
-              ) : null}
-              <button
-                type="button"
-                aria-label={`Remove ${r.currency}`}
-                title="Remove rate"
-                onClick={() => remove(r.currency)}
-                className="btn-transition ml-auto rounded p-1"
-                style={{ color: 'var(--lp-text-tertiary)' }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.color = 'var(--color-lp-error)';
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.color = 'var(--lp-text-tertiary)';
-                }}
-              >
-                <Trash2 className="h-3.5 w-3.5" aria-hidden />
-              </button>
+              <span className="ml-auto" style={{ fontSize: 'var(--lp-text-xs)', color: 'var(--lp-text-tertiary)' }}>
+                live · {fxWhen(r.updated_at) || 'just now'}
+              </span>
             </li>
           ))
         )}
       </ul>
-
-      <div className="mt-3 flex items-center gap-2">
-        <input
-          value={currency}
-          onChange={(e) => setCurrency(e.target.value.toUpperCase())}
-          placeholder="EUR"
-          maxLength={3}
-          aria-label="Currency code"
-          className="w-20"
-          style={{ ...inputStyle, textTransform: 'uppercase' }}
-        />
-        <input
-          value={rate}
-          onChange={(e) => setRate(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') void add();
-          }}
-          placeholder="1.17"
-          inputMode="decimal"
-          aria-label={`Rate in ${native}`}
-          className="w-24"
-          style={{ ...inputStyle, textAlign: 'right' }}
-        />
-        <button
-          type="button"
-          disabled={busy}
-          onClick={() => void add()}
-          className="btn-transition inline-flex items-center gap-1.5 rounded-md px-3 py-1.5"
-          style={{
-            background: 'var(--color-lp-orange)',
-            color: 'var(--lp-text-inverse)',
-            fontSize: 'var(--lp-text-sm)',
-            fontWeight: 'var(--lp-weight-medium)',
-            opacity: busy ? 0.6 : 1,
-          }}
-        >
-          <Plus className="h-4 w-4" aria-hidden /> Add rate
-        </button>
-      </div>
-      {dialog}
     </section>
   );
 }

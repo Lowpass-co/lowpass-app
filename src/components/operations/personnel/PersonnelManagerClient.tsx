@@ -36,6 +36,8 @@ import type {
 
 interface PersonnelManagerClientProps {
   tourId: string;
+  /** The tour's currency — rates are shown in it (Oct 2026). */
+  tourCurrency?: string;
   tourStartDate: string | null;
   tourEndDate: string | null;
   /** Whether the ?filter=conflicts query is set. Read on the SERVER and passed
@@ -100,6 +102,7 @@ function formatRange(start: string | null, end: string | null): string {
 
 export function PersonnelManagerClient({
   tourId,
+  tourCurrency = 'GBP',
   tourStartDate,
   tourEndDate,
   conflictsOnly,
@@ -513,6 +516,7 @@ export function PersonnelManagerClient({
       <PersonnelManageSlideOver
         open={!!manageMember}
         tourId={tourId}
+        tourCurrency={tourCurrency}
         member={manageMember}
         onClose={() => setManageId(null)}
         onSaved={() => void fetchList()}

@@ -2268,3 +2268,19 @@ test tour only. ✅ = passed live; ⚙ = covered by vitest, not live-run.
   rest and turns orange on row hover. The Totals and Commissions tables sit
   under black title bands and Net is larger.
 
+## Live exchange rates (Oct 2026)
+
+- [ ] **BUD-FX-01 — Nothing to type.** Budget → Settings → Exchange rates lists
+  each currency as "1 EUR = 0.8439 GBP · live · 18 Oct, 09:00" with **Refresh
+  now**; there is no add / delete. Give a line a new currency (e.g. CAD) and
+  reload: CAD appears with a live rate and the P&L converts it.
+
+- [ ] **BUD-FX-02 — Hourly.** Reload within the hour: the time doesn't move.
+  After an hour (or Refresh now) it does. "Show in" USD / EUR / CAD / AUD
+  always converts (never 1:1).
+
+- [ ] **BUD-FX-03 — Outage is flagged, not silent.** If the live service is
+  down and a currency has no earlier rate, the banner says it couldn't get a
+  live rate and links to Settings to retry; the last good rate is otherwise
+  kept.
+

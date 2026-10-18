@@ -7,39 +7,20 @@
    GET  ?from=USD&to=GBP           → { rate, source, fetched_at }  (live, cached 1h)
    POST { tour_id, currency }      → fetch the live currency→tour rate and UPSERT it
                                      into budget_fx_rates (1 <currency> = rate <tour
-                                     currency>). No longer writes the retired
-                                     budget_settings.exchange_rate scalar (store #3,
-                                     dropped by migration 236).
+                                     currency>).
+   POST { tour_id }                → refresh EVERY stored rate for the tour now
+                                     (Settings → "Refresh now").
 
-   Per-currency manual edits still go through /api/budget/fx-rates.
+   Oct 2026 — rates are never typed: the budget page refreshes them hourly
+   (src/server/budget/liveFx.ts) and this is the on-demand refresh.
    ============================================ */
 
 import { NextResponse } from 'next/server';
 import { requireWrite } from '@/lib/auth/workspace-check';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
-import { pickRate } from '@/lib/budget/fxVendor';
+import { fetchLiveRate, refreshTourFxRates } from '@/server/budget/liveFx';
 
 const CACHE_MAX_AGE = 3600; // 1 hour
-
-const VENDORS = (from: string, to: string) => [
-  `https://api.exchangerate.host/latest?base=${encodeURIComponent(from)}&symbols=${encodeURIComponent(to)}`,
-  `https://open.er-api.com/v6/latest/${encodeURIComponent(from)}`,
-];
-
-/** Fetch a live 1 `from` = rate `to` figure, trying each vendor in order. */
-async function fetchLiveRate(from: string, to: string): Promise<number | null> {
-  for (const url of VENDORS(from, to)) {
-    try {
-      const res = await fetch(url, { next: { revalidate: CACHE_MAX_AGE } });
-      if (!res.ok) continue;
-      const rate = pickRate(await res.json(), to);
-      if (rate != null) return rate;
-    } catch {
-      /* try the next vendor */
-    }
-  }
-  return null;
-}
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
@@ -83,8 +64,8 @@ export async function POST(request: Request) {
   }
   const tourId = body.tour_id;
   const currency = body.currency?.toUpperCase();
-  if (!tourId || !currency) {
-    return NextResponse.json({ error: 'tour_id and currency are required' }, { status: 400 });
+  if (!tourId) {
+    return NextResponse.json({ error: 'tour_id is required' }, { status: 400 });
   }
 
   const { data: tour } = await supabase
@@ -97,6 +78,11 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Tour not found' }, { status: 404 });
   }
   const tourCurrency = ((tour.currency as string | null) ?? 'GBP').toUpperCase();
+  if (!currency) {
+    // Refresh every stored rate for the tour, now.
+    const r = await refreshTourFxRates(supabase, { tourId, workspaceId: profile.workspace_id, tourCurrency, used: [], force: true });
+    return NextResponse.json(r, { status: r.failed.length && !r.refreshed.length ? 502 : 200 });
+  }
   if (currency === tourCurrency) {
     return NextResponse.json({ error: 'currency equals the tour currency (rate is 1:1)' }, { status: 400 });
   }

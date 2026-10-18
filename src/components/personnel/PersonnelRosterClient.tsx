@@ -12,15 +12,6 @@ import { useToast } from '@/components/ui/Toast';
 import { PersonnelDetailSlideOver, type PersonnelPanelState } from './PersonnelDetailSlideOver';
 import { PersonnelImportModal } from './PersonnelImportModal';
 
-function formatRates(sr: unknown): string {
-  const o = (sr && typeof sr === 'object' ? sr : {}) as Record<string, unknown>;
-  const cur = typeof o.currency === 'string' ? o.currency : 'GBP';
-  const show = Number(o.show_day_rate) || 0;
-  const off = Number(o.off_day_rate) || 0;
-  const pd = Number(o.per_diem_rate) || 0;
-  return `${cur} · show ${show} · off ${off} · PD ${pd}`;
-}
-
 export function PersonnelRosterClient({
   initial,
   initialOpenPersonnelId,
@@ -273,7 +264,6 @@ export function PersonnelRosterClient({
                   </div>
                   <div className="mt-1 flex flex-wrap gap-x-4 gap-y-0.5 text-xs text-lp-text-tertiary">
                     <span className="truncate">{p.email || '—'}</span>
-                    <span className="tabular-nums text-lp-text-secondary">{formatRates(p.standard_rates)}</span>
                   </div>
                 </div>
                 <div className="shrink-0" onClick={(e) => e.stopPropagation()}>

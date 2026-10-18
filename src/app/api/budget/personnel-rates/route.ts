@@ -15,6 +15,7 @@ import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { findOrCreateWorkspacePersonnelByName } from '@/lib/personnel-workspace';
 import { isMissingRosterPersonnelIdColumn } from '@/lib/personnel-schema-fallback';
 import { writeRates } from '@/server/payroll/writeRates';
+import { insertSeedLines, lastTourSeed } from '@/server/payroll/seedRateCard';
 import { loadTourRateContext, rateAmountsFor } from '@/lib/payroll/loadRateLines';
 import { PERMISSIONS } from '@/types';
 import { refreshDerivedLines } from '@/server/budget/reconcileDerivedLines';
@@ -152,35 +153,16 @@ export async function POST(request: Request) {
     role?: string | null;
     person_type?: string;
     rate_type?: string;
-    show_rate?: number;
-    off_rate?: number;
-    rehearsal_rate?: number;
-    per_diem?: number;
-    advance_fee?: number;
     commission?: number;
     commission_note?: string | null;
     base_rate_note?: string | null;
-    // camelCase aliases some clients send; normalized to the snake_case DTO below.
-    showRate?: number;
-    offRate?: number;
-    rehearsalRate?: number;
-    perDiem?: number;
-    advanceFee?: number;
+    // Rate AMOUNTS are not accepted here (Oct 2026) — Payroll → Summary only.
   };
   try {
     body = await request.json();
   } catch {
     return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
   }
-
-  // Request-DTO normalization (one block): accept camelCase rate keys and fold
-  // them onto the snake_case DTO the handler maps to writeRates below. Nothing
-  // downstream reads the camelCase aliases.
-  if (body.showRate !== undefined) body.show_rate = Number(body.showRate);
-  if (body.offRate !== undefined) body.off_rate = Number(body.offRate);
-  if (body.rehearsalRate !== undefined) body.rehearsal_rate = Number(body.rehearsalRate);
-  if (body.perDiem !== undefined) body.per_diem = Number(body.perDiem);
-  if (body.advanceFee !== undefined) body.advance_fee = Number(body.advanceFee);
 
   const { tour_id } = body;
   if (!tour_id) {
@@ -211,7 +193,7 @@ export async function POST(request: Request) {
   if (roster_personnel_id) {
     const { data: roster } = await supabase
       .from('personnel')
-      .select('id, name, role, standard_rates')
+      .select('id, name, role')
       .eq('id', roster_personnel_id)
       .eq('workspace_id', profile.workspace_id)
       .single();
@@ -236,13 +218,8 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'This person is already on the tour' }, { status: 409 });
     }
 
-    const sr = (roster.standard_rates ?? {}) as Record<string, number | string | undefined>;
     if (!person_name) person_name = roster.name;
     body.role = body.role ?? roster.role ?? null;
-    if (body.show_rate === undefined) body.show_rate = Number(sr.show_day_rate) || 0;
-    if (body.off_rate === undefined) body.off_rate = Number(sr.off_day_rate) || 0;
-    if (body.rehearsal_rate === undefined) body.rehearsal_rate = Number(sr.travel_day_rate) || 0;
-    if (body.per_diem === undefined) body.per_diem = Number(sr.per_diem_rate) || 0;
   }
 
   if (!person_name) {
@@ -308,20 +285,17 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  // Rate columns + lines via the ONE writer (reads the just-set rate_type).
-  const wr = await writeRates(supabase, {
-    workspaceId: profile.workspace_id,
-    cardId: (created as { id: string }).id,
-    rates: {
-      showRate: Number(body.show_rate) || 0,
-      offRate: Number(body.off_rate) || 0,
-      rehearsalRate: Number(body.rehearsal_rate) || 0,
-      perDiem: Number(body.per_diem) || 0,
-      advanceFee: Number(body.advance_fee) || 0,
-    },
-  });
-  if (wr.error) return NextResponse.json({ error: wr.error }, { status: 500 });
-  const finalCard = (wr.card ?? created) as Record<string, unknown>;
+  // Oct 2026 — ONE place to type rates (Payroll → Summary, /api/budget/
+  // rate-lines). This route no longer accepts amounts: a new card is seeded
+  // from the person's last tour (blank if none), like a roster add.
+  const cardId = (created as { id: string }).id;
+  const seed = await lastTourSeed(supabase, { workspaceId: profile.workspace_id, tourId: tour_id, personId: roster_personnel_id });
+  await insertSeedLines(supabase, { workspaceId: profile.workspace_id, tourId: tour_id, cardId, seed });
+  let finalCard = created as Record<string, unknown>;
+  if (seed.perDiem) {
+    const { data: upd } = await supabase.from('personnel_rates').update({ per_diem: seed.perDiem }).eq('id', cardId).select().single();
+    if (upd) finalCard = upd as Record<string, unknown>;
+  }
   return NextResponse.json(canApprove ? finalCard : stripCommission(finalCard));
 }
 
@@ -352,40 +326,17 @@ export async function PATCH(request: Request) {
     role?: string | null;
     person_type?: string;
     rate_type?: string;
-    show_rate?: number;
-    off_rate?: number;
-    rehearsal_rate?: number;
-    per_diem?: number;
-    advance_fee?: number;
     commission?: number;
     commission_note?: string | null;
     base_rate_note?: string | null;
     order_index?: number;
-    // camelCase aliases some clients send; normalized to the snake_case DTO below.
-    showRate?: number;
-    offRate?: number;
-    rehearsalRate?: number;
-    perDiem?: number;
-    advanceFee?: number;
+    // Rate AMOUNTS are not accepted here (Oct 2026) — Payroll → Summary only.
   };
   try {
     body = await request.json();
   } catch {
     return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
   }
-
-  // Request-DTO normalization (one block): camelCase rate keys → snake_case DTO.
-  if (body.showRate !== undefined) body.show_rate = Number(body.showRate);
-  if (body.offRate !== undefined) body.off_rate = Number(body.offRate);
-  if (body.rehearsalRate !== undefined) body.rehearsal_rate = Number(body.rehearsalRate);
-  if (body.perDiem !== undefined) body.per_diem = Number(body.perDiem);
-  if (body.advanceFee !== undefined) body.advance_fee = Number(body.advanceFee);
-  // Drop the aliases so they don't leak into the ...updates spread below.
-  delete body.showRate;
-  delete body.offRate;
-  delete body.rehearsalRate;
-  delete body.perDiem;
-  delete body.advanceFee;
 
   const { id, ...updates } = body;
   if (!id) {
@@ -417,27 +368,21 @@ export async function PATCH(request: Request) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  // Rate fields (if any) → the ONE writer, keyed by card id (single scheme).
+  // Oct 2026 — rate AMOUNTS are typed only in Payroll → Summary
+  // (/api/budget/rate-lines); any amount keys sent here are ignored. A
+  // rate_type flip still rebuilds the lines from the stored amounts (CR-02).
   let card = data as Record<string, unknown>;
-  const hasRateEdit = (['show_rate', 'off_rate', 'rehearsal_rate', 'per_diem', 'advance_fee'] as const)
-    .some((k) => updates[k] !== undefined);
   // CR-02 — a rate_type flip (day_rate ↔ split_rate) must also rebuild the SSOT
   // lines: rate_type is already persisted above, and writeRates re-emits lines
   // from the card's stored amounts under the new layout (and deletes the stale
   // split lines for day_rate). Without this, the picker changed the column but
   // never the totals — "rate-type not editable".
   const rateTypeChanged = updates.rate_type !== undefined;
-  if (hasRateEdit || rateTypeChanged) {
+  if (rateTypeChanged) {
     const wr = await writeRates(supabase, {
       workspaceId: profile.workspace_id,
       cardId: id,
-      rates: {
-        showRate: updates.show_rate,
-        offRate: updates.off_rate,
-        rehearsalRate: updates.rehearsal_rate,
-        perDiem: updates.per_diem,
-        advanceFee: updates.advance_fee,
-      },
+      rates: {},
     });
     if (wr.error) return NextResponse.json({ error: wr.error }, { status: 500 });
     card = (wr.card ?? card) as Record<string, unknown>;

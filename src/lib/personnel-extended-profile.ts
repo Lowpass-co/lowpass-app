@@ -535,7 +535,9 @@ interface CompletenessInputs {
   email: string | null;
   phone: string | null;
   homeAirport: string | null;
-  standardRates: { show_day_rate?: number | null } | null | undefined;
+  /** Unused since Oct 2026 (rates live per tour in Payroll); kept optional so
+   *  older callers still type-check. */
+  standardRates?: { show_day_rate?: number | null } | null | undefined;
   /** Parsed extended_profile JSONB. */
   ext: PersonnelExtendedProfile;
 }
@@ -625,13 +627,8 @@ export function computeCompletenessSections(
       filled: frequentFlier.length > 0,
       adminOnly: false,
     },
-    {
-      id: 'pay',
-      label: 'Pay rates',
-      weight: 15,
-      filled: !!i.standardRates && (i.standardRates.show_day_rate ?? 0) > 0,
-      adminOnly: true,
-    },
+    // Oct 2026 — no 'Pay rates' item: a person's rates are set per tour in
+    // Payroll (not on their profile), so a profile can't be "missing" them.
   ];
 }
 

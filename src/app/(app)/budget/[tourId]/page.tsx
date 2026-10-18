@@ -48,6 +48,8 @@ import { getBudgetPanelData } from '@/server/budget/getBudgetPanelData';
 import { reconcileDerivedBudgetLines } from '@/server/budget/reconcileDerivedLines';
 import { resolveActiveVersion, getProposedLineMap, getProposedIncomeMap } from '@/server/budget/versions';
 import { loadTourFxRates } from '@/lib/budget/fxRates';
+import { refreshTourFxRates } from '@/server/budget/liveFx';
+import { DISPLAY_CURRENCIES } from '@/lib/budget/displayCurrencies';
 import { FxMissingRateBanner } from '@/components/budget/FxMissingRateBanner';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { IncomeSettlementSwitch } from '@/components/budget/IncomeSettlementSwitch';
@@ -385,8 +387,31 @@ export default async function BudgetTourPage({
     }
   }
 
-  // Phase 2 — per-tour FX map (1 currency = rate tour-ccy) for the P&L + the
-  // income grid's currency picker. Unversioned (a conversion assumption).
+  // Foreign currencies the budget uses (lines + income).
+  const fxTour = tourCurrency.toUpperCase();
+  const fxUsed = new Set<string>();
+  for (const l of lines) {
+    const c = (l.currency ?? '').toUpperCase();
+    if (c) fxUsed.add(c);
+  }
+  for (const i of incomeRows) {
+    const c = ((i as { currency?: string | null }).currency ?? '').toUpperCase();
+    if (c) fxUsed.add(c);
+  }
+
+  // Oct 2026 — FX is LIVE, never typed: refresh any rate over an hour old (or
+  // missing) from the live vendors before reading the map. Best-effort; a
+  // vendor outage keeps the last good rate.
+  // The "Show in" currencies are kept live too, so switching never shows 1:1.
+  await refreshTourFxRates(supabase, {
+    tourId,
+    workspaceId,
+    tourCurrency: fxTour,
+    used: [...fxUsed, ...DISPLAY_CURRENCIES.map((d) => d.code)],
+  });
+
+  // Per-tour FX map (1 currency = rate tour-ccy) for the P&L + the income
+  // grid's currency picker.
   const fxRates = await loadTourFxRates(supabase, tourId, workspaceId);
 
   // Stage-3 parity — routing_id → day_type, for the grid's day-type pill.
@@ -402,19 +427,8 @@ export default async function BudgetTourPage({
     if (r.day_type) dayTypeByRouting[r.id] = r.day_type;
   }
 
-  // FX unify (Stage 2) — foreign currencies used in the budget that have NO
-  // budget_fx_rates entry convert 1:1 (a flagged fallback). Surface them via a
-  // warning banner rather than silently mis-totalling the P&L.
-  const fxTour = tourCurrency.toUpperCase();
-  const fxUsed = new Set<string>();
-  for (const l of lines) {
-    const c = (l.currency ?? '').toUpperCase();
-    if (c) fxUsed.add(c);
-  }
-  for (const i of incomeRows) {
-    const c = ((i as { currency?: string | null }).currency ?? '').toUpperCase();
-    if (c) fxUsed.add(c);
-  }
+  // A currency still without a rate (the live fetch failed) converts 1:1 — a
+  // flagged fallback, surfaced by the banner, never silent.
   const fxMissing = [...fxUsed].filter((c) => c && c !== fxTour && fxRates[c] == null).sort();
 
   // M1-A — data-health banner (budget sheet only, so other tabs don't pay for

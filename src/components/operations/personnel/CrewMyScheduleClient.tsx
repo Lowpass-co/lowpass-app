@@ -300,21 +300,6 @@ export function CrewMyScheduleClient({ tourId }: CrewMyScheduleClientProps) {
               color: 'var(--lp-text)',
             }}
           >
-            <span style={{ color: 'var(--lp-text-secondary)' }}>Rate</span>
-            <span>
-              {formatMoney(pay.dailyRate, pay.rate_currency)}
-              {pay.rate_period ? (
-                <span
-                  style={{
-                    marginLeft: 4,
-                    color: 'var(--lp-text-tertiary)',
-                    fontSize: 'var(--lp-text-xs)',
-                  }}
-                >
-                  per {pay.rate_period}
-                </span>
-              ) : null}
-            </span>
             <span style={{ color: 'var(--lp-text-secondary)' }}>Period</span>
             <span>
               {formatRange(assignment.starts_on, assignment.ends_on) || '—'}
@@ -330,9 +315,17 @@ export function CrewMyScheduleClient({ tourId }: CrewMyScheduleClientProps) {
                 </span>
               ) : null}
             </span>
-            <span style={{ color: 'var(--lp-text-secondary)' }}>Total expected</span>
+            <span style={{ color: 'var(--lp-text-secondary)' }}>Fees</span>
+            <span>{formatMoney(pay.fee, pay.currency)}</span>
+            <span style={{ color: 'var(--lp-text-secondary)' }}>Per diem</span>
+            <span>{formatMoney(pay.perDiem, pay.currency)}</span>
+            <span style={{ color: 'var(--lp-text-secondary)' }}>Total</span>
             <span style={{ fontWeight: 'var(--lp-weight-semibold)' }}>
-              {formatMoney(pay.total_expected, pay.rate_currency)}
+              {formatMoney(pay.total, pay.currency)}
+            </span>
+            <span />
+            <span style={{ fontSize: 'var(--lp-text-xs)', color: 'var(--lp-text-tertiary)' }}>
+              As on the tour&apos;s Payroll — ask your TM if anything looks wrong.
             </span>
           </div>
         </Section>
