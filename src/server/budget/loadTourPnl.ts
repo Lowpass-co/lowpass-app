@@ -16,10 +16,10 @@
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { computeBudgetPnl, type BudgetPnl, type CommissionInput, type IncomeInput } from '@/lib/budget/computeBudgetPnl';
-import { convertToTour, type FxRateMap } from '@/lib/budget/fxRates';
+import type { FxRateMap } from '@/lib/budget/fxRates';
 import { isIncomeRow } from '@/lib/budget/income-rows';
+import { isHeldDeposit, lineInTour } from '@/lib/budget/lineMoney';
 import { PAYROLL_PER_DIEM_SOURCE, PAYROLL_SALARY_SOURCE } from '@/lib/budget/derivedPayrollTotals';
-import { getEffectiveActual } from '@/lib/budget/transactions';
 import { reconcileDerivedBudgetLines, type ReconcileResult } from '@/server/budget/reconcileDerivedLines';
 import { getProposedLineMap } from '@/server/budget/versions';
 import type { BudgetLineItem } from '@/types';
@@ -62,7 +62,9 @@ export async function loadTourPnl(
     supabase.from('routing').select('id, date, day_type').eq('tour_id', tourId),
     supabase.from('budget_line_items').select('*').eq('tour_id', tourId).eq('workspace_id', workspaceId),
     supabase.from('budget_settings').select('*').eq('tour_id', tourId).eq('workspace_id', workspaceId).maybeSingle(),
-    supabase.from('budget_commissions').select('id, label, percentage, basis').eq('tour_id', tourId).eq('workspace_id', workspaceId),
+    // select('*') — migration-tolerant: basis_components / basis_pre_tax
+    // (migration 274) are read when present, absent before it is pasted.
+    supabase.from('budget_commissions').select('*').eq('tour_id', tourId).eq('workspace_id', workspaceId),
     supabase.from('budget_fx_rates').select('currency, rate_to_tour_currency').eq('tour_id', tourId).eq('workspace_id', workspaceId),
     supabase.from('budget_versions').select('id, status, version_number').eq('tour_id', tourId).eq('workspace_id', workspaceId),
   ]);
@@ -116,11 +118,8 @@ export async function loadTourPnl(
     production: { projected: 0, actual: 0 },
   };
   for (const l of lines) {
-    if (isIncomeRow(l)) continue;
-    const ccy = (l.currency || tourCurrency).toUpperCase();
-    const lr = Number(l.locked_fx_rate) > 0 ? Number(l.locked_fx_rate) : null;
-    const p = convertToTour(Number(l.proposed_cost) || 0, ccy, tourCurrency, fxRates);
-    const a = convertToTour(getEffectiveActual(l), ccy, tourCurrency, fxRates, lr);
+    if (isIncomeRow(l) || isHeldDeposit(l)) continue;
+    const { projected: p, actual: a } = lineInTour(l, tourCurrency, fxRates, pnl.fxMarginPct, 'cost');
     const src = (l as { source_entity_type?: string | null }).source_entity_type;
     const cat = String(l.category ?? '');
     const bucket =

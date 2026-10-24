@@ -21,7 +21,8 @@ import type { ShowWalk } from '@/lib/settlement/loadWalk';
 import type { PayrollExportData } from '@/lib/export/payroll-data';
 import type { BudgetLineItem } from '@/types';
 import { isDerivedLine, perLineSourceLabel } from '@/lib/grid/budgetAdapter';
-import { convertToTour } from '@/lib/budget/fxRates';
+import { isIncomeRow } from '@/lib/budget/income-rows';
+import { fxMargin, isHeldDeposit, lineInTour } from '@/lib/budget/lineMoney';
 
 const CURRENCY_SYMBOL: Record<string, string> = { GBP: '£', USD: '$', EUR: '€', CAD: 'C$', AUD: 'A$', JPY: '¥' };
 
@@ -116,8 +117,14 @@ function budgetSheet(wb: ExcelJS.Workbook, input: TourWorkbookInput): void {
   const data = input.budget;
   const ccy = input.meta.currency;
   const sectionName = new Map(data.sections.map((s) => [s.id, s.name]));
-  const isIncome = (l: { category?: string | null }) => (l.category ?? '').toLowerCase() === 'income';
-  const lines = (data.lines as BudgetLineItem[]).filter((l) => !isIncome(l));
+  // Costs only — income rows (section = 'income', the P&L's test; `category`
+  // was the wrong column) and held refundable deposits are listed after the
+  // grand total, outside it (migration 274).
+  const margin = fxMargin(data.settings?.fx_margin_pct);
+  const allLines = data.lines as BudgetLineItem[];
+  const lines = allLines.filter((l) => !isIncomeRow(l) && !isHeldDeposit(l));
+  const incomeLines = allLines.filter((l) => isIncomeRow(l));
+  const heldLines = allLines.filter((l) => !isIncomeRow(l) && isHeldDeposit(l));
 
   const ws = wb.addWorksheet('Budget', { views: [{ state: 'frozen', ySplit: 1 }] });
   ws.columns = [
@@ -149,10 +156,7 @@ function budgetSheet(wb: ExcelJS.Workbook, input: TourWorkbookInput): void {
     const firstDataRow = ws.rowCount + 1;
     const secSum = { d: 0, e: 0, f: 0 };
     for (const l of groupLines) {
-      const lineCcy = ((l.currency as string) || ccy).toUpperCase();
-      const lLock = num(l.locked_fx_rate) > 0 ? num(l.locked_fx_rate) : null;
-      const estTour = convertToTour(num(l.proposed_cost), lineCcy, ccy, data.fxRates);
-      const actTour = convertToTour(num(l.actual_cost), lineCcy, ccy, data.fxRates, lLock);
+      const { projected: estTour, actual: actTour } = lineInTour(l, ccy, data.fxRates, margin, 'cost');
       const r = ws.addRow({
         section,
         item: l.label || '—',
@@ -186,6 +190,30 @@ function budgetSheet(wb: ExcelJS.Workbook, input: TourWorkbookInput): void {
     const refs = (c: string) => subtotalRowNumbers.map((n) => `${c}${n}`).join(',');
     const gres: Record<string, number> = { D: grand.d, E: grand.e, F: grand.f };
     for (const c of [D, E, F]) ws.getCell(`${c}${gt.number}`).value = { formula: `SUM(${refs(c)})`, result: gres[c] };
+  }
+  // Outside the grand total: Other income lines and refundable deposits.
+  const extras: Array<{ title: string; side: 'income' | 'cost'; ls: BudgetLineItem[] }> = [
+    { title: 'Other income (adds to income — not in the total above)', side: 'income', ls: incomeLines },
+    { title: 'Refundable deposits (owed back / returned — not costs)', side: 'cost', ls: heldLines },
+  ];
+  for (const x of extras) {
+    if (x.ls.length === 0) continue;
+    ws.addRow({});
+    const h = ws.addRow({ section: x.title });
+    h.font = { bold: true };
+    for (const l of x.ls) {
+      const v = lineInTour(l, ccy, data.fxRates, margin, x.side);
+      ws.addRow({
+        section: x.side === 'income' ? 'Other income' : `Deposit · ${l.refundable_status === 'returned' ? 'returned' : 'owed back'}`,
+        item: l.label || '—',
+        vendor: (l as { vendor?: string | null }).vendor ?? '',
+        estimate: v.projected,
+        actual: v.actual,
+        variance: v.actual - v.projected,
+        status: (l.status as string) ?? 'draft',
+        provenance: 'Manual',
+      });
+    }
   }
   for (const c of [D, E, F]) ws.getColumn(c).numFmt = money;
   autosize(ws);

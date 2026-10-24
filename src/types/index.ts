@@ -424,6 +424,12 @@ export type RateType = 'day_rate' | 'split_rate';
 export type DayStatus = 'show' | 'off_travel' | 'rehearsal' | 'no_tour';
 export type CommissionBasis = 'gross' | 'net' | 'gross_merch' | 'net_merch' | 'gross_minus_tax';
 
+/** Migration 274 — the parts of income a commission can be a % of.
+ *  show = guarantees + overages; merch = merch net of COGS; vip = VIP income;
+ *  other = commissionable Other income lines (buy-on, sponsorship…). */
+export type CommissionComponent = 'show' | 'merch' | 'vip' | 'other';
+export const COMMISSION_COMPONENTS: readonly CommissionComponent[] = ['show', 'merch', 'vip', 'other'];
+
 export interface BudgetSettings {
   id: string;
   tour_id: string;
@@ -507,6 +513,10 @@ export interface BudgetCommission {
   label: string;
   percentage: number;
   basis: CommissionBasis;
+  /** Migration 274 — parts of income this is a % of. NULL = use `basis`. */
+  basis_components?: CommissionComponent[] | null;
+  /** Migration 274 — with basis_components: show income before withholding. */
+  basis_pre_tax?: boolean | null;
   notes: string | null;
   order_index: number;
   created_at: string;
@@ -551,6 +561,13 @@ export interface BudgetLineItem {
    *  actualized → the P&L converts the actual at the live tour rate. Projected
    *  always uses the live rate. */
   locked_fx_rate?: number | null;
+  /** Migration 274 — refundable deposit state. NULL = ordinary cost;
+   *  'pending' = owed back, 'returned' = came back (both kept OUT of costs);
+   *  'forfeited' = kept by the supplier (counts as a cost). */
+  refundable_status?: 'pending' | 'returned' | 'forfeited' | string | null;
+  /** Migration 274 — for an Other income line: does it count toward a
+   *  commission that includes "Other income"? Default true. */
+  income_commissionable?: boolean | null;
   receipt_id: string | null;
   routing_id: string | null;
   notes: string | null;

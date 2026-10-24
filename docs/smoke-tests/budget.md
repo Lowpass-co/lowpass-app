@@ -2284,3 +2284,62 @@ test tour only. ✅ = passed live; ⚙ = covered by vitest, not live-run.
   live rate and links to Settings to retry; the last good rate is otherwise
   kept.
 
+
+## Money options from the USA '26 reconciliation (Oct 2026 — needs migration 274)
+
+Paste `database/migrations/274_money_options_reconciliation.sql` first. Before
+it is pasted, these controls show a save error and roll back; nothing else
+breaks.
+
+- [ ] **BUD-MO-01 — Commission parts.** Budget sheet → Commissions → click a
+  commission's **Of** box. Tick Show + Merch + VIP: the summary reads
+  "Show (pre-tax) + Merch + VIP" and the amount changes at once. The single
+  base dropdown greys out. Untick all → the single base is used again. Reload —
+  it stuck. Tour settings → Commissions shows the same summary (read-only).
+
+- [ ] **BUD-MO-02 — Pre-tax switch.** On a tour with withholding tax, with Show
+  ticked, untick "Show income before withholding tax": the commission drops by
+  pct × the tax withheld.
+
+- [ ] **BUD-MO-03 — Fixed overhead.** Click **fixed amount** next to Insurance:
+  the % box reads "fixed" and Proposed becomes a box. Type 1500 → Insurance and
+  Total expenses move. Click **use %** → back to the percentage.
+
+- [ ] **BUD-MO-04 — Typed actual.** Type 808.81 in Insurance's Actual: Total
+  expenses (actual) and Net (actual) move. Clear the box → the calculated
+  actual comes back.
+
+- [ ] **BUD-MO-05 — Other income.** Totals → Other income → **+ Add**. An
+  "Other income" section appears in the grid. Add a line "Support buy-on"
+  £10,000: Income goes up by £10,000, Total expenses does not. A second
+  **+ Add** is refused ("already has an Other income section").
+
+- [ ] **BUD-MO-06 — Commissionable toggle.** Open that buy-on line: untick
+  "Counts toward commissions". A commission with Other ticked drops; Income
+  does not.
+
+- [ ] **BUD-MO-07 — Refundable deposit.** Open a £3,500 deposit line →
+  Refundable deposit → **Owed back**. Its section total and Total expenses drop
+  by £3,500; "Deposits owed back £3,500" appears under Net; the burn bar's
+  spent drops. **Forfeited** → it's a cost again; **Returned** → shows as
+  "Deposits returned".
+
+- [ ] **BUD-MO-08 — Rate paid.** On a USD tour, a £ line with an actual: the
+  slide-over shows "Rate paid 1 GBP = [1.34] USD" (locked when the actual was
+  entered). Change the tour's live rate (Settings → Refresh) — the line's
+  actual in USD does not move. Type 1.3508 → the actual re-converts at 1.3508.
+  Clear it → back to the tour rate at that moment. A tour-currency line shows
+  no Rate paid box.
+
+- [ ] **BUD-MO-09 — Bank margin.** Tour settings → Overheads → Bank FX margin
+  2%. Projected £ costs on a USD tour go up 2%, projected £ income down 2%;
+  actuals don't move. A note under the totals says so. 60% is refused.
+
+- [ ] **BUD-MO-10 — Show-income base.** Tour settings → an overhead's base →
+  "of show income (pre-tax)": it is a % of guarantees + overages before tax,
+  excluding merch / VIP / other.
+
+- [ ] **BUD-MO-11 — Exports agree.** Export PDF and Excel: Other income
+  appears in the income breakdown (PDF) / under the grand total (workbook), a
+  deposit owed back is not in any expense total, and section totals match the
+  sheet.

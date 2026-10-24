@@ -11,7 +11,9 @@
 
 import ExcelJS from 'exceljs';
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { convertToTour } from '@/lib/budget/fxRates';
+import { getEffectiveActual } from '@/lib/budget/transactions';
+import { isIncomeRow } from '@/lib/budget/income-rows';
+import { fxMargin, isHeldDeposit, lineInTour } from '@/lib/budget/lineMoney';
 import { isPlaceholderHotelName } from '@/lib/rooming/nightsSummary';
 import { loadBudgetExportData } from '@/lib/export/budget-data';
 import { loadRoomingExportData } from '@/lib/export/rooming-data';
@@ -130,16 +132,19 @@ function addSheet(wb: ExcelJS.Workbook, spec: SheetSpec): void {
 function budgetSheet(data: BudgetExportData): SheetSpec {
   const ccy = data.tour.currency;
   const sectionName = new Map(data.sections.map((s) => [s.id, s.name]));
-  const isIncome = (l: { category?: string | null }) => (l.category ?? '').toLowerCase() === 'income';
+  // Costs only: income rows (`section = 'income'`, the same test the P&L uses —
+  // `category` was the wrong column) and refundable deposits still owed back
+  // or returned are not expenses (migration 274). Conversion is lineInTour, the
+  // P&L's own per-line rule (locked/paid rate on actuals, bank margin on
+  // projected foreign amounts).
+  const margin = fxMargin(data.settings?.fx_margin_pct);
   const rows = data.lines
-    .filter((l) => !isIncome(l))
+    .filter((l) => !isIncomeRow(l) && !isHeldDeposit(l))
     .map((l) => {
       const lineCcy = (l.currency || ccy).toUpperCase();
       const proj = num(l.proposed_cost);
-      const act = num(l.actual_cost);
-      const lLock = num(l.locked_fx_rate) > 0 ? num(l.locked_fx_rate) : null;
-      const projTour = convertToTour(proj, lineCcy, ccy, data.fxRates);
-      const actTour = convertToTour(act, lineCcy, ccy, data.fxRates, lLock);
+      const act = getEffectiveActual(l);
+      const { projected: projTour, actual: actTour } = lineInTour(l, ccy, data.fxRates, margin, 'cost');
       return {
         section: String((l.section_id ? sectionName.get(l.section_id) : null) || l.section || l.category || 'Uncategorised'),
         item: l.label || '—',

@@ -112,6 +112,12 @@ export function lineToRow(
     _sectionId: l.section_id ?? null,
     _txnCount: l.transaction_count ?? 0,
     _actualOverride: !!l.actual_cost_override,
+    // Migration 274 — money options, edited in the line slide-over only.
+    _tourCcy: (tourCurrency || 'USD').toUpperCase(),
+    _fxRate: l.locked_fx_rate != null && Number(l.locked_fx_rate) > 0 ? Number(l.locked_fx_rate) : null,
+    _refundable: l.refundable_status ?? null,
+    _income: (l.section ?? '').toLowerCase() === 'income', // = isIncomeRow (kept inline: pure module)
+    _commissionable: l.income_commissionable !== false,
   };
 }
 
@@ -197,6 +203,13 @@ export function gridFieldToColumn(field: string): string | null {
       return 'currency';
     case 'notes':
       return 'notes';
+    // Migration 274 — slide-over money options (no grid column uses these ids).
+    case 'refundable':
+      return 'refundable_status';
+    case 'paidRate':
+      return 'locked_fx_rate';
+    case 'commissionable':
+      return 'income_commissionable';
     default:
       return null;
   }
@@ -209,7 +222,20 @@ export function gridFieldToColumn(field: string): string | null {
 export function gridEditToPatch(field: string, value: unknown): Record<string, unknown> | null {
   const col = gridFieldToColumn(field);
   if (!col) return null;
-  const patch: Record<string, unknown> = { [col]: value };
+  let v: unknown = value;
+  if (col === 'refundable_status') {
+    // '' / 'none' → an ordinary cost.
+    const st = String(value ?? '').toLowerCase();
+    v = st === 'pending' || st === 'returned' || st === 'forfeited' ? st : null;
+  } else if (col === 'locked_fx_rate') {
+    // Blank / 0 → null = go back to the tour's stored rate (the DB trigger
+    // re-locks it while the line has an actual).
+    const n = Number(String(value ?? '').replace(/[^0-9.]/g, ''));
+    v = Number.isFinite(n) && n > 0 ? n : null;
+  } else if (col === 'income_commissionable') {
+    v = Boolean(value);
+  }
+  const patch: Record<string, unknown> = { [col]: v };
   if (col === 'actual_cost') patch.actual_cost_override = true;
   return patch;
 }

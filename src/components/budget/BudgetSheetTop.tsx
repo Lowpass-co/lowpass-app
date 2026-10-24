@@ -29,17 +29,34 @@
 
    Saves are optimistic: applied at once, persisted in the background, rolled
    back with a toast if the server refuses.
+
+   MIGRATION 274 OPTIONS (from the USA '26 business-manager reconciliation):
+     • a commission ticks the parts of income it is a % of (show / merch /
+       VIP / other) and whether show income is measured before tax — or keeps
+       one legacy base;
+     • each overhead is a % OR a fixed amount, and its actual can be typed
+       (the real invoice) — blank = the calculation;
+     • income is broken down (show / merch / VIP / other), with an
+       "Add other income" section for buy-ons and sponsorship;
+     • refundable deposits still owed back show under Net, outside costs.
    ============================================ */
 
-import { useMemo, useState } from 'react';
+import { Fragment, useMemo, useState } from 'react';
 import type { KeyboardEvent } from 'react';
-import { Plus, X } from 'lucide-react';
-import { computeBudgetPnl, type CommissionInput, type IncomeInput, type PnlSettingsInput } from '@/lib/budget/computeBudgetPnl';
+import { useRouter } from 'next/navigation';
+import { ChevronDown, Plus, X } from 'lucide-react';
+import {
+  computeBudgetPnl,
+  normalizeComponents,
+  type CommissionInput,
+  type IncomeInput,
+  type PnlSettingsInput,
+} from '@/lib/budget/computeBudgetPnl';
 import { sheetTotalsBySection } from '@/lib/budget/sheetTotals';
 import type { FxRateMap } from '@/lib/budget/fxRates';
 import { formatCurrency } from '@/lib/utils';
 import { useToast } from '@/components/ui/Toast';
-import type { BudgetLineItem, BudgetSection } from '@/types';
+import { COMMISSION_COMPONENTS, type BudgetLineItem, type BudgetSection, type CommissionComponent } from '@/types';
 
 export const COMMISSION_BASES = [
   { value: 'gross', label: 'Gross' },
@@ -48,6 +65,29 @@ export const COMMISSION_BASES = [
   { value: 'net_merch', label: 'Net merch' },
   { value: 'gross_minus_tax', label: 'Pre-tax' },
 ];
+
+const COMPONENT_LABEL: Record<CommissionComponent, string> = {
+  show: 'Show',
+  merch: 'Merch',
+  vip: 'VIP',
+  other: 'Other',
+};
+const COMPONENT_HINT: Record<CommissionComponent, string> = {
+  show: 'Show income (guarantees + overages)',
+  merch: 'Merch (after cost of goods)',
+  vip: 'VIP',
+  other: 'Other income lines marked commissionable',
+};
+
+/** What a commission is a % of, in a few words. */
+export function commissionBaseSummary(components: CommissionComponent[] | null, basis: string, preTax: boolean): string {
+  if (components && components.length) {
+    return components
+      .map((c) => (c === 'show' && preTax ? 'Show (pre-tax)' : COMPONENT_LABEL[c]))
+      .join(' + ');
+  }
+  return COMMISSION_BASES.find((b) => b.value === basis)?.label ?? basis;
+}
 
 type Overhead = 'accountancy' | 'insurance' | 'contingency';
 const OVERHEADS: Array<{ key: Overhead; label: string }> = [
@@ -61,7 +101,19 @@ interface CommissionRow {
   label: string;
   percentage: number;
   basis: string;
+  /** Migration 274 — ticked parts (null = the legacy `basis`). */
+  basis_components: CommissionComponent[] | null;
+  basis_pre_tax: boolean;
 }
+
+const toRow = (c: CommissionInput): CommissionRow => ({
+  id: c.id,
+  label: c.label,
+  percentage: Number(c.percentage) || 0,
+  basis: c.basis || 'gross',
+  basis_components: normalizeComponents(c.basis_components),
+  basis_pre_tax: c.basis_pre_tax !== false,
+});
 
 export interface BudgetSheetTopProps {
   tourId: string;
@@ -126,6 +178,53 @@ function PctInput({
   );
 }
 
+/** A money box: typed figure or blank (= null). Used for a fixed overhead and a
+ *  typed actual. Commits on blur / Enter; Escape abandons the edit. */
+function MoneyInput({
+  value,
+  onCommit,
+  label,
+  placeholder,
+  disabled,
+}: {
+  value: number | null;
+  onCommit: (v: number | null) => void;
+  label: string;
+  placeholder?: string;
+  disabled?: boolean;
+}) {
+  const [draft, setDraft] = useState<string | null>(null);
+  const shown = draft ?? (value == null ? '' : String(+value.toFixed(2)));
+  const commit = () => {
+    if (draft === null) return;
+    setDraft(null);
+    const t = draft.trim();
+    if (t === '') {
+      if (value != null) onCommit(null);
+      return;
+    }
+    const n = Number(t);
+    if (!Number.isFinite(n) || n < 0) return;
+    if (value == null || Math.abs(n - value) > 0.004) onCommit(n);
+  };
+  return (
+    <input
+      aria-label={label}
+      inputMode="decimal"
+      disabled={disabled}
+      value={shown}
+      placeholder={placeholder}
+      onChange={(e) => setDraft(e.target.value.replace(/[^0-9.]/g, ''))}
+      onBlur={commit}
+      onKeyDown={(e: KeyboardEvent<HTMLInputElement>) => {
+        if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
+        if (e.key === 'Escape') setDraft(null);
+      }}
+      className="h-7 w-full min-w-0 rounded border border-transparent bg-transparent px-1 text-right tabular-nums text-lp-text outline-none placeholder:text-lp-text-tertiary hover:border-lp-border focus:border-lp-orange disabled:opacity-60"
+    />
+  );
+}
+
 export function BudgetSheetTop({
   tourId,
   tourCurrency,
@@ -138,42 +237,67 @@ export function BudgetSheetTop({
   readOnly = false,
 }: BudgetSheetTopProps) {
   const { showToast } = useToast();
+  const router = useRouter();
   const ccy = (tourCurrency || 'GBP').toUpperCase();
   const [settings, setSettings] = useState<PnlSettingsInput>(() => ({ ...(initialSettings ?? {}) }) as PnlSettingsInput);
-  const [rows, setRows] = useState<CommissionRow[]>(() =>
-    initialCommissions.map((c) => ({
-      id: c.id,
-      label: c.label,
-      percentage: Number(c.percentage) || 0,
-      basis: c.basis || 'gross',
-    })),
-  );
+  const [rows, setRows] = useState<CommissionRow[]>(() => initialCommissions.map(toRow));
   const [busy, setBusy] = useState(false);
+  /** The commission whose base editor is open (one at a time). */
+  const [baseOpen, setBaseOpen] = useState<string | null>(null);
 
   const pnl = useMemo(
     () => computeBudgetPnl({ lines, income, commissions: rows, settings, tourCurrency: ccy, fxRates }),
     [lines, income, rows, settings, ccy, fxRates],
   );
-  const sectionRows = useMemo(() => sheetTotalsBySection(lines, sections, ccy, fxRates), [lines, sections, ccy, fxRates]);
+  const sectionRows = useMemo(
+    () => sheetTotalsBySection(lines, sections, ccy, fxRates, pnl.fxMarginPct),
+    [lines, sections, ccy, fxRates, pnl.fxMarginPct],
+  );
+  const hasIncomeSection = sections.some((s) => s.kind === 'income');
   const commByid = useMemo(() => new Map(pnl.commissionRows.map((c) => [c.id, c])), [pnl.commissionRows]);
 
-  const saveOverhead = (key: Overhead, fraction: number) => {
-    const field = `${key}_pct` as const;
+  /** Optimistic settings save — the same row Tour settings writes. */
+  const saveSettings = (fields: Partial<PnlSettingsInput>, what: string) => {
     const before = settings;
-    setSettings((s) => ({ ...s, [field]: fraction }));
+    setSettings((s) => ({ ...s, ...fields }));
     void (async () => {
       try {
         const res = await fetch('/api/budget/settings', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ tour_id: tourId, [field]: fraction }),
+          body: JSON.stringify({ tour_id: tourId, ...fields }),
         });
-        if (!res.ok) throw new Error(`Could not save ${key} (${res.status})`);
+        if (!res.ok) {
+          const j = (await res.json().catch(() => null)) as { error?: string } | null;
+          throw new Error(j?.error || `Could not save ${what} (${res.status})`);
+        }
       } catch (err) {
         setSettings(before);
         showToast(err instanceof Error ? err.message : 'Save failed', 'error');
       }
     })();
+  };
+  const saveOverhead = (key: Overhead, fraction: number) => saveSettings({ [`${key}_pct`]: fraction }, key);
+
+  const addOtherIncome = async () => {
+    setBusy(true);
+    try {
+      const res = await fetch('/api/budget/sections', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tour_id: tourId, name: 'Other income', kind: 'income' }),
+      });
+      if (!res.ok) {
+        const j = (await res.json().catch(() => null)) as { error?: string } | null;
+        throw new Error(j?.error || `Could not add Other income (${res.status})`);
+      }
+      showToast('Other income added — add its lines in the grid below', 'success');
+      router.refresh();
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Add failed', 'error');
+    } finally {
+      setBusy(false);
+    }
   };
 
   const patchCommission = (id: string, fields: Partial<Omit<CommissionRow, 'id'>>) => {
@@ -186,7 +310,10 @@ export function BudgetSheetTop({
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ id, ...fields }),
         });
-        if (!res.ok) throw new Error(`Could not save commission (${res.status})`);
+        if (!res.ok) {
+          const j = (await res.json().catch(() => null)) as { error?: string } | null;
+          throw new Error(j?.error || `Could not save commission (${res.status})`);
+        }
       } catch (err) {
         setRows(before);
         showToast(err instanceof Error ? err.message : 'Save failed', 'error');
@@ -203,8 +330,8 @@ export function BudgetSheetTop({
         body: JSON.stringify({ tour_id: tourId, label: 'Commission', percentage: 0, basis: 'gross' }),
       });
       if (!res.ok) throw new Error(`Could not add commission (${res.status})`);
-      const c = (await res.json()) as CommissionRow;
-      setRows((r) => [...r, { id: c.id, label: c.label, percentage: Number(c.percentage) || 0, basis: c.basis || 'gross' }]);
+      const c = (await res.json()) as CommissionInput;
+      setRows((r) => [...r, toRow(c)]);
     } catch (err) {
       showToast(err instanceof Error ? err.message : 'Add failed', 'error');
     } finally {
@@ -250,6 +377,31 @@ export function BudgetSheetTop({
     { id: 'income', label: 'Income', v: pnl.grossIncome },
     { id: 'expenses', label: 'Total expenses', v: pnl.totalExpenses },
     { id: 'net', label: 'Net', v: pnl.net },
+  ];
+
+  // Income broken down — the parts sum to the Income total (pinned by the P&L
+  // test: show (after tax and settlement deductions) + merch + VIP + other).
+  const nonZero = (v: { projected: number; actual: number }) => Math.abs(v.projected) > 0.004 || Math.abs(v.actual) > 0.004;
+  const incomeParts: Array<{ id: string; label: string; v: { projected: number; actual: number }; title?: string }> = [
+    {
+      id: 'show',
+      label: 'Show income',
+      v: pnl.showIncome.postTax,
+      title: `After withholding tax and settlement deductions. Before tax: ${money(pnl.showIncome.preTax.projected, ccy)} proposed · ${money(pnl.showIncome.preTax.actual, ccy)} actual`,
+    },
+    ...(nonZero(pnl.incomeBreakdown.merch) ? [{ id: 'merch', label: 'Merch income', v: pnl.incomeBreakdown.merch }] : []),
+    ...(nonZero(pnl.incomeBreakdown.vip) ? [{ id: 'vip', label: 'VIP income', v: pnl.incomeBreakdown.vip }] : []),
+    ...(hasIncomeSection || nonZero(pnl.incomeBreakdown.other) || !readOnly
+      ? [{ id: 'other', label: 'Other income', v: pnl.incomeBreakdown.other, title: 'Support buy-ons, sponsorship — the Other income section in the grid' }]
+      : []),
+  ];
+  const depositRows: Array<{ id: string; label: string; v: { projected: number; actual: number }; title: string }> = [
+    ...(nonZero(pnl.deposits.owedBack)
+      ? [{ id: 'owed', label: 'Deposits owed back', v: pnl.deposits.owedBack, title: 'Refundable deposits not yet returned — kept out of costs. Mark a line forfeited if the supplier keeps it.' }]
+      : []),
+    ...(nonZero(pnl.deposits.returned)
+      ? [{ id: 'returned', label: 'Deposits returned', v: pnl.deposits.returned, title: 'Refundable deposits that came back — not a cost.' }]
+      : []),
   ];
 
   return (
@@ -316,21 +468,73 @@ export function BudgetSheetTop({
                 <td className={num}>{money(pnl.commissions.projected, ccy)}</td>
                 <td className={num}>{money(pnl.commissions.actual, ccy)}</td>
               </tr>
-              {OVERHEADS.map((o) => (
-                <tr key={o.key} className={tr}>
-                  <td className={lbl}>{o.label}</td>
-                  <td className={pctCell}>
-                    <PctInput
-                      label={o.label}
-                      value={Number(settings[`${o.key}_pct`]) || 0}
-                      disabled={readOnly}
-                      onCommit={(f) => saveOverhead(o.key, f)}
-                    />
-                  </td>
-                  <td className={num}>{money(pnl[o.key].projected, ccy)}</td>
-                  <td className={num}>{money(pnl[o.key].actual, ccy)}</td>
-                </tr>
-              ))}
+              {OVERHEADS.map((o) => {
+                const flat = pnl.mode[o.key] === 'flat';
+                const typedActual = settings[`${o.key}_actual_amount`];
+                return (
+                  <tr key={o.key} className={tr} data-testid={`sheet-overhead-${o.key}`}>
+                    <td className={lbl}>
+                      <span>{o.label}</span>
+                      {!readOnly ? (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            saveSettings({ [`${o.key}_mode`]: flat ? 'pct' : 'flat' }, o.label.toLowerCase())
+                          }
+                          aria-label={flat ? `${o.label}: use a percentage` : `${o.label}: use a fixed amount`}
+                          className="ml-2 rounded px-1 text-lp-text-tertiary hover:text-lp-text"
+                          style={{ fontSize: 'var(--lp-text-xs)' }}
+                        >
+                          {flat ? 'use %' : 'fixed amount'}
+                        </button>
+                      ) : null}
+                    </td>
+                    <td className={pctCell}>
+                      {flat ? (
+                        <span className="text-lp-text-tertiary" style={{ fontSize: 'var(--lp-text-sm)' }}>fixed</span>
+                      ) : (
+                        <PctInput
+                          label={o.label}
+                          value={Number(settings[`${o.key}_pct`]) || 0}
+                          disabled={readOnly}
+                          onCommit={(f) => saveOverhead(o.key, f)}
+                        />
+                      )}
+                    </td>
+                    <td className={flat && !readOnly ? 'px-2' : num}>
+                      {flat && !readOnly ? (
+                        <MoneyInput
+                          label={`${o.label} fixed amount`}
+                          value={settings[`${o.key}_flat_amount`] != null ? Number(settings[`${o.key}_flat_amount`]) : null}
+                          placeholder={money(0, ccy)}
+                          onCommit={(v) => saveSettings({ [`${o.key}_flat_amount`]: v }, `${o.label.toLowerCase()} amount`)}
+                        />
+                      ) : (
+                        money(pnl[o.key].projected, ccy)
+                      )}
+                    </td>
+                    <td
+                      className={readOnly ? num : 'px-2'}
+                      title={
+                        pnl.actualOverridden[o.key]
+                          ? 'Typed actual (the real invoice). Clear it to use the calculation.'
+                          : 'Calculated. Type the real invoice to replace it.'
+                      }
+                    >
+                      {readOnly ? (
+                        money(pnl[o.key].actual, ccy)
+                      ) : (
+                        <MoneyInput
+                          label={`${o.label} actual`}
+                          value={typedActual != null ? Number(typedActual) : null}
+                          placeholder={money(pnl[o.key].actual, ccy)}
+                          onCommit={(v) => saveSettings({ [`${o.key}_actual_amount`]: v }, `${o.label.toLowerCase()} actual`)}
+                        />
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
               {pnl.cogs.projected !== 0 || pnl.cogs.actual !== 0 ? (
                 <tr className={tr}>
                   <td className={lbl}>Merch cost of goods</td>
@@ -345,6 +549,27 @@ export function BudgetSheetTop({
                 <td className={num}>{money(pnl.totalExpenses.projected, ccy)}</td>
                 <td className={num}>{money(pnl.totalExpenses.actual, ccy)}</td>
               </tr>
+              {incomeParts.map((r) => (
+                <tr key={r.id} className={tr} data-testid={`sheet-income-${r.id}`} title={r.title}>
+                  <td className={`${lbl} pl-6 text-lp-text-secondary`} style={{ fontSize: 'var(--lp-text-sm)' }}>
+                    {r.label}
+                    {r.id === 'other' && !hasIncomeSection && !readOnly ? (
+                      <button
+                        type="button"
+                        onClick={() => void addOtherIncome()}
+                        disabled={busy}
+                        className="ml-2 inline-flex items-center gap-0.5 rounded px-1 text-lp-text-tertiary hover:text-lp-text disabled:opacity-50"
+                        style={{ fontSize: 'var(--lp-text-xs)' }}
+                      >
+                        <Plus className="h-3 w-3" /> Add
+                      </button>
+                    ) : null}
+                  </td>
+                  <td />
+                  <td className={`${num} text-lp-text-secondary`} style={{ fontSize: 'var(--lp-text-sm)' }}>{money(r.v.projected, ccy)}</td>
+                  <td className={`${num} text-lp-text-secondary`} style={{ fontSize: 'var(--lp-text-sm)' }}>{money(r.v.actual, ccy)}</td>
+                </tr>
+              ))}
               <tr className={tr}>
                 <td className={`${lbl} text-lp-text-secondary`}>Income</td>
                 <td />
@@ -360,8 +585,22 @@ export function BudgetSheetTop({
                   </td>
                 ))}
               </tr>
+              {depositRows.map((r) => (
+                <tr key={r.id} className={tr} data-testid={`sheet-deposits-${r.id}`} title={r.title}>
+                  <td className={`${lbl} text-lp-text-secondary`}>{r.label}</td>
+                  <td />
+                  <td className={`${num} text-lp-text-secondary`}>{money(r.v.projected, ccy)}</td>
+                  <td className={`${num} text-lp-text-secondary`}>{money(r.v.actual, ccy)}</td>
+                </tr>
+              ))}
             </tbody>
           </table>
+          {pnl.fxMarginPct > 0 ? (
+            <p className="border-t border-lp-border/60 px-3 py-2 text-lp-text-tertiary" style={{ fontSize: 'var(--lp-text-xs)' }}>
+              Projected foreign-currency amounts include a {+(pnl.fxMarginPct * 100).toFixed(2)}% bank margin
+              (Tour settings). Actuals use the rate locked or paid on each line.
+            </p>
+          ) : null}
         </section>
 
         {/* ── Commissions ────────────────────────────────────── */}
@@ -393,8 +632,17 @@ export function BudgetSheetTop({
               ) : (
                 rows.map((r) => {
                   const c = commByid.get(r.id);
+                  const summary = commissionBaseSummary(r.basis_components, r.basis, r.basis_pre_tax);
+                  const ticked = new Set(r.basis_components ?? []);
+                  const toggle = (part: CommissionComponent) => {
+                    const next = new Set(ticked);
+                    if (next.has(part)) next.delete(part);
+                    else next.add(part);
+                    patchCommission(r.id, { basis_components: normalizeComponents([...next]) });
+                  };
                   return (
-                    <tr key={r.id} className={tr} data-testid="sheet-commission-row">
+                    <Fragment key={r.id}>
+                    <tr className={tr} data-testid="sheet-commission-row">
                       <td className="px-2">
                         <input
                           aria-label="Commission name"
@@ -417,18 +665,18 @@ export function BudgetSheetTop({
                         />
                       </td>
                       <td className="px-2">
-                        <select
-                          aria-label={`${r.label} is a percentage of`}
-                          value={r.basis}
-                          disabled={readOnly}
-                          onChange={(e) => patchCommission(r.id, { basis: e.target.value })}
-                          className="h-7 w-full rounded border border-lp-border bg-lp-bg px-1 text-lp-text outline-none focus:border-lp-orange"
+                        <button
+                          type="button"
+                          aria-expanded={baseOpen === r.id}
+                          aria-label={`${r.label} is a percentage of ${summary}`}
+                          title={summary}
+                          onClick={() => setBaseOpen((o) => (o === r.id ? null : r.id))}
+                          className="flex h-7 w-full min-w-0 items-center gap-1 rounded border border-lp-border bg-lp-bg px-1 text-left text-lp-text outline-none hover:border-lp-text-tertiary focus:border-lp-orange"
                           style={{ fontSize: 'var(--lp-text-sm)' }}
                         >
-                          {COMMISSION_BASES.map((b) => (
-                            <option key={b.value} value={b.value}>{b.label}</option>
-                          ))}
-                        </select>
+                          <span className="min-w-0 flex-1 truncate">{summary}</span>
+                          <ChevronDown className="h-3 w-3 shrink-0 text-lp-text-tertiary" />
+                        </button>
                       </td>
                       <td className={num} title={`Actual ${money(c?.actual ?? 0, ccy)}`}>{money(c?.projected ?? 0, ccy)}</td>
                       <td className="px-1 text-right">
@@ -444,6 +692,50 @@ export function BudgetSheetTop({
                         ) : null}
                       </td>
                     </tr>
+                    {baseOpen === r.id ? (
+                      <tr className="border-t border-lp-border/60" data-testid="sheet-commission-base">
+                        <td colSpan={5} className="px-3 py-2" style={{ fontSize: 'var(--lp-text-sm)' }}>
+                          <fieldset disabled={readOnly} className="space-y-2">
+                            <legend className="mb-1 text-lp-text-secondary">{r.label} is a % of — tick the parts:</legend>
+                            <div className="flex flex-wrap gap-x-4 gap-y-1">
+                              {COMMISSION_COMPONENTS.map((part) => (
+                                <label key={part} className="inline-flex items-center gap-1.5 text-lp-text" title={COMPONENT_HINT[part]}>
+                                  <input type="checkbox" checked={ticked.has(part)} onChange={() => toggle(part)} />
+                                  {part === 'other' ? 'Other income' : COMPONENT_LABEL[part]}
+                                </label>
+                              ))}
+                            </div>
+                            <label className="inline-flex items-center gap-1.5 text-lp-text">
+                              <input
+                                type="checkbox"
+                                checked={r.basis_pre_tax}
+                                disabled={!ticked.has('show')}
+                                onChange={(e) => patchCommission(r.id, { basis_pre_tax: e.target.checked })}
+                              />
+                              Show income before withholding tax
+                            </label>
+                            <div className="flex items-center gap-2 text-lp-text-secondary">
+                              <span>{ticked.size ? 'Parts ticked — single base not used' : 'Nothing ticked — one base:'}</span>
+                              <select
+                                aria-label={`${r.label} single base`}
+                                value={r.basis}
+                                disabled={readOnly || ticked.size > 0}
+                                onChange={(e) => patchCommission(r.id, { basis: e.target.value })}
+                                className="h-7 rounded border border-lp-border bg-lp-bg px-1 text-lp-text outline-none focus:border-lp-orange disabled:opacity-50"
+                              >
+                                {COMMISSION_BASES.map((b) => (
+                                  <option key={b.value} value={b.value}>{b.label}</option>
+                                ))}
+                              </select>
+                            </div>
+                            <div className="tabular-nums text-lp-text-tertiary">
+                              Actual so far {money(c?.actual ?? 0, ccy)}
+                            </div>
+                          </fieldset>
+                        </td>
+                      </tr>
+                    ) : null}
+                    </Fragment>
                   );
                 })
               )}

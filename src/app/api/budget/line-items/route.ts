@@ -294,6 +294,13 @@ export async function PATCH(request: Request) {
     notes?: string | null;
     order_index?: number;
     status?: string;
+    /** Migration 274 — the rate the bank actually paid (1 line ccy = x tour
+     *  ccy). null = go back to the tour's stored rate. */
+    locked_fx_rate?: number | null;
+    /** Migration 274 — refundable deposit: pending | returned | forfeited | null. */
+    refundable_status?: string | null;
+    /** Migration 274 — Other income line counts toward commissions. */
+    income_commissionable?: boolean;
     /** Phase 3 §D — pre_prod / rehearsals / show_days / wrap, or null. */
     phase_tag?: string | null;
     tags?: string[];
@@ -430,6 +437,28 @@ export async function PATCH(request: Request) {
   if (updates.room_id !== undefined) payload.room_id = updates.room_id;
   if (updates.gear_id !== undefined) payload.gear_id = updates.gear_id;
   if (updates.tour_gear_id !== undefined) payload.tour_gear_id = updates.tour_gear_id;
+  // Migration 274 — the actual layer's money options (live, never versioned).
+  if (updates.locked_fx_rate !== undefined) {
+    if (updates.locked_fx_rate === null) {
+      payload.locked_fx_rate = null; // the trigger re-locks to the stored tour rate
+    } else {
+      const r = Number(updates.locked_fx_rate);
+      if (!Number.isFinite(r) || r <= 0) {
+        return NextResponse.json({ error: 'locked_fx_rate must be a positive number (or null)' }, { status: 400 });
+      }
+      payload.locked_fx_rate = r;
+    }
+  }
+  if (updates.refundable_status !== undefined) {
+    const v = updates.refundable_status === null ? null : String(updates.refundable_status).toLowerCase();
+    if (v !== null && !['pending', 'returned', 'forfeited'].includes(v)) {
+      return NextResponse.json({ error: 'refundable_status must be pending, returned, forfeited or null' }, { status: 400 });
+    }
+    payload.refundable_status = v;
+  }
+  if (updates.income_commissionable !== undefined) {
+    payload.income_commissionable = Boolean(updates.income_commissionable);
+  }
 
   const SECTION_WHITE = ['income', 'expenses', 'hotels', 'travel', 'hire', 'payroll', 'per_diems', 'other'];
   if (updates.section !== undefined && updates.section !== null) {
