@@ -15,7 +15,10 @@ export type BudgetSectionKind =
   | 'commission'
   | 'insurance'
   | 'contingency'
-  | 'cogs';
+  | 'cogs'
+  /** Migration 274 — "Other income": editable lines that ADD to income
+   *  (support buy-on, sponsorship). One per tour; not a formula. */
+  | 'income';
 
 export const BUDGET_SECTION_KINDS: readonly BudgetSectionKind[] = [
   'custom',
@@ -23,6 +26,7 @@ export const BUDGET_SECTION_KINDS: readonly BudgetSectionKind[] = [
   'insurance',
   'contingency',
   'cogs',
+  'income',
 ];
 
 /** The kinds whose rows are computed + read-only (one of each per tour). */
@@ -52,6 +56,12 @@ export function normalizeSectionKind(
     : 'custom';
 }
 
+/** One-per-tour kinds (formula kinds + Other income) — the partial unique
+ *  index (tour_id, kind) WHERE kind <> 'custom' enforces it. */
+export function isSingletonSectionKind(kind: string | null | undefined): boolean {
+  return isFormulaSectionKind(kind) || kind === 'income';
+}
+
 /** Default display name when a formula section is created from the picker. */
 export const SECTION_KIND_NAME: Record<BudgetSectionKind, string> = {
   custom: 'New section',
@@ -59,6 +69,7 @@ export const SECTION_KIND_NAME: Record<BudgetSectionKind, string> = {
   insurance: 'Insurance',
   contingency: 'Contingency',
   cogs: 'Merch COGS',
+  income: 'Other income',
 };
 
 /** Picker labels (the "+ Add section" menu). */
@@ -68,11 +79,13 @@ export const SECTION_KIND_PICKER_LABEL: Record<BudgetSectionKind, string> = {
   insurance: 'Insurance (formula)',
   contingency: 'Contingency (formula)',
   cogs: 'Merch COGS (formula)',
+  income: 'Other income (adds to income)',
 };
 
 /** Human label for an overhead/commission basis, for the read-only hint. */
 export const SECTION_BASIS_LABEL: Record<string, string> = {
   income_gross: 'gross income',
+  income_show: 'show income before tax',
   expenses_total: 'total expenses',
   expenses_pre_contingency: 'expenses before contingency',
   gross: 'gross income',

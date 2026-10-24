@@ -11,6 +11,8 @@ import { NextResponse } from 'next/server';
 import { requireWrite } from '@/lib/auth/workspace-check';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { normalizeCommissionPct } from '@/lib/commission-pct';
+import { normalizeComponents } from '@/lib/budget/computeBudgetPnl';
+import { COMMISSION_COMPONENTS, type CommissionComponent } from '@/types';
 
 const BASIS_VALUES = new Set([
   'gross',
@@ -19,6 +21,19 @@ const BASIS_VALUES = new Set([
   'net_merch',
   'gross_minus_tax',
 ]);
+
+/**
+ * Migration 274 — validate the ticked income parts. `null` / `[]` → null
+ * (= use the single legacy `basis`). Unknown parts are a 400, not dropped
+ * silently, so a typo can never quietly shrink a commission.
+ */
+function parseComponents(v: unknown): { ok: true; value: CommissionComponent[] | null } | { ok: false } {
+  if (v === null) return { ok: true, value: null };
+  if (!Array.isArray(v)) return { ok: false };
+  const known = new Set<string>(COMMISSION_COMPONENTS);
+  if (!v.every((x) => typeof x === 'string' && known.has(x.toLowerCase()))) return { ok: false };
+  return { ok: true, value: normalizeComponents(v) };
+}
 
 export async function GET(request: Request) {
   const supabase = await createServerSupabaseClient();
@@ -91,6 +106,8 @@ export async function POST(request: Request) {
     label: string;
     percentage: number;
     basis?: string;
+    basis_components?: string[] | null;
+    basis_pre_tax?: boolean;
     notes?: string | null;
   };
   try {
@@ -129,17 +146,33 @@ export async function POST(request: Request) {
 
   const orderIndex = (existing?.order_index ?? 0) + 1;
 
+  const basis = (body.basis ?? 'gross').trim();
+  if (!BASIS_VALUES.has(basis)) {
+    return NextResponse.json({ error: 'Invalid basis' }, { status: 400 });
+  }
+  const insertRow: Record<string, unknown> = {
+    tour_id,
+    workspace_id: profile.workspace_id,
+    label: label.trim(),
+    percentage: normalizeCommissionPct(Number(body.percentage) || 0),
+    basis,
+    notes: body.notes ?? null,
+    order_index: orderIndex,
+  };
+  // Only send the 274 columns when asked, so a create still works before the
+  // migration is pasted.
+  if (body.basis_components !== undefined) {
+    const parsed = parseComponents(body.basis_components);
+    if (!parsed.ok) {
+      return NextResponse.json({ error: 'basis_components must be a list of show, merch, vip, other' }, { status: 400 });
+    }
+    insertRow.basis_components = parsed.value;
+  }
+  if (body.basis_pre_tax !== undefined) insertRow.basis_pre_tax = Boolean(body.basis_pre_tax);
+
   const { data: created, error } = await supabase
     .from('budget_commissions')
-    .insert({
-      tour_id,
-      workspace_id: profile.workspace_id,
-      label: label.trim(),
-      percentage: normalizeCommissionPct(Number(body.percentage) || 0),
-      basis: (body.basis ?? 'gross').trim(),
-      notes: body.notes ?? null,
-      order_index: orderIndex,
-    })
+    .insert(insertRow)
     .select()
     .single();
 
@@ -173,6 +206,8 @@ export async function PATCH(request: Request) {
     label?: string;
     percentage?: number;
     basis?: string;
+    basis_components?: string[] | null;
+    basis_pre_tax?: boolean;
     notes?: string | null;
     order_index?: number;
   };
@@ -209,6 +244,14 @@ export async function PATCH(request: Request) {
     }
     payload.basis = b;
   }
+  if (updates.basis_components !== undefined) {
+    const parsed = parseComponents(updates.basis_components);
+    if (!parsed.ok) {
+      return NextResponse.json({ error: 'basis_components must be a list of show, merch, vip, other' }, { status: 400 });
+    }
+    payload.basis_components = parsed.value;
+  }
+  if (updates.basis_pre_tax !== undefined) payload.basis_pre_tax = Boolean(updates.basis_pre_tax);
   if (updates.notes !== undefined) payload.notes = updates.notes;
   if (updates.order_index !== undefined) payload.order_index = updates.order_index;
 

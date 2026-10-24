@@ -136,7 +136,8 @@ export async function POST(request: Request) {
   }
 
   // Stage 3 — overhead bases must be one of the known vocabulary values.
-  const BASIS_VALUES = ['income_gross', 'expenses_total', 'expenses_pre_contingency'];
+  // 'income_show' (migration 274) = show income before withholding tax.
+  const BASIS_VALUES = ['income_gross', 'income_show', 'expenses_total', 'expenses_pre_contingency'];
   const validBasis = (v: unknown) =>
     typeof v === 'string' && BASIS_VALUES.includes(v);
 
@@ -164,6 +165,39 @@ export async function POST(request: Request) {
   if (default_merch_fee_pct !== undefined) payload.default_merch_fee_pct = default_merch_fee_pct;
   if (overage_haircut !== undefined) payload.overage_haircut = overage_haircut;
   if (overage_tax_pct !== undefined) payload.overage_tax_pct = overage_tax_pct;
+
+  // Migration 274 — overhead % / fixed mode, fixed amount, typed actual, and
+  // the bank's FX margin. Sent only when present, so the route keeps working
+  // before the migration is pasted. Bad values are a 400, never coerced.
+  for (const k of ['insurance', 'contingency', 'accountancy'] as const) {
+    const mode = body[`${k}_mode`];
+    if (mode !== undefined) {
+      if (mode !== 'pct' && mode !== 'flat') {
+        return NextResponse.json({ error: `${k}_mode must be pct or flat` }, { status: 400 });
+      }
+      payload[`${k}_mode`] = mode;
+    }
+    for (const f of [`${k}_flat_amount`, `${k}_actual_amount`]) {
+      const v = body[f];
+      if (v === undefined) continue;
+      if (v === null || v === '') {
+        payload[f] = null; // blank = not set (flat → 0, actual → use the %)
+        continue;
+      }
+      const n = Number(v);
+      if (!Number.isFinite(n) || n < 0) {
+        return NextResponse.json({ error: `${f} must be a number ≥ 0 (or blank)` }, { status: 400 });
+      }
+      payload[f] = n;
+    }
+  }
+  if (body.fx_margin_pct !== undefined) {
+    const m = Number(body.fx_margin_pct ?? 0);
+    if (!Number.isFinite(m) || m < 0 || m >= 0.5) {
+      return NextResponse.json({ error: 'fx_margin_pct must be a fraction from 0 to under 0.5 (0.02 = 2%)' }, { status: 400 });
+    }
+    payload.fx_margin_pct = m;
+  }
 
   const { data, error } = await supabase
     .from('budget_settings')

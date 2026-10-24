@@ -15,14 +15,16 @@
    columns. Each line is converted exactly as computeBudgetPnl converts it
    (projected at the live tour rate; actual at the rate locked when it first
    actualised, else live), so the block can never disagree with the P&L under
-   it. A test asserts this against computeBudgetPnl directly.
+   it. A test asserts this against computeBudgetPnl directly. Both convert
+   through lineInTour (migration 274: + the bank margin on foreign projections)
+   and both skip Other income lines and refundable deposits held out of costs.
 
    Pure — no I/O — so the client sheet recomputes it as you type.
    ============================================ */
 
-import { convertToTour, type FxRateMap } from '@/lib/budget/fxRates';
-import { getEffectiveActual } from '@/lib/budget/transactions';
+import type { FxRateMap } from '@/lib/budget/fxRates';
 import { isIncomeRow } from '@/lib/budget/income-rows';
+import { isHeldDeposit, lineInTour } from '@/lib/budget/lineMoney';
 import type { BudgetLineItem, BudgetSection } from '@/types';
 
 export interface SheetTotalRow {
@@ -43,17 +45,16 @@ export function sheetTotalsBySection(
   sections: BudgetSection[],
   tourCurrency: string,
   fxRates: FxRateMap = {},
+  /** Migration 274 — budget_settings.fx_margin_pct (fraction). */
+  fxMarginPct: number = 0,
 ): SheetTotalRow[] {
   const ccy = (tourCurrency || 'GBP').toUpperCase();
   const ordered = [...sections].sort((a, b) => num(a.sort_order) - num(b.sort_order));
   const known = new Set(ordered.map((s) => s.id));
   const acc = new Map<string, { projected: number; actual: number }>();
   for (const l of lines) {
-    if (isIncomeRow(l)) continue;
-    const cur = (l.currency || ccy).toUpperCase();
-    const lr = num(l.locked_fx_rate);
-    const p = convertToTour(num(l.proposed_cost), cur, ccy, fxRates);
-    const a = convertToTour(getEffectiveActual(l), cur, ccy, fxRates, lr > 0 ? lr : null);
+    if (isIncomeRow(l) || isHeldDeposit(l)) continue;
+    const { projected: p, actual: a } = lineInTour(l, ccy, fxRates, fxMarginPct, 'cost');
     const key = l.section_id && known.has(l.section_id) ? l.section_id : '__uncat__';
     const cur0 = acc.get(key) ?? { projected: 0, actual: 0 };
     acc.set(key, { projected: cur0.projected + p, actual: cur0.actual + a });

@@ -232,7 +232,7 @@ export default async function BudgetTourPage({
         : Promise.resolve({ data: [] }),
       supabase
         .from('budget_commissions')
-        .select('id, label, percentage, basis, order_index')
+        .select('*') // migration-tolerant (274 adds basis_components / basis_pre_tax)
         .eq('tour_id', tourId)
         .eq('workspace_id', workspaceId)
         .order('order_index', { ascending: true }),

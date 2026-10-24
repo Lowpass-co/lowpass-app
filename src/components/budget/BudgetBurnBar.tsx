@@ -31,6 +31,7 @@ import { useSearchParams } from 'next/navigation';
 import { convertVia, type FxRateMap } from '@/lib/budget/fxRates';
 import { getEffectiveActual } from '@/lib/budget/transactions';
 import { isIncomeRow } from '@/lib/budget/income-rows';
+import { isHeldDeposit } from '@/lib/budget/lineMoney';
 import type { BudgetLineItem } from '@/types';
 
 interface BudgetBurnBarProps {
@@ -92,7 +93,8 @@ export function BudgetBurnBar({ lines, tourCurrency, fxRates = {}, inline = fals
     let committed = 0;
     let spent = 0;
     for (const line of lines) {
-      if (isIncomeRow(line)) continue;
+      // Refundable deposits owed back / returned are not spend (migration 274).
+      if (isIncomeRow(line) || isHeldDeposit(line)) continue;
       const cur = (line.currency || tourCurrency).toUpperCase();
       const proposed = convertVia(
         Number(line.proposed_cost ?? 0),

@@ -336,6 +336,11 @@ export function BudgetGridView({
           } else if (!res.ok) {
             showToast('Could not save the change', 'error');
             router.refresh();
+          } else if (field === 'refundable' || field === 'paidRate' || field === 'commissionable') {
+            // Migration 274 — these move money between sheet rows (costs ↔
+            // owed back, the paid rate, the commission base), and the sheet
+            // top recomputes from server lines, so pull the true state.
+            router.refresh();
           }
         })
         .catch(() => {

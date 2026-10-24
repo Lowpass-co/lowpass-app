@@ -20,9 +20,10 @@
    ============================================ */
 
 import { computeBudgetPnl, type PnlPair } from '@/lib/budget/computeBudgetPnl';
-import { toTourCurrency, convertToTour } from '@/lib/budget/fxRates';
+import { toTourCurrency } from '@/lib/budget/fxRates';
 import { getEffectiveActual } from '@/lib/budget/transactions';
 import { isIncomeRow } from '@/lib/budget/income-rows';
+import { fxMargin, isHeldDeposit, lineInTour } from '@/lib/budget/lineMoney';
 import { escapeHtml as esc } from '@/lib/export/shell';
 import type { BudgetExportData, ExportIncomeRow } from '@/lib/export/budget-data';
 import type { TemplateConfig } from '@/lib/export/template-config';
@@ -89,7 +90,7 @@ export function buildBudgetBodyHtml(data: BudgetExportData, config: TemplateConf
     // The leading "\n    " + page-break preserve the original summary+detail
     // concatenation byte-for-byte when all three are shown in default order.
     'income-detail': () =>
-      `\n    <div class="lp-page-break"></div>\n    <div class="lp-sec-head">Income detail (by show)</div>\n    ${buildIncomeDetail(data.income, scope, data.tour.currency, data.fxRates)}`,
+      `\n    <div class="lp-page-break"></div>\n    <div class="lp-sec-head">Income detail (by show)</div>\n    ${buildIncomeDetail(data.income, scope, data.tour.currency, data.fxRates, fxMargin(data.settings?.fx_margin_pct))}`,
     'expense-detail': () =>
       `\n    <div class="lp-sec-head">Expense detail (by section)</div>\n    ${buildExpenseDetail(data, scope, data.tour.currency)}`,
   };
@@ -124,6 +125,7 @@ function renderPnlSummary(data: BudgetExportData, scope: ExportScope): string {
     row('Overage', ib.overage, scope, ccy, 'higher'),
     row('Merch', ib.merch, scope, ccy, 'higher'),
     row('VIP', ib.vip, scope, ccy, 'higher'),
+    ib.other.projected || ib.other.actual ? row('Other income', ib.other, scope, ccy, 'higher') : '',
     // Deductions are actual-only (reduce actual gross) — show when not projected-only.
     scope !== 'projected' ? row('Less: settlement deductions', ib.deductions, scope, ccy, 'lower') : '',
     row('Gross income', pnl.grossIncome, scope, ccy, 'higher', 'lp-subtotal'),
@@ -133,11 +135,9 @@ function renderPnlSummary(data: BudgetExportData, scope: ExportScope): string {
   const sectionName = new Map(data.sections.map((s) => [s.id, s.name]));
   const secAgg = new Map<string, { name: string; pair: PnlPair }>();
   for (const l of data.lines) {
-    if (isIncomeRow(l)) continue;
-    const rowCur = (l.currency || ccy).toUpperCase();
-    const lLock = num(l.locked_fx_rate) > 0 ? num(l.locked_fx_rate) : null;
-    const proj = convertToTour(num(l.proposed_cost), rowCur, ccy, fxRates);
-    const act = convertToTour(getEffectiveActual(l), rowCur, ccy, fxRates, lLock);
+    // Income rows add to income; held deposits are owed back, not costs (274).
+    if (isIncomeRow(l) || isHeldDeposit(l)) continue;
+    const { projected: proj, actual: act } = lineInTour(l, ccy, fxRates, pnl.fxMarginPct, 'cost');
     const key = l.section_id ?? '__none__';
     const cur = secAgg.get(key) ?? { name: (l.section_id && sectionName.get(l.section_id)) || l.section || 'Uncategorised', pair: { projected: 0, actual: 0 } };
     cur.pair.projected += proj;
@@ -149,17 +149,23 @@ function renderPnlSummary(data: BudgetExportData, scope: ExportScope): string {
     .map((s) => row(s.name, s.pair, scope, ccy, 'lower'))
     .join('');
 
+  const overheadTag = (k: 'insurance' | 'contingency' | 'accountancy') =>
+    pnl.mode[k] === 'flat' ? 'fixed' : `${Math.round(pnl.pct[k] * 100)}%`;
   const overheadRows = [
     pnl.commissions.projected || pnl.commissions.actual ? row('Commissions', pnl.commissions, scope, ccy, 'lower') : '',
-    pnl.insurance.projected || pnl.insurance.actual ? row(`Insurance (${Math.round(pnl.pct.insurance * 100)}%)`, pnl.insurance, scope, ccy, 'lower') : '',
-    pnl.contingency.projected || pnl.contingency.actual ? row(`Contingency (${Math.round(pnl.pct.contingency * 100)}%)`, pnl.contingency, scope, ccy, 'lower') : '',
-    pnl.accountancy.projected || pnl.accountancy.actual ? row(`Accountancy (${Math.round(pnl.pct.accountancy * 100)}%)`, pnl.accountancy, scope, ccy, 'lower') : '',
+    pnl.insurance.projected || pnl.insurance.actual ? row(`Insurance (${overheadTag('insurance')})`, pnl.insurance, scope, ccy, 'lower') : '',
+    pnl.contingency.projected || pnl.contingency.actual ? row(`Contingency (${overheadTag('contingency')})`, pnl.contingency, scope, ccy, 'lower') : '',
+    pnl.accountancy.projected || pnl.accountancy.actual ? row(`Accountancy (${overheadTag('accountancy')})`, pnl.accountancy, scope, ccy, 'lower') : '',
     pnl.cogs.projected || pnl.cogs.actual ? row(`Merch COGS (${Math.round(pnl.pct.merchCogs * 100)}%)`, pnl.cogs, scope, ccy, 'lower') : '',
     row('Total expenses', pnl.totalExpenses, scope, ccy, 'lower', 'lp-subtotal'),
   ].join('');
 
   /* ---------- NET ---------- */
-  const netRow = row('NET', pnl.net, scope, ccy, 'higher', 'lp-subtotal');
+  const netRow =
+    row('NET', pnl.net, scope, ccy, 'higher', 'lp-subtotal') +
+    (pnl.deposits.owedBack.projected || pnl.deposits.owedBack.actual
+      ? row('Refundable deposits owed back (not in costs)', pnl.deposits.owedBack, scope, ccy, 'higher')
+      : '');
 
   return `
     <div class="lp-sec-head">Profit &amp; Loss</div>
@@ -178,7 +184,14 @@ function renderPnlSummary(data: BudgetExportData, scope: ExportScope): string {
 
 /** Per-show income: projected (post-tax gross) vs actual (gross − deductions),
  *  native+converted, reconciling to grossIncome. */
-function buildIncomeDetail(income: ExportIncomeRow[], scope: ExportScope, ccy: string, fxRates: Record<string, number>): string {
+function buildIncomeDetail(
+  income: ExportIncomeRow[],
+  scope: ExportScope,
+  ccy: string,
+  fxRates: Record<string, number>,
+  /** Migration 274 — bank margin, applied to PROJECTED foreign income (as the P&L does). */
+  margin = 0,
+): string {
   if (income.length === 0) return `<p class="lp-native">No show income recorded.</p>`;
   const valHeads = SCOPE_HEADERS[scope].map((h) => `<th class="num">${esc(h)}</th>`).join('');
   let totProj = 0;
@@ -198,7 +211,7 @@ function buildIncomeDetail(income: ExportIncomeRow[], scope: ExportScope, ccy: s
         (i.post_tax_overage != null ? num(i.post_tax_overage) : num(i.pre_tax_overage) * (1 - wh)) +
         num(i.merch_income) + num(i.vip_income);
       const actNative = num(i.actual_guarantee) + num(i.actual_overage) + num(i.actual_merch) + num(i.actual_vip) - num(i.actual_deductions);
-      const projConv = f(projNative);
+      const projConv = f(projNative) * (rowCur !== ccy.toUpperCase() ? 1 - margin : 1);
       const actConv = f(actNative);
       totProj += projConv;
       totAct += actConv;
@@ -225,13 +238,14 @@ function buildExpenseDetail(data: BudgetExportData, scope: ExportScope, ccy: str
   const sectionName = new Map(data.sections.map((s) => [s.id, s.name]));
   const bySection = new Map<string, { name: string; lines: typeof data.lines }>();
   for (const l of data.lines) {
-    if (isIncomeRow(l)) continue;
+    if (isIncomeRow(l) || isHeldDeposit(l)) continue; // held deposits are owed back, not costs (274)
     const key = l.section_id ?? '__none__';
     const entry = bySection.get(key) ?? { name: (l.section_id && sectionName.get(l.section_id)) || l.section || 'Uncategorised', lines: [] as typeof data.lines };
     entry.lines.push(l);
     bySection.set(key, entry);
   }
   if (bySection.size === 0) return `<p class="lp-native">No expense lines recorded.</p>`;
+  const margin = fxMargin(data.settings?.fx_margin_pct);
   const groups = [...bySection.values()].sort((a, b) => a.name.localeCompare(b.name));
   return groups
     .map((g) => {
@@ -242,9 +256,7 @@ function buildExpenseDetail(data: BudgetExportData, scope: ExportScope, ccy: str
           const rowCur = (l.currency || ccy).toUpperCase();
           const projN = num(l.proposed_cost);
           const actN = getEffectiveActual(l);
-          const lLock = num(l.locked_fx_rate) > 0 ? num(l.locked_fx_rate) : null;
-          const projC = convertToTour(projN, rowCur, ccy, data.fxRates);
-          const actC = convertToTour(actN, rowCur, ccy, data.fxRates, lLock);
+          const { projected: projC, actual: actC } = lineInTour(l, ccy, data.fxRates, margin, 'cost');
           secProj += projC;
           secAct += actC;
           const cells =

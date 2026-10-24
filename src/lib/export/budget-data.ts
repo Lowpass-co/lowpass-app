@@ -104,7 +104,7 @@ export async function loadBudgetExportData(
     routingIds.length
       ? supabase.from('budget_income').select('*').eq('workspace_id', workspaceId).in('routing_id', routingIds)
       : Promise.resolve({ data: [] }),
-    supabase.from('budget_commissions').select('id, label, percentage, basis, order_index')
+    supabase.from('budget_commissions').select('*') // migration-tolerant (274 adds basis_components / basis_pre_tax)
       .eq('tour_id', tourId).eq('workspace_id', workspaceId).order('order_index', { ascending: true }),
   ]);
   const income: ExportIncomeRow[] = ((incRes.data ?? []) as Array<Record<string, unknown>>).map((r) => {

@@ -14,7 +14,7 @@ import { NextResponse } from 'next/server';
 import { requireWrite } from '@/lib/auth/workspace-check';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 import {
-  isFormulaSectionKind,
+  isSingletonSectionKind,
   normalizeSectionKind,
 } from '@/lib/budget/sectionKinds';
 
@@ -138,7 +138,7 @@ export async function POST(request: Request) {
     (error.code === '42703' || error.code === 'PGRST204') &&
     /kind/i.test(error.message)
   ) {
-    if (isFormulaSectionKind(kind)) {
+    if (isSingletonSectionKind(kind)) {
       return NextResponse.json(
         { error: 'Formula sections require migration 203 — run npm run db:migrate.' },
         { status: 409 },
@@ -154,9 +154,17 @@ export async function POST(request: Request) {
   if (error) {
     // The partial unique index (one formula section per kind per tour)
     // surfaces as 23505. Translate to a friendly 409.
-    if (error.code === '23505' && isFormulaSectionKind(kind)) {
+    if (error.code === '23505' && isSingletonSectionKind(kind)) {
       return NextResponse.json(
-        { error: `This tour already has a ${kind} section.` },
+        { error: `This tour already has ${kind === 'income' ? 'an Other income' : `a ${kind}`} section.` },
+        { status: 409 },
+      );
+    }
+    // Migration 274 adds 'income' to budget_sections_kind_check; before it is
+    // pasted the insert fails the CHECK (23514).
+    if (error.code === '23514' && kind === 'income') {
+      return NextResponse.json(
+        { error: 'Other income needs migration 274 — paste it into the Supabase SQL Editor.' },
         { status: 409 },
       );
     }

@@ -737,12 +737,131 @@ export function GridSlideOver({
     </div>
   );
 
+  /* Migration 274 — the line's money options. Rendered only for rows the budget
+     adapter built (they carry _tourCcy); /grid-demo rows never show it. */
+  const REFUND_OPTS = ['No — it’s a cost', 'Owed back', 'Returned', 'Forfeited (supplier kept it)'] as const;
+  const REFUND_VALUE: Record<string, string> = {
+    [REFUND_OPTS[0]]: '',
+    [REFUND_OPTS[1]]: 'pending',
+    [REFUND_OPTS[2]]: 'returned',
+    [REFUND_OPTS[3]]: 'forfeited',
+  };
+  const refundLabel = (v: unknown) =>
+    v === 'pending' ? REFUND_OPTS[1] : v === 'returned' ? REFUND_OPTS[2] : v === 'forfeited' ? REFUND_OPTS[3] : REFUND_OPTS[0];
+  const MoneyOptionsBlock = () => {
+    if (typeof row._tourCcy !== 'string') return null;
+    const tourCcy = row._tourCcy;
+    const lineCcy = String(row.cur || tourCcy).toUpperCase();
+    const foreign = lineCcy !== tourCcy;
+    const isIncome = row._income === true;
+    const hasActual = (Number(row.act) || 0) !== 0;
+    const held = row._refundable === 'pending' || row._refundable === 'returned';
+    return (
+      <>
+        {isIncome ? (
+          <div className="so-field">
+            <label>Commissions</label>
+            {/* a plain checkbox row — undo the field-caption styling `.so-field label` applies */}
+            <label
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
+                fontWeight: 'normal',
+                textTransform: 'none',
+                letterSpacing: 'normal',
+                fontSize: 'var(--lp-text-sm)',
+                color: 'var(--lp-text)',
+              }}
+            >
+              <input
+                type="checkbox"
+                defaultChecked={row._commissionable !== false}
+                onChange={(e) =>
+                  commit(() => {
+                    row._commissionable = e.target.checked;
+                    fireEdit('commissionable', e.target.checked);
+                  })
+                }
+              />
+              Counts toward commissions ticked “Other income”
+            </label>
+          </div>
+        ) : (
+          <div className="so-field">
+            <label>Refundable deposit</label>
+            <div>
+              <span
+                className="pill"
+                style={{ cursor: 'pointer' }}
+                onClick={(e) =>
+                  openMenu({
+                    anchor: rectOf(e),
+                    options: [...REFUND_OPTS],
+                    current: refundLabel(row._refundable),
+                    onPick: (label) =>
+                      commit(() => {
+                        const v = REFUND_VALUE[label] ?? '';
+                        row._refundable = v || null;
+                        fireEdit('refundable', v);
+                      }),
+                  })
+                }
+              >
+                {refundLabel(row._refundable)}
+              </span>
+            </div>
+            {held ? (
+              <div className="so-note" style={{ marginTop: 4 }}>
+                Kept out of costs — shown on the sheet as money {row._refundable === 'pending' ? 'owed back' : 'returned'}.
+                Mark it forfeited if the supplier keeps it.
+              </div>
+            ) : null}
+          </div>
+        )}
+        {foreign ? (
+          <div className="so-field">
+            <label>Rate paid</label>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <span>1 {lineCcy} =</span>
+              <div className="moneyin" style={{ maxWidth: 140 }}>
+                <input
+                  inputMode="decimal"
+                  placeholder={hasActual ? 'tour rate' : 'locks on actual'}
+                  defaultValue={row._fxRate != null ? String(row._fxRate) : ''}
+                  onBlur={(e) => {
+                    const raw = e.target.value.trim();
+                    const n = Number(raw);
+                    const next = raw && Number.isFinite(n) && n > 0 ? n : null;
+                    if (next === (row._fxRate ?? null)) return;
+                    commit(() => {
+                      row._fxRate = next;
+                      row._fxLocked = next != null;
+                      fireEdit('paidRate', next ?? '');
+                    });
+                  }}
+                />
+              </div>
+              <span>{tourCcy}</span>
+            </div>
+            <div className="so-note" style={{ marginTop: 4 }}>
+              {hasActual
+                ? 'Locked from the tour rate when the actual landed. Type the rate your bank really used; clear it to go back to the tour rate.'
+                : 'Locks to the tour rate automatically when an actual is entered.'}
+            </div>
+          </div>
+        ) : null}
+      </>
+    );
+  };
+
   /* ---- variant bodies ---- */
   const LineBody = () => (
     <div className="so-body" key={version}>
       {Title('Untitled line')}
       {MoneyBlock()}
       {CurBlock()}
+      {MoneyOptionsBlock()}
       <div className="so-field">
         <label>Vendor</label>
         <input defaultValue={String(row.vendor ?? '')} onBlur={(e) => commit(() => (row.vendor = e.target.value))} />

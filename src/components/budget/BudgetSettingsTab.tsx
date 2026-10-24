@@ -29,6 +29,9 @@ import { useToast } from '@/components/ui/Toast';
 import { useBudgetConfirm } from '@/components/budget/BudgetConfirmDialog';
 import { useTrackPhases } from '@/components/budget/BudgetTrackPhasesContext';
 import { InlineSelectCell } from '@/components/budget/cells/InlineSelectCell';
+import { commissionBaseSummary } from '@/components/budget/BudgetSheetTop';
+import { normalizeComponents } from '@/lib/budget/computeBudgetPnl';
+import type { CommissionComponent } from '@/types';
 import { VersionApprovalCard } from '@/components/budget/versioning/VersionApprovalCard';
 import type { BudgetVersionVm } from '@/components/budget/versioning/versionApi';
 import type {
@@ -319,10 +322,13 @@ type OverheadSettings = {
   insurance_basis: string;
   contingency_basis: string;
   accountancy_basis: string;
+  /** Migration 274 — bank margin on projected foreign amounts (fraction). */
+  fx_margin_pct: number;
 };
 
 const BASIS_OPTIONS = [
   { value: 'income_gross', label: 'of gross income' },
+  { value: 'income_show', label: 'of show income (pre-tax)' },
   { value: 'expenses_pre_contingency', label: 'of expenses' },
   { value: 'expenses_total', label: 'of total expenses' },
 ];
@@ -351,6 +357,7 @@ function OverheadsCard({ tourId }: { tourId: string }) {
           insurance_basis: d.insurance_basis ?? 'income_gross',
           contingency_basis: d.contingency_basis ?? 'expenses_pre_contingency',
           accountancy_basis: d.accountancy_basis ?? 'income_gross',
+          fx_margin_pct: Number(d.fx_margin_pct ?? 0),
         });
       } catch {
         if (active) setLoadFailed(true);
@@ -462,7 +469,38 @@ function OverheadsCard({ tourId }: { tourId: string }) {
             of merch income
           </span>
         </div>
+        <div className="flex items-center gap-3">
+          <span className="w-28 shrink-0" style={{ fontSize: 'var(--lp-text-sm)', color: 'var(--lp-text)' }}>
+            Bank FX margin
+          </span>
+          <div className="flex items-center gap-1">
+            <input
+              type="number"
+              min={0}
+              max={49}
+              step={0.25}
+              aria-label="Bank FX margin percentage"
+              value={s ? +(s.fx_margin_pct * 100).toFixed(2) : ''}
+              onChange={(e) => {
+                const pct = Number(e.target.value) || 0;
+                if (pct < 0 || pct >= 50) return; // the DB caps it below 50%
+                save({ fx_margin_pct: pct / 100 });
+              }}
+              disabled={!s}
+              className="w-16"
+              style={{ ...inputStyle, textAlign: 'right' }}
+            />
+            <span style={{ color: 'var(--lp-text-tertiary)' }}>%</span>
+          </div>
+          <span style={{ fontSize: 'var(--lp-text-xs)', color: 'var(--lp-text-tertiary)' }}>
+            worse than the market rate — applied to projected foreign amounts only
+          </span>
+        </div>
       </div>
+      <p className="mt-3" style={{ fontSize: 'var(--lp-text-xs)', color: 'var(--lp-text-tertiary)' }}>
+        A fixed overhead (e.g. an insurance invoice) and a typed actual are set on the
+        Budget sheet: click “fixed amount” next to the overhead, or type into its Actual.
+      </p>
     </section>
   );
 }
@@ -479,7 +517,15 @@ const COMMISSION_BASIS_OPTIONS = [
   { value: 'gross_minus_tax', label: 'pre-tax' },
 ];
 
-type CommissionRow = { id: string; label: string; percentage: number; basis: string };
+type CommissionRow = {
+  id: string;
+  label: string;
+  percentage: number;
+  basis: string;
+  /** Migration 274 — ticked parts; set on the Budget sheet. */
+  basis_components?: CommissionComponent[] | null;
+  basis_pre_tax?: boolean;
+};
 
 function CommissionsCard({ tourId }: { tourId: string }) {
   const { showToast } = useToast();
@@ -501,6 +547,8 @@ function CommissionsCard({ tourId }: { tourId: string }) {
               label: c.label,
               percentage: Number(c.percentage) || 0,
               basis: c.basis || 'gross',
+              basis_components: normalizeComponents(c.basis_components),
+              basis_pre_tax: c.basis_pre_tax !== false,
             })),
           );
       } catch {
@@ -649,14 +697,25 @@ function CommissionsCard({ tourId }: { tourId: string }) {
                 <span style={{ color: 'var(--lp-text-tertiary)' }}>%</span>
               </div>
               <div className="w-32">
-                <InlineSelectCell
-                  variant="field"
-                  showTone={false}
-                  ariaLabel={`${r.label} basis`}
-                  value={r.basis}
-                  options={COMMISSION_BASIS_OPTIONS}
-                  onCommit={(v) => commit(r.id, { basis: v })}
-                />
+                {r.basis_components && r.basis_components.length ? (
+                  /* Ticked parts win over the single base (migration 274);
+                     they're edited on the Budget sheet's Commissions table. */
+                  <span
+                    title="Set on the Budget sheet — click the commission's “Of” box"
+                    style={{ fontSize: 'var(--lp-text-sm)', color: 'var(--lp-text-secondary)' }}
+                  >
+                    {commissionBaseSummary(r.basis_components, r.basis, r.basis_pre_tax !== false)}
+                  </span>
+                ) : (
+                  <InlineSelectCell
+                    variant="field"
+                    showTone={false}
+                    ariaLabel={`${r.label} basis`}
+                    value={r.basis}
+                    options={COMMISSION_BASIS_OPTIONS}
+                    onCommit={(v) => commit(r.id, { basis: v })}
+                  />
+                )}
               </div>
               <button
                 type="button"
