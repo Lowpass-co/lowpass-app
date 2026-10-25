@@ -35,7 +35,8 @@ import { ChevronRight } from 'lucide-react';
 import { useArtistTourContext } from '@/contexts/ArtistTourContext';
 import { useTourEditor } from '@/contexts/TourEditorContext';
 import { tourHref } from '@/lib/nav/lastProduct';
-import { DayTypeLegend, TourFingerprint, dayTypesPresent } from '@/components/tour/TourFingerprint';
+import { DayTypeLegend, TourFingerprint } from '@/components/tour/TourFingerprint';
+import { dayTypesPresent } from '@/lib/routing/dayTypesPresent';
 import { tourPhase, type TourPhase } from '@/lib/derive/tourStatus';
 import type { HomeTourSummary } from '@/server/home/getHomeData';
 

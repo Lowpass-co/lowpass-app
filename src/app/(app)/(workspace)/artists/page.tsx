@@ -28,7 +28,9 @@ import { NeedsYouQueue } from '@/components/artists/NeedsYouQueue';
 import { ArtistHomeStagger } from '@/components/artists/ArtistHomeStagger';
 import { WorkspaceNewArtistButton } from '@/components/artists/WorkspaceNewArtistButton';
 import { getWorkspaceLandingData } from '@/server/workspace/getWorkspaceLandingData';
-import { DayTypeLegend, dayTypesPresent } from '@/components/tour/TourFingerprint';
+import { DayTypeLegend } from '@/components/tour/TourFingerprint';
+// A plain (server-safe) module — never call a function from a 'use client' file here.
+import { dayTypesPresent } from '@/lib/routing/dayTypesPresent';
 
 // (UX-walk §A.7) — the abbreviateCurrency / CURRENCY_SYMBOL helpers were only
 // used by the deleted workspace "COMMITTED" mixed-currency stat; removed with it.

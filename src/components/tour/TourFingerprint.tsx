@@ -34,6 +34,8 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { DAY_TYPE_TOKEN, colourForDayType } from '@/lib/routing/dayType';
 import { getDayTypeLabel } from '@/lib/utils';
+// (dayTypesPresent lives in '@/lib/routing/dayTypesPresent' — a plain module,
+// because server components call it. Don't export plain functions from here.)
 
 export type FingerprintSize = 'card' | 'row' | 'hero';
 
@@ -361,7 +363,6 @@ export function TourFingerprint({
 
 /* ---- the key — rendered ONCE per section, not per strip ---- */
 
-const LEGEND_ORDER = ['show', 'festival', 'travel', 'off', 'rehearsal', 'press', 'radio', 'tv'];
 const LEGEND_LABEL: Record<string, string> = {
   show: 'Show',
   festival: 'Festival',
@@ -372,19 +373,6 @@ const LEGEND_LABEL: Record<string, string> = {
   radio: 'Radio',
   tv: 'TV',
 };
-
-/** The day types that actually appear across some strips (first type of each
- *  day, known types only, in a fixed order). */
-export function dayTypesPresent(strips: Array<Array<{ dayType: string }>>): string[] {
-  const seen = new Set<string>();
-  for (const s of strips) {
-    for (const d of s) {
-      const t = types(d.dayType)[0] ?? 'off';
-      seen.add(DAY_TYPE_TOKEN[t] ? t : 'off');
-    }
-  }
-  return LEGEND_ORDER.filter((t) => seen.has(t));
-}
 
 export function DayTypeLegend({ dayTypes, className }: { dayTypes?: string[]; className?: string }) {
   const list = (dayTypes && dayTypes.length ? dayTypes : ['show', 'travel', 'off']).filter((t) => DAY_TYPE_TOKEN[t]);
