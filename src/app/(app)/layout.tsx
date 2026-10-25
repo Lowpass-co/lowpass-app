@@ -27,7 +27,6 @@ import { ErrorBoundary } from '@/components/common/ErrorBoundary';
 import { ToastProvider } from '@/components/ui/Toast';
 import { ArtistTourProvider } from '@/contexts/ArtistTourContext';
 import { ProductProvider } from '@/contexts/ProductContext';
-import { SwitcherStateProvider } from '@/contexts/SwitcherStateContext';
 import { TourEditorProvider } from '@/contexts/TourEditorContext';
 import { AppDensityProvider } from '@/lib/density/appDensity';
 
@@ -46,12 +45,6 @@ export default async function AppLayout({
         <Suspense fallback={null}>
           <ArtistTourProvider>
             <ProductProvider>
-              {/* Sprint 8.3 §1 — switcher dropdown + optimistic-
-                  artist state lives here so it survives navigation
-                  inside the dynamic-segment subtree (Next 16 RSC
-                  remounts the wrapper/switcher on /artists/[id]
-                  changes; the provider above the segment doesn't). */}
-              <SwitcherStateProvider>
                 {/* Grid system Phase 1 — ONE app-wide density. Mounted
                     here so its data-lp-density attr + context wrap every
                     authenticated page; every grid reads the same value. */}
@@ -62,7 +55,6 @@ export default async function AppLayout({
                     <AppShell>{children}</AppShell>
                   </TourEditorProvider>
                 </AppDensityProvider>
-              </SwitcherStateProvider>
             </ProductProvider>
           </ArtistTourProvider>
         </Suspense>

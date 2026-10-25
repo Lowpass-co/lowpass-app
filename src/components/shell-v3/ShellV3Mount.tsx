@@ -22,7 +22,8 @@ import {
   getRequestWorkspaceName,
   getRequestVisibleResources,
 } from '@/lib/server/requestContext';
-import { ArtistTourSwitcherClientWrapper } from '@/components/shell-v2/ArtistTourSwitcherClientWrapper';
+import { ArtistTourPicker } from '@/components/picker/ArtistTourPicker';
+import type { PickerArtist, PickerTour } from '@/lib/nav/pickerModel';
 import { ProductHeaderAvatarMenu } from '@/components/shell-v2/ProductHeaderAvatarMenu';
 import { WorkspaceSwitcher } from '@/components/shell-v2/WorkspaceSwitcher';
 import { countReceiptsNeedingDetails } from '@/lib/budget/loadReceipts';
@@ -43,8 +44,9 @@ export interface ShellV3MountProps {
   search?: string;
   /** Known from server data at tour scope; the path carries only the tour id. */
   artistId?: string | null;
-  /** S-2a — names the layout already loaded, so the picker never renders
-   *  "Pick an artist…" on a URL where the server knew the answer. */
+  /** S-2a — names the layout already loaded. Unused since the Oct 2026 picker:
+   *  it receives every artist and tour, so it names both itself. Kept so the
+   *  layouts that pass them don't all change in this PR. */
   artistName?: string | null;
   tourName?: string | null;
   badges?: Record<string, string | number | null | undefined>;
@@ -57,7 +59,7 @@ export interface ShellV3MountProps {
 }
 
 export async function ShellV3Mount({
-  pathname, search, artistId, artistName, tourName, badges, denseRail, landing, children,
+  pathname, search, artistId, badges, denseRail, landing, children,
 }: ShellV3MountProps) {
   /* Perf pass 1 (2026-08-04) — everything below rides the per-request cache
      (src/lib/server/requestContext.ts). The old shape was a serial chain —
@@ -75,9 +77,14 @@ export async function ShellV3Mount({
   const scope = resolveScope(pathname, search ?? '');
   const wantsReceiptBadge = scope.scope === 'tour' && scope.mode === 'money' && !!scope.tourId;
 
-  const [{ data: artistsRes }, needsDetails, profile, workspaceName, visibleResources] =
+  const [{ data: artistsRes }, { data: toursRes }, needsDetails, profile, workspaceName, visibleResources] =
     await Promise.all([
       supabase.from('artists').select('id, name, branding, spotify_image_url').order('name', { ascending: true }),
+      /* Oct 2026 picker redesign — EVERY tour, lean, with the page. The old
+         picker fetched one artist's tours client-side and, on most pages,
+         never fetched at all (empty tours pane). One cheap RLS-scoped query
+         here means the picker opens complete and switches artists instantly. */
+      supabase.from('tours').select('id, name, artist_id, start_date, end_date').order('start_date', { ascending: true }),
       wantsReceiptBadge ? countReceiptsNeedingDetails(supabase, scope.tourId as string) : Promise.resolve(0),
       getRequestProfile(),
       /* S-3b — the REAL workspace name, everywhere (WorkspaceTopBar showed it;
@@ -90,10 +97,16 @@ export async function ShellV3Mount({
     ]);
 
   const initialArtists = (artistsRes ?? []) as SwitcherArtistMin[];
+  const pickerArtists: PickerArtist[] = initialArtists.map((a) => {
+    const logo = (a.branding as { logo_url?: string | null } | null)?.logo_url ?? null;
+    return { id: a.id, name: a.name, imageUrl: logo || a.spotify_image_url || null };
+  });
+  const pickerTours: PickerTour[] = ((toursRes ?? []) as Array<{
+    id: string; name: string | null; artist_id: string | null; start_date: string | null; end_date: string | null;
+  }>).map((t) => ({ id: t.id, name: t.name ?? 'Untitled tour', artistId: t.artist_id, startDate: t.start_date, endDate: t.end_date }));
 
   const knownArtistId = artistId ?? scope.artistId ?? null;
-  const resolvedArtistName =
-    initialArtists.find((a) => a.id === knownArtistId)?.name ?? null;
+
 
   const isSiteAdmin = !!profile?.is_site_admin;
   const avatarUrl = profile?.avatar_url ?? null;
@@ -112,15 +125,14 @@ export async function ShellV3Mount({
       landing={landing}
       workspaceName={workspaceName ? toTitleCase(workspaceName) : 'Workspace'}
       switcher={
-        <ArtistTourSwitcherClientWrapper
-          initialArtists={initialArtists}
-          initialTours={null}
-          initialArtistId={artistId ?? scope.artistId ?? null}
-          /* S-3a — at artist scope the id IS in the path, and the artist list
-             was already fetched for the picker, so the name is here for free.
-             No layout needs to query for it, and none does. */
-          fallbackArtistName={artistName ?? resolvedArtistName}
-          fallbackTourName={tourName ?? null}
+        <ArtistTourPicker
+          artists={pickerArtists}
+          tours={pickerTours}
+          /* At tour scope the layout supplies the artist; the picker can also
+             derive it from the tour row, so either way it never sits empty. */
+          currentArtistId={knownArtistId}
+          currentTourId={scope.tourId ?? null}
+          landing={landing}
         />
       }
       headerRight={

@@ -987,38 +987,24 @@ input[type='checkbox'].lp-checkbox:focus-visible {
   --lp-pink: #F472B6;
 }
 
-/* ============================================
-   ArtistTourSwitcher — surface hooks only.
-
-   Sprint 6.1 §3: animations moved to JS via the Web Animations
-   API (element.animate()) inside useLayoutEffect. The
-   data-state= / data-pane-state= attribute-driven transitions
-   that lived here are gone — Sprint 6's two-frame raf pattern
-   couldn't survive React 19's automatic batching, which
-   collapsed the mount-state and animate-state renders into one
-   paint and let no transition fire. The Web Animations API
-   runs on the compositor and doesn't depend on React's render
-   cycle. prefers-reduced-motion is detected via window.matchMedia
-   inline, not @media here.
-
-   These class rules retain only the structural styles each
-   element needs at rest — sizing, positioning, default opacity.
-   The component sets initial inline opacity to match the
-   animation's from-frame so any race with .animate()
-   establishment doesn't flash full-opacity content.
-   ============================================ */
-.lp-ats-panel {
-  pointer-events: auto;
+/* Artist & tour picker (Oct 2026) — a short fade/slide in on open. CSS only:
+   nothing animates on remount or close, which is what made the old switcher
+   flash shut and open again between selections. */
+@keyframes lp-picker-in {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
 }
-
-.lp-ats-pane {
-  /* No animation rules here — JS drives them. */
+@keyframes lp-picker-sheet-in {
+  from { transform: translateY(24px); opacity: 0; }
+  to   { transform: translateY(0); opacity: 1; }
 }
-
-/* prefers-reduced-motion: handled inline in
-   ArtistTourSwitcher.tsx via window.matchMedia in the animation
-   effects (ANIM.reducedMs = 50ms). No CSS @media block needed
-   here — the JS read is the source of truth. */
+.lp-picker-panel { animation: lp-picker-in var(--lp-dur-fast) var(--lp-ease-out) both; }
+.lp-picker-sheet { animation: lp-picker-sheet-in var(--lp-dur-base) var(--lp-ease-out) both; }
+.lp-picker-seg:hover { background: var(--lp-panel-hover); }
+.lp-picker-seg:focus-visible { outline: 2px solid var(--lp-orange); outline-offset: -2px; }
+@media (prefers-reduced-motion: reduce) {
+  .lp-picker-panel, .lp-picker-sheet { animation: none; }
+}
 
 /* Sprint 7 §4 — hover lift utility for artist surface cards
    (ArtistProductCards, the workspace artist grid). Transform
