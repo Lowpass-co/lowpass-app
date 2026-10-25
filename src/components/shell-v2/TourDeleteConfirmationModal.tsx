@@ -7,9 +7,9 @@
    "Type DELETE to confirm" guard. The Delete button stays
    disabled until the input matches DELETE (case-sensitive).
 
-   Used from the <ArtistTourSwitcher> overflow menu (⋮ next
-   to each tour row) and from the future Operations · Edit
-   Tour surface when that lands.
+   Used from the ⋮ on each tour row of the artist page
+   (<TourPicker>). Oct 2026: it moved there from the top-bar
+   picker, which no longer carries destructive actions.
 
    Reuses the existing modal pattern from
    <DeleteConfirmationModal> but renders richer body content

@@ -14,17 +14,10 @@
        on its left side, alongside the existing tours dropdown.
        Workspace-scoped routes don't need an artist/tour switcher.
 
-     - shell-v2 (<ProductHeader>): renders <WorkspaceSwitcher> +
-       <ArtistTourSwitcherClientWrapper> on its left side. The
-       initialArtists prefetch lives on ProductHeader directly.
-
-   Sprint 8.5 §1's hoisted-mount fix (artist/tour switcher state
-   persistence across /artists/[A]→/artists/[B] navigation) is
-   superseded — switcher state survives via SwitcherStateContext
-   (mounted in (app)/layout.tsx, above this component), so DOM
-   remount on dynamic-segment change still preserves the open
-   dropdown's open/close state and selection. Any visible flash
-   on artist switch is a separate polish item, not in 13.A scope.
+     - shell-v3: <TopBarV3> mounts <ArtistTourPicker> (Oct 2026 redesign,
+       src/components/picker). It holds no state across navigation — choosing
+       an artist only previews it, and choosing a tour navigates once — so the
+       old SwitcherStateContext / hoisted-mount machinery is deleted.
 
    AppShell is now a pure pass-through wrapper for providers and
    global non-chrome ambient elements.

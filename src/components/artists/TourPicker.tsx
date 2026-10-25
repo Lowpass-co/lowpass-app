@@ -30,8 +30,11 @@
    ============================================ */
 
 import Link from 'next/link';
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { ChevronRight } from 'lucide-react';
+import { ChevronRight, Trash2 } from 'lucide-react';
+import { ContextMenu } from '@/components/ui/ContextMenu';
+import { TourDeleteConfirmationModal } from '@/components/shell-v2/TourDeleteConfirmationModal';
 import { useArtistTourContext } from '@/contexts/ArtistTourContext';
 import { useTourEditor } from '@/contexts/TourEditorContext';
 import { tourHref } from '@/lib/nav/lastProduct';
@@ -161,6 +164,12 @@ export function TourPicker({ tours }: { tours: HomeTourSummary[] }) {
     ? selectedTourId
     : null;
 
+  // Oct 2026 — "Delete tour…" lives here now (each row's ⋮). It used to be
+  // only in the top-bar picker's row menu, which the picker redesign removed:
+  // a destructive action in a fast navigation menu is too easy to hit.
+  const [tourToDelete, setTourToDelete] = useState<{ id: string; name: string } | null>(null);
+  const askDelete = (t: HomeTourSummary) => setTourToDelete({ id: t.id, name: t.name });
+
   const openTour = (id: string) => {
     // Q4 — a row click NAVIGATES IN to the tour's last-used product
     // (Operations fallback). No setSelectedTourId: context derives the
@@ -275,6 +284,7 @@ export function TourPicker({ tours }: { tours: HomeTourSummary[] }) {
                 first={i === 0}
                 active={t.id === activeTourId}
                 onPick={() => openTour(t.id)}
+                onDelete={() => askDelete(t)}
               />
             ))
           )}
@@ -303,13 +313,39 @@ export function TourPicker({ tours }: { tours: HomeTourSummary[] }) {
                   tour={t}
                   active={t.id === activeTourId}
                   onPick={() => openTour(t.id)}
+                  onDelete={() => askDelete(t)}
                 />
               ))}
             </div>
           </div>
         ) : null}
       </div>
+      {tourToDelete ? (
+        <TourDeleteConfirmationModal
+          open
+          tourId={tourToDelete.id}
+          tourName={tourToDelete.name}
+          onClose={() => setTourToDelete(null)}
+          onDeleted={() => {
+            setTourToDelete(null);
+            router.refresh();
+          }}
+        />
+      ) : null}
     </section>
+  );
+}
+
+/** Row ⋮ — sits above the row's click-through overlay. */
+function RowMenu({ tourName, onDelete }: { tourName: string; onDelete: () => void }) {
+  return (
+    <span
+      className="pointer-events-auto relative z-[2] shrink-0"
+      aria-label={`More for ${tourName}`}
+      onClick={(e) => e.stopPropagation()}
+    >
+      <ContextMenu items={[{ label: 'Delete tour…', icon: Trash2, variant: 'danger', onClick: onDelete }]} align="right" />
+    </span>
   );
 }
 
@@ -366,11 +402,13 @@ function TourRow({
   first,
   active,
   onPick,
+  onDelete,
 }: {
   tour: HomeTourSummary;
   first: boolean;
   active: boolean;
   onPick: () => void;
+  onDelete: () => void;
 }) {
   const meta = PHASE_META[phaseOf(tour)];
   return (
@@ -465,6 +503,7 @@ function TourRow({
           </span>
         )}
       </div>
+      <RowMenu tourName={tour.name} onDelete={onDelete} />
       <ChevronRight
         size={16}
         aria-hidden
@@ -481,10 +520,12 @@ function PastTourLine({
   tour,
   active,
   onPick,
+  onDelete,
 }: {
   tour: HomeTourSummary;
   active: boolean;
   onPick: () => void;
+  onDelete: () => void;
 }) {
   return (
     <div
@@ -529,6 +570,7 @@ function PastTourLine({
           <span className="lp-mono">{tour.showCount}</span>{' '}
           {tour.showCount === 1 ? 'show' : 'shows'} · wrapped
         </span>
+        <RowMenu tourName={tour.name} onDelete={onDelete} />
       </span>
     </div>
   );

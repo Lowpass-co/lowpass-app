@@ -10,8 +10,8 @@
    sidebar grouped by job (ia.ts TOUR_RAIL), so the bar only says where you are
    and lets you switch artist or tour.
 
-   ONE PICKER, EVERYWHERE. The artist/tour switcher is <ArtistTourSwitcher> —
-   the same component shell-v2 already uses — mounted here once and rendered
+   ONE PICKER, EVERYWHERE. The artist/tour picker is <ArtistTourPicker>
+   (src/components/picker, Oct 2026 redesign), mounted here once and rendered
    identically at every scope. Two pickers that drift apart is precisely what
    this shell replaces, so this file does not roll its own; it hides the
    switcher at workspace and You scope (there is no artist or tour to pick) and
@@ -26,9 +26,8 @@ export interface TopBarV3Props {
   ctx: NavContext;
   workspaceName: string;
   /** THE artist/tour picker. Supplied by the mounting layout, which already has
-   *  the server data it needs — so this is literally the same
-   *  <ArtistTourSwitcherClientWrapper> the rest of the app renders, not a
-   *  second control that can drift from it. */
+   *  the server data it needs — the one <ArtistTourPicker>, not a second
+   *  control that can drift from it. */
   switcher?: React.ReactNode;
   /** Rendered at the far right — the avatar menu the app already has. */
   right?: React.ReactNode;

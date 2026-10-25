@@ -206,3 +206,42 @@ artist to enable" dead state. **Needs-live**.
 (focus the person) on click. The `useSearchParams()` (no-Suspense) anomaly was
 removed — `conflictsOnly` is read on the server and passed as a prop. **CANDIDATE
 fix for the hang — needs a Cowork re-walk to confirm the loader now fires.**
+
+## Artist & tour picker — redesign (Oct 2026)
+
+Replaces shell-v2's ArtistTourSwitcher (deleted with its wrapper, SwitcherStateContext
+and `/api/artists/[id]/tours`).
+
+- [ ] **NAV-PK-01 — Two halves.** On a tour page the top bar reads
+  `[avatar] Charlotte Sands │ ● Simple Plan Support | Fall'26 ⌄`. The dot is the
+  tour's phase (green on the road, blue upcoming, amber dates TBC, grey past).
+  Clicking the artist half opens with the artists list active; the tour half
+  with the tours list active.
+- [ ] **NAV-PK-02 — Tours are there on first open.** Hard-reload an artist page
+  and a tour page; open the picker straight away: the artist's tours are
+  listed (they used to be empty until you picked another artist and came back).
+- [ ] **NAV-PK-03 — Picking an artist doesn't close or navigate.** Click
+  another artist on the left: its tours appear on the right at once, the URL
+  doesn't change, the panel stays open. Click back — instant.
+- [ ] **NAV-PK-04 — Picking a tour keeps your page.** On Budget, pick another
+  artist's tour → you land on that tour's Budget (same tab). Same from
+  Operations › Crew → Crew; Budget › Settlement → Settlement. An advance show
+  page lands on that tour's Advance. While it loads the bar reads
+  "Opening <tour>…" with a spinner.
+- [ ] **NAV-PK-05 — From an artist page.** Picking a tour opens the page you
+  last used on that tour (Operations if never opened).
+- [ ] **NAV-PK-06 — Product landing.** /budget with no tour: the bar reads
+  "Choose an artist and tour" (dashed). Pick a tour → its Budget.
+- [ ] **NAV-PK-07 — Groups.** On the road / Upcoming / Dates TBC; Past is tucked
+  behind "Show N past tours" while a live tour exists. "You're here" marks the
+  current tour; a ✓ marks the current artist. Each artist shows one status
+  line (On the road · day N of M / Next tour starts … / Last tour ended …).
+- [ ] **NAV-PK-08 — Search + keyboard.** Type a tour name: only artists with a
+  match remain, matching tours on the right. ↑↓ move, → into tours, ← back,
+  ↵ opens, esc closes. Click outside closes.
+- [ ] **NAV-PK-09 — Create.** "+ New tour for <artist>" opens the tour editor
+  with that artist chosen. "+ New artist" opens the artist slide-over.
+- [ ] **NAV-PK-10 — No delete in the picker.** Delete a tour from the ⋮ on its
+  row on the artist page (current and past rows) → confirm → the row goes.
+- [ ] **NAV-PK-11 — Phone.** Narrow window: the trigger is avatar + tour name.
+  Tap → full-height sheet; tap an artist to expand its tours; tap a tour to go.
