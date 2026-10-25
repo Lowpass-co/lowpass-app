@@ -3,10 +3,9 @@
 /* ============================================
    LOWPASS — /tour-fingerprint-demo (Design pass §7 grading harness)
 
-   Renders <TourFingerprint> at all three sizes against seed data that exercises
-   every feature: mixed day types, two-type stacking, advance states, the
-   next-show highlight, and a long tour that overflows so wheel→horizontal +
-   week-commencing markers are visible. Not a product surface.
+   Renders <TourFingerprint> at all three sizes against seed data: mixed day
+   types (incl. two-type days — one cell, both named in the popover), advance
+   states, the highlight marker and week labels. Not a product surface.
    ============================================ */
 
 import { TourFingerprint, type FingerprintDay } from '@/components/tour/TourFingerprint';

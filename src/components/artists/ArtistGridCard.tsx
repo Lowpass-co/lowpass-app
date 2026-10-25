@@ -62,7 +62,13 @@ export function ArtistGridCard({
           border: '1px solid var(--lp-border-strong)',
           borderRadius: 'var(--lp-radius-lg)',
           overflow: 'hidden',
-          height: 320,
+          // Oct 2026 — was a fixed 320px, which squashed the status line until
+          // its letters lost their tails ("runnina"). Fill the grid row instead
+          // (cards in a row stay equal) and let content set the minimum.
+          height: '100%',
+          minHeight: 320,
+          display: 'flex',
+          flexDirection: 'column',
         }}
       >
         {/* Click target — covers the whole card via absolute fill,
@@ -87,6 +93,7 @@ export function ArtistGridCard({
         <div
           style={{
             height: 160,
+            flexShrink: 0,
             background: artist.bannerUrl
               ? `url(${artist.bannerUrl}) center / cover no-repeat`
               : artist.bannerGradient,
@@ -172,7 +179,7 @@ export function ArtistGridCard({
             padding: '52px var(--lp-space-3) var(--lp-space-3)',
             gap: 'var(--lp-space-2)',
             pointerEvents: 'none',
-            height: 160,
+            flex: '1 0 auto',
           }}
         >
           <div
@@ -188,16 +195,17 @@ export function ArtistGridCard({
             {artist.name}
           </div>
 
-          {/* Card-scale fingerprint of the featured tour. pointerEvents re-enabled
-              (parent content is inert) + above the click target for hover. */}
+          {/* Card-scale strip of the featured tour: one even row of days, past
+              dimmed, a marker on today, start/end dates under it. The next show
+              is in the footer, so the strip doesn't mark it. pointerEvents
+              re-enabled (parent content is inert) + above the click target. */}
           {artist.fingerprint.length > 0 ? (
             <div style={{ pointerEvents: 'auto', position: 'relative', zIndex: 2, width: '100%' }}>
               <TourFingerprint
                 days={artist.fingerprint}
                 size="card"
                 fill
-                highlightDate={artist.nextShow?.date ?? null}
-                ariaLabel={`${artist.name} tour day strip`}
+                ariaLabel={`${artist.name}: tour days`}
                 className="w-full"
               />
             </div>
@@ -207,24 +215,20 @@ export function ArtistGridCard({
               N days" / "Tour running · day X of Y". Shares tourStatus with the
               Needs-you queue, so it never disagrees with the footer. Falls back to
               the active/months summary only when there's no featured tour. */}
-          {artist.statusLine ? (
-            <div
-              className="truncate"
-              style={{
-                fontSize: 'var(--lp-text-xs)',
-                fontWeight: 'var(--lp-weight-medium)',
-                color: 'var(--lp-text-secondary)',
-              }}
-            >
-              {artist.statusLine}
-            </div>
-          ) : artist.fingerprint.length === 0 ? (
-            <div style={{ fontSize: 'var(--lp-text-xs)', color: 'var(--lp-text-tertiary)' }}>
-              <span className="lp-mono">{artist.activeTourCount}</span> active ·{' '}
-              <span className="lp-mono">{artist.monthsUpcoming}</span>{' '}
-              {artist.monthsUpcoming === 1 ? 'month' : 'months'} upcoming
-            </div>
-          ) : null}
+          {/* One status line; line-height leaves room for descenders, and it
+              never shrinks (the old fixed-height card squeezed it). */}
+          <div
+            className="truncate"
+            style={{
+              flexShrink: 0,
+              lineHeight: 1.45,
+              fontSize: 'var(--lp-text-xs)',
+              fontWeight: artist.statusLine ? 'var(--lp-weight-medium)' : undefined,
+              color: artist.statusLine ? 'var(--lp-text-secondary)' : 'var(--lp-text-tertiary)',
+            }}
+          >
+            {artist.statusLine ?? (artist.action.label === 'Plan a tour' ? 'No tours yet' : 'No dates booked yet')}
+          </div>
 
           {/* Standardized footer (§8): left = Next: <date> · <city> (or Nothing
               booked), right = derived action verb — same shape on every card. */}
@@ -235,21 +239,23 @@ export function ArtistGridCard({
             <span
               className="min-w-0 truncate"
               style={{
+                lineHeight: 1.45,
                 fontSize: 'var(--lp-text-2xs)',
                 color: 'var(--lp-text-tertiary)',
               }}
             >
               {artist.nextShow ? (
                 <>
-                  Next:{' '}
-                  <span className="lp-mono" style={{ color: 'var(--lp-text-secondary)' }}>
+                  Next show{' '}
+                  {/* same face + size as the label (the mono date looked oversized) */}
+                  <span className="tabular-nums" style={{ color: 'var(--lp-text-secondary)', fontWeight: 'var(--lp-weight-medium)' }}>
                     {formatNextDate(artist.nextShow.date)}
                   </span>
                   {artist.nextShow.city ? ` · ${shortenVenue(artist.nextShow.city)}` : ''}
                 </>
-              ) : (
+              ) : artist.statusLine ? (
                 'Nothing booked'
-              )}
+              ) : null /* the status line already says "No tours yet" / "No dates booked yet" */}
             </span>
             <span
               className="inline-flex shrink-0 items-center"
