@@ -28,6 +28,7 @@ import { NeedsYouQueue } from '@/components/artists/NeedsYouQueue';
 import { ArtistHomeStagger } from '@/components/artists/ArtistHomeStagger';
 import { WorkspaceNewArtistButton } from '@/components/artists/WorkspaceNewArtistButton';
 import { getWorkspaceLandingData } from '@/server/workspace/getWorkspaceLandingData';
+import { DayTypeLegend, dayTypesPresent } from '@/components/tour/TourFingerprint';
 
 // (UX-walk §A.7) — the abbreviateCurrency / CURRENCY_SYMBOL helpers were only
 // used by the deleted workspace "COMMITTED" mixed-currency stat; removed with it.
@@ -152,11 +153,11 @@ export default async function ArtistsLandingPage() {
           {/* Artists grid */}
           <section style={{ marginBottom: 'var(--lp-space-6)' }}>
             <div
-              className="flex items-baseline justify-between"
-              style={{ marginBottom: 'var(--lp-space-3)' }}
+              className="flex items-center justify-between"
+              style={{ marginBottom: 'var(--lp-space-3)', gap: 'var(--lp-space-4)' }}
             >
               <h2
-                className="lp-label-caps"
+                className="lp-label-caps shrink-0"
                 style={{
                   margin: 0,
                   color: 'var(--lp-text-tertiary)',
@@ -179,6 +180,13 @@ export default async function ArtistsLandingPage() {
                   {data.artists.length}
                 </span>
               </h2>
+              {/* Oct 2026 — the key for the day strips on the cards, once for
+                  the whole grid (one line; hidden when there's no strip). */}
+              {data.artists.some((a) => a.fingerprint.length > 0) ? (
+                <div className="hidden min-w-0 flex-1 justify-end md:flex">
+                  <DayTypeLegend dayTypes={dayTypesPresent(data.artists.map((a) => a.fingerprint))} />
+                </div>
+              ) : null}
               {/* Sprint 8.1 §3 (8a) — replaces the Sprint 7
                   placeholder Link to /artists/new (which 404'd).
                   Client wrapper owns open-state + mounts the

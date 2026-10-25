@@ -1,36 +1,39 @@
 'use client';
 
 /* ============================================================
-   LOWPASS — <TourFingerprint> (Design pass §7 — the signature component)
+   LOWPASS — <TourFingerprint> — a tour as one row of days
 
-   A tour rendered as a horizontal strip of day ticks, coloured by (muted)
-   day-type hue. ONE component, three sizes:
+   Rebuilt Oct 2026 (Adam: "fix the little tour graphics so they don't glitch
+   and are clearer"). The old strip graded each tick's HEIGHT by day type
+   (shows tall, off days 40%), outlined the next show 1px OUTSIDE its tick,
+   lifted ticks on hover and ran a draw-in animation that was switched off
+   right after the first paint. At card / row scale that read as a broken
+   barcode: squares beside dashes, an orange box poking above the strip, a
+   flicker on load and a wobble under the mouse.
 
-     - card  (10px ticks)  — workspace / artist rows at a glance
-     - row   (14–18px)     — artist tour rows
-     - hero  (32–44px)     — the tour-landing hero strip
+   Now it reads like a calendar bar:
+     • every day is the SAME height — colour alone says the day type;
+     • days before today are dimmed, so progress through the tour is visible;
+     • TODAY is a light vertical marker drawn INSIDE the strip's own padding
+       (never outside it — nothing pokes out, nothing is clipped). It is not
+       orange: festival days are brand orange;
+     • it is ALWAYS one line. No stacked second tick, no wrapping; in fill
+       mode the days share the width (the gap shrinks on long tours);
+     • start / end dates sit under the strip (and "Today" where it falls);
+     • no animation and no hover lift — hover just brightens the day and
+       opens the popover.
 
-   Interaction (§7 + §6):
-     - hover / focus a tick → it lifts 3–7px and an ANCHORED popover opens
-       above it (mono date line · day type · venue — city · advance state) with
-       a tail pointing back to the tick. The popover is portalled to <body> and
-       positioned from the tick's rect, so a horizontally-scrolling strip never
-       clips it. It scales in from its bottom-centre anchor (~140ms).
-     - click a tick → onDayClick(day) (callers route show days → advance/grid).
-     - two day types on one day → a second tick stacks below (§7 "TR idea").
-     - hero scale → week-commencing markers under the strip (§7 "AR pro").
-     - wheel over the strip → horizontal scroll (§7).
-     - bars draw in once on mount (~20ms/bar); reduced-motion disables draw-in +
-       lift + popover scale (global kill-switch + guarded inline styles).
+   <DayTypeLegend> is the key, rendered once per page section (not per strip).
 
+   Sizes: card (workspace cards) · row (artist tour rows) · hero (routing).
    Presentational + interactive only. The PARENT resolves data (incl. venue via
    resolveVenue — never raw venue_* columns) into FingerprintDay[].
    ============================================================ */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { colourForDayType, labelForDayType } from '@/lib/routing/dayType';
-import { firstDayType } from '@/lib/utils';
+import { DAY_TYPE_TOKEN, colourForDayType } from '@/lib/routing/dayType';
+import { getDayTypeLabel } from '@/lib/utils';
 
 export type FingerprintSize = 'card' | 'row' | 'hero';
 
@@ -39,8 +42,8 @@ export type FingerprintAdvanceState = 'not_started' | 'in_progress' | 'complete'
 export interface FingerprintDay {
   /** YYYY-MM-DD. */
   date: string;
-  /** Free-text day_type, CSV allowed ("show,festival") — first drives the hue,
-   *  a second stacks a tick below. */
+  /** Free-text day_type, CSV allowed ("show,festival") — the first drives the
+   *  colour; every type is named in the popover. */
   dayType: string;
   /** Resolved venue name (parent resolves via resolveVenue — never raw column). */
   venue?: string | null;
@@ -52,52 +55,69 @@ export interface FingerprintDay {
 export interface TourFingerprintProps {
   days: FingerprintDay[];
   size?: FingerprintSize;
-  /** Fill mode (§C3): the strip spans the full container width and each day's
-   *  tick flexes to an equal share instead of a fixed `spec.width`. Heights
-   *  still grade by day type. Used on the workspace artist cards so the
-   *  fingerprint reads as a full-width graded bar, not a short dense stub. */
+  /** Fill mode: the strip spans the container and the days share its width.
+   *  Without it each day has a fixed width (demo / dense use). */
   fill?: boolean;
-  /** Week-commencing markers under the strip. Defaults on at hero scale. */
+  /** Week-commencing labels under the strip. Defaults on at hero scale. */
   weekMarkers?: boolean;
-  /** Outline the tick for this date (e.g. the next upcoming show). */
+  /** Start / end date (and "Today") under the strip. Defaults on, except at
+   *  hero scale where the week labels do that job. */
+  rangeLabels?: boolean;
+  /** A second marked day (e.g. the next show when today isn't a tour day). */
   highlightDate?: string | null;
+  /** YYYY-MM-DD. Defaults to today (UTC — the same "today" every derived
+   *  status line in the app uses, so the strip and "day 25 of 31" agree). */
+  today?: string;
   onDayClick?: (day: FingerprintDay, index: number) => void;
   ariaLabel?: string;
   className?: string;
 }
 
 interface SizeSpec {
-  tick: number;   // full tick height (px)
-  width: number;  // tick width (px)
-  gap: number;    // gap between ticks (px)
-  lift: number;   // hover lift (px)
+  /** cell height (px) */
+  h: number;
+  /** fixed cell width when not in fill mode (px) */
+  w: number;
+  /** gap between cells (px) — fill mode tightens it on long tours */
+  gap: number;
+  radius: number;
+  /** room above / below the cells for the today marker (px) */
+  pad: number;
 }
 const SIZES: Record<FingerprintSize, SizeSpec> = {
-  card: { tick: 10, width: 3, gap: 1, lift: 3 },
-  row: { tick: 16, width: 3, gap: 1.5, lift: 4 },
-  hero: { tick: 40, width: 5, gap: 2, lift: 7 },
+  card: { h: 10, w: 6, gap: 2, radius: 2, pad: 3 },
+  row: { h: 12, w: 8, gap: 2, radius: 2, pad: 4 },
+  hero: { h: 28, w: 12, gap: 3, radius: 3, pad: 5 },
 };
 
-/** A day-type's tick renders at a fraction of full height + muted toward the
- *  panel so shows read as the tall, saturated anchor and off/travel recede. */
-function intensityFor(dayType: string): { heightPct: number; mix: number } {
-  const t = (firstDayType(dayType) || '').toLowerCase();
-  if (t === 'show' || t === 'festival') return { heightPct: 1, mix: 62 };
-  if (t === 'rehearsal' || t === 'press' || t === 'radio' || t === 'tv') return { heightPct: 0.7, mix: 48 };
-  if (t === 'travel') return { heightPct: 0.5, mix: 40 };
-  return { heightPct: 0.4, mix: 32 }; // off / unknown
+/** Fill mode: shrink the gap so a long tour's days stay visible. */
+function fillGap(spec: SizeSpec, count: number): number {
+  if (count > 90) return 0.5;
+  if (count > 45) return 1;
+  return spec.gap;
 }
 
-/** Muted day-type colour: blend the day token toward the panel (~desaturate). */
-function mutedColour(dayType: string): string {
-  const token = colourForDayType(dayType);
-  const { mix } = intensityFor(dayType);
-  return `color-mix(in srgb, ${token} ${mix}%, var(--lp-panel))`;
+function ymd(iso: string | null | undefined): string {
+  return (iso ?? '').slice(0, 10);
 }
 
-function secondType(dayType: string): string | null {
-  const parts = (dayType || '').split(',').map((s) => s.trim()).filter(Boolean);
-  return parts.length > 1 ? parts[1] : null;
+function types(dayType: string): string[] {
+  return (dayType || '')
+    .split(',')
+    .map((s) => s.trim().toLowerCase())
+    .filter(Boolean);
+}
+
+/** "Show Day + Press Day" — every type on the day, for the popover. */
+function labelAll(dayType: string): string {
+  const t = types(dayType);
+  return t.length ? t.map(getDayTypeLabel).join(' + ') : 'Day';
+}
+
+/** Day colour: the type's token blended toward the panel — dimmer for days
+ *  already gone. One rule, so past/future never disagree between sizes. */
+export function dayCellColour(dayType: string, past: boolean): string {
+  return `color-mix(in srgb, ${colourForDayType(dayType)} ${past ? 30 : 82}%, var(--lp-panel))`;
 }
 
 const ADVANCE_DOT: Record<FingerprintAdvanceState, string> = {
@@ -114,18 +134,23 @@ const ADVANCE_LABEL: Record<FingerprintAdvanceState, string> = {
 };
 
 function fmtDate(iso: string): string {
-  // Local-safe parse (avoid UTC off-by-one) + mono-friendly compact form.
-  const d = new Date(`${iso.slice(0, 10)}T12:00:00`);
+  const d = new Date(`${ymd(iso)}T12:00:00Z`);
   if (Number.isNaN(d.getTime())) return iso;
-  return d.toLocaleDateString('en-GB', { weekday: 'short', day: '2-digit', month: 'short' });
+  return d.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' });
 }
 
-/** Monday-of-week ISO for the week-commencing markers. */
-function weekStartIso(iso: string): string {
-  const d = new Date(`${iso.slice(0, 10)}T12:00:00`);
+function fmtShort(iso: string): string {
+  const d = new Date(`${ymd(iso)}T12:00:00Z`);
   if (Number.isNaN(d.getTime())) return iso;
-  const dow = (d.getDay() + 6) % 7; // 0 = Monday
-  d.setDate(d.getDate() - dow);
+  return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' });
+}
+
+/** Monday-of-week ISO for the week labels. */
+function weekStartIso(iso: string): string {
+  const d = new Date(`${ymd(iso)}T12:00:00Z`);
+  if (Number.isNaN(d.getTime())) return iso;
+  const dow = (d.getUTCDay() + 6) % 7; // 0 = Monday
+  d.setUTCDate(d.getUTCDate() - dow);
   return d.toISOString().slice(0, 10);
 }
 
@@ -134,31 +159,27 @@ export function TourFingerprint({
   size = 'card',
   fill = false,
   weekMarkers,
+  rangeLabels,
   highlightDate,
+  today: todayProp,
   onDayClick,
   ariaLabel,
   className,
 }: TourFingerprintProps) {
   const spec = SIZES[size];
   const showWeeks = weekMarkers ?? size === 'hero';
-  const stripRef = useRef<HTMLDivElement | null>(null);
+  const showRange = rangeLabels ?? size !== 'hero';
+  const today = ymd(todayProp ?? new Date().toISOString());
+  const highlight = ymd(highlightDate);
+  const gap = fill ? fillGap(spec, days.length) : spec.gap;
+
   const [hover, setHover] = useState<{ index: number; rect: DOMRect } | null>(null);
   const [mounted, setMounted] = useState(false);
+  const stripRef = useRef<HTMLDivElement | null>(null);
   useEffect(() => {
-    // One-shot mount flag: gate the <body> portal (SSR-safe) + let bars draw in
-    // once. Not a render loop.
+    // Gate the <body> portal (SSR-safe). Nothing visual depends on this flag.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setMounted(true);
-  }, []);
-
-  // Wheel → horizontal scroll (§7). Only when the strip actually overflows.
-  const onWheel = useCallback((e: React.WheelEvent<HTMLDivElement>) => {
-    const el = stripRef.current;
-    if (!el || el.scrollWidth <= el.clientWidth) return;
-    if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) {
-      el.scrollLeft += e.deltaY;
-      e.preventDefault();
-    }
   }, []);
 
   const openPopover = useCallback((index: number, target: HTMLElement) => {
@@ -168,29 +189,32 @@ export function TourFingerprint({
 
   if (days.length === 0) {
     return (
-      <span
-        className={className}
-        style={{ fontSize: 'var(--lp-text-2xs)', color: 'var(--lp-text-tertiary)' }}
-      >
-        No dates
+      <span className={className} style={{ fontSize: 'var(--lp-text-2xs)', color: 'var(--lp-text-tertiary)' }}>
+        No dates yet
       </span>
     );
   }
 
-  // Week-marker positions: first tick index of each new week-commencing group.
+  const first = ymd(days[0].date);
+  const last = ymd(days[days.length - 1].date);
+  const todayIndex = days.findIndex((d) => ymd(d.date) === today);
+  // Position (0–100%) of a day's centre — for the "Today" label under the strip.
+  const centrePct = (i: number) => ((i + 0.5) / days.length) * 100;
+
   const weekLabels: Array<{ index: number; iso: string }> = [];
   if (showWeeks) {
-    let last = '';
+    let lastWeek = '';
     days.forEach((d, i) => {
       const w = weekStartIso(d.date);
-      if (w !== last) {
+      if (w !== lastWeek) {
         weekLabels.push({ index: i, iso: w });
-        last = w;
+        lastWeek = w;
       }
     });
   }
 
   const hovered = hover ? days[hover.index] : null;
+  const caption = { fontSize: 'var(--lp-text-2xs)', color: 'var(--lp-text-tertiary)', lineHeight: '12px' } as const;
 
   return (
     <div
@@ -198,106 +222,78 @@ export function TourFingerprint({
       style={{
         display: fill ? 'flex' : 'inline-flex',
         flexDirection: 'column',
-        gap: 4,
+        gap: 2,
         maxWidth: '100%',
         width: fill ? '100%' : undefined,
+        minWidth: 0,
       }}
     >
       <div
         ref={stripRef}
         role="list"
-        aria-label={ariaLabel ?? 'Tour day strip'}
-        onWheel={onWheel}
+        aria-label={ariaLabel ?? 'Tour days'}
         className="lp-fingerprint"
         style={{
           display: 'flex',
-          alignItems: 'flex-end',
-          gap: spec.gap,
-          height: spec.tick + spec.lift,
-          paddingTop: spec.lift,
-          // Fill mode divides the full width across ticks, so there's nothing to
-          // scroll; fixed-width mode keeps the dense scroll-on-overflow strip.
+          flexWrap: 'nowrap',
+          alignItems: 'stretch',
+          gap,
+          // The today marker lives inside this padding, so nothing overflows.
+          padding: `${spec.pad}px 0`,
           width: fill ? '100%' : undefined,
-          overflowX: fill ? 'hidden' : 'auto',
-          overflowY: 'visible',
+          overflow: fill ? 'hidden' : 'auto hidden',
           scrollbarWidth: 'none',
         }}
       >
         {days.map((day, i) => {
-          const { heightPct } = intensityFor(day.dayType);
-          const h = Math.max(3, Math.round(spec.tick * heightPct));
-          const second = secondType(day.dayType);
-          const isHighlight = !!highlightDate && day.date.slice(0, 10) === highlightDate.slice(0, 10);
+          const date = ymd(day.date);
+          const past = date < today;
+          const isToday = date === today;
+          const isHighlight = !isToday && !!highlight && date === highlight;
           const isHover = hover?.index === i;
-          const interactive = !!onDayClick;
           return (
             <button
-              key={`${day.date}-${i}`}
+              key={`${date}-${i}`}
               type="button"
               role="listitem"
-              aria-label={`${fmtDate(day.date)}${labelForDayType(day.dayType) ? ` · ${labelForDayType(day.dayType)}` : ''}`}
-              tabIndex={0}
+              aria-label={`${fmtDate(date)} · ${labelAll(day.dayType)}${isToday ? ' · today' : ''}`}
+              aria-current={isToday ? 'date' : undefined}
               onMouseEnter={(e) => openPopover(i, e.currentTarget)}
               onMouseLeave={closePopover}
               onFocus={(e) => openPopover(i, e.currentTarget)}
               onBlur={closePopover}
               onClick={() => onDayClick?.(day, i)}
-              className="btn-transition"
               style={{
-                display: 'flex',
-                flexDirection: 'column',
-                justifyContent: 'flex-end',
-                alignItems: 'stretch',
-                gap: 1,
-                // Fill mode: equal flex share + shrinkable; fixed mode: rigid tick.
-                width: fill ? undefined : spec.width,
-                flex: fill ? '1 1 0' : undefined,
-                minWidth: fill ? 0 : undefined,
-                height: spec.tick,
+                position: 'relative',
+                flex: fill ? '1 1 0' : '0 0 auto',
+                width: fill ? undefined : spec.w,
+                minWidth: 0,
+                height: spec.h,
                 padding: 0,
                 border: 0,
-                background: 'transparent',
-                cursor: interactive ? 'pointer' : 'default',
-                transform: isHover ? `translateY(-${spec.lift}px)` : 'none',
-                transition: 'transform var(--lp-dur-fast) var(--lp-ease-out)',
-                flexShrink: fill ? 1 : 0,
-                position: 'relative',
+                borderRadius: spec.radius,
+                background: dayCellColour(day.dayType, past),
+                filter: isHover ? 'brightness(1.35)' : undefined,
+                cursor: onDayClick ? 'pointer' : 'default',
+                outline: 'none',
               }}
             >
-              {/* VIS-G-07 — forgiving hit target. The visible tick is only
-                  3–5px wide; this transparent overlay extends the hover/focus
-                  catch area ±6px without changing the dense strip layout
-                  (absolute → no flex impact), so the anchored popover opens
-                  reliably instead of only on a hair-thin target. */}
-              <span
-                aria-hidden
-                style={{ position: 'absolute', top: 0, bottom: 0, left: -6, right: -6 }}
-              />
-              {/* Primary tick */}
-              <span
-                aria-hidden
-                style={{
-                  display: 'block',
-                  width: '100%',
-                  height: h,
-                  borderRadius: 1,
-                  background: mutedColour(day.dayType),
-                  outline: isHighlight ? '1.5px solid var(--lp-orange)' : 'none',
-                  outlineOffset: 1,
-                  transformOrigin: 'bottom',
-                  animation: mounted ? undefined : `lp-fp-draw var(--lp-dur-base) var(--lp-ease-out) ${Math.min(i * 20, 600)}ms both`,
-                }}
-              />
-              {/* Second day-type stacks a thin tick below (§7). */}
-              {second ? (
+              {isToday || isHighlight ? (
                 <span
                   aria-hidden
+                  data-testid={isToday ? 'fingerprint-today' : 'fingerprint-highlight'}
                   style={{
-                    display: 'block',
-                    width: '100%',
-                    height: Math.max(2, Math.round(spec.tick * 0.22)),
+                    position: 'absolute',
+                    left: '50%',
+                    top: -spec.pad,
+                    bottom: -spec.pad,
+                    width: 2,
+                    transform: 'translateX(-50%)',
                     borderRadius: 1,
-                    background: mutedColour(second),
+                    background: isToday ? 'var(--lp-text)' : 'var(--lp-text-tertiary)',
+                    // a hairline of panel colour separates it from the cells either side
+                    boxShadow: '0 0 0 1px var(--lp-panel)',
+                    pointerEvents: 'none',
                   }}
                 />
               ) : null}
@@ -306,36 +302,45 @@ export function TourFingerprint({
         })}
       </div>
 
-      {/* Week-commencing markers (hero / tour scale). Spacers mirror the tick
-          sizing so labels stay aligned — including fill mode's flexed ticks. */}
+      {/* Start · Today · End — one line, never wraps. */}
+      {showRange ? (
+        <div
+          aria-hidden
+          className="tabular-nums"
+          style={{ position: 'relative', height: 12, width: fill ? '100%' : undefined, whiteSpace: 'nowrap', overflow: 'hidden', ...caption }}
+        >
+          <span style={{ position: 'absolute', left: 0 }}>{fmtShort(first)}</span>
+          {/* "Today" only where it can't crowd the start / end dates. */}
+          {todayIndex >= 0 && centrePct(todayIndex) > 22 && centrePct(todayIndex) < 78 ? (
+            <span
+              style={{
+                position: 'absolute',
+                left: `${centrePct(todayIndex)}%`,
+                transform: 'translateX(-50%)',
+                color: 'var(--lp-text-secondary)',
+                fontWeight: 'var(--lp-weight-medium)',
+              }}
+            >
+              Today
+            </span>
+          ) : null}
+          {last !== first ? <span style={{ position: 'absolute', right: 0 }}>{fmtShort(last)}</span> : null}
+        </div>
+      ) : null}
+
+      {/* Week-commencing labels (hero). Spacers mirror the cells so labels align. */}
       {showWeeks && weekLabels.length > 1 ? (
-        <div style={{ display: 'flex', gap: spec.gap, position: 'relative', height: 12, width: fill ? '100%' : undefined }}>
+        <div style={{ display: 'flex', gap, position: 'relative', height: 12, width: fill ? '100%' : undefined, overflow: 'hidden' }}>
           {days.map((_, i) => {
             const mark = weekLabels.find((w) => w.index === i);
             return (
               <span
                 key={i}
-                style={{
-                  width: fill ? undefined : spec.width,
-                  flex: fill ? '1 1 0' : undefined,
-                  minWidth: fill ? 0 : undefined,
-                  flexShrink: fill ? 1 : 0,
-                  position: 'relative',
-                }}
+                style={{ position: 'relative', flex: fill ? '1 1 0' : '0 0 auto', width: fill ? undefined : spec.w, minWidth: 0 }}
               >
                 {mark ? (
-                  <span
-                    className="lp-mono"
-                    style={{
-                      position: 'absolute',
-                      left: 0,
-                      top: 0,
-                      whiteSpace: 'nowrap',
-                      fontSize: 'var(--lp-text-2xs)',
-                      color: 'var(--lp-text-tertiary)',
-                    }}
-                  >
-                    {new Date(`${mark.iso}T12:00:00`).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })}
+                  <span className="tabular-nums" style={{ position: 'absolute', left: 0, top: 0, whiteSpace: 'nowrap', ...caption }}>
+                    {fmtShort(mark.iso)}
                   </span>
                 ) : null}
               </span>
@@ -344,10 +349,9 @@ export function TourFingerprint({
         </div>
       ) : null}
 
-      {/* Anchored popover — portalled so the scrolling strip never clips it. */}
       {mounted && hover && hovered
         ? createPortal(
-            <FingerprintPopover rect={hover.rect} day={hovered} compact={size === 'row'} />,
+            <FingerprintPopover rect={hover.rect} day={hovered} isToday={ymd(hovered.date) === today} compact={size !== 'hero'} />,
             document.body,
           )
         : null}
@@ -355,79 +359,178 @@ export function TourFingerprint({
   );
 }
 
-function FingerprintPopover({ rect, day, compact = false }: { rect: DOMRect; day: FingerprintDay; compact?: boolean }) {
-  /* 2026-08-06 (Adam's screenshot) — at ROW scale the full 200px popover
-     floated up over the row's own name/status content (and the row above).
-     Compact mode: one line, small, ALWAYS below the tick — below a row strip
-     is the row's own whitespace, not another row's text. Hero keeps the full
-     card + flip logic (TR-03). */
-  const width = compact ? 160 : 200;
+/* ---- the key — rendered ONCE per section, not per strip ---- */
+
+const LEGEND_ORDER = ['show', 'festival', 'travel', 'off', 'rehearsal', 'press', 'radio', 'tv'];
+const LEGEND_LABEL: Record<string, string> = {
+  show: 'Show',
+  festival: 'Festival',
+  travel: 'Travel',
+  off: 'Off',
+  rehearsal: 'Rehearsal',
+  press: 'Press',
+  radio: 'Radio',
+  tv: 'TV',
+};
+
+/** The day types that actually appear across some strips (first type of each
+ *  day, known types only, in a fixed order). */
+export function dayTypesPresent(strips: Array<Array<{ dayType: string }>>): string[] {
+  const seen = new Set<string>();
+  for (const s of strips) {
+    for (const d of s) {
+      const t = types(d.dayType)[0] ?? 'off';
+      seen.add(DAY_TYPE_TOKEN[t] ? t : 'off');
+    }
+  }
+  return LEGEND_ORDER.filter((t) => seen.has(t));
+}
+
+export function DayTypeLegend({ dayTypes, className }: { dayTypes?: string[]; className?: string }) {
+  const list = (dayTypes && dayTypes.length ? dayTypes : ['show', 'travel', 'off']).filter((t) => DAY_TYPE_TOKEN[t]);
+  const swatch = (bg: string) => (
+    <span aria-hidden style={{ width: 8, height: 8, borderRadius: 2, background: bg, flexShrink: 0 }} />
+  );
+  return (
+    <div
+      className={className}
+      data-testid="day-type-legend"
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        flexWrap: 'nowrap',
+        gap: 'var(--lp-space-3)',
+        whiteSpace: 'nowrap',
+        overflow: 'hidden',
+        minWidth: 0,
+        fontSize: 'var(--lp-text-2xs)',
+        color: 'var(--lp-text-tertiary)',
+      }}
+    >
+      {list.map((t) => (
+        <span key={t} style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+          {swatch(dayCellColour(t, false))}
+          {LEGEND_LABEL[t]}
+        </span>
+      ))}
+      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+        <span aria-hidden style={{ width: 2, height: 10, borderRadius: 1, background: 'var(--lp-text)', flexShrink: 0 }} />
+        Today
+      </span>
+      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+        {swatch(dayCellColour('show', true))}
+        Past
+      </span>
+    </div>
+  );
+}
+
+/* ---- popover ---- */
+
+function FingerprintPopover({
+  rect,
+  day,
+  isToday,
+  compact = false,
+}: {
+  rect: DOMRect;
+  day: FingerprintDay;
+  isToday: boolean;
+  compact?: boolean;
+}) {
+  /* Card / row scale: one line, ALWAYS below the strip (above would cover the
+     row's own text), sized to its text and centred on the day — clamped to an
+     edge near the viewport sides so it never runs off screen. Hero keeps the
+     full card and flips below when there's no room above. */
   const gap = compact ? 6 : 10;
-  const estHeight = 150; // typical full-popover height, for the flip decision
-  const left = Math.max(8, Math.min(window.innerWidth - width - 8, rect.left + rect.width / 2 - width / 2));
-  // TR-03 (G1-B #15) — flip below the tick when there isn't room above (tick
-  // near the top of the viewport / the routing hero strip), so the popover never
-  // renders upward over the columns/chrome above the strip. It never covers the
-  // tick itself, and stays pointer-events:none so clicks reach the cell.
+  const estHeight = 150;
+  const cx = rect.left + rect.width / 2;
   const placeBelow = compact || rect.top < estHeight + gap;
   const top = placeBelow ? rect.bottom + gap : rect.top - gap;
-  const anchorX = rect.left + rect.width / 2 - left; // tail x within the popover
+  const EDGE = 120;
+  const vw = window.innerWidth;
+  const align: 'left' | 'centre' | 'right' = cx < EDGE ? 'left' : cx > vw - EDGE ? 'right' : 'centre';
+  const width = compact ? undefined : 220;
+  const left = compact
+    ? align === 'left'
+      ? Math.max(8, cx - 12)
+      : align === 'right'
+        ? undefined
+        : cx
+    : Math.max(8, Math.min(vw - 228, cx - 110));
+  const right = compact && align === 'right' ? Math.max(8, vw - cx - 12) : undefined;
+  const tx = compact && align === 'centre' ? '-50%' : '0';
+  const ty = placeBelow ? '0' : '-100%';
+  // Tail x inside the bubble.
+  const tail: React.CSSProperties = compact
+    ? align === 'left'
+      ? { left: 8 }
+      : align === 'right'
+        ? { right: 8 }
+        : { left: '50%', marginLeft: -4 }
+    : { left: Math.max(8, Math.min(212, cx - (left as number))) - 4 };
+  const where = day.venue ? `${day.venue}${day.city ? ` — ${day.city}` : ''}` : day.city ?? '';
   return (
     <div
       role="tooltip"
       style={{
         position: 'fixed',
         left,
+        right,
         top,
         width,
-        transform: placeBelow ? 'translateY(0)' : 'translateY(-100%)',
-        transformOrigin: placeBelow ? `${anchorX}px 0%` : `${anchorX}px 100%`,
-        animation: 'lp-fp-pop var(--lp-dur-base) var(--lp-ease-out) both',
+        transform: `translate(${tx}, ${ty})`,
         zIndex: 'var(--lp-z-tooltip, 60)' as unknown as number,
         pointerEvents: 'none',
       }}
     >
       <div
         style={{
+          position: 'relative',
           background: 'var(--lp-surface)',
           border: '1px solid var(--lp-border-strong)',
           borderRadius: 'var(--lp-radius-md)',
-          boxShadow: 'var(--lp-shadow-lg, 0 12px 32px rgba(0,0,0,0.35))',
+          boxShadow: 'var(--lp-shadow-lg)',
           padding: compact ? '5px 8px' : '8px 10px',
-          ...(compact ? { whiteSpace: 'nowrap' as const, width: 'fit-content' } : {}),
+          ...(compact ? { whiteSpace: 'nowrap' as const } : { width: '100%' }),
         }}
       >
         {compact ? (
-          /* One line: "Fri 23 Oct · Show Day" — nothing else at row scale. */
-          <div style={{ fontSize: 'var(--lp-text-2xs)', color: 'var(--lp-text)' }}>
-            <span className="lp-mono" style={{ fontWeight: 'var(--lp-weight-medium)' }}>{fmtDate(day.date)}</span>
-            <span style={{ color: 'var(--lp-text-secondary)' }}>{` · ${labelForDayType(day.dayType) || 'Day'}`}</span>
+          <div style={{ fontSize: 'var(--lp-text-2xs)', color: 'var(--lp-text)', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+            <span className="tabular-nums" style={{ fontWeight: 'var(--lp-weight-medium)' }}>
+              {fmtDate(day.date)}
+              {isToday ? ' (today)' : ''}
+            </span>
+            <span style={{ color: 'var(--lp-text-secondary)' }}>
+              {` · ${labelAll(day.dayType)}`}
+              {day.city ? ` · ${day.city}` : ''}
+            </span>
           </div>
         ) : (
           <>
-        <div className="lp-mono" style={{ fontSize: 'var(--lp-text-xs)', color: 'var(--lp-text)', fontWeight: 'var(--lp-weight-medium)' }}>
-          {fmtDate(day.date)}
-        </div>
-        <div style={{ marginTop: 2, fontSize: 'var(--lp-text-2xs)', color: 'var(--lp-text-secondary)' }}>
-          {labelForDayType(day.dayType) || 'Day'}
-          {day.venue ? ` · ${day.venue}${day.city ? ` — ${day.city}` : ''}` : day.city ? ` · ${day.city}` : ''}
-        </div>
-        {day.advanceState ? (
-          <div style={{ marginTop: 4, display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 'var(--lp-text-2xs)', color: 'var(--lp-text-tertiary)' }}>
-            <span aria-hidden style={{ width: 6, height: 6, borderRadius: 999, background: ADVANCE_DOT[day.advanceState] }} />
-            {ADVANCE_LABEL[day.advanceState]}
-          </div>
-        ) : null}
+            <div className="tabular-nums" style={{ fontSize: 'var(--lp-text-xs)', color: 'var(--lp-text)', fontWeight: 'var(--lp-weight-medium)' }}>
+              {fmtDate(day.date)}
+              {isToday ? ' (today)' : ''}
+            </div>
+            <div style={{ marginTop: 2, fontSize: 'var(--lp-text-2xs)', color: 'var(--lp-text-secondary)' }}>
+              {labelAll(day.dayType)}
+              {where ? ` · ${where}` : ''}
+            </div>
+            {day.advanceState ? (
+              <div style={{ marginTop: 4, display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 'var(--lp-text-2xs)', color: 'var(--lp-text-tertiary)' }}>
+                <span aria-hidden style={{ width: 6, height: 6, borderRadius: 999, background: ADVANCE_DOT[day.advanceState] }} />
+                Advance: {ADVANCE_LABEL[day.advanceState]}
+              </div>
+            ) : null}
           </>
         )}
       </div>
-      {/* Tail — a rotated square poking toward the tick; direction flips with
-          placement (down when above the tick, up when flipped below it). */}
+      {/* Tail, pointing back at the day. */}
       <span
         aria-hidden
         style={{
           position: 'absolute',
-          left: anchorX - 4,
+          ...tail,
           width: 8,
           height: 8,
           background: 'var(--lp-surface)',

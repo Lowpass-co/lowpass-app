@@ -109,6 +109,39 @@ to the normal picker / auto-skip).
   mixed-currency aggregate is **deleted**; the artist "Budget committed" stat now
   states its display currency ("· GBP").
 
+## Tour strips + overview tidy (Oct 2026)
+
+- [ ] **HOME-ST-01 — Strip is one even line.** Workspace cards and artist tour
+  rows: every day is the same height, colour = day type, never two lines at any
+  width (try a phone width too). No flicker on load, no wobble when the mouse
+  runs along it.
+- [ ] **HOME-ST-02 — Today.** On a running tour a light vertical line sits on
+  today's day, inside the strip (nothing pokes out). Days before it are dimmed.
+  Start / end dates sit under the strip; "Today" appears under it when it
+  isn't crowding the ends. Hover a day → one line: "Sun 25 Oct (today) · Show
+  Day · city".
+- [ ] **HOME-ST-03 — Key.** One key per section (Artists header, Tours header)
+  listing only the day types present, plus Today and Past. Hidden on phones.
+- [ ] **HOME-ST-04 — Cards don't clip.** "Tour running · day 25 of 31" shows
+  whole letters; the next-show date is the same size as "Next show".
+  An artist with no tours reads "No tours yet" once (no duplicate "Nothing
+  booked").
+- [ ] **HOME-ST-05 — Card order.** On tour first, then by nearest next show,
+  then the rest A–Z.
+- [ ] **HOME-ST-06 — Shows this month.** The workspace figure counts show and
+  festival days only (it used to count every routing day — 31 in October).
+- [ ] **HOME-ST-07 — Tour pill is date-derived.** A tour within its dates reads
+  ON THE ROAD with "Day N of M · ends in X days"; future = UPCOMING; past =
+  wrapped; no dates = DATES TBC. Never "PLANNING" on a running tour.
+- [ ] **HOME-ST-08 — Budget figure.** The artist stat line shows "$X BUDGETED ·
+  <tour>" = that tour's Total expenses (proposed) on its budget sheet, in its
+  currency. No figure when the artist has no current or upcoming tour. (Replaces
+  "committed", which summed every tour in mixed currencies — UXW-07 retired.)
+- [ ] **HOME-ST-09 — Recent activity.** No "Tour metadata updated" rows; advance
+  rows name their tour and only this artist's advances appear.
+- [ ] **HOME-ST-10 — Phone width.** Artist page tour rows: the strip sits under
+  the name, full width; past tours wrap without clipping.
+
 ## Known broken
 
 (None yet.)

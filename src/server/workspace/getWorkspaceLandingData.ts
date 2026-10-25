@@ -28,8 +28,11 @@ import {
 import { resolveVenue, type RoutingVenueSource } from '@/lib/venues/resolveVenue';
 import { computeNeedsYou, type NeedsYouItem } from './computeNeedsYou';
 import {
+  compareLandingArtists,
   countInPlanning,
   countOnTourNow,
+  tourPhase,
+  type TourPhase,
   nextShow as deriveNextShow,
   tourStatusLine,
   type DeriveTour,
@@ -64,6 +67,9 @@ export interface WorkspaceLandingArtist {
   statusLine: string | null;
   /** Derived footer action (verb + href) — no mood words (§8). */
   action: { label: string; href: string };
+  /** Date-derived phase of the featured tour (null = no tours) — orders the
+   *  grid: on tour → upcoming → the rest. */
+  phase: TourPhase | null;
 }
 
 export interface WorkspaceLandingPickUp {
@@ -222,9 +228,12 @@ export async function getWorkspaceLandingData(
       .select('id, tour_id, date, day_type, city, country, address, venue_name, venue_phone, venue_website, venue_capacity, venue_frozen_at, canonical_venue_id, canonical:canonical_venues(id, name, address, city, country, capacity)')
       .gte('date', new Date().toISOString().slice(0, 10))
       .order('date', { ascending: true }),
+    // Oct 2026 — was a head-count of EVERY routing row in the month (off,
+    // travel, rehearsal…), so "31 shows this month" was really "31 days".
+    // Fetch the day types and count shows with the one show predicate.
     supabase
       .from('routing')
-      .select('id', { count: 'exact', head: true })
+      .select('day_type')
       .gte('date', monthStart)
       .lte('date', monthEnd),
     // Sprint 8.2 §6 — order by last_visited_at DESC NULLS LAST,
@@ -519,8 +528,16 @@ export async function getWorkspaceLandingData(
         fingerprint,
         statusLine,
         action,
+        phase: featuredTour ? tourPhase(featuredTour as DeriveTour, todayIso) : null,
       };
     }),
+  );
+  // Oct 2026 (Adam) — on tour first, then by nearest next show, then A–Z.
+  artists.sort((a, b) =>
+    compareLandingArtists(
+      { name: a.name, phase: a.phase, nextShowDate: a.nextShow?.date ?? null },
+      { name: b.name, phase: b.phase, nextShowDate: b.nextShow?.date ?? null },
+    ),
   );
 
   // Pick-up resolution.
@@ -576,7 +593,9 @@ export async function getWorkspaceLandingData(
   // in-planning = future/unlocked only (never ended).
   const activeTourCount = countOnTourNow(tourRows as DeriveTour[], todayIso);
   const planningTourCount = countInPlanning(tourRows as DeriveTour[], todayIso);
-  const showsThisMonth = monthRoutingRes.count ?? 0;
+  const showsThisMonth = ((monthRoutingRes.data ?? []) as Array<{ day_type: string | null }>).filter((r) =>
+    isShowDayType(r.day_type),
+  ).length;
   const budgetCommitted = budgetLines.reduce(
     (sum, l) => sum + (Number(l.proposed_cost) || 0),
     0,

@@ -28,8 +28,6 @@ export type HomeStats = {
   activeTours: number;
   showsThisMonth: number;
   personnelActive: number;
-  budgetCommitted: number;
-  budgetCurrency: string;
 };
 
 export type HomeTourSummary = {
@@ -215,11 +213,12 @@ export async function getHomeData(
     category: string | null;
     status: string | null;
   }>;
-  let budgetCommitted = 0;
+  // Oct 2026 — the "committed" sum that used to be built here added every
+  // planned cost across ALL this artist's tours (past ones too) in mixed
+  // currencies. Removed; the artist page shows the current tour's projected
+  // expenses from loadTourPnl instead (one formula, tour currency).
   const budgetByTour = new Map<string, string | null>();
   for (const row of budgetRows) {
-    const p = Number(row.proposed_cost ?? 0);
-    if (Number.isFinite(p)) budgetCommitted += p;
     if (row.tour_id) {
       const existing = budgetByTour.get(row.tour_id);
       const candidate = row.updated_at;
@@ -266,6 +265,10 @@ export async function getHomeData(
   // Advance updated-at: re-bucket to per-tour. advance_instances has
   // routing_id only, so we need the routing→tour mapping.
   const advanceUpdatedByTour = new Map<string, string>();
+  // routing id → tour id for the advances above. The advance query is NOT
+  // scoped to this artist (advance_instances has no tour_id), so the activity
+  // list below uses this to keep only this artist's advances.
+  const advanceRoutingToTour = new Map<string, string>();
   const advanceUpdates = (advanceUpdatedRes.data ?? []) as Array<{
     id: string;
     routing_id: string;
@@ -285,6 +288,7 @@ export async function getHomeData(
           (r) => [r.id, r.tour_id],
         ),
       );
+      for (const [rid, tid] of routingToTour) advanceRoutingToTour.set(rid, tid);
       for (const adv of advanceUpdates) {
         const tourId = routingToTour.get(adv.routing_id);
         if (!tourId || !adv.updated_at) continue;
@@ -340,31 +344,26 @@ export async function getHomeData(
       occurredAt: row.updated_at,
     });
   }
+  // Oct 2026 — only THIS artist's advances (the query is workspace-wide, so
+  // every artist page used to list other artists' advances with no tour name).
   for (const adv of advanceUpdates) {
     if (!adv.updated_at) continue;
+    const tourId = advanceRoutingToTour.get(adv.routing_id);
+    if (!tourId || !tourNameById.has(tourId)) continue;
     recentActivity.push({
       id: `advance-${adv.id}`,
       product: 'advance',
-      tourId: '',
-      tourName: '',
+      tourId,
+      tourName: tourNameById.get(tourId) ?? 'Tour',
       actor: '',
-      summary: 'Advance instance updated',
+      summary: 'Advance updated',
       occurredAt: adv.updated_at,
     });
   }
-  // Tours themselves count as Operations updates.
-  for (const t of tours) {
-    if (!t.updated_at) continue;
-    recentActivity.push({
-      id: `tour-${t.id}`,
-      product: 'operations',
-      tourId: t.id,
-      tourName: t.name ?? 'Tour',
-      actor: '',
-      summary: `Tour metadata updated`,
-      occurredAt: t.updated_at,
-    });
-  }
+  // Oct 2026 (Adam: "keep, hide noise") — the per-tour "Tour metadata updated"
+  // rows are gone: tours.updated_at moves on any touch, so they crowded out the
+  // real budget / advance changes. Each tour row already says when it was
+  // last updated.
   recentActivity.sort((a, b) => (a.occurredAt < b.occurredAt ? 1 : -1));
   const top10 = recentActivity.slice(0, 10);
 
@@ -398,22 +397,6 @@ export async function getHomeData(
       }
     }
   }
-
-  // Default budget currency = the most-common tour currency for this
-  // artist (or GBP if none).
-  const currencyVotes = new Map<string, number>();
-  for (const t of tours) {
-    const c = (t.currency ?? 'GBP').toUpperCase();
-    currencyVotes.set(c, (currencyVotes.get(c) ?? 0) + 1);
-  }
-  let budgetCurrency = 'GBP';
-  let topVotes = -1;
-  currencyVotes.forEach((v, k) => {
-    if (v > topVotes) {
-      topVotes = v;
-      budgetCurrency = k;
-    }
-  });
 
   // Phase 1 §B — Calendar widget data (next 30 days, artist-scoped) +
   // "what's hot" metrics per product card. Two cheap queries.
@@ -529,8 +512,6 @@ export async function getHomeData(
       activeTours,
       showsThisMonth,
       personnelActive: personnelRes.count ?? 0,
-      budgetCommitted,
-      budgetCurrency,
     },
     tours: tourSummaries,
     recentActivity: top10,

@@ -172,3 +172,29 @@ export function nextShowFooter(
   if (!ns) return { hasShow: false, date: null, city: null };
   return { hasShow: true, date: ns.date, city: cityByDate ? cityByDate(ns.date) : null };
 }
+
+// ── workspace card order (Oct 2026, Adam) ────────────────────────────────────
+
+export interface LandingOrderKey {
+  name: string;
+  /** Phase of the artist's featured tour (null = no tours). */
+  phase: TourPhase | null;
+  /** Next show date across the artist's tours (YYYY-MM-DD) or null. */
+  nextShowDate: string | null;
+}
+
+/** On tour now → upcoming (nearest next show first) → everyone else, A–Z.
+ *  Ties inside a group fall back to the name, so the order is stable. */
+export function compareLandingArtists(a: LandingOrderKey, b: LandingOrderKey): number {
+  const rank = (k: LandingOrderKey) =>
+    k.phase === 'on_tour' ? 0 : k.phase === 'upcoming' || (k.phase !== 'ended' && k.nextShowDate) ? 1 : 2;
+  const ra = rank(a);
+  const rb = rank(b);
+  if (ra !== rb) return ra - rb;
+  if (ra < 2) {
+    const da = a.nextShowDate ?? '9999-12-31';
+    const db = b.nextShowDate ?? '9999-12-31';
+    if (da !== db) return da < db ? -1 : 1;
+  }
+  return a.name.localeCompare(b.name, 'en', { sensitivity: 'base' });
+}

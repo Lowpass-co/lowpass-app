@@ -37,7 +37,22 @@ import {
   getArtistGradient,
 } from '@/lib/artists/imageUrl';
 import { getSpotifyArtistMeta } from '@/lib/spotify/server';
-import type { HomeActivityRow } from '@/server/home/getHomeData';
+import type { HomeActivityRow, HomeTourSummary } from '@/server/home/getHomeData';
+import { loadTourPnl } from '@/server/budget/loadTourPnl';
+import { tourPhase } from '@/lib/derive/tourStatus';
+
+/** The tour the artist page's budget figure is about: the one on the road,
+ *  else the next to start. Null when nothing is current or upcoming. */
+function currentTour(tours: HomeTourSummary[], today: string): HomeTourSummary | null {
+  const byStart = (a: HomeTourSummary, b: HomeTourSummary) =>
+    (a.startDate ?? '9999') < (b.startDate ?? '9999') ? -1 : 1;
+  const phase = (t: HomeTourSummary) => tourPhase({ start_date: t.startDate, end_date: t.endDate }, today);
+  return (
+    tours.filter((t) => phase(t) === 'on_tour').sort(byStart)[0] ??
+    tours.filter((t) => phase(t) === 'upcoming').sort(byStart)[0] ??
+    null
+  );
+}
 
 const CURRENCY_SYMBOL: Record<string, string> = {
   GBP: '£',
@@ -80,6 +95,26 @@ export default async function ArtistHomePage({
   if (!data) notFound();
 
   const { artist, stats, tours, recentActivity } = data;
+
+  // Oct 2026 — the stat line's money figure is the CURRENT tour's projected
+  // expenses from the same P&L as the budget sheet (tour currency), replacing a
+  // sum of every planned cost across all tours in mixed currencies. Read-only
+  // (no reconcile); a failed read just drops the figure.
+  const today = new Date().toISOString().slice(0, 10);
+  const budgetTour = currentTour(tours, today);
+  let tourBudget: { value: number; currency: string; tourName: string } | null = null;
+  if (budgetTour) {
+    const { data: tw } = await supabase.from('tours').select('workspace_id').eq('id', budgetTour.id).maybeSingle();
+    const workspaceId = (tw as { workspace_id?: string } | null)?.workspace_id;
+    if (workspaceId) {
+      try {
+        const b = await loadTourPnl(supabase, budgetTour.id, workspaceId, { reconcile: false });
+        tourBudget = { value: b.pnl.totalExpenses.projected, currency: b.tourCurrency, tourName: budgetTour.name };
+      } catch {
+        tourBudget = null;
+      }
+    }
+  }
 
   // Sprint 7 §4 — extra fields for the redesigned hero. getHomeData
   // returns the resolved imageUrl already; we need branding +
@@ -176,8 +211,7 @@ export default async function ArtistHomePage({
             activeTours={stats.activeTours}
             showsThisMonth={stats.showsThisMonth}
             personnelActive={stats.personnelActive}
-            budgetCommitted={stats.budgetCommitted}
-            budgetCurrency={stats.budgetCurrency ?? 'GBP'}
+            tourBudget={tourBudget}
           />
 
           <div style={{ height: 'var(--lp-space-5)' }} />
@@ -233,33 +267,35 @@ function ArtistStatLine({
   activeTours,
   showsThisMonth,
   personnelActive,
-  budgetCommitted,
-  budgetCurrency,
+  tourBudget,
 }: {
   activeTours: number;
   showsThisMonth: number;
   personnelActive: number;
-  budgetCommitted: number;
-  budgetCurrency: string;
+  tourBudget: { value: number; currency: string; tourName: string } | null;
 }) {
   // §C1 — one lean line replaces the four stat boxes. Mono value + caps label,
   // dot-separated; wraps gracefully on narrow widths. Token-clean.
-  const parts: { value: string; label: string }[] = [
+  const parts: { value: string; label: string; note?: string; title?: string }[] = [
     { value: String(activeTours), label: activeTours === 1 ? 'tour on the road' : 'tours on the road' },
-    { value: String(showsThisMonth), label: 'shows this month' },
+    { value: String(showsThisMonth), label: showsThisMonth === 1 ? 'show this month' : 'shows this month' },
     { value: String(personnelActive), label: 'personnel assigned' },
-    {
-      value: abbrevCurrency(budgetCommitted, budgetCurrency),
-      label: `committed · ${budgetCurrency.toUpperCase()}`,
-    },
   ];
+  if (tourBudget) {
+    parts.push({
+      value: abbrevCurrency(tourBudget.value, tourBudget.currency),
+      label: 'budgeted',
+      note: tourBudget.tourName,
+      title: `Projected total expenses for ${tourBudget.tourName} (${tourBudget.currency.toUpperCase()}), from its budget sheet`,
+    });
+  }
   return (
     <div
       className="flex flex-wrap items-baseline"
       style={{ gap: 'var(--lp-space-4)' }}
     >
       {parts.map((p, i) => (
-        <span key={i} className="inline-flex items-baseline" style={{ gap: 6 }}>
+        <span key={i} className="inline-flex items-baseline" style={{ gap: 6 }} title={p.title}>
           <span
             className="lp-mono"
             style={{
@@ -280,6 +316,9 @@ function ArtistStatLine({
           >
             {p.label}
           </span>
+          {p.note ? (
+            <span style={{ fontSize: 'var(--lp-text-xs)', color: 'var(--lp-text-tertiary)' }}>· {p.note}</span>
+          ) : null}
         </span>
       ))}
     </div>

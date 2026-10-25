@@ -35,24 +35,22 @@ import { ChevronRight } from 'lucide-react';
 import { useArtistTourContext } from '@/contexts/ArtistTourContext';
 import { useTourEditor } from '@/contexts/TourEditorContext';
 import { tourHref } from '@/lib/nav/lastProduct';
-import { TourFingerprint } from '@/components/tour/TourFingerprint';
+import { DayTypeLegend, TourFingerprint, dayTypesPresent } from '@/components/tour/TourFingerprint';
+import { tourPhase, type TourPhase } from '@/lib/derive/tourStatus';
 import type { HomeTourSummary } from '@/server/home/getHomeData';
 
-const STATUS_META: Record<string, { label: string; color: string }> = {
-  active: { label: 'Active', color: 'var(--color-lp-status-complete)' },
-  planning: { label: 'Planning', color: 'var(--color-lp-status-needs-review)' },
-  confirmed: { label: 'Confirmed', color: 'var(--color-lp-status-in-progress)' },
-  completed: { label: 'Completed', color: 'var(--lp-text-tertiary)' },
-  archived: { label: 'Archived', color: 'var(--lp-text-tertiary)' },
+/* Oct 2026 — the pill is DATE-derived (tourPhase, the same rule as every
+   status line). It used to print the DB `status` text, which nobody updates:
+   a tour on its 25th day read "PLANNING" right above "On the road". */
+const PHASE_META: Record<TourPhase, { label: string; color: string }> = {
+  on_tour: { label: 'On the road', color: 'var(--color-lp-status-complete)' },
+  upcoming: { label: 'Upcoming', color: 'var(--color-lp-status-in-progress)' },
+  planning: { label: 'Dates TBC', color: 'var(--color-lp-status-needs-review)' },
+  ended: { label: 'Wrapped', color: 'var(--lp-text-tertiary)' },
 };
 
-function statusMeta(status: string) {
-  return (
-    STATUS_META[status?.toLowerCase()] ?? {
-      label: status || 'Tour',
-      color: 'var(--lp-text-tertiary)',
-    }
-  );
+function phaseOf(t: HomeTourSummary): TourPhase {
+  return tourPhase({ start_date: t.startDate, end_date: t.endDate }, new Date().toISOString().slice(0, 10));
 }
 
 function fmtDate(iso: string | null): string | null {
@@ -122,22 +120,14 @@ function tourStatusLine(t: HomeTourSummary): string {
   const start = t.startDate?.slice(0, 10) ?? null;
   const end = t.endDate?.slice(0, 10) ?? null;
   if (start && end && start <= today && today <= end) {
-    return `On the road · ends ${fmtRelativeDay(end)}`;
+    // The pill already says "On the road" — the line says where in the run.
+    const dayN = Math.round((Date.parse(`${today}T12:00:00Z`) - Date.parse(`${start}T12:00:00Z`)) / 86_400_000) + 1;
+    const total = Math.round((Date.parse(`${end}T12:00:00Z`) - Date.parse(`${start}T12:00:00Z`)) / 86_400_000) + 1;
+    return `Day ${dayN} of ${total} · ends ${fmtRelativeDay(end)}`;
   }
   if (start && start > today) return `Starts ${fmtRelativeDay(start)}`;
   if (end && end < today) return `Wrapped ${fmtRelativeDay(end)}`;
   return lastActivity(t) ?? 'Not scheduled yet';
-}
-
-/** Next upcoming show/festival day for the fingerprint highlight tick. */
-function nextShowDate(t: HomeTourSummary): string | null {
-  const today = new Date().toISOString().slice(0, 10);
-  return (
-    t.fingerprint.find((d) => {
-      const first = d.dayType.split(',')[0]?.trim().toLowerCase();
-      return (first === 'show' || first === 'festival') && d.date >= today;
-    })?.date ?? null
-  );
 }
 
 /** Current/upcoming tours: equal weight, date-ordered (start asc). */
@@ -222,9 +212,9 @@ export function TourPicker({ tours }: { tours: HomeTourSummary[] }) {
     <section className="space-y-2">
       {/* Section header — standard workspace-landing grammar:
           caps label + mono count left, compact action right. */}
-      <div className="flex items-baseline justify-between">
+      <div className="flex items-center justify-between" style={{ gap: 'var(--lp-space-4)' }}>
         <h2
-          className="lp-label-caps"
+          className="lp-label-caps shrink-0"
           style={{ margin: 0, color: 'var(--lp-text-tertiary)' }}
         >
           Tours
@@ -233,10 +223,16 @@ export function TourPicker({ tours }: { tours: HomeTourSummary[] }) {
           </span>
           <span className="lp-mono">{tours.length}</span>
         </h2>
+        {/* The key for the day strips below — once, one line. */}
+        {upcoming.some((t) => t.fingerprint.length > 0) ? (
+          <div className="hidden min-w-0 flex-1 justify-end md:flex">
+            <DayTypeLegend dayTypes={dayTypesPresent(upcoming.map((t) => t.fingerprint))} />
+          </div>
+        ) : null}
         <button
           type="button"
           onClick={() => openCreateTour()}
-          className="btn-transition inline-flex items-center rounded-md px-2.5 py-1"
+          className="btn-transition inline-flex shrink-0 items-center rounded-md px-2.5 py-1"
           style={{
             gap: 4,
             fontSize: 12,
@@ -376,11 +372,10 @@ function TourRow({
   active: boolean;
   onPick: () => void;
 }) {
-  const meta = statusMeta(tour.status);
-  const highlightDate = nextShowDate(tour);
+  const meta = PHASE_META[phaseOf(tour)];
   return (
     <div
-      className="group btn-transition relative flex items-center gap-4 py-3.5 pl-3 pr-3"
+      className="group btn-transition relative flex flex-wrap items-center gap-x-4 gap-y-3 py-3.5 pl-3 pr-3 md:flex-nowrap"
       style={{
         borderTop: first ? 'none' : '1px solid var(--lp-border-subtle)',
         borderLeft: active
@@ -411,7 +406,7 @@ function TourRow({
           quick links re-enable their own. */}
       <div
         className="pointer-events-none relative z-[1] min-w-0"
-        style={{ flex: '0 1 300px' }}
+        style={{ flex: '1 1 300px', maxWidth: 380 }}
       >
         <div className="flex items-center gap-2">
           <span
@@ -451,16 +446,18 @@ function TourRow({
         </div>
       </div>
       {/* fingerprint — its own pointer events sit above the overlay */}
-      <div className="pointer-events-auto relative z-[2] min-w-0 flex-1">
+      {/* Phone: the strip drops under the name (it used to be squeezed to
+          nothing beside it). */}
+      <div className="pointer-events-auto relative z-[2] w-full min-w-0 md:w-auto md:flex-1">
         {tour.fingerprint.length > 0 ? (
-          // No weekMarkers at row scale — the date labels don't fit the
-          // compact strip and collide (Adam's 2026-08-06 screenshot). Week
-          // labels are hero-scale furniture; the row default (off) is right.
+          // Oct 2026 — fills the row (was a short stub of 3px ticks), one
+          // line, today marked, start/end dates under it. No week labels at
+          // row scale (they collide — Adam's 2026-08-06 screenshot).
           <TourFingerprint
             days={tour.fingerprint}
             size="row"
-            highlightDate={highlightDate}
-            ariaLabel={`${tour.name} day strip`}
+            fill
+            ariaLabel={`${tour.name}: tour days`}
           />
         ) : (
           <span style={{ fontSize: 11, color: 'var(--lp-text-tertiary)' }}>
@@ -471,7 +468,7 @@ function TourRow({
       <ChevronRight
         size={16}
         aria-hidden
-        className="pointer-events-none relative z-[1] shrink-0 opacity-0 transition-opacity group-hover:opacity-100"
+        className="pointer-events-none relative z-[1] hidden shrink-0 opacity-0 transition-opacity group-hover:opacity-100 md:block"
         style={{ color: 'var(--color-lp-orange)' }}
       />
     </div>
@@ -521,8 +518,8 @@ function PastTourLine({
         </span>
       </span>
       <span
-        className="relative z-[1] flex shrink-0 items-center"
-        style={{ gap: 'var(--lp-space-3)' }}
+        className="relative z-[1] flex min-w-0 flex-wrap items-center"
+        style={{ columnGap: 'var(--lp-space-3)', rowGap: 'var(--lp-space-1)' }}
       >
         <QuickLinks tourId={tour.id} tourName={tour.name} />
         <span

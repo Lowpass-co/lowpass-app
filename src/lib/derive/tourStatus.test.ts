@@ -8,6 +8,7 @@ import {
   countInPlanning,
   countOnTourNow,
   countEndedUnsettled,
+  compareLandingArtists,
   type DeriveRoutingDay,
   type DeriveTour,
 } from './tourStatus.ts';
@@ -75,6 +76,24 @@ const days: DeriveRoutingDay[] = [
   // The "9 IN PLANNING counting ended tours" regression: an ended tour must never
   // land in the planning bucket.
   check('ended tour is phase=ended, not planning', tourPhase(tours[3], TODAY) === 'ended');
+}
+
+// Workspace card order (Oct 2026): on tour → upcoming by next show → rest A–Z.
+{
+  const cards = [
+    { name: 'Ella Langley', phase: 'ended' as const, nextShowDate: null },
+    { name: 'Good Neighbours', phase: 'upcoming' as const, nextShowDate: '2027-04-09' },
+    { name: 'AU/RA', phase: null, nextShowDate: null },
+    { name: 'Charlotte Sands', phase: 'on_tour' as const, nextShowDate: '2026-10-26' },
+    { name: 'Chance Peña', phase: 'upcoming' as const, nextShowDate: null },
+    { name: 'Band B', phase: 'upcoming' as const, nextShowDate: '2026-11-01' },
+  ];
+  const order = [...cards].sort(compareLandingArtists).map((c) => c.name);
+  check(
+    'landing order: on tour, then nearest next show, then the rest A–Z',
+    JSON.stringify(order) ===
+      JSON.stringify(['Charlotte Sands', 'Band B', 'Good Neighbours', 'Chance Peña', 'AU/RA', 'Ella Langley']),
+  );
 }
 
 console.log(`tourStatus.test.ts — ${pass} assertions passed`);
