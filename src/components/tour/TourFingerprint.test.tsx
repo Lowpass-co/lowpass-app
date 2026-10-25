@@ -9,7 +9,8 @@
 
 import { describe, expect, it } from 'vitest';
 import { render, screen, within, fireEvent } from '@testing-library/react';
-import { DayTypeLegend, TourFingerprint, dayCellColour, dayTypesPresent, type FingerprintDay } from './TourFingerprint';
+import { DayTypeLegend, TourFingerprint, dayCellColour, type FingerprintDay } from './TourFingerprint';
+import { dayTypesPresent } from '@/lib/routing/dayTypesPresent';
 
 const days: FingerprintDay[] = [
   { date: '2026-10-01', dayType: 'rehearsal' },
