@@ -20,7 +20,8 @@
    ============================================ */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Plus } from 'lucide-react';
+import { Plus, Sparkles } from 'lucide-react';
+import { ScheduleImportFlow, type ScheduleImportResult } from '@/components/import/ScheduleImportFlow';
 import { Modal } from '@/components/ui/Modal';
 import { useToast } from '@/components/ui/Toast';
 import { TOUR_CURRENCIES, DEFAULT_TOUR_CURRENCY } from '@/lib/currencies';
@@ -115,7 +116,10 @@ function TourEditorModalInner({
   const isEdit = mode === 'edit';
   const today = useMemo(() => todayIso(), []);
 
-  const [tab, setTab] = useState<'details' | 'routing'>('details');
+  const [tab, setTab] = useState<'details' | 'routing' | 'import'>('details');
+  // Oct 2026 — "Start from a tour book": the AI import, inline, for a new tour.
+  const [importDirty, setImportDirty] = useState(false);
+  const [confirmDiscard, setConfirmDiscard] = useState(false);
 
   // Artist — create uses Existing/New; edit is locked to the tour's artist.
   const [artistMode, setArtistMode] = useState<'existing' | 'new'>('existing');
@@ -192,6 +196,44 @@ function TourEditorModalInner({
     setTab('routing');
   }, [isEdit, startDate, endDate, rowsSeededFor]);
 
+  /* The import's approved days → this form: dates cover every day, the name
+     fills if empty, a matching artist is picked, and the routing rows are the
+     imported days (every other date in the range stays blank). Everything is
+     still editable before the tour is created. */
+  const applyImported = useCallback((r: ScheduleImportResult) => {
+    const dates = r.days.map((d) => d.date).sort();
+    if (!dates.length) return;
+    const start = [r.meta.startDate, dates[0]].filter(Boolean).sort()[0] as string;
+    const end = [r.meta.endDate, dates[dates.length - 1]].filter(Boolean).sort().reverse()[0] as string;
+    setStartDate(start);
+    setEndDate(end);
+    if (!name.trim() && r.meta.tourName) setName(r.meta.tourName);
+    if (artistPick === null && r.meta.artistName) {
+      const key = (v: string) => v.toLowerCase().replace(/[^a-z0-9]/g, '');
+      const hit = artists.find((a) => key(a.name) === key(r.meta.artistName ?? ''));
+      if (hit) setArtistPick(hit.id);
+    }
+    const byDate = new Map(r.days.map((d) => [d.date, d]));
+    setRows(
+      seedRows(start, end).map((row) => {
+        const d = byDate.get(row.date);
+        return d
+          ? { ...row, day_type: d.day_type, venue_name: d.venue_name, city: d.city, country: d.country, address: d.address, notes: d.notes }
+          : row;
+      }),
+    );
+    setRowsSeededFor(`${start}__${end}`);
+    setImportDirty(false);
+    setTab('routing');
+    showToast(`Added ${r.days.length} ${r.days.length === 1 ? 'day' : 'days'} — check them, then create the tour.`);
+  }, [name, artistPick, artists, showToast]);
+
+  /* Closing mid-import asks first (the AI's reading would be lost). */
+  const requestClose = useCallback(() => {
+    if (tab === 'import' && importDirty) setConfirmDiscard(true);
+    else onClose();
+  }, [tab, importDirty, onClose]);
+
   const persistRouting = useCallback(async (id: string, includeRows: boolean) => {
     if (!includeRows) return;
     const filled = rows.filter(isRowFilled);
@@ -247,7 +289,7 @@ function TourEditorModalInner({
     }
   }, [canSave, isEdit, tourId, trimmedName, currency, region, startDate, endDate, persistRouting, effectiveArtistId, artistMode, newArtistName, showToast, onSaved, onClose]);
 
-  const footer = (
+  const footer = tab === 'import' ? null : (
     <div className="flex w-full items-center justify-between gap-2">
       <div>
         {tab === 'routing' ? (
@@ -272,7 +314,16 @@ function TourEditorModalInner({
   );
 
   return (
-    <Modal open={open} onClose={onClose} title={isEdit ? 'Edit tour' : 'New tour'} subtitle={isEdit ? 'Update the tour’s details and routing.' : 'Set up the tour, then lay out the routing.'} size="xl" footer={footer} closeOnBackdrop={false}>
+    <Modal open={open} onClose={requestClose} title={isEdit ? 'Edit tour' : 'New tour'} subtitle={isEdit ? 'Update the tour’s details and routing.' : 'Set up the tour, then lay out the routing.'} size="xl" footer={footer} closeOnBackdrop={false}>
+      {confirmDiscard ? (
+        <div role="alertdialog" aria-label="Discard this import?" className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-md px-3 py-2 text-sm" style={{ color: 'var(--lp-text)', background: 'color-mix(in srgb, var(--color-lp-status-needs-review) 12%, transparent)', border: '1px solid color-mix(in srgb, var(--color-lp-status-needs-review) 40%, transparent)' }}>
+          <span>Discard this import? What the AI read will be lost.</span>
+          <span className="flex gap-2">
+            <button type="button" onClick={() => setConfirmDiscard(false)} style={btnGhost}>Keep reviewing</button>
+            <button type="button" onClick={() => { setConfirmDiscard(false); setImportDirty(false); onClose(); }} style={{ ...btnGhost, color: 'var(--lp-text-inverse)', background: 'var(--color-lp-error)', borderColor: 'transparent' }}>Discard</button>
+          </span>
+        </div>
+      ) : null}
       {/* Tabs */}
       <div className="mb-4 flex items-center gap-4 border-b" style={{ borderColor: 'var(--lp-border)' }}>
         {(['details', 'routing'] as const).map((t) => {
@@ -295,8 +346,30 @@ function TourEditorModalInner({
         <div role="alert" className="mb-3 rounded-md px-3 py-2 text-sm" style={{ color: 'var(--color-lp-error)', background: 'color-mix(in srgb, var(--color-lp-error) 10%, transparent)', border: '1px solid color-mix(in srgb, var(--color-lp-error) 30%, transparent)' }}>{error}</div>
       ) : null}
 
-      {tab === 'details' ? (
+      {tab === 'import' ? (
+        <ScheduleImportFlow
+          mode="new-tour"
+          onDirtyChange={setImportDirty}
+          onCancel={() => { setImportDirty(false); setTab('details'); }}
+          onUse={applyImported}
+        />
+      ) : tab === 'details' ? (
         <div className="flex flex-col gap-4">
+          {!isEdit ? (
+            <button
+              type="button"
+              onClick={() => setTab('import')}
+              data-testid="tour-start-from-book"
+              className="btn-transition flex w-full items-center gap-3 rounded-lg px-4 py-3 text-left"
+              style={{ border: '1px dashed var(--lp-border-strong)', background: 'var(--lp-panel)' }}
+            >
+              <Sparkles size={18} aria-hidden style={{ color: 'var(--lp-orange)', flexShrink: 0 }} />
+              <span className="min-w-0">
+                <span className="block text-sm font-semibold" style={{ color: 'var(--lp-text)' }}>Start from a tour book or routing grid</span>
+                <span className="block text-xs" style={{ color: 'var(--lp-text-secondary)' }}>Drop the file — AI fills the dates, name and every day. You check it all before the tour is created.</span>
+              </span>
+            </button>
+          ) : null}
           {/* Artist */}
           <label style={labelStyle}>Artist</label>
           {isEdit ? (
