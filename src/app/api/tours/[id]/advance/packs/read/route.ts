@@ -68,8 +68,12 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     path: paths[i] as string,
     name: 'error' in c ? c.name.replace(/^\d+-/, '') : c.name,
     kind: 'error' in c ? null : c.kind,
+    mime: 'error' in c ? null : c.mime,
     pageCount: 'error' in c ? null : c.pageCount,
     error: 'error' in c ? c.error : null,
+    // Spreadsheets / text have no rendering of their own: send the text so the
+    // review screen can show (and highlight) it. PDFs render from the file.
+    textPages: !('error' in c) && c.kind === 'text' && c.mime !== 'application/pdf' ? c.pages.map((p) => ({ num: p.num, text: p.text.slice(0, 60_000) })) : null,
   }));
 
   /* ---- identify: which show is each file for ---- */
@@ -136,10 +140,20 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   const ok = results.filter((r): r is NonNullable<typeof r> => !!r);
   const suggestions = mergeSuggestions(ok.map((r) => r.suggestions));
   const extras = mergeExtras(ok.map((r) => r.extras), sections);
+  const labels: Record<string, { section: string; label: string; type: string }> = {};
+  for (const s of sections) for (const f of s.fields ?? []) labels[`${s.template_id}:${f.id}`] = { section: s.label, label: f.label, type: f.type };
+  const existing: Record<string, unknown> = {};
+  for (const sg of suggestions) {
+    const v = show.data[sg.section_id]?.[sg.field_id];
+    if (v !== null && v !== undefined && v !== '') existing[`${sg.section_id}:${sg.field_id}`] = v;
+  }
   return NextResponse.json({
     files: fileInfo.map((f, i) => ({ ...f, found: results[i]?.suggestions.length ?? 0, show: results[i]?.show ?? null, truncated: results[i]?.truncated ?? false })),
     suggestions,
     extras,
     unanswered: unansweredAfter(sections, show.data, suggestions),
+    labels,
+    existing,
+    sections: sections.map((s) => ({ template_id: s.template_id, label: s.label })),
   });
 }

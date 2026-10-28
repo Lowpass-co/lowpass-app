@@ -488,7 +488,7 @@ describe('hasOwnRail — where the app rail should start collapsed', () => {
 
   it.each([
     `/operations/${T}/day/r-1`,     // DayLayout → DayRail
-    `/advance/${T}/r-1`,            // AdvanceUpcomingSidebar
+    `/advance/${T}/r-1`,            // the shows rail
     `/operations/${T}/riders/p-1`,  // RiderPackEditorView → RiderPackSidebar, 280px
     '/rider-packs/p-1',             // S-3b — the STANDALONE editor, same sidebar
   ])('%s carries one, unconditionally — no view can turn it off', (p) => {
@@ -498,6 +498,7 @@ describe('hasOwnRail — where the app rail should start collapsed', () => {
   it.each([
     `/operations/${T}/day`,      // the day INDEX has no rail — the per-day page does
     `/advance/${T}`,             // tour-level advance overview, no rail
+    `/advance/${T}/templates`,   // templates page, no rail
     `/operations/${T}/riders`,   // the pack LIST, likewise
     `/operations/${T}/personnel`,
     `/operations/${T}/files`,

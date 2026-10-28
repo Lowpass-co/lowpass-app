@@ -7,14 +7,13 @@
 
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import type { Tour } from '@/types';
 import type { Continent } from '@/types';
 import { BrandedSelect } from '@/components/ui/BrandedSelect';
 
-type LayoutTemplate = { id: string; name: string; sections: unknown[] };
 
 const CONTINENTS: { value: Continent; label: string }[] = [
   { value: 'US', label: 'US' },
@@ -53,17 +52,6 @@ export function TourEditForm({ tour }: { tour: Tour }) {
   const [crewCount, setCrewCount] = useState(tour.crew_count);
   const [status, setStatus] = useState(tour.status);
   const [notes, setNotes] = useState(tour.notes ?? '');
-  const [defaultAdvanceTemplateId, setDefaultAdvanceTemplateId] = useState<string>(
-    (tour as { default_advance_template_id?: string }).default_advance_template_id ?? ''
-  );
-  const [layoutTemplates, setLayoutTemplates] = useState<LayoutTemplate[]>([]);
-
-  useEffect(() => {
-    fetch('/api/advance/layout-templates')
-      .then((r) => (r.ok ? r.json() : { templates: [] }))
-      .then((j) => setLayoutTemplates(j.templates ?? []))
-      .catch(() => setLayoutTemplates([]));
-  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -84,7 +72,6 @@ export function TourEditForm({ tour }: { tour: Tour }) {
           crew_count: crewCount,
           status,
           notes: notes.trim() || null,
-          default_advance_template_id: defaultAdvanceTemplateId || null,
         }),
       });
       if (!res.ok) {
@@ -203,22 +190,10 @@ export function TourEditForm({ tour }: { tour: Tour }) {
           className="w-full"
         />
       </div>
-      <div>
-        <label className="mb-1 block text-sm font-medium text-lp-text-secondary">Default advance template</label>
-        <BrandedSelect
-          value={defaultAdvanceTemplateId}
-          onChange={setDefaultAdvanceTemplateId}
-          options={[
-            { value: '', label: 'None' },
-            ...layoutTemplates.map((t) => ({ value: t.id, label: t.name })),
-          ]}
-          ariaLabel="Default advance template"
-          className="w-full"
-        />
-        <p className="mt-0.5 text-xs text-lp-text-tertiary">
-          New advances for this tour will use this section layout by default.
-        </p>
-      </div>
+      <p className="text-xs text-lp-text-tertiary">
+        Advance questions come from the template for each day type — set them in{' '}
+        <a href={`/advance/${tour.id}/templates`} className="underline">Advance → Templates</a>.
+      </p>
       <div>
         <label className="mb-1 block text-sm font-medium text-lp-text-secondary">Notes</label>
         <textarea

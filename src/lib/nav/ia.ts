@@ -422,7 +422,7 @@ export function isShelledPath(pathname: string, search = ''): boolean {
  * Three, and each renders its rail UNCONDITIONALLY — that qualifier is the
  * whole lesson of this function:
  *   · the per-day page              → DayLayout → DayRail
- *   · the per-show Advance surface  → AdvanceUpcomingSidebar
+ *   · the per-show Advance surface  → the shows rail (AdvanceShowPage)
  *   · the rider pack editor         → RiderPackSidebar (280px)
  *
  * NOT ROUTING. S-1 collapsed it there on my assumption that the routing page
@@ -449,7 +449,8 @@ export function hasOwnRail(pathname: string): boolean {
   return (
     /^\/operations\/[^/]+\/day\/[^/]+/.test(pathname) ||
     /^\/operations\/[^/]+\/riders\/[^/]+/.test(pathname) ||
-    /^\/advance\/[^/]+\/[^/]+/.test(pathname) ||
+    /* The show page's shows rail — not the tour's Templates page. */
+    /^\/advance\/[^/]+\/(?!templates(\/|$))[^/]+/.test(pathname) ||
     /* S-3b — the STANDALONE rider editor renders the same RiderPackSidebar the
        tour-scoped one does (280px, unconditional whenever the pack has a
        context id). Same component, same collapse rule. */

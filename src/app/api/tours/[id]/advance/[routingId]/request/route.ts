@@ -8,15 +8,51 @@
 import { NextResponse } from 'next/server';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
-import { requireWrite } from '@/lib/auth/workspace-check';
+import { requireUserAndWorkspace, requireWrite } from '@/lib/auth/workspace-check';
 import { generateToken } from '@/lib/rider-packs/web-links';
-import { buildIntakeFormSchema } from '@/lib/advance/intake';
+import { buildIntakeFormSchema, isEmptyAnswer } from '@/lib/advance/intake';
+import { loadAdvanceShow } from '@/server/advance/show';
 import { ensureAdvance } from '@/server/advance/ensure';
 import { loadAdvanceSections } from '@/server/advance/advanceSections';
 import { advanceError, readJson, tourGate } from '@/server/advance/routeGuard';
 
 type Params = { params: Promise<{ id: string; routingId: string }> };
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+/** GET — what a request for this show would ask, and who to: the questions a
+ *  venue can answer (with which are already answered), the last recipient. */
+export async function GET(_request: Request, { params }: Params) {
+  const { id: tourId, routingId } = await params;
+  const supabase = await createServerSupabaseClient();
+  const auth = await requireUserAndWorkspace(supabase);
+  if ('error' in auth) return auth.error;
+  const gate = await tourGate(supabase, tourId, auth.workspaceId);
+  if (gate) return gate;
+  const client = supabase as unknown as SupabaseClient;
+  try {
+    const show = await loadAdvanceShow(client, tourId, routingId);
+    if (!show) return NextResponse.json({ error: 'Show not found' }, { status: 404 });
+    const schema = buildIntakeFormSchema(show.allSections);
+    const contacts = Object.values(show.data).flatMap((v) => (Array.isArray((v as Record<string, unknown>)?.contacts) ? ((v as Record<string, unknown>).contacts as { first_name?: string; email?: string; role?: string }[]) : []));
+    const withEmail = contacts.find((c) => c.email && /production|pm|tech/i.test(c.role ?? '')) ?? contacts.find((c) => c.email) ?? null;
+    return NextResponse.json({
+      show: { date: show.routing.date, venue: show.venue.name, city: show.venue.city, artist: show.tour.artistName },
+      sections: schema.sections.map((s) => ({
+        template_id: s.template_id,
+        label: s.label,
+        fields: s.fields.map((f) => ({ id: f.id, label: f.label, answered: !isEmptyAnswer(show.data[s.template_id]?.[f.id]) })),
+      })),
+      tmOnly: show.sections.filter((s) => s.tm_only).map((s) => s.label),
+      recipient: {
+        name: show.request.recipientName ?? withEmail?.first_name ?? '',
+        email: show.request.recipientEmail ?? withEmail?.email ?? '',
+      },
+      request: { kind: show.request.kind, label: show.request.label },
+    });
+  } catch (e) {
+    return advanceError(e);
+  }
+}
 
 export async function POST(request: Request, { params }: Params) {
   const { id: tourId, routingId } = await params;
