@@ -23,6 +23,7 @@ import {
   type AdvSection,
 } from '@/lib/advance/board';
 import { resetSections, saveSections } from './api';
+import './advance.css';
 
 type Row = { section: AdvSection; on: boolean; open: boolean };
 

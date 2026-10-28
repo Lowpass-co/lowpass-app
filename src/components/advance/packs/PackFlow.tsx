@@ -15,15 +15,15 @@
    Nothing is saved before step 5. Closing mid-way asks first.
    ============================================ */
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { X, FileUp, Check } from 'lucide-react';
 import { createClient } from '@/lib/supabase-client';
-import { useToast } from '@/components/ui/Toast';
 import type { Extra, Suggestion } from '@/lib/advance/packs';
 import { advanceCall, packFileUrl, saveAnswers } from '../api';
 import { fmtDay } from '../format';
 import { RequestFlow } from '../RequestFlow';
 import { PackViewer } from './PackViewer';
+import '../advance.css';
 
 interface ShowLite { routingId: string; date: string; venue: string | null; city: string | null }
 interface Uploaded { name: string; path: string; size: number; type: string }
@@ -66,7 +66,6 @@ export function PackFlow({
   fixedRoutingId?: string;
   onClose: (saved?: boolean) => void;
 }) {
-  const { showToast } = useToast();
   const [stage, setStage] = useState<Stage>(initialFiles.length ? 'reading' : 'add');
   const [files, setFiles] = useState<File[]>(initialFiles);
   const [over, setOver] = useState(false);
@@ -138,7 +137,7 @@ export function PackFlow({
         setSel(0);
         const signed: Record<string, string> = {};
         await Promise.all(
-          out.files.filter((f) => !f.error && f.kind !== 'text').map(async (f) => {
+          out.files.filter((f) => !f.error && !f.textPages).map(async (f) => {
             try {
               signed[f.path] = (await packFileUrl(tourId, { path: f.path })).url;
             } catch {

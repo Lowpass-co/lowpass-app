@@ -39,7 +39,6 @@ import {
   Trash2,
   Link2,
   ChevronDown,
-  FileText,
   ClipboardCheck,
   CalendarClock,
   Calculator,
@@ -408,28 +407,16 @@ function LedgerRow({
             </ExpansionField>
           </div>
 
-          {/* Graded cross-link button row — the day's spokes. Open day sheet is
-              primary; Advance flushes autosave then soft-navs; Schedule shows the
-              call count and preselects the date; Day budget is a product jump;
-              Rooming only appears when a hotel is attached. Clear / Delete stay in
-              the trailing context menu. */}
+          {/* Graded cross-link button row — the day's spokes. Advance is primary
+              (day sheets were retired, Oct 2026: the show's advance is the per-day
+              page) and flushes autosave then soft-navs; Crew calls shows the call
+              count and jumps to the advance's Local crew calls; Day budget is a
+              product jump; Rooming only appears when a hotel is attached. Clear /
+              Delete stay in the trailing context menu. */}
           <div className="flex flex-wrap items-center gap-[10px]" style={{ gridColumn: '1 / -1', marginTop: 2 }}>
-            {tourId ? (
-              <CrossLink
-                primary
-                icon={FileText}
-                label="Open day sheet"
-                // Single-day sheet when we hold the routing id; else the day-timeline
-                // deep-linked by date (a brand-new unsaved row has no id yet).
-                href={
-                  status?.routingId
-                    ? `/operations/${tourId}/day/${status.routingId}`
-                    : `/operations/${tourId}/day?date=${encodeURIComponent(row.date.slice(0, 10))}`
-                }
-              />
-            ) : null}
             {tourId && status?.routingId ? (
               <CrossLink
+                primary
                 icon={ClipboardCheck}
                 label="Advance this show"
                 onClick={() => {
@@ -438,12 +425,12 @@ function LedgerRow({
                 }}
               />
             ) : null}
-            {tourId ? (
+            {tourId && status?.routingId ? (
               <CrossLink
                 icon={CalendarClock}
-                label="Schedule"
-                count={status?.crewCount ?? 0}
-                href={`/operations/${tourId}/labor?date=${encodeURIComponent(row.date.slice(0, 10))}`}
+                label="Crew calls"
+                count={status.crewCount ?? 0}
+                href={`/advance/${tourId}/${status.routingId}#crew-calls`}
               />
             ) : null}
             {tourId ? (
@@ -495,7 +482,7 @@ function CrossLink({
 }: {
   href?: string;
   onClick?: () => void;
-  icon: typeof FileText;
+  icon: typeof ClipboardCheck;
   label: string;
   count?: number;
   primary?: boolean;

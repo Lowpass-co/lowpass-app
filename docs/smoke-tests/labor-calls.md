@@ -1,5 +1,11 @@
 # Labor calls — smoke tests (P6)
 
+> **Oct 2026 — Advance rebuild.** Labor calls are live, shown as **Local crew
+> calls** on every show's advance (no builder field needed — LAB-01's "add a
+> block" step no longer applies; the block is always there). The tour Labor page
+> and day sheets were retired, so **LAB-04 is retired** — see ADV-125 / ADV-134
+> in `advance.md`. LAB-02 and LAB-03 still apply; re-verify on the rebuild.
+
 Object: per-day crew call schedule. First-class `labor_calls` table (migration
 239). NOT payroll (local crew ≠ tour payroll; never touches rate_lines).
 

@@ -118,12 +118,8 @@ const TOUR_RAIL: RailEntry[] = [
     kind: 'item', id: 'routing', label: 'Schedule', icon: 'CalendarRange', badge: 'days', resource: 'operations.routing',
     href: (c) => `/operations/${c.tourId}/routing`,
   },
-  {
-    kind: 'item', id: 'day-sheets', label: 'Day sheets', icon: 'CalendarDays',
-    href: (c) => `/operations/${c.tourId}/day`,
-    /* Labor calls has no item of its own; it lights its parent, Day sheets. */
-    match: (p) => /^\/operations\/[^/]+\/(day|labor)(\/|$)/.test(p),
-  },
+  /* Day sheets were retired in the Advance rebuild (Oct 2026, Adam): the
+     show's advance is the per-day page now, and local crew calls live on it. */
   {
     kind: 'item', id: 'advance', label: 'Advance', icon: 'Send', badge: 'advanced', resource: 'advance',
     href: (c) => `/advance/${c.tourId}`,
@@ -183,7 +179,7 @@ const ARTIST_RAIL: RailEntry[] = [
     href: (c) => `/artists/${c.artistId}`,
     /* Also claims Edit and the Production hub. Neither has a rail item of its
        own; both are reached from the landing, and a rail showing nothing lit
-       reads as broken. Same call as labor → Day sheets.
+       reads as broken.
 
        S-4b dropped `financials` from this list along with the route — it was an
        unlinked stub with no model behind it. A matcher for a page that no
@@ -419,9 +415,8 @@ export function isShelledPath(pathname: string, search = ''): boolean {
  * a surface you work in, and the one you work in shouldn't be the one that
  * shrinks.
  *
- * Three, and each renders its rail UNCONDITIONALLY — that qualifier is the
+ * Two, and each renders its rail UNCONDITIONALLY — that qualifier is the
  * whole lesson of this function:
- *   · the per-day page              → DayLayout → DayRail
  *   · the per-show Advance surface  → the shows rail (AdvanceShowPage)
  *   · the rider pack editor         → RiderPackSidebar (280px)
  *
@@ -447,7 +442,6 @@ export function isShelledPath(pathname: string, search = ''): boolean {
  */
 export function hasOwnRail(pathname: string): boolean {
   return (
-    /^\/operations\/[^/]+\/day\/[^/]+/.test(pathname) ||
     /^\/operations\/[^/]+\/riders\/[^/]+/.test(pathname) ||
     /* The show page's shows rail — not the tour's Templates page. */
     /^\/advance\/[^/]+\/(?!templates(\/|$))[^/]+/.test(pathname) ||

@@ -31,7 +31,6 @@ const A = 'artist-abc';
 describe('resolveScope — tour scope, from the path alone', () => {
   it.each([
     [`/operations/${T}/routing`, 'tour'],
-    [`/operations/${T}/day`, 'tour'],
     [`/operations/${T}/personnel`, 'tour'],
     [`/budget/${T}`, 'money'],
     [`/budget/${T}/settlement`, 'money'],
@@ -123,9 +122,6 @@ describe('activeItemFor — the deep-link contract', () => {
 
   it.each([
     [`/operations/${T}/routing`, '', 'routing'],
-    [`/operations/${T}/day`, '', 'day-sheets'],
-    [`/operations/${T}/day/routing-5`, '', 'day-sheets'],
-    // NB: there is no top-level /day/[routingId] route — see the note in ia.ts.
     [`/advance/${T}`, '', 'advance'],
     [`/advance/${T}/routing-5`, '', 'advance'],
     [`/operations/${T}/personnel`, '', 'crew'],
@@ -195,8 +191,8 @@ describe('railFor — the shape of each rail', () => {
   });
 
   it('Labor calls is NOT a top-level rail item anywhere', () => {
-    /* IA_CANONICAL is explicit: it's reached from Day sheets → Schedule, and its
-       badge lives on the Day's Schedule button. */
+    /* Local crew calls live inside each show's advance (day sheets and the
+       tour Labor page were retired, Oct 2026). */
     const all = [
       ...itemsFor('tour', 'tour'), ...itemsFor('tour', 'money'), ...itemsFor('tour', 'production'),
       ...itemsFor('artist', null), ...itemsFor('workspace', null), ...itemsFor('you', null),
@@ -370,8 +366,6 @@ describe('isShelledPath — what is on the canonical shell after S-2c', () => {
   it.each([
     // S-2a — Tour mode.
     `/operations/${T}/routing`,
-    `/operations/${T}/day`,
-    `/operations/${T}/day/r-1`,
     `/operations/${T}/personnel`,
     `/operations/${T}/rooming`,
     `/operations/${T}/files`,
@@ -487,7 +481,6 @@ describe('hasOwnRail — where the app rail should start collapsed', () => {
   });
 
   it.each([
-    `/operations/${T}/day/r-1`,     // DayLayout → DayRail
     `/advance/${T}/r-1`,            // the shows rail
     `/operations/${T}/riders/p-1`,  // RiderPackEditorView → RiderPackSidebar, 280px
     '/rider-packs/p-1',             // S-3b — the STANDALONE editor, same sidebar
@@ -496,7 +489,6 @@ describe('hasOwnRail — where the app rail should start collapsed', () => {
   });
 
   it.each([
-    `/operations/${T}/day`,      // the day INDEX has no rail — the per-day page does
     `/advance/${T}`,             // tour-level advance overview, no rail
     `/advance/${T}/templates`,   // templates page, no rail
     `/operations/${T}/riders`,   // the pack LIST, likewise
@@ -512,17 +504,14 @@ describe('hasOwnRail — where the app rail should start collapsed', () => {
 });
 
 describe('a rail with nothing lit reads as broken', () => {
-  it('Labor calls lights Day sheets, its parent', () => {
-    /* It has no rail item by design — IA_CANONICAL reaches it from Day sheets →
-       Schedule. But "no item of its own" and "nothing highlighted at all" look
-       very different to someone using the thing. */
-    expect(activeItemFor(`/operations/${T}/labor`)).toBe('day-sheets');
-    expect(activeItemFor(`/operations/${T}/labor/call-1`)).toBe('day-sheets');
+  it('a show’s advance lights Advance', () => {
+    /* Day sheets were retired (Oct 2026): the show's advance is the per-day
+       page, and its crew calls live on it — so the day lights Advance. */
+    expect(activeItemFor(`/advance/${T}/r-1`)).toBe('advance');
   });
 
-  it('and Day sheets itself is unaffected', () => {
-    expect(activeItemFor(`/operations/${T}/day`)).toBe('day-sheets');
-    expect(activeItemFor(`/operations/${T}/day/r-1`)).toBe('day-sheets');
+  it('there is no Day sheets item any more', () => {
+    expect(itemsFor('tour', 'tour').map((i) => i.id)).not.toContain('day-sheets');
   });
 });
 
@@ -703,11 +692,11 @@ describe('P-1 — resolveRailView filters by the allow-list', () => {
   });
 
   it('ungated items survive an EMPTY allow-list — absent means ungated', () => {
-    /* Income, Day sheets, Travel and Tour settings have no catalogue entry. If
+    /* Income, Travel and Tour settings have no catalogue entry. If
        an empty list hid them, the filter would be denying by default, which is
        a different and much worse policy than the one intended. */
     const shown = ids(resolveRailView(money, `/budget/${T}`, '', {}, []));
-    expect(shown).toEqual(expect.arrayContaining(['income', 'day-sheets', 'travel', 'reports']));
+    expect(shown).toEqual(expect.arrayContaining(['income', 'travel', 'reports']));
     expect(shown).not.toContain('payroll');
   });
 

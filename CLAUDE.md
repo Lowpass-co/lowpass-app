@@ -317,6 +317,35 @@ recreate a `_legacy/` tree: delete dead code instead of parking it.
   there is no manual FX endpoint. Actuals keep their `locked_fx_rate`.
 - Tests for all of the above run against `src/test-utils/fakeSupabase.ts`.
 
+### Advance — board, show, templates (rebuild, Oct 2026, Adam)
+
+- **Three pages**: the board (`AdvanceBoard`, every show × question group,
+  search, packs drop), the show (`AdvanceShowPage`, answers + review + crew
+  calls + linked cards), Templates (`TemplatesPage`). Loaders live in
+  `src/server/advance/` (`board.ts`, `show.ts`); rules are pure in
+  `src/lib/advance/board.ts` / `packs.ts`. **Page loads write nothing** —
+  `ensureAdvance` runs on the first write only.
+- **Answers** are written ONLY through the `advance_merge_answers` RPC
+  (migration 276) via `mergeAnswers` — an atomic merge of answers + their
+  `field_sources`. Don't read-modify-write `advance_instances.data` in a route.
+- **Templates**: workspace `advance_layout_templates` + day type → template
+  (`advance_day_type_templates`). A template change reaches only days that are
+  neither `customised` nor sent (`applyTemplateToDays`).
+- **Hotel, Flights, Deal** are shown read-only from their home pages, never
+  asked on the advance (`isLinkedSection`). Old stored answers stay in the JSON.
+- **Asking the venue**: Lowpass makes a link (`ask_fields` limits the venue
+  form) and an email the TM sends from their own inbox. The app never emails
+  venues.
+- **Info packs**: stored in `tour-files/advance-packs/<ws>/<tour>/…`, recorded in
+  `advance_documents`; every suggested answer carries a quote + page, verified
+  by `findQuote` before it is offered, and the viewer boxes it or outlines the
+  page — never a box in the wrong place.
+- **Day sheets are RETIRED** (pages, `/m/day` crew links — now a static "no
+  longer active" page — tour roles, the Day Sheet PDF, the tour Labor page).
+  Local crew calls live on each show's advance (`#crew-calls`). The
+  `tour_roles` / `tour_role_links` tables are left in place, unread. Don't
+  rebuild a per-day page beside the advance.
+
 ### Auth + RLS
 
 - Site admin gating: `getUserAndAdminStatus()` from `@/lib/site-admin`. Mirror the pattern used in `src/app/(app)/bugs/page.tsx` for any admin-only page.
@@ -340,7 +369,7 @@ Nav / IA as it now stands:
 - `/artists/[id]` — Home (artist-scoped overview; the artist's touring surfaces are branded **Production**, route group `(home)/production` — not "Library").
 - `/operations/[tourId]/*` — Operations. **Routing is the tour landing** (`next.config.ts` redirects `/operations/[id]` → `/operations/[id]/routing`).
 - `/budget/[tourId]/*` — Budget (live).
-- `/advance/[tourId]/[routingId]` — Advance. One per-show surface with three modes via `<AdvanceModeSwitcher>`: **Build** (`?mode=edit`) / **Advance** (fill/read) / **Share** (packet + intake).
+- `/advance/[tourId]` (board) · `/advance/[tourId]/[routingId]` (show) · `/advance/[tourId]/templates` — Advance (rebuilt Oct 2026, see §"Advance — board, show, templates"). Day sheets are retired.
 
 **VENUE RESOLVER RULE:** never read the gated `routing.venue_*` columns (`venue_name` / `venue_phone` / `venue_website` / `venue_capacity`) directly for display — always go through `resolveVenue()` (`src/lib/venues/resolveVenue.ts`), the one live-vs-frozen read path. On the advance read surfaces the venue block prefers the advance's own edited Venue Info values, else `resolveVenue()` — via `resolveAdvanceVenue()` (`src/lib/advance/venue.ts`).
 

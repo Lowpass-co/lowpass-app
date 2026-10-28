@@ -56,6 +56,10 @@ export function asTemplateSections(sections: AdvSection[]): AdvSection[] {
   return sections.map((s, i) => ({
     ...s,
     order: i,
-    fields: s.fields.map(({ day_only: _d, ...f }) => f),
+    fields: s.fields.map((f) => {
+      const copy = { ...f };
+      delete copy.day_only;
+      return copy;
+    }),
   }));
 }

@@ -1,5 +1,10 @@
 # Smoke — The Day + tour roles (D1)
 
+> **RETIRED (Oct 2026).** Day sheets, crew phone links (`/m/day`), tour roles,
+> the Day Sheet PDF and the tour Labor page were retired in the Advance rebuild.
+> Local crew calls now live on each show's advance — see ADV-125 / ADV-134–136
+> in `advance.md`. The IDs below are kept so old PRs still resolve; don't run them.
+
 "The Day" is a per-routing-row surface assembling venue · schedule · hotel ·
 flights · contacts · notes · money chip from data we already hold (no new entry
 surfaces). Roles slice it **server-side**: the loader only queries the blocks in

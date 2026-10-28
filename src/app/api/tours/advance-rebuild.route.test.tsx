@@ -7,6 +7,8 @@
                "also the template" reaches days that follow it — not customised
                ones, not ones already sent to a venue
    request   → a link that asks only venue-answerable questions; sent_at
+   review    → accepting a venue answer merges it atomically, marked Venue;
+               empty venue values never blank yours
    packs     → files kept once; every answer remembers file + page + quote;
                new questions land on the day or the template
    loaders   → board cells / counts / gaps; show page linked facts
@@ -51,6 +53,7 @@ const request = await import('./[id]/advance/[routingId]/request/route');
 const packs = await import('./[id]/advance/[routingId]/packs/route');
 const templateSet = await import('../advance/template-set/route');
 const templateOne = await import('../advance/template-set/[templateId]/route');
+const pendingRoute = await import('../advance/intake/pending/route');
 const { loadAdvanceBoard } = await import('@/server/advance/board');
 const { loadAdvanceShow } = await import('@/server/advance/show');
 
@@ -226,5 +229,38 @@ describe('loaders', () => {
     expect(s.linked.flights[0].label).toBe('BA 1386 · LHR → MAN');
     expect(s.linked.deal).toEqual({ title: 'Manchester deal', status: 'signed' });
     expect(s.tour.artistName).toBe('Charlotte Sands');
+  });
+});
+
+describe('venue review', () => {
+  it('accept merges through the one write and marks the answer as the venue’s', async () => {
+    await answers.POST(json({ changes: { 'tpl-sched': { doors: '19:00', curfew: '23:00' } } }), p('r1'));
+    const inst = db.t('advance_instances').find((i) => i.routing_id === 'r1')!;
+    db.seed('profiles', [{ id: 'user-1', workspace_id: 'ws-1' }]);
+    db.seed('intake_pending_answers', [
+      { id: 'pa1', workspace_id: 'ws-1', advance_instance_id: inst.id, section_id: 'tpl-sched', field_id: 'doors', value: '19:30', status: 'pending' },
+      { id: 'pa2', workspace_id: 'ws-1', advance_instance_id: inst.id, section_id: 'tpl-sched', field_id: 'curfew', value: '', status: 'pending' },
+      { id: 'pa3', workspace_id: 'ws-1', advance_instance_id: inst.id, section_id: 'tpl-prod', field_id: 'power', value: '3ph 63A', status: 'pending' },
+    ]);
+    const r = await pendingRoute.POST(json({ advance_instance_id: inst.id, accept: ['pa1', 'pa2'], reject: ['pa3'] }));
+    expect(r!.status).toBe(200);
+    expect(inst.data).toEqual({ 'tpl-sched': { doors: '19:30', curfew: '23:00' } });
+    const src = inst.field_sources as Record<string, { kind: string }>;
+    expect(src['tpl-sched:doors'].kind).toBe('venue');
+    expect(src['tpl-sched:curfew']).toBeUndefined();
+    expect(db.t('intake_pending_answers').map((x) => [x.id, x.status])).toEqual([['pa1', 'accepted'], ['pa2', 'accepted'], ['pa3', 'rejected']]);
+  });
+
+  it('a failed write leaves the venue answers pending', async () => {
+    await answers.POST(json({ changes: { 'tpl-sched': { doors: '19:00' } } }), p('r1'));
+    const inst = db.t('advance_instances').find((i) => i.routing_id === 'r1')!;
+    db.seed('profiles', [{ id: 'user-1', workspace_id: 'ws-1' }]);
+    db.seed('intake_pending_answers', [{ id: 'pa1', workspace_id: 'ws-1', advance_instance_id: inst.id, section_id: 'tpl-sched', field_id: 'doors', value: '19:30', status: 'pending' }]);
+    const failing = new FakeDb({ rpc: { advance_merge_answers: () => ({ data: null, error: { message: 'boom' } }) } });
+    for (const t of ['profiles', 'advance_instances', 'advance_form_configs', 'advance_templates', 'intake_pending_answers']) failing.seed(t, db.t(t));
+    db = failing;
+    const r = await pendingRoute.POST(json({ advance_instance_id: inst.id, accept: ['pa1'] }));
+    expect(r!.status).toBe(500);
+    expect(db.t('intake_pending_answers')[0].status).toBe('pending');
   });
 });

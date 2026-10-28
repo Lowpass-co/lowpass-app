@@ -1,589 +1,188 @@
 # Advance smoke tests
 
-> **Last bulk verification**: pending — to be filled after Adam's first run on Vercel preview post-merge.
+> **Last bulk verification**: pending — first run on the Vercel preview of the
+> Advance rebuild (Oct 2026). Needs migrations **276** and **277** pasted first.
 
 Per `docs/smoke-tests/README.md`. Walk these on Vercel preview after
 every non-trivial advance change. ID prefix is `ADV`.
 
-## Shell + chrome
+The Advance rebuild (Oct 2026) replaced every surface the old ADV-01…ADV-116
+tests described (the three-zone show page, the Template Builder, the copy
+flow, Send Packet). Those IDs are listed under **Retired** — except the venue
+form tests, which still describe live behaviour and stay below.
 
-#### ADV-01 — Three-zone layout
+Surfaces: `/advance/[tourId]` (board) · `/advance/[tourId]/[routingId]` (show) ·
+`/advance/[tourId]/templates` · the public venue form `/advance-intake/[token]`.
 
-**Do**: Open `/advance/[any]/[any]`.
+## Board
 
-**Expect**: Three columns visible — 280px upcoming-shows sidebar on
-the left, main column in the middle, 300px right rail on the right.
+#### ADV-120 — Board lists every day, folds gaps
 
-**Last verified**:
+**Do**: Open `/advance/[tourId]` on a tour with shows and days off.
 
-#### ADV-02 — Single in-page header layer
+**Expect**: One row per show with a status cell per question group; runs of
+days off fold into one quiet gap row. Counts at the top (not sent / waiting /
+to review / done) match the rows. Nothing is written by opening the page.
 
-**Do**: Open `/advance/[any]/[any]`. Look at the area between
-`AdvanceSubHeader` and the section list.
+#### ADV-121 — Search finds answers, `/` focuses it
 
-**Expect**: One header card — the chunky `AdvanceShowHeader` with the
-progress strip and circular ring. No second context bar. No
-"← Advance / Sat 21 Mar / Print / Edit advance" toolbar.
+**Do**: Press `/`, type a value you know is in one show's answers (e.g. a
+production manager's surname).
 
-**Last verified**:
+**Expect**: The box focuses; only matching shows remain, each with the
+matching answer shown under the venue. Clearing restores the board.
 
-#### ADV-03 — Chunky strip totals match section list
+#### ADV-122 — Row → show animates
 
-**Do**: Open `/advance/[any]/[any]` with at least 3 sections.
-Count sections whose status pill says "COMPLETE" (green).
+**Do**: Click a show row.
 
-**Expect**: The "Complete" tile in the chunky strip matches.
-Pending + Overdue + Complete sum to total.
+**Expect**: The venue name glides into the show page title (view
+transition); with reduced motion on, it simply navigates.
 
-**Last verified**:
+## Show
 
-#### ADV-04 — Sticky sub-header doesn't overlap content on scroll
+#### ADV-123 — Answers autosave, times are 24-hour
 
-**Do**: Open `/advance/[any]/[any]`. Scroll the main column down.
+**Do**: On a show, type `7.30pm` in a time question, tab away; reload.
 
-**Expect**: AdvanceSubHeader stays at the top with an opaque background.
-Content scrolls underneath, not over.
+**Expect**: It reads `19:30` and survives the reload. Other answers in the
+same group are untouched.
 
-**Last verified**:
+#### ADV-124 — Hotel, flights and deal are read-only links
 
-#### ADV-05 — Print button in sub-header opens print dialog
+**Do**: Look for the Hotel / Flights / Deal cards on a show.
 
-**Do**: Click the Print button in `AdvanceSubHeader` (read mode only).
+**Expect**: Each shows what the home page holds (Hotels & rooming, Travel,
+Income) with a link there; no inputs on the advance.
 
-**Expect**: Browser print dialog opens with the read view rendered
-print-friendly.
+#### ADV-125 — Local crew calls live on the show
 
-**Last verified**:
+**Do**: From Schedule, expand a day and click **Crew calls** (shows the call
+count).
 
-#### ADV-06 — Show / Template Builder tab toggle works
+**Expect**: Lands on that show's advance scrolled to **Local crew calls**;
+adding a call there shows up in the count back on Schedule.
 
-**Do**: Click "Template Builder" tab in `AdvanceSubHeader`.
+#### ADV-126 — Customise this day only
 
-**Expect**: URL becomes `?mode=edit`. Right rail swaps from the
-read-mode rail (Specs / Contacts / Previously Played) to the
-builder Field Properties panel.
+**Do**: Customise drawer → add a question → save for this day only.
 
-**Last verified**:
+**Expect**: Only this show gains it; the day is marked customised and later
+template edits skip it.
 
-## Read mode — sections + fields
+## Templates
 
-#### ADV-20 — Section header strip layout
+#### ADV-127 — Day types pick the template
 
-**Do**: Look at any section's header strip in read mode.
+**Do**: `/advance/[tourId]/templates` → set "Festival" → a template.
 
-**Expect**: Uppercase section title, mini progress bar, "X / Y" done
-count badge, status pill on the right, caret to collapse. Drag handle
-is hidden in read mode.
+**Expect**: Festival days not yet customised or sent switch to it; customised
+or sent days keep theirs.
 
-**Last verified**:
+#### ADV-128 — Editing a template updates its days
 
-#### ADV-21 — Section caret collapses + animates smoothly
+**Do**: Add a question to a template.
 
-**Do**: Click a section's caret.
+**Expect**: Every day on that template that isn't customised or sent gains it.
 
-**Expect**: Body collapses with a smooth ~200ms animation (no jump).
-Caret rotates 90° on the same timing.
+## Asking the venue
 
-**Last verified**:
+#### ADV-129 — Request: link + email, no app email
 
-#### ADV-22 — Status pill is a branded dropdown (not native select)
+**Do**: Show → **Request from venue** → pick questions → Open in Gmail (or
+the mail app, or Copy).
 
-**Do**: Click a section's status pill.
+**Expect**: Gmail opens with the link and a short message from you; Lowpass
+sends nothing itself. Choosing any of the three marks the request sent: the
+board shows it as sent with the date, and after 7 days unanswered it flags a
+chase.
 
-**Expect**: A custom-branded panel opens below the pill, options each
-showing a coloured swatch + label. Outside-click closes. Arrow keys
-navigate. Enter commits.
+#### ADV-130 — Venue only sees the questions asked
 
-**Last verified**:
+**Do**: Open the link in a private window.
 
-#### ADV-23 — Status change persists + chunky strip refreshes
-
-**Do**: Change a section's status. Refresh the page.
-
-**Expect**: New status persists. The chunky strip's totals updated
-immediately on the change (without manual refresh) — `router.refresh`
-keeps the server-rendered totals in sync.
-
-**Last verified**:
-
-#### ADV-30 — Field rows render as a 2-col dense grid
-
-**Do**: Look at any non-empty section's field rows.
-
-**Expect**: Two columns: label cell (with `--lp-bg-deep` background)
-+ value cell. Visible row borders. Visible column divider between
-the two cells. Hover fills the entire row.
-
-**Last verified**:
-
-#### ADV-31 — No field-type icon column in read mode
-
-**Do**: Scan field rows in read mode.
-
-**Expect**: No type-icon column. Field-type icons are builder-only.
-
-**Last verified**:
-
-#### ADV-32 — Required fields show asterisk
-
-**Do**: Find a required field with no value entered.
-
-**Expect**: Trailing red asterisk after the label. No "Required" text.
-
-**Last verified**:
-
-## Right rail (read mode)
-
-<!-- Alignment pass F3 — renumbered ADV-40/41 → ADV-50/51. The alignment pass
-     (CC_ALIGNMENT_PASS.md) claimed ADV-40 for the "opening any listed day never
-     shows an error string" test; these two right-rail visual checks moved up to
-     ADV-50/51 to end the collision. -->
-
-#### ADV-50 — Three rail cards stacked
-
-**Do**: Scan the right rail in read mode.
-
-**Expect**: Three cards top to bottom — Venue Specs / Key Contacts /
-Previously Played. Each card has an uppercase tracked-wider title,
-borders match the rest of the visual language.
-
-**Last verified**:
-
-#### ADV-51 — Venue specs render only for non-null fields
-
-**Do**: Open a show with `venue_capacity` populated and
-`venue_phone` null on the routing record.
-
-**Expect**: Capacity row visible with a mono numeric value. Phone row
-absent. No empty-row placeholder.
-
-**Last verified**:
-
-#### ADV-42 — Key contacts pulled from filled contact fields
-
-**Do**: Open a show whose Hospitality / Production sections have
-contact fields filled with promoter/venue/production-manager roles.
-
-**Expect**: Each shows up in the rail's Key Contacts card with name,
-role, phone (mono), email. Other roles (e.g. catering rep) don't.
-
-**Last verified**:
-
-#### ADV-43 — Previously Played card shows last prior advance
-
-**Do**: Open a show whose venue has at least one prior advance in
-the workspace's history.
-
-**Expect**: Rail's PREVIOUSLY PLAYED card shows date (mono uppercase)
-+ tour name + "View past advance →" link in orange.
-
-**Last verified**:
-
-#### ADV-44 — Click "View past advance" opens slide-over
-
-**Do**: Click "View past advance →" in the rail.
-
-**Expect**: `PreviouslyPlayedSlideOver` opens with the matched past
-shows listed.
-
-**Last verified**:
-
-#### ADV-45 — Slide-over leads with "Import sections from this advance"
-
-**Do**: Inside the slide-over, click any past show to enter its
-section picker.
-
-**Expect**: First heading reads "Import sections from this advance"
-(uppercase tracked-wider). Footer button: "Import N sections".
-
-**Last verified**:
-
-## Builder mode
-
-#### ADV-60 — Three-pane layout
-
-**Do**: Open `/advance/[any]/[any]?mode=edit`.
-
-**Expect**: Three panes — `AdvanceSectionLibrary` (280px) on the
-left, canvas in the middle (with `TemplateMetaBar` sticky at top
-and `SectionDropZone` at the bottom), `AdvanceFieldPropertiesPanel`
-(300px) on the right.
-
-**Last verified**:
-
-#### ADV-61 — Library cards drag
-
-**Do**: Pick a library card and drag it.
-
-**Expect**: Drag image follows the cursor. Card sets the
-`SECTION_LIBRARY_DRAG_TYPE` data transfer.
-
-**Last verified**:
-
-#### ADV-62 — Drop zone tints orange on dragover
-
-**Do**: Drag a library card over the drop zone.
-
-**Expect**: Drop-zone border turns orange, background tints
-~5% orange.
-
-**Last verified**:
-
-#### ADV-63 — TemplateMetaBar Apply-to-tour button opens the slide-over
-
-**Do**: Click "Apply to tour(s)" in `TemplateMetaBar`.
-
-**Expect**: `ApplyAdvanceTemplateSlideOver` mounts. Lazy-fetches both
-dates and templates on first open. Shows a loading state until both
-arrive.
-
-**Last verified**:
-
-#### ADV-64 — TemplateMetaBar Copy-from-show button opens the modal
-
-**Do**: Click "Copy from show…" in `TemplateMetaBar`.
-
-**Expect**: `CopyAdvanceModal` opens. Lazy-fetches dates list on
-first open.
-
-**Last verified**:
-
-#### ADV-65 — Field-def row click populates Properties panel
-
-**Do**: Click any field-def row in the canvas.
-
-**Expect**: Within ~100ms, the right-rail `AdvanceFieldPropertiesPanel`
-populates with the row's data (label, type, required). Selected row
-gets a 2px orange left border + 6% orange tint background.
-
-**Last verified**:
-
-#### ADV-66 — Library drag → adds section to canvas
-
-**Do**: Drag a library card onto the drop zone.
-
-**Expect**: A new section appears in the canvas with the dropped
-seed's label. If a workspace template matching that label exists,
-its full field set comes in. Otherwise the section is empty (a
-blank custom section).
-
-**Last verified**:
-
-#### ADV-67 — Apply-to-tour applies the template
-
-**Do**: Open `ApplyAdvanceTemplateSlideOver` from `TemplateMetaBar`,
-pick a template, pick at least one show, click Apply.
-
-**Expect**: Slide-over closes. Page refreshes. The selected shows
-have the applied template's sections.
-
-**Last verified**:
-
-#### ADV-68 — Field-properties panel edits propagate to the canvas
-
-**Do**: Click a field-def row in the canvas. In the panel, change the
-label or toggle Required.
-
-**Expect**: The row in the canvas re-renders with the new label /
-required marker without a page reload. Existing autosave path
-persists the change.
-
-**Last verified**:
-
-#### ADV-69 — Field type icon grid: five buttons, no photo proof
-
-**Do**: Look at the Field type icon grid in the panel.
-
-**Expect**: 5 buttons (text / checkbox / number / dropdown / file).
-No "photo proof" or "evidence" button anywhere.
-
-**Last verified**:
-
-## Copy flow
-
-#### ADV-80 — Copy with empty destination is one-step
-
-**Do**: Trigger Copy against a destination that has no field values
-yet. Pick a source, click the primary button.
-
-**Expect**: Copy executes immediately, no conflict prompt.
-
-**Last verified**:
-
-#### ADV-81 — Copy with destination data shows three-option prompt
-
-**Do**: Trigger Copy against a destination that already has field
-values. Click the primary button.
-
-**Expect**: A confirmation panel appears with two radio choices:
-**Fill blanks only** (default, selected) and **Replace all**. Cancel
-button still on the modal footer.
-
-**Last verified**:
-
-#### ADV-82 — "Fill blanks only" preserves existing destination values
-
-**Do**: Pick "Fill blanks only" + click the primary button.
-
-**Expect**: After the copy, the destination's previously-entered
-field values are unchanged. Empty fields receive source values.
-Section statuses on the destination are unchanged.
-
-**Last verified**:
-
-#### ADV-83 — "Replace all" overwrites destination
-
-**Do**: Pick "Replace all" + click the primary button.
-
-**Expect**: Destination data + section statuses both reflect the
-source. (Destructive — the radio's hint copy says so.)
-
-**Last verified**:
-
-#### ADV-84 — Cancel option closes without changes
-
-**Do**: With the conflict prompt visible, click the modal's Cancel
-button (not a radio).
-
-**Expect**: Modal closes. Destination unchanged.
-
-**Last verified**:
-
-## Adam's locks (negative-space tests)
-
-#### ADV-90 — No "Mark All Complete" button anywhere
-
-**Do**: `grep -ri "Mark All Complete\|Mark all complete" src/` (or
-visually scan the surface).
-
-**Expect**: Zero matches outside code comments asserting the lock.
-
-**Last verified**:
-
-#### ADV-91 — No "Tasks Done" framing anywhere
-
-**Do**: Same grep for "Tasks Done" / "tasks done".
-
-**Expect**: Zero matches outside asserting comments. The progress
-caption reads "X / Y sections complete", not "X tasks done".
-
-**Last verified**:
-
-#### ADV-92 — No "photo proof" / "evidence photo" anywhere
-
-**Do**: `grep -ri "photo proof\|evidence photo\|Require photo" src/`.
-
-**Expect**: Zero matches. The Field type icon grid does not include
-a photo-proof button.
-
-**Last verified**:
-
-## Per-show read redesign (UX Audit 2026 — T1 / T2)
-
-#### ADV-93 — Field cells read missing vs filled at a glance
-
-**Do**: Open `/advance/[tour]/[show]`. Scan the section grids.
-
-**Expect**: Every field is a tile — empty fields are amber-dashed
-("missing"), filled fields are solid with an emerald right edge. No
-empty fields are hidden (auth view).
-
-**Last verified**:
-
-#### ADV-94 — Inline fill autosaves
-
-**Do**: Click a missing (amber) cell and type a value; click away.
-
-**Expect**: The cell flips to the filled (emerald-edge) style; a
-"Saving… → Saved ✓" pill appears top-right. Reload → value persists.
-
-**Last verified**:
-
-#### ADV-95 — Section header: completed pill + state badge
-
-**Do**: Look at any section card header.
-
-**Expect**: Shows an "X / Y completed" pill and a "Needs Input"
-(amber, pulsing dot) or "Complete" (emerald) badge; the caret
-collapses/expands the grid.
-
-**Last verified**:
-
-#### ADV-96 — Glass hero with completion ring + stats
-
-**Do**: Look at the top of the per-show page.
-
-**Expect**: Glass hero with a date chip, "Missing info" warning when
-incomplete, big venue title, address line, and a stats row
-(completion ring + Complete / Pending / Overdue). Actions: "Edit
-Template" (outline) + "Send Packet" (orange).
-
-**Last verified**:
-
-#### ADV-97 — Read surface is adaptive (light/dark)
-
-**Do**: Toggle the app theme on the per-show page.
-
-**Expect**: Cells, hero, and badges adapt via tokens (amber =
-needs-review, emerald = complete, brand = orange). No hardcoded dark
-colours leaking in light mode.
-
-**Last verified**:
-
-## Template Builder re-skin (UX Audit 2026 — T2.5)
-
-#### ADV-98 — Canvas grid + elevated section cards
-
-**Do**: Open the builder (`?mode=edit` / Template Builder tab).
-
-**Expect**: The canvas shows a faint grid texture; section cards are
-elevated; the card holding the currently selected field gets an
-orange ring.
-
-**Last verified**:
-
-#### ADV-99 — Required / Optional field badges
-
-**Do**: Look at the field rows inside a section card.
-
-**Expect**: Required = solid-orange badge; Optional = muted badge.
-
-**Last verified**:
-
-#### ADV-100 — Field Properties panel layout
-
-**Do**: Click a field; look at the right rail.
-
-**Expect**: Titled "Field Properties"; TYPE row, Field Label,
-Placeholder Text, Help Text, a VALIDATION group with Required +
-Read-only pill toggles, and a Delete Field button. (Required / Label /
-Type are wired; Placeholder / Read-only / Delete are design-surfaced —
-see Known broken.)
-
-**Last verified**:
-
-#### ADV-101 — Library active card highlight
-
-**Do**: Expand a card in the left section library.
-
-**Expect**: The expanded (active) card takes the orange treatment
-(tinted bg + orange border).
-
-**Last verified**:
-
-## Builder field-level palette + contacts (advance-builder-fixes)
-
-#### ADV-102 — Click a palette field to add just that field
-
-**Do**: In the builder, expand a group in the left palette and click
-a single field row.
-
-**Expect**: That one field lands in its group's section on the canvas
-(the section is created if absent). Clicking the same field again is a
-no-op (de-duped by id).
-
-**Last verified**:
-
-#### ADV-103 — Drag a single field onto the canvas
-
-**Do**: Drag a single field row from the palette onto the "Drop a
-section or field here" zone.
-
-**Expect**: Same result as ADV-102 (single field appended).
-
-**Last verified**:
-
-#### ADV-104 — Key Contacts pinned first in the palette
-
-**Do**: Open the builder; look at the palette's Platform group.
-
-**Expect**: "Key Contacts" is the first card.
-
-**Last verified**:
-
-#### ADV-105 — Section / header reorder
-
-**Do**: Drag a section card above/below another to reorder headers;
-Save layout; reload.
-
-**Expect**: The new section order persists. (Flagged for live
-confirmation — native drag can't be exercised in CI.)
-
-**Last verified**:
-
-## Send Packet venue intake (T3) — requires migrations 107 + 108
-
-#### ADV-106 — Generate + copy + revoke an intake link
-
-**Do**: Per-show advance → "Send Packet" → set recipient + expiry →
-"Generate link". Then Copy, then Revoke.
-
-**Expect**: A `/advance-intake/<token>` URL appears and is
-auto-copied; the list shows it with Copy + Revoke; revoking removes it
-from the active list.
-
-**Last verified**:
+**Expect**: Only the picked questions appear; TM-only questions never do.
+`?print=1` gives a printable list of the same questions.
 
 #### ADV-107 — Public venue form submits
 
-**Do**: Open `/advance-intake/<token>` (logged out / incognito), fill
-fields, submit.
+**Do**: Fill and submit the venue form.
 
-**Expect**: A branded form with the show's fillable fields, required
-validation, and a "Thanks — your details are in" success state. Never
-shows the TM's existing advance data.
+**Expect**: "Thanks — your details are in". Reopening the link says it was
+already submitted and lets the venue update their answers.
 
-**Last verified**:
+#### ADV-108 — Submission comes back for review
 
-#### ADV-108 — Submission merges back into the advance
+**Do**: Reopen the show as the TM.
 
-**Do**: After ADV-107, reopen the show's advance in the app.
-
-**Expect**: The venue's answers now show as filled (emerald) cells;
-blanks left by the venue didn't wipe existing values.
-
-**Last verified**:
+**Expect**: A review banner; each venue answer shows beside the current one
+with Accept / Keep mine. Nothing overwrites without a click.
 
 #### ADV-109 — Revoked / expired link is blocked
 
-**Do**: Open a revoked or expired token URL.
+**Do**: Open a revoked or expired link.
 
-**Expect**: "This link isn't available" / "This link has expired" —
-no form, no submit.
-
-**Last verified**:
+**Expect**: "This link has expired" (or invalid/revoked) — no form.
 
 #### ADV-110 — TM emailed on submit
 
-**Do**: Submit a venue form; wait one cron tick (~5 min) with
-`RESEND_API_KEY` + `CRON_SECRET` set.
+**Do**: Submit a venue form for a link you made.
 
-**Expect**: The link creator (account email) receives "<Venue>
-submitted their advance details". Sent exactly once.
+**Expect**: One email to you (the link's creator), not one per save.
 
-**Last verified**:
+#### ADV-114 — Public intake renders the venue form
 
-## Known broken
+**Do**: Open an intake link whose questions include Venue Info.
 
-#### ADV-100 (partial) — Field Properties: 3 controls are design-only
+**Expect**: The venue fields render as editable inputs.
 
-**Currently**: The Field Properties panel renders fully, but
-Placeholder Text, "Read-only for users", and Delete Field are
-surfaced visually and not yet wired to the builder's save path
-(Required / Label / Type ARE wired). Delete Field fires
-`advance:field-delete` which the canvas does not yet consume.
+## Info packs
 
-**Tracked in**: design/ux-audit-2026 T2.5 follow-up.
+#### ADV-131 — Drop packs, review suggestions with the source shown
 
-#### ADV-105 — Section/header reorder needs live confirmation
+**Do**: Drag one or more venue PDFs onto the board (or a show).
 
-**Currently**: Static recon shows section reorder + persistence
-already work (moveSectionOrder + section-card drag + saveLayout writes
-`order`); native drag-drop can't be exercised in CI. Confirm on a
-preview before relying on it; if it fails, capture the exact
-behaviour (drag does nothing? doesn't persist?).
+**Expect**: It matches each pack to a show (you can change it), reads it, and
+walks you through suggested answers. Each suggestion opens the pack at the
+right page with the quoted text boxed; if the text can't be found the page
+is outlined instead — never a box in the wrong place.
 
-**Tracked in**: feat/advance-builder-fixes §2.
+#### ADV-132 — Extra facts become questions only if you say so
+
+**Do**: In the same flow, look at facts the pack had that no question asks.
+
+**Expect**: Each is offered as a new question (this day or the template);
+nothing is added unless ticked.
+
+#### ADV-133 — Packs are kept; sources reopen
+
+**Do**: Save, then click the source chip on an answer that came from a pack.
+
+**Expect**: The pack opens at that place. The pack is listed under Venue
+documents and opens from there too.
+
+## Day sheets retired
+
+#### ADV-134 — Old day sheet URLs land on the advance
+
+**Do**: Open `/operations/[tourId]/day`, `/operations/[tourId]/day/[routingId]`
+and `/operations/[tourId]/labor`.
+
+**Expect**: They redirect to `/advance/[tourId]` (or that show's advance).
+The rail has no Day sheets item.
+
+#### ADV-135 — Old crew phone links say so
+
+**Do**: Open an old `/m/day/<token>` link.
+
+**Expect**: "This link is no longer active" — no tour data on the page.
+
+#### ADV-136 — Mobile Today opens the show
+
+**Do**: Open `/m/today` on a phone with a tour picked.
+
+**Expect**: Today's show (else the next, else the last) opens in the mobile
+show reader.
 
 ## Venue-info auto-fill from the linked venue (feat/advance-venue-autofill)
 
@@ -612,67 +211,80 @@ behaviour (drag does nothing? doesn't persist?).
   (world-readable facts); only the routing rows for THIS tour are read; nothing reads
   another workspace's advance data. The advance stays workspace-private.
 
-## Default template + any-day-type start (G1-A #4)
+> These were written for the old show page; **re-verify on the rebuild** (the
+> show and board read the venue through `resolveAdvanceVenue`).
 
-> ADV-51 grade fix. Two gaps closed: (1) a tour with no default advance template
-> now gets a "Build one for the whole tour, or skip" prompt on the start surface;
-> the builder's Save-as-template modal has a "Set as tour default" tick that
-> persists `tours.default_advance_template_id` and fans the template out to every
-> show/festival routing without an advance yet (idempotent). (2) Advances open on
-> ANY day type — the show-only gates in AdvanceOverview (row menu, row-click,
-> status/city/progress cells) are removed. Readiness counts stay show-based.
+## Known broken
 
-- **ADV-110 — no-default start prompt.** On a tour with `default_advance_template_id`
-  null, open a day with no advance → the start panel shows two actions: primary
-  "Build one for the whole tour" (→ `?mode=edit` build surface) and secondary
-  "Skip — start a blank advance for this day". When a default exists, the single
-  "Start this advance" button shows instead.
-- **ADV-111 — save-as-tour-default fans out.** In the builder, Save as template with
-  "Set as tour default" ticked → `tours.default_advance_template_id` is set and every
-  show/festival routing without a form config gets one seeded from the template.
-  Re-saving does not clobber days already customised (idempotent).
-- **ADV-112 — any day opens an advance.** In the advance overview, a day-off /
-  travel / rehearsal / radio row's kebab offers Open/Start advance + Copy; clicking
-  the row routes into `/advance/[tourId]/[routingId]`; status/city/sections cells
-  render for every row. "Edit note" stays available on non-show rows.
+#### ADV-137 — No TM-side export of a filled advance
 
-## Venue-entry form — in-day edit path + intake reality (G1-A #5)
-
-> Grade A#5 ("the links work, the form doesn't"). Two findings: (1) the PUBLIC
-> venue intake form is NOT missing — `/advance-intake/[token]` renders a
-> schema-driven form (`buildIntakeFormSchema`) that keeps the seeded **Venue
-> Info** section (venue_name/address/capacity/website); it only shows "Nothing to
-> fill in yet" when the advance has zero fillable sections, i.e. the empty-advance
-> case that #4 fixes. INTK-02 is accurate, not false. (2) The real gap was in-day:
-> the rail VENUE SPECS card was read-only with no edit path — now it deep-links to
-> the editable Venue Info section on the read surface.
-
-- **ADV-113 — rail "Edit venue info" jumps to the section.** On the advance day,
-  the right-rail Venue Specs card shows an "Edit venue info" link (when the advance
-  has a Venue Info section). Clicking it scrolls to that section
-  (`#advance-<slug>`), where the venue fields are inline-editable (ADV-94).
-- **ADV-114 — public intake renders the venue form.** A venue intake link for a
-  show whose advance has sections shows the Venue Info fields as editable inputs
-  (name/address/capacity/website), autosaving to `intake_pending_answers`. An
-  advance with no sections shows "Nothing to fill in yet" — resolved once #4 seeds
-  a default template. (Contact-typed fields stay TM-curated by design.)
-
-## Export advance button (G1-A #6)
-
-> The main Advance surface header showed `[Edit Template] [Send Packet]` with no
-> export. Added `<AdvanceExportButton>` beside Send Packet with the app's
-> one-show/multi-show scope pattern. Full config-aware export-shell parity for the
-> advance PDF stays the G2 item; this is the visible-button unblock over the
-> existing packet route.
-
-- **ADV-115 — Export advance visible beside Send Packet.** On `/advance/[tourId]/[routingId]`
-  the header actions row reads `[Edit Template] [Export advance ▾] [Send Packet]`.
-  The Export button opens a menu with **This show** and **Whole tour**.
-- **ADV-116 — scope routes to the packet PDF.** "This show" opens
-  `/api/advance-packets/[tourId]/[routingId]/pdf`; "Whole tour" opens
-  `/api/advance-packets/[tourId]/all/pdf` (the `all` sentinel → empty routingId →
-  whole-tour "All shows" manifest). Both open in a new tab.
+**Currently**: The old header "Export advance" button (ADV-115/116) was not
+carried into the rebuild. The venue-facing printable question list exists
+(`?print=1`); an export of the filled advance does not.
+**Tracked in**: Advance rebuild PR — follow-up.
 
 ## Retired
 
-(None yet.)
+Retired by the Advance rebuild (Oct 2026); the surfaces they describe no
+longer exist. IDs are never recycled.
+
+- ADV-01 — Three-zone layout
+- ADV-02 — Single in-page header layer
+- ADV-03 — Chunky strip totals match section list
+- ADV-04 — Sticky sub-header doesn't overlap content on scroll
+- ADV-05 — Print button in sub-header opens print dialog
+- ADV-06 — Show / Template Builder tab toggle works
+- ADV-20 — Section header strip layout
+- ADV-21 — Section caret collapses + animates smoothly
+- ADV-22 — Status pill is a branded dropdown (not native select)
+- ADV-23 — Status change persists + chunky strip refreshes
+- ADV-30 — Field rows render as a 2-col dense grid
+- ADV-31 — No field-type icon column in read mode
+- ADV-32 — Required fields show asterisk
+- ADV-50 — Three rail cards stacked
+- ADV-51 — Venue specs render only for non-null fields
+- ADV-42 — Key contacts pulled from filled contact fields
+- ADV-43 — Previously Played card shows last prior advance
+- ADV-44 — Click "View past advance" opens slide-over
+- ADV-45 — Slide-over leads with "Import sections from this advance"
+- ADV-60 — Three-pane layout
+- ADV-61 — Library cards drag
+- ADV-62 — Drop zone tints orange on dragover
+- ADV-63 — TemplateMetaBar Apply-to-tour button opens the slide-over
+- ADV-64 — TemplateMetaBar Copy-from-show button opens the modal
+- ADV-65 — Field-def row click populates Properties panel
+- ADV-66 — Library drag → adds section to canvas
+- ADV-67 — Apply-to-tour applies the template
+- ADV-68 — Field-properties panel edits propagate to the canvas
+- ADV-69 — Field type icon grid: five buttons, no photo proof
+- ADV-80 — Copy with empty destination is one-step
+- ADV-81 — Copy with destination data shows three-option prompt
+- ADV-82 — "Fill blanks only" preserves existing destination values
+- ADV-83 — "Replace all" overwrites destination
+- ADV-84 — Cancel option closes without changes
+- ADV-90 — No "Mark All Complete" button anywhere
+- ADV-91 — No "Tasks Done" framing anywhere
+- ADV-92 — No "photo proof" / "evidence photo" anywhere
+- ADV-93 — Field cells read missing vs filled at a glance
+- ADV-94 — Inline fill autosaves
+- ADV-95 — Section header: completed pill + state badge
+- ADV-96 — Glass hero with completion ring + stats
+- ADV-97 — Read surface is adaptive (light/dark)
+- ADV-98 — Canvas grid + elevated section cards
+- ADV-99 — Required / Optional field badges
+- ADV-100 — Field Properties panel layout
+- ADV-101 — Library active card highlight
+- ADV-102 — Click a palette field to add just that field
+- ADV-103 — Drag a single field onto the canvas
+- ADV-104 — Key Contacts pinned first in the palette
+- ADV-105 — Section / header reorder
+- ADV-106 — Generate + copy + revoke an intake link
+- ADV-110 — no-default start prompt
+- ADV-111 — save-as-tour-default fans out
+- ADV-112 — any day opens an advance
+- ADV-113 — rail "Edit venue info" jumps to the section
+- ADV-115 — Export advance visible beside Send Packet
+- ADV-116 — scope routes to the packet PDF
+
+Day sheet tests (DAY-*, ROLE-*) are retired with day sheets — see
+`docs/smoke-tests/day.md`.

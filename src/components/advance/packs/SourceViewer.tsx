@@ -8,21 +8,19 @@ import { X } from 'lucide-react';
 import type { FieldSource } from '@/server/advance/show';
 import { packFileUrl } from '../api';
 import { PackViewer } from './PackViewer';
+import '../advance.css';
 
 export function SourceViewer({ tourId, source, label, onClose }: { tourId: string; source: FieldSource; label: string; onClose: () => void }) {
   const [url, setUrl] = useState<string | null>(null);
   const [text, setText] = useState<{ num: number; text: string }[] | null>(null);
-  const [err, setErr] = useState<string | null>(null);
+  const [fetchErr, setErr] = useState<string | null>(null);
   const name = source.file_name ?? 'Info pack';
   const ext = (name.split('.').pop() ?? '').toLowerCase();
   const kind: 'pdf' | 'image' | 'text' = ext === 'pdf' ? 'pdf' : ['png', 'jpg', 'jpeg', 'gif', 'webp'].includes(ext) ? 'image' : 'text';
 
   useEffect(() => {
     let live = true;
-    if (!source.doc_id) {
-      setErr('This answer’s file isn’t kept.');
-      return;
-    }
+    if (!source.doc_id) return;
     packFileUrl(tourId, { doc: source.doc_id })
       .then(async ({ url: u }) => {
         if (!live) return;
@@ -36,6 +34,8 @@ export function SourceViewer({ tourId, source, label, onClose }: { tourId: strin
       live = false;
     };
   }, [tourId, source.doc_id, kind]);
+
+  const err = source.doc_id ? fetchErr : 'This answer’s file isn’t kept.';
 
   useEffect(() => {
     const k = (e: KeyboardEvent) => e.key === 'Escape' && onClose();

@@ -120,8 +120,6 @@ const UNGUARDED: Record<string, string> = {
   '/stage-plots/[id]/export/preview': /* POST */ 'PERMANENT — read-only POST. Writes nothing; renders a preview from a config body. READ CHECK: same workspace-scoped load as the pdf sibling.',
 
   /* ── P0-C5 — 6 remaining, all fourth-category (23 converted) ── */
-  '/day/[routingId]/export/pdf': /* POST */ 'PERMANENT — read-only POST. Writes nothing; renders a day-sheet PDF from a config body. READ CHECK: authenticated user, then the day is loaded scoped to the calling user own profile workspace_id.',
-  '/day/[routingId]/export/preview': /* POST */ 'PERMANENT — read-only POST. Writes nothing; renders a preview from a config body. READ CHECK: same workspace-scoped load as the pdf sibling.',
   '/places/airports': /* POST */ 'PERMANENT — read-only POST. Writes nothing; proxies Google Places. READ CHECK: guardGoogleCall() authenticates the Supabase session, resolves the workspace and returns 401/403/429 — the gate is one level down in lib/external/googleUsage, not inline.',
   '/places/autocomplete': /* POST */ 'PERMANENT — read-only POST. Writes nothing; proxies Google Places autocomplete. READ CHECK: same guardGoogleCall() gate as /places/airports.',
   '/rooming/[tourId]/export/pdf': /* POST */ 'PERMANENT — read-only POST. Writes nothing; renders a rooming PDF from a config body. READ CHECK: authenticated user, then the tour is loaded scoped to the calling user own profile workspace_id.',

@@ -327,7 +327,7 @@ export function AdvanceShowPage({ show, rail, templates }: { show: AdvanceShowDa
               onReview={onReview}
               onOpenSource={(src, label) => setViewing({ src, label })}
               afterSchedule={
-                <section className="adv-section" aria-label="Local crew calls" style={{ ['--i' as string]: 1 }}>
+                <section id="crew-calls" className="adv-section" aria-label="Local crew calls" style={{ ['--i' as string]: 1, scrollMarginTop: 'var(--lp-space-6)' }}>
                   <div className="adv-section-head">
                     <h2>Local crew calls</h2>
                     <span className="adv-muted" style={{ fontSize: 'var(--lp-text-xs)' }}>Calls for the venue’s crew on this day</span>

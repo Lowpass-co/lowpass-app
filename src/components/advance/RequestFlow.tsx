@@ -17,6 +17,7 @@ import { Modal } from '@/components/ui/Modal';
 import { useToast } from '@/components/ui/Toast';
 import { makeRequest, markSent } from './api';
 import { fmtDay, fmtLong } from './format';
+import './advance.css';
 
 interface ShowLite {
   routingId: string;

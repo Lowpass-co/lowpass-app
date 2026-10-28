@@ -42,11 +42,9 @@
  *   /advance-intake/  VENUE intake      — token → advance instance, service-role;
  *                     the form writes only into that instance's intake answers.
  *   /a/               public advance packet — token → packet, read-only render.
- *   /m/day/           CREW day link     — token → routing day, then D1-3's
- *                     SERVER-SIDE role slice decides which blocks are even
- *                     queried. Out-of-slice data (money, internal notes) is
- *                     ABSENT from the HTML, not CSS-hidden. Cowork's byte-level
- *                     check after R5-2 confirmed this holds.
+ *   /m/day/           RETIRED crew day link — day sheets were retired (Oct
+ *                     2026). Old links stay public only to show a static "this
+ *                     link is no longer active" page; nothing is read.
  *   /share/advance/   shared advance    — share token → advance, read-only.
  *   /s/               ONE SHOW LINK (B4) — token → show_links row, service-role;
  *                     the /api/public/show-link endpoint owns the password gate

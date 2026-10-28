@@ -14,6 +14,7 @@ import { useEffect, useRef, useState } from 'react';
 import { isEmptyAnswer } from '@/lib/advance/intake';
 import { countedFields, sectionProgress, type AdvField, type AdvSection, type AdvData } from '@/lib/advance/board';
 import type { FieldSource, PendingAnswer } from '@/server/advance/show';
+import { coerceValue } from '@/lib/advance/packs';
 import { fmtWhen } from './format';
 
 export interface SectionsProps {
@@ -58,10 +59,15 @@ function Editor({ field, value, onCommit, id }: { field: AdvField; value: unknow
   const [v, setV] = useState<string>(display(value));
   const last = useRef(display(value));
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // A new value from outside (a review accepted, a pack applied) replaces the
+  // draft — but the echo of this editor's own save must not, or it would wipe
+  // what was typed since the debounce fired. That needs the committed-value ref,
+  // which can't be read during render, hence an effect.
   useEffect(() => {
     const d = display(value);
     if (d !== last.current) {
       last.current = d;
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- sync from prop, guarded by the ref above
       setV(d);
     }
   }, [value]);
@@ -72,7 +78,15 @@ function Editor({ field, value, onCommit, id }: { field: AdvField; value: unknow
     timer.current = null;
     if (next === last.current) return;
     last.current = next;
-    if (field.type === 'number' || field.type === 'currency') {
+    if (field.type === 'time') {
+      // 24-hour, whatever the browser's locale: "7.30pm" → 19:30.
+      const t = next.trim() === '' ? null : coerceValue({ type: 'time' }, next) ?? next;
+      if (typeof t === 'string') {
+        last.current = t;
+        setV(t);
+      }
+      onCommit(t);
+    } else if (field.type === 'number' || field.type === 'currency') {
       const n = next.trim() === '' ? null : Number(next);
       onCommit(n === null || Number.isFinite(n) ? n : next);
     } else onCommit(next.trim() === '' ? null : next);
@@ -116,17 +130,18 @@ function Editor({ field, value, onCommit, id }: { field: AdvField; value: unknow
       />
     );
   }
-  const type = field.type === 'time' ? 'time' : field.type === 'date' ? 'date' : field.type === 'number' || field.type === 'currency' ? 'number' : field.type === 'url' ? 'url' : 'text';
+  const type = field.type === 'date' ? 'date' : field.type === 'number' || field.type === 'currency' ? 'number' : field.type === 'url' ? 'url' : 'text';
   return (
     <input
       id={id}
       className="adv-input"
       type={type}
       value={v}
-      placeholder={field.placeholder || 'Not answered'}
+      placeholder={field.type === 'time' ? 'HH:MM' : field.placeholder || 'Not answered'}
+      inputMode={field.type === 'time' ? 'numeric' : undefined}
       onChange={(e) => change(e.target.value)}
       onBlur={(e) => commit(e.target.value)}
-      style={type === 'time' || type === 'date' ? { maxWidth: 180, fontFamily: 'var(--lp-font-numeric)' } : undefined}
+      style={field.type === 'time' || type === 'date' ? { maxWidth: 180, fontFamily: 'var(--lp-font-numeric)' } : undefined}
     />
   );
 }

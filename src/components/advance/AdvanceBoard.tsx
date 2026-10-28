@@ -75,7 +75,7 @@ export function AdvanceBoard({ data }: { data: BoardData }) {
   const notSent = shows.filter((r) => bucket(r) === 'not_sent');
 
   const visible = useMemo(() => {
-    const out: (typeof data.rows[number] & { hit?: { label: string; value: string } | null })[] = [];
+    const out: (BoardData['rows'][number] & { hit?: { label: string; value: string } | null })[] = [];
     for (const r of data.rows) {
       if (r.kind === 'gap') {
         if (filter === 'all' && !words.length) out.push(r);

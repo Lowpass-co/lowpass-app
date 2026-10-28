@@ -133,10 +133,33 @@ const nextConfig: NextConfig = {
         destination: '/operations/:id/payroll',
         permanent: true,
       },
+      // Day sheets + the tour Labor page were retired in the Advance rebuild
+      // (Oct 2026): the show's advance is the per-day page, local crew calls
+      // live on it. Temporary (307) so a browser never caches the move.
+      {
+        source: '/tours/:id/day/:routingId',
+        destination: '/advance/:id/:routingId',
+        permanent: false,
+      },
       {
         source: '/tours/:id/day',
-        destination: '/operations/:id/day',
-        permanent: true,
+        destination: '/advance/:id',
+        permanent: false,
+      },
+      {
+        source: '/operations/:id/day/:routingId',
+        destination: '/advance/:id/:routingId',
+        permanent: false,
+      },
+      {
+        source: '/operations/:id/day',
+        destination: '/advance/:id',
+        permanent: false,
+      },
+      {
+        source: '/operations/:id/labor/:rest*',
+        destination: '/advance/:id',
+        permanent: false,
       },
       {
         source: '/tours/:id/files',

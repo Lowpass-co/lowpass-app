@@ -29,7 +29,9 @@ type PdfJs = {
 let pdfjsPromise: Promise<PdfJs> | null = null;
 function loadPdfJs(): Promise<PdfJs> {
   if (!pdfjsPromise) {
-    pdfjsPromise = import('pdfjs-dist').then((m) => {
+    // The prebuilt minified bundle: webpack re-processing pdf.mjs breaks it
+    // ("Object.defineProperty called on non-object").
+    pdfjsPromise = import(/* webpackIgnore: false */ 'pdfjs-dist/build/pdf.min.mjs').then((m) => {
       const pdfjs = m as unknown as PdfJs;
       pdfjs.GlobalWorkerOptions.workerSrc = new URL('pdfjs-dist/build/pdf.worker.min.mjs', import.meta.url).toString();
       return pdfjs;
@@ -107,17 +109,22 @@ export function PackViewer({
   const [doc, setDoc] = useState<PdfDoc | null>(null);
   const [pdfjs, setPdfjs] = useState<PdfJs | null>(null);
   const [num, setNum] = useState(page ?? 1);
+  // A new source page from outside moves the viewer (adjusted during render).
+  const [seenPage, setSeenPage] = useState(page);
+  if (page !== seenPage) {
+    setSeenPage(page);
+    setNum(page ?? 1);
+  }
   const [boxes, setBoxes] = useState<Box[] | null>(null);
   const [size, setSize] = useState<{ w: number; h: number } | null>(null);
-  const [failed, setFailed] = useState(false);
-
-  useEffect(() => setNum(page ?? 1), [page]);
+  // Which URL failed to open — so a new file starts clean without a reset.
+  const [failedUrl, setFailedUrl] = useState<string | null>(null);
+  const failed = failedUrl !== null && failedUrl === url;
 
   useEffect(() => {
     if (kind !== 'pdf' || !url) return;
     let live = true;
     let d: PdfDoc | null = null;
-    setFailed(false);
     loadPdfJs()
       .then((p) => {
         setPdfjs(p);
@@ -127,7 +134,10 @@ export function PackViewer({
         d = x;
         if (live) setDoc(x);
       })
-      .catch(() => live && setFailed(true));
+      .catch((e) => {
+        console.error('[pack-viewer] could not open the PDF', e);
+        if (live) setFailedUrl(url);
+      });
     return () => {
       live = false;
       void d?.destroy();
@@ -205,7 +215,19 @@ export function PackViewer({
             {boxes
               ? boxes.map((b, i) => <span key={i} className="adv-hl" style={{ left: b.left - 3, top: b.top - 2, width: b.width + 6, height: b.height + 4 }} />)
               : quote && size ? <span key={`wash-${num}-${quote}`} className="adv-page-wash" /> : null}
-            {first && label ? <span className="adv-hl-tag" style={{ left: Math.min(first.left, (size?.w ?? 400) - 140), top: Math.max(0, first.top - 26) }}>{label}</span> : null}
+            {first && label && size ? (
+              // Beside the highlight when there's room, else just above it — never over the text.
+              <span
+                className="adv-hl-tag"
+                style={
+                  first.left + first.width + 16 + label.length * 7 < size.w
+                    ? { left: first.left + first.width + 10, top: first.top - 1 }
+                    : { left: Math.max(4, Math.min(first.left, size.w - 160)), top: Math.max(0, first.top - 28) }
+                }
+              >
+                {label}
+              </span>
+            ) : null}
           </div>
         )
       ) : kind === 'image' ? (

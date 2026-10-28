@@ -108,7 +108,7 @@ describe('a rail item that is loading says so', () => {
   it('every live item in the rail can show it, not just the one I checked', () => {
     status.pending = true;
     mount(`/operations/${T}/routing`);
-    for (const id of ['routing', 'day-sheets', 'advance', 'crew', 'rooming', 'travel', 'files', 'payroll', 'expenses']) {
+    for (const id of ['routing', 'advance', 'crew', 'rooming', 'travel', 'files', 'payroll', 'expenses']) {
       expect(spinning(`nav-item-${id}`)).toBe(true);
     }
   });
