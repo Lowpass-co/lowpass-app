@@ -180,8 +180,10 @@ export async function getHomeData(
     tourIds.length
       ? supabase
           .from('advance_instances')
-          .select('id, routing_id, updated_at, status')
-          .order('updated_at', { ascending: false })
+          // The column is last_updated_at; `updated_at` doesn't exist, which
+          // made this query fail and the home advance activity always empty.
+          .select('id, routing_id, updated_at:last_updated_at, status')
+          .order('last_updated_at', { ascending: false })
           .limit(20)
       : empty,
     tourIds.length

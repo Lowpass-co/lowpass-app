@@ -33,6 +33,7 @@ import {
   tmCompletedText,
   type DueRow,
 } from './reminders';
+import { loadAdvanceSections } from '@/server/advance/advanceSections';
 
 const FROM_ADDRESS = process.env.RESEND_FROM_ADDRESS ?? 'Lowpass <notifications@lowpass.co>';
 
@@ -112,11 +113,12 @@ async function answeredRatio(
   instanceId: string | null,
   routingId: string,
 ): Promise<{ answered: number; total: number }> {
-  let q = service.from('advance_instances').select('id, sections');
+  let q = service.from('advance_instances').select('id, form_config_id');
   q = instanceId ? q.eq('id', instanceId) : q.eq('routing_id', routingId);
-  const { data: inst } = await q.maybeSingle<{ id: string; sections: IntakeSection[] | null }>();
+  const { data: inst } = await q.maybeSingle<{ id: string; form_config_id: string | null }>();
   if (!inst) return { answered: 0, total: 0 };
-  const schema: IntakeFormSchema = buildIntakeFormSchema(inst.sections);
+  const sections: IntakeSection[] = await loadAdvanceSections(service, inst.form_config_id);
+  const schema: IntakeFormSchema = buildIntakeFormSchema(sections);
   const total = schema.sections.reduce((n, s) => n + s.fields.length, 0);
   const { data: pend } = await service
     .from('intake_pending_answers')

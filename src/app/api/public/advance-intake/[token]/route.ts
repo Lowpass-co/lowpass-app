@@ -15,6 +15,7 @@
 
 import { NextResponse } from 'next/server';
 import { createServiceSupabaseClient } from '@/lib/supabase-server';
+import { loadAdvanceSections } from '@/server/advance/advanceSections';
 import {
   buildIntakeFormSchema,
   type IntakeSection,
@@ -58,12 +59,18 @@ export async function GET(
 
   const expired = !!link.expires_at && new Date(link.expires_at).getTime() < Date.now();
 
-  // Section templates live on the advance instance for this show.
+  // The show's sections live on its form config (via the instance).
   const { data: instance } = await service
     .from('advance_instances')
-    .select('sections')
+    .select('form_config_id')
     .eq('routing_id', link.routing_id)
-    .maybeSingle<{ sections: IntakeSection[] | null }>();
+    .maybeSingle<{ form_config_id: string | null }>();
+  let sections: IntakeSection[];
+  try {
+    sections = await loadAdvanceSections(service, instance?.form_config_id);
+  } catch {
+    return NextResponse.json({ error: 'Could not load this form — try again shortly.' }, { status: 500 });
+  }
 
   const [{ data: routing }, { data: tour }] = await Promise.all([
     service
@@ -83,7 +90,7 @@ export async function GET(
       .maybeSingle<{ name: string | null }>(),
   ]);
 
-  const schema = buildIntakeFormSchema(instance?.sections);
+  const schema = buildIntakeFormSchema(sections);
 
   // Best-effort view stamp.
   try {

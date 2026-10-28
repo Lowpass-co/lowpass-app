@@ -43,6 +43,7 @@ import {
 import { AdvanceBuilderShellClient } from '@/components/advance/AdvanceBuilderShellClient';
 import { extractKeyContacts, type SectionDef as KeyInfoSectionDef } from '@/lib/advance/key-info';
 import { computeAdvanceProgress } from '@/lib/advance/progress';
+import { loadAdvanceSections } from '@/server/advance/advanceSections';
 
 function relativeTime(iso: string | null | undefined): string | null {
   if (!iso) return null;
@@ -114,7 +115,7 @@ export default async function AdvanceShowPage({
     supabase
       .from('advance_instances')
       .select(
-        'id, sections, status, last_updated_at, last_updated_by_id, form_config_id, data, section_statuses',
+        'id, status, last_updated_at, last_updated_by_id, form_config_id, data, section_statuses',
       )
       .eq('routing_id', routingId)
       .maybeSingle(),
@@ -125,10 +126,12 @@ export default async function AdvanceShowPage({
   // Q1 — the advance's OWN edited Venue Info value wins per-field, else
   // resolveVenue(canonical). resolveAdvanceVenue keeps resolveVenue as the
   // canonical-fallback reader (guardrail intact).
-  const advForVenue = advanceRes.data as {
-    sections?: AdvanceVenueSection[] | null;
-    data?: Record<string, Record<string, unknown>> | null;
-  } | null;
+  // Sections live on the form config, not the instance (see advanceSections.ts).
+  const advRaw = advanceRes.data as { form_config_id: string | null; data?: Record<string, Record<string, unknown>> | null } | null;
+  const advSections = advRaw ? await loadAdvanceSections(supabase, advRaw.form_config_id) : [];
+  const advForVenue = advRaw
+    ? { sections: advSections as unknown as AdvanceVenueSection[], data: advRaw.data ?? null }
+    : null;
   const routing = routingRaw
     ? (() => {
         const v = resolveAdvanceVenue(routingRaw, advForVenue?.sections, advForVenue?.data ?? null);
@@ -170,7 +173,7 @@ export default async function AdvanceShowPage({
       { status: string; assigned_to?: string }
     > | null;
   };
-  const advance = advanceRes.data as AdvanceRow | null;
+  const advance = advRaw ? ({ ...(advRaw as object), sections: advSections } as unknown as AdvanceRow) : null;
 
   let lastEditedBy: string | null = null;
   let templateName: string | null = null;

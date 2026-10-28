@@ -19,6 +19,7 @@
 
 import { NextResponse } from 'next/server';
 import { createServiceSupabaseClient } from '@/lib/supabase-server';
+import { loadAdvanceSections } from '@/server/advance/advanceSections';
 import {
   buildIntakeFormSchema,
   sanitizeSubmission,
@@ -95,13 +96,13 @@ export async function POST(
   let instanceId = link.advance_instance_id;
   let instanceQuery = service
     .from('advance_instances')
-    .select('id, sections, data');
+    .select('id, form_config_id, data');
   instanceQuery = instanceId
     ? instanceQuery.eq('id', instanceId)
     : instanceQuery.eq('routing_id', link.routing_id);
   const { data: instance } = await instanceQuery.maybeSingle<{
     id: string;
-    sections: IntakeSection[] | null;
+    form_config_id: string | null;
     data: AdvanceData | null;
   }>();
 
@@ -116,7 +117,13 @@ export async function POST(
   // Q7 STORE-PENDING: sanitise against the live schema, then store the answers as
   // PENDING rows — do NOT merge into advance_instances.data here. The TM reviews
   // them (ChangeReviewQueue) and mergeIntakeIntoAdvance runs at ACCEPT-time.
-  const schema = buildIntakeFormSchema(instance.sections);
+  let sections: IntakeSection[];
+  try {
+    sections = await loadAdvanceSections(service, instance.form_config_id);
+  } catch {
+    return NextResponse.json({ error: 'Could not save right now — please try again.' }, { status: 500 });
+  }
+  const schema = buildIntakeFormSchema(sections);
   const clean = sanitizeSubmission(schema, rawData);
   const pending = flattenToPending(clean);
 

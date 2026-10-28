@@ -98,7 +98,8 @@ export type TourHubData = {
 
 type AdvanceInstanceRow = {
   routing_id: string;
-  sections: { template_id?: string | null; label?: string | null }[] | null;
+  form_config_id: string | null;
+  sections?: { template_id?: string | null; label?: string | null }[] | null;
   section_statuses: Record<string, { status?: string }> | null;
 };
 
@@ -201,11 +202,17 @@ export async function getTourHubData(
   if (showRoutingIds.length > 0) {
     const { data: advanceRows } = await supabase
       .from('advance_instances')
-      .select('routing_id, sections, section_statuses')
+      .select('routing_id, form_config_id, section_statuses')
       .in('routing_id', showRoutingIds);
+    // Sections live on the form config, not the instance.
+    const configIds = [...new Set(((advanceRows ?? []) as AdvanceInstanceRow[]).map((r) => r.form_config_id).filter((x): x is string => !!x))];
+    const { data: configRows } = configIds.length
+      ? await supabase.from('advance_form_configs').select('id, sections').in('id', configIds)
+      : { data: [] as { id: string; sections: AdvanceInstanceRow['sections'] }[] };
+    const sectionsByConfig = new Map(((configRows ?? []) as { id: string; sections: AdvanceInstanceRow['sections'] }[]).map((c) => [c.id, c.sections]));
     const advanceByShow = new Map<string, AdvanceInstanceRow>();
     for (const row of (advanceRows ?? []) as AdvanceInstanceRow[]) {
-      advanceByShow.set(row.routing_id, row);
+      advanceByShow.set(row.routing_id, { ...row, sections: row.form_config_id ? sectionsByConfig.get(row.form_config_id) ?? [] : [] });
     }
     for (const showId of showRoutingIds) {
       const adv = advanceByShow.get(showId);
