@@ -10,6 +10,7 @@
 
 import { notFound, redirect } from 'next/navigation';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
+import { loadAdvanceSections } from '@/server/advance/advanceSections';
 import { resolveArtistLogoUrlSync } from '@/lib/artists/imageUrl';
 import { resolveVenue, type RoutingVenueSource } from '@/lib/venues/resolveVenue';
 import {
@@ -41,13 +42,12 @@ export default async function AdvanceSharePage({
 
   const { data: instance } = await supabase
     .from('advance_instances')
-    .select('id, sections')
+    .select('id, form_config_id')
     .eq('routing_id', routingId)
-    .maybeSingle();
+    .maybeSingle<{ id: string; form_config_id: string | null }>();
   if (!instance) notFound();
 
-  const rawSections = ((instance as { sections?: unknown }).sections ??
-    []) as IntakeSection[];
+  const rawSections: IntakeSection[] = await loadAdvanceSections(supabase, instance.form_config_id);
 
   // Venue-fillable schema (drops tm_only sections + file/contact fields) — the
   // exact set the public intake form exposes.

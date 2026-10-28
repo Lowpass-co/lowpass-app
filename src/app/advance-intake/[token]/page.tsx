@@ -15,6 +15,7 @@
    ============================================ */
 
 import { createServiceSupabaseClient } from '@/lib/supabase-server';
+import { loadAdvanceSections } from '@/server/advance/advanceSections';
 import {
   buildIntakeFormSchema,
   type IntakeSection,
@@ -121,9 +122,10 @@ export default async function AdvanceIntakePage({
 
   const { data: instance } = await service
     .from('advance_instances')
-    .select('sections, data')
+    .select('form_config_id, data')
     .eq('routing_id', link.routing_id)
-    .maybeSingle<{ sections: IntakeSection[] | null; data: AdvanceData | null }>();
+    .maybeSingle<{ form_config_id: string | null; data: AdvanceData | null }>();
+  const sections: IntakeSection[] = await loadAdvanceSections(service, instance?.form_config_id);
 
   const [{ data: routing }, { data: tour }] = await Promise.all([
     service
@@ -146,12 +148,12 @@ export default async function AdvanceIntakePage({
   const venue = routing
     ? resolveAdvanceVenue(
         routing as RoutingVenueSource,
-        (instance?.sections as AdvanceVenueSection[] | null | undefined) ?? null,
+        (sections as unknown as AdvanceVenueSection[]),
         (instance?.data as Record<string, Record<string, unknown>> | null | undefined) ?? null,
       )
     : null;
 
-  const schema = buildIntakeFormSchema(instance?.sections);
+  const schema = buildIntakeFormSchema(sections);
 
   if (schema.sections.length === 0) {
     return (

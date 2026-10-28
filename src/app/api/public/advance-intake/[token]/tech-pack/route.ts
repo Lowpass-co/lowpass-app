@@ -13,6 +13,7 @@
 
 import { NextResponse } from 'next/server';
 import { createServiceSupabaseClient } from '@/lib/supabase-server';
+import { loadAdvanceSections } from '@/server/advance/advanceSections';
 import { withAiUsage } from '@/lib/ai/usage';
 import {
   buildIntakeFormSchema,
@@ -71,11 +72,17 @@ export async function POST(request: Request, { params }: { params: Promise<{ tok
   if (!process.env.ANTHROPIC_API_KEY) return softFail('The reader is unavailable right now — please fill in the form below.');
 
   // Resolve the advance + its fillable schema (the extraction target).
-  let instanceQuery = service.from('advance_instances').select('id, sections');
+  let instanceQuery = service.from('advance_instances').select('id, form_config_id');
   instanceQuery = link.advance_instance_id ? instanceQuery.eq('id', link.advance_instance_id) : instanceQuery.eq('routing_id', link.routing_id);
-  const { data: instance } = await instanceQuery.maybeSingle<{ id: string; sections: IntakeSection[] | null }>();
+  const { data: instance } = await instanceQuery.maybeSingle<{ id: string; form_config_id: string | null }>();
   if (!instance) return NextResponse.json({ error: 'This show is not ready yet.' }, { status: 409 });
-  const schema = buildIntakeFormSchema(instance.sections);
+  let sections: IntakeSection[];
+  try {
+    sections = await loadAdvanceSections(service, instance.form_config_id);
+  } catch {
+    return softFail('The reader is unavailable right now — please fill in the form below.');
+  }
+  const schema = buildIntakeFormSchema(sections);
   if (schema.sections.length === 0) return softFail('There are no questions to answer yet — please check back later.');
 
   // Parse + guard the upload (mirror receipts).

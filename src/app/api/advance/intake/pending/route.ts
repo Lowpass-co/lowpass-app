@@ -18,6 +18,7 @@ import { buildIntakeFormSchema, mergeIntakeIntoAdvance, type IntakeSection, type
 import { pendingToAdvanceData, LABOR_CALL_FIELD_TYPE } from '@/lib/advance/intake-pending';
 import { applyRowsToDay } from '@/lib/labor-calls/server';
 import type { LaborCallRow } from '@/lib/labor-calls/types';
+import { loadAdvanceSections } from '@/server/advance/advanceSections';
 
 interface PendingRow {
   id: string;
@@ -63,10 +64,11 @@ export async function GET(request: Request) {
 
   const { data: instance } = await c.supabase
     .from('advance_instances')
-    .select('id, sections, data')
+    .select('id, form_config_id, data')
     .eq('id', instanceId)
-    .maybeSingle<{ id: string; sections: IntakeSection[] | null; data: AdvanceData | null }>();
+    .maybeSingle<{ id: string; form_config_id: string | null; data: AdvanceData | null }>();
   if (!instance) return NextResponse.json({ error: 'Advance not found' }, { status: 404 });
+  const sections = await loadAdvanceSections(c.supabase, instance.form_config_id);
 
   const { data: pending } = await c.supabase
     .from('intake_pending_answers')
@@ -75,7 +77,7 @@ export async function GET(request: Request) {
     .eq('advance_instance_id', instanceId)
     .eq('status', 'pending');
 
-  const meta = fieldMeta(instance.sections);
+  const meta = fieldMeta(sections);
   const rows = (pending ?? []).map((p: PendingRow) => {
     const key = `${p.section_id}:${p.field_id}`;
     return {
@@ -112,10 +114,11 @@ export async function POST(request: Request) {
 
   const { data: instance } = await c.supabase
     .from('advance_instances')
-    .select('id, routing_id, sections, data')
+    .select('id, routing_id, form_config_id, data')
     .eq('id', instanceId)
-    .maybeSingle<{ id: string; routing_id: string | null; sections: IntakeSection[] | null; data: AdvanceData | null }>();
+    .maybeSingle<{ id: string; routing_id: string | null; form_config_id: string | null; data: AdvanceData | null }>();
   if (!instance) return NextResponse.json({ error: 'Advance not found' }, { status: 404 });
+  const sections = await loadAdvanceSections(c.supabase, instance.form_config_id);
 
   // Load the accepted pending rows (workspace-scoped).
   const { data: accepted } = acceptIds.length
@@ -127,7 +130,7 @@ export async function POST(request: Request) {
         .in('id', acceptIds)
     : { data: [] as { id: string; section_id: string; field_id: string; value: unknown }[] };
 
-  const meta = fieldMeta(instance.sections);
+  const meta = fieldMeta(sections);
   const normal: { section_id: string; field_id: string; value: unknown }[] = [];
   const laborRows: LaborCallRow[] = [];
   for (const a of accepted ?? []) {

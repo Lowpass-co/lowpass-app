@@ -25,6 +25,7 @@ import {
 } from '@/lib/advance/key-info';
 import { sliceFor, type TourRole, type RoleSlice, type DayBlock } from '@/lib/roles/slices';
 import { signedUrlForAsset } from '@/lib/rider-packs/assets';
+import { loadAdvanceSections } from '@/server/advance/advanceSections';
 
 /** One row in the merged day timeline, tagged with where it came from. */
 export interface ScheduleItem {
@@ -242,7 +243,7 @@ export async function loadDay(
         .select('department, call_time, call_time_approx, contact_name, notes, sort_order')
         .eq('routing_id', routingId)
         .order('sort_order', { ascending: true }),
-      supabase.from('advance_instances').select('sections, data').eq('routing_id', routingId).maybeSingle(),
+      supabase.from('advance_instances').select('form_config_id, data').eq('routing_id', routingId).maybeSingle(),
     ]);
     const items: ScheduleItem[] = [];
     for (const c of calls ?? []) {
@@ -254,9 +255,10 @@ export async function loadDay(
         source: 'labor_call',
       });
     }
+    const advSections = adv ? await loadAdvanceSections(supabase, adv.form_config_id as string | null) : null;
     items.push(
       ...advanceScheduleItems(
-        (adv?.sections as SectionDef[] | null) ?? null,
+        (advSections as unknown as SectionDef[] | null) ?? null,
         (adv?.data as Record<string, Record<string, unknown>> | null) ?? null,
       ),
     );
@@ -361,12 +363,13 @@ export async function loadDay(
   if (has('contacts')) {
     const contacts: DayContact[] = [];
     const [{ data: adv }, { data: memos }] = await Promise.all([
-      supabase.from('advance_instances').select('sections, data').eq('routing_id', routingId).maybeSingle(),
+      supabase.from('advance_instances').select('form_config_id, data').eq('routing_id', routingId).maybeSingle(),
       supabase.from('deal_memos').select('promoter_name, promoter_email, promoter_phone').eq('show_id', routingId).eq('workspace_id', workspaceId),
     ]);
     if (adv) {
+      const advSections = await loadAdvanceSections(supabase, adv.form_config_id as string | null);
       const venueContacts: KeyContactCard[] = extractDayContacts(
-        (adv.sections as SectionDef[] | null) ?? [],
+        advSections as unknown as SectionDef[],
         (adv.data as Record<string, Record<string, unknown>> | null) ?? {},
       );
       for (const c of venueContacts) {

@@ -96,3 +96,29 @@ twice (with `Authorization: Bearer $CRON_SECRET` in prod; bare in dev).
   remaining unsent t14/t7/t3 rows; no further venue reminders fire.
 
 **Last verified**:
+
+## Sections source fix (Oct 2026 — fix/advance-intake-sections)
+
+Until this fix every intake path read `advance_instances.sections`, a column
+that doesn't exist, so INTK-01…05 could never have passed live: Share 404'd,
+the venue form had no questions, submit said "not ready". Sections are now
+read from the show's form config via `loadAdvanceSections`
+(`src/server/advance/advanceSections.ts`); `advanceSections.test.tsx` fails
+if any code selects a non-existent `advance_instances` column again.
+
+#### INTK-06 — Share opens; venue form shows the right sections
+
+**Before**: paste migration 275 (Deal Info forks back to TM-only).
+**Do**: Open a show with sections → **Share**. Create a venue link, open it in
+a private window.
+**Expect**: Share loads (no 404). The venue form lists the show's sections
+with their fields. **Deal Info (guarantee etc.) is NOT on the venue form.**
+
+#### INTK-07 — Advance header and tour hub count real progress
+
+**Do**: Open a show whose sections are marked complete.
+**Expect**: The header's completion ring and counts reflect those sections
+(previously always 0% — the server read failed). The tour overview's
+"advances complete" count includes shows with every section complete.
+
+**Last verified**:

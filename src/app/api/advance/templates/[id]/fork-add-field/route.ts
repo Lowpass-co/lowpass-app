@@ -58,6 +58,7 @@ type ApiTemplate = {
   icon: string | null;
   fields: FieldDef[];
   forked_from_id: string | null;
+  tm_only: boolean | null;
 };
 
 async function getWorkspaceId(
@@ -114,7 +115,7 @@ export async function POST(
   // is extending further. Both supported.
   const { data: source, error: sourceErr } = await supabase
     .from('advance_templates')
-    .select('id, workspace_id, name, description, icon, fields, forked_from_id')
+    .select('id, workspace_id, name, description, icon, fields, forked_from_id, tm_only')
     .eq('id', templateId)
     .maybeSingle();
 
@@ -194,6 +195,9 @@ export async function POST(
       icon: sourceTemplate.icon,
       fields: newFields,
       forked_from_id: platformParentId,
+      // A fork must stay as private as its parent: losing tm_only here is how
+      // the workspace's Deal Info became venue-visible (migration 275 repairs).
+      tm_only: sourceTemplate.tm_only === true,
     })
     .select(
       'id, workspace_id, name, description, icon, fields, forked_from_id, sort_order',
