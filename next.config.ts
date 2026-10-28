@@ -14,6 +14,23 @@ const nextConfig: NextConfig = {
      server-sliced crew view for an animation, and the spine already works. */
   experimental: { viewTransition: true },
 
+  /* pdf-parse runs pdf.js, which loads its worker (pdf.worker.mjs) by a path it
+     works out at runtime. Bundled by webpack, that file isn't in the server
+     chunks, so EVERY PDF read failed in production with "Setting up fake worker
+     failed" — info packs, schedule import, rider extraction, receipts — while
+     tests and dev passed (they don't bundle). Left as Node packages, pdf.js
+     finds its worker next to itself. Pinned by src/lib/pdfBundling.test.tsx.
+     Same lesson as RC-5 below: a runtime-resolved file is invisible to the
+     bundler and fails only in production. */
+  serverExternalPackages: ['pdf-parse'],
+  /* …and pdf.js picks that worker up by a runtime path ("./pdf.worker.mjs"
+     next to legacy/build/pdf.mjs), which the file tracer can't see — so Vercel
+     would ship pdf.mjs without its worker and fail the same way. Ship it with
+     every API route (that's where PDFs are read). */
+  outputFileTracingIncludes: {
+    '/api/**/*': ['./node_modules/pdfjs-dist/legacy/build/pdf.worker.mjs'],
+  },
+
   /* RC-5 removed the outputFileTracingIncludes block that lived here. It existed
      because pdfFirstPage.ts read pdfjs-dist off disk at runtime — a path the file
      tracer cannot see, so the lambda shipped without it. The rasteriser is gone

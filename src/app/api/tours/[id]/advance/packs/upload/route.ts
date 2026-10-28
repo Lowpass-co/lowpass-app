@@ -8,7 +8,7 @@
 import { NextResponse } from 'next/server';
 import { createServerSupabaseClient, createServiceSupabaseClient } from '@/lib/supabase-server';
 import { requireWrite } from '@/lib/auth/workspace-check';
-import { MAX_PACK_FILE, MAX_PACK_FILES, PACK_BUCKET, packPrefix, safeFileName } from '@/server/advance/packReader';
+import { MAX_PACK_FILE, MAX_PACK_FILES, MAX_PACK_MB, PACK_BUCKET, packPrefix, safeFileName } from '@/server/advance/packReader';
 import { readJson, tourGate } from '@/server/advance/routeGuard';
 
 export const dynamic = 'force-dynamic';
@@ -25,7 +25,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   if (!files.length) return NextResponse.json({ error: 'No files' }, { status: 400 });
   if (files.length > MAX_PACK_FILES) return NextResponse.json({ error: `At most ${MAX_PACK_FILES} files at once.` }, { status: 400 });
   if (files.some((f) => typeof f.size !== 'number' || f.size <= 0 || f.size > MAX_PACK_FILE)) {
-    return NextResponse.json({ error: 'Each file must be under 30 MB.' }, { status: 400 });
+    return NextResponse.json({ error: `Each file must be under ${MAX_PACK_MB} MB.` }, { status: 400 });
   }
   const svc = createServiceSupabaseClient();
   const batch = crypto.randomUUID();

@@ -17,7 +17,16 @@ import type { AdvSection } from '@/lib/advance/board';
 import { cleanExtraction, type Extra, type PackPage, type Suggestion } from '@/lib/advance/packs';
 
 export const PACK_BUCKET = 'tour-files';
-export const MAX_PACK_FILE = 30 * 1024 * 1024;
+/** Storage caps any single file at 50 MB on the Supabase Free plan, so that's
+ *  the ceiling here too (Oct 2026, Adam). Raise both together. */
+export const MAX_PACK_FILE = 50 * 1024 * 1024;
+export const MAX_PACK_MB = 50;
+/** A scanned PDF (no text layer) goes to the model whole, base64-encoded, and
+ *  the API caps a request at 32 MB — base64 adds a third, so ~22 MB of file.
+ *  The API also reads at most 100 pages of a PDF at our context size. Text
+ *  PDFs aren't affected: only their text is sent, whatever the file's size. */
+const MAX_SCAN_BYTES = 22 * 1024 * 1024;
+const MAX_SCAN_PAGES = 100;
 export const MAX_PACK_FILES = 10;
 const MAX_TEXT_CHARS = 160_000;
 const CHUNK_CHARS = 60_000;
@@ -76,7 +85,7 @@ export async function readPackFile(service: SupabaseClient, path: string): Promi
   const { data, error } = await service.storage.from(PACK_BUCKET).download(path);
   if (error || !data) throw new PackReadError(`Couldn’t open ${path.split('/').pop()}`);
   const buffer = Buffer.from(await data.arrayBuffer());
-  if (buffer.length > MAX_PACK_FILE) throw new PackReadError(`${path.split('/').pop()} is over 30 MB`);
+  if (buffer.length > MAX_PACK_FILE) throw new PackReadError(`${path.split('/').pop()} is over ${MAX_PACK_MB} MB`);
   const name = (path.split('/').pop() ?? 'file').replace(/^\d+-/, '');
   return { buffer, mime: data.type || '', name };
 }
@@ -89,6 +98,12 @@ export async function toContent(file: { buffer: Buffer; mime: string; name: stri
     const chars = pages.reduce((n, p) => n + p.text.replace(/\s/g, '').length, 0);
     if (pages.length && chars >= Math.max(200, pages.length * 40)) {
       return { kind: 'text', name: file.name, mime: 'application/pdf', pages, pageCount: total || pages.length };
+    }
+    if (file.buffer.length > MAX_SCAN_BYTES) {
+      throw new PackReadError(`“${file.name}” is a scan (no text in it) and too big for the AI to read as pictures (over 22 MB). Export it again with text, or in smaller parts.`);
+    }
+    if (total > MAX_SCAN_PAGES) {
+      throw new PackReadError(`“${file.name}” is a scan of ${total} pages — the AI reads at most ${MAX_SCAN_PAGES}. Split it and drop the parts.`);
     }
     return { kind: 'pdf', name: file.name, mime: 'application/pdf', base64: file.buffer.toString('base64'), pageCount: total || null };
   }
