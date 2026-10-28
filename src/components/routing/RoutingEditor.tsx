@@ -11,7 +11,8 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import dynamic from 'next/dynamic';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { LayoutGrid, Calendar, MapPin, Download, Copy, Check, X, ClipboardCheck, Calculator, LayoutDashboard } from 'lucide-react';
+import { LayoutGrid, Calendar, MapPin, Download, Copy, Check, X, ClipboardCheck, Calculator, LayoutDashboard, Sparkles, Upload } from 'lucide-react';
+import { ScheduleImportModal } from '@/components/import/ScheduleImportModal';
 import { useToast } from '@/components/ui/Toast';
 import { type RoutingRow } from './RoutingGrid';
 import { RoutingLedger } from './RoutingLedger';
@@ -195,6 +196,10 @@ export function RoutingEditor({
   const pendingSaveRef = useRef(false);
   const scheduleAutosaveRef = useRef<(() => void) | null>(null);
   const [autosave, setAutosave] = useState<'idle' | 'pending' | 'saving' | 'saved' | 'error'>('idle');
+  // Oct 2026 — AI schedule import (Import button, or drop a file anywhere here).
+  const [importOpen, setImportOpen] = useState(false);
+  const [importFiles, setImportFiles] = useState<File[]>([]);
+  const [dropHover, setDropHover] = useState(false);
 
   useEffect(() => {
     setCustomDayTypes(initialCustomDayTypes);
@@ -388,6 +393,21 @@ export function RoutingEditor({
     if (pendingSaveRef.current) await saveRouting(true);
   }, [saveRouting]);
 
+  /* AI import: save any pending edit FIRST (the import writes the same days),
+     then open; afterwards re-read the days (and the tour window, which an
+     import can widen) from the server. */
+  const openImport = useCallback((files: File[] = []) => {
+    if (readOnly) return;
+    void flushSave();
+    setImportFiles(files);
+    setImportOpen(true);
+  }, [readOnly, flushSave]);
+  const onImported = useCallback(() => {
+    hasUserEditedRef.current = false;
+    router.refresh();
+    void refetchRouting();
+  }, [router, refetchRouting]);
+
   /* Warn on tab-close / reload while a save is still pending or in flight. */
   useEffect(() => {
     const onBeforeUnload = (e: BeforeUnloadEvent) => {
@@ -404,8 +424,69 @@ export function RoutingEditor({
     return <RoutingLedgerSkeleton />;
   }
 
+  const isFileDrag = (e: React.DragEvent) => Array.from(e.dataTransfer?.types ?? []).includes('Files');
+
   return (
-    <div className="space-y-4">
+    <div
+      className="relative space-y-4"
+      onDragOver={(e) => {
+        if (readOnly || importOpen || !isFileDrag(e)) return;
+        e.preventDefault();
+        if (!dropHover) setDropHover(true);
+      }}
+      onDragLeave={(e) => {
+        if (e.currentTarget.contains(e.relatedTarget as Node | null)) return;
+        setDropHover(false);
+      }}
+      onDrop={(e) => {
+        if (readOnly || importOpen || !isFileDrag(e)) return;
+        e.preventDefault();
+        setDropHover(false);
+        const files = Array.from(e.dataTransfer.files ?? []);
+        if (files.length) openImport(files);
+      }}
+    >
+      {dropHover ? (
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-0 z-20 flex flex-col items-center justify-center gap-2 rounded-xl"
+          style={{
+            border: '2px dashed var(--lp-orange)',
+            background: 'color-mix(in srgb, var(--lp-bg) 85%, var(--lp-orange) 6%)',
+            minHeight: 240,
+          }}
+        >
+          <Upload size={26} style={{ color: 'var(--lp-orange)' }} />
+          <span style={{ fontSize: 'var(--lp-text-md)', fontWeight: 'var(--lp-weight-semibold)', color: 'var(--lp-text)' }}>
+            Drop to import with AI
+          </span>
+          <span style={{ fontSize: 'var(--lp-text-sm)', color: 'var(--lp-text-secondary)' }}>
+            Tour book, routing grid or itinerary — you review everything before it&apos;s added
+          </span>
+        </div>
+      ) : null}
+      {importOpen ? (
+        <ScheduleImportModal
+          open
+          onClose={() => setImportOpen(false)}
+          tourId={tourId}
+          tourStart={startDate || null}
+          tourEnd={endDate || null}
+          initialFiles={importFiles}
+          existing={rows
+            .filter((r) => r.day_type || r.venue_name || r.city || r.address || r.notes || r.country)
+            .map((r) => ({
+              date: r.date,
+              day_type: r.day_type,
+              venue_name: r.venue_name ?? '',
+              city: r.city,
+              country: r.country ?? '',
+              address: r.address ?? '',
+              notes: r.notes ?? '',
+            }))}
+          onApplied={onImported}
+        />
+      ) : null}
       {saveError && (
         <div
           className="rounded-xl px-4 py-3 text-sm"
@@ -456,6 +537,18 @@ export function RoutingEditor({
         <span className="flex items-center gap-2">
           {view !== 'calendar' ? (
             <RoutingSettingsMenu primaryTransit={primaryTransit} onPrimaryTransitChange={setPrimaryTransit} />
+          ) : null}
+          {!readOnly ? (
+            <button
+              type="button"
+              onClick={() => openImport()}
+              title="Import days from a tour book, routing grid or itinerary (or drop a file on the page)"
+              className="flex items-center gap-2 rounded-lg border px-3 py-1.5 text-[12.5px] transition-colors"
+              style={{ borderColor: 'var(--lp-border)', color: 'var(--lp-text-secondary)' }}
+            >
+              <Sparkles size={14} />
+              Import
+            </button>
           ) : null}
           <RoutingExportButton tourId={tourId} />
           <button
