@@ -19,6 +19,7 @@
 
 import { NextResponse } from 'next/server';
 import { createServiceSupabaseClient } from '@/lib/supabase-server';
+import { limitSchemaToAsked } from '@/lib/advance/askFields';
 import { loadAdvanceSections } from '@/server/advance/advanceSections';
 import {
   buildIntakeFormSchema,
@@ -39,6 +40,7 @@ interface LinkRow {
   status: string;
   expires_at: string | null;
   revoked_at: string | null;
+  ask_fields?: string[] | null;
 }
 
 export async function POST(
@@ -80,7 +82,7 @@ export async function POST(
   const service = createServiceSupabaseClient();
   const { data: link } = await service
     .from('advance_intake_links')
-    .select('id, workspace_id, routing_id, advance_instance_id, status, expires_at, revoked_at')
+    .select('*') // '*' so this still works before migration 276 adds ask_fields
     .eq('token', token)
     .maybeSingle<LinkRow>();
 
@@ -123,7 +125,7 @@ export async function POST(
   } catch {
     return NextResponse.json({ error: 'Could not save right now — please try again.' }, { status: 500 });
   }
-  const schema = buildIntakeFormSchema(sections);
+  const schema = limitSchemaToAsked(buildIntakeFormSchema(sections), link.ask_fields);
   const clean = sanitizeSubmission(schema, rawData);
   const pending = flattenToPending(clean);
 
