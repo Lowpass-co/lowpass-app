@@ -3,8 +3,9 @@
 -- Migration 276
 -- ============================================
 --
--- Paste into the Supabase SQL Editor and Run. Paste 275 first. Safe to paste
--- twice: every column is ADD … IF NOT EXISTS, tables are CREATE … IF NOT
+-- Paste into the Supabase SQL Editor and Run. Paste 275 first. It checks
+-- first and stops, changing nothing, if a column it relies on is missing (the
+-- error names them all). Safe to paste twice: every column is ADD … IF NOT EXISTS, tables are CREATE … IF NOT
 -- EXISTS, policies are dropped before they are re-created, the function is
 -- CREATE OR REPLACE, and the template copy skips rows it already copied.
 -- Nothing here deletes or rewrites existing answers.
@@ -30,22 +31,98 @@
 --      you and a venue accept) can't overwrite each other's fields.
 -- ============================================
 
+-- 0. Preflight ----------------------------------------------------------------
+-- This database has drifted from the migration files (columns from migration
+-- 011 are missing in production). Rather than fail on the first missing
+-- column, check everything this migration and the rebuilt Advance code rely
+-- on, and stop BEFORE changing anything, naming every gap at once.
+DO $$
+DECLARE
+  need text[] := ARRAY[
+    'public.workspaces.id',
+    'public.tours.id', 'public.tours.workspace_id',
+    'public.routing.id',
+    'auth.users.id',
+    'public.advance_layout_templates.id', 'public.advance_layout_templates.workspace_id',
+    'public.advance_layout_templates.name', 'public.advance_layout_templates.sections',
+    'public.advance_form_configs.id', 'public.advance_form_configs.tour_id',
+    'public.advance_form_configs.routing_id', 'public.advance_form_configs.name',
+    'public.advance_form_configs.sections',
+    'public.advance_instances.id', 'public.advance_instances.routing_id',
+    'public.advance_instances.form_config_id', 'public.advance_instances.status',
+    'public.advance_instances.data', 'public.advance_instances.last_updated_at',
+    'public.advance_instances.last_updated_by_id',
+    'public.advance_intake_links.id', 'public.advance_intake_links.token',
+    'public.advance_intake_links.tour_id', 'public.advance_intake_links.routing_id',
+    'public.advance_intake_links.advance_instance_id', 'public.advance_intake_links.status',
+    'public.advance_intake_links.created_at', 'public.advance_intake_links.revoked_at',
+    'public.advance_intake_links.expires_at', 'public.advance_intake_links.submitted_at',
+    'public.advance_intake_links.last_viewed_at',
+    'public.advance_intake_links.recipient_name', 'public.advance_intake_links.recipient_email',
+    'public.advance_templates.id', 'public.advance_templates.tm_only',
+    'public.intake_pending_answers.id', 'public.intake_pending_answers.workspace_id',
+    'public.intake_pending_answers.advance_instance_id', 'public.intake_pending_answers.section_id',
+    'public.intake_pending_answers.field_id', 'public.intake_pending_answers.value',
+    'public.intake_pending_answers.status'
+  ];
+  missing text[] := '{}';
+  item text;
+  parts text[];
+BEGIN
+  FOREACH item IN ARRAY need LOOP
+    parts := string_to_array(item, '.');
+    IF NOT EXISTS (
+      SELECT 1 FROM information_schema.columns
+      WHERE table_schema = parts[1] AND table_name = parts[2] AND column_name = parts[3]
+    ) THEN
+      missing := missing || item;
+    END IF;
+  END LOOP;
+  IF to_regprocedure('public.get_my_workspace_id()') IS NULL THEN
+    missing := missing || 'function public.get_my_workspace_id()'::text;
+  END IF;
+  IF coalesce(array_length(missing, 1), 0) > 0 THEN
+    RAISE EXCEPTION '276 stopped before changing anything. Missing: %', array_to_string(missing, ', ')
+      USING HINT = 'Send this list back to Claude. Nothing was applied.';
+  END IF;
+END $$;
+
 -- 1. Workspace templates ------------------------------------------------------
 ALTER TABLE public.advance_layout_templates ADD COLUMN IF NOT EXISTS updated_at timestamptz NOT NULL DEFAULT now();
 ALTER TABLE public.advance_layout_templates ADD COLUMN IF NOT EXISTS source_config_id uuid;
 
-INSERT INTO public.advance_layout_templates (workspace_id, name, sections, source_config_id)
-SELECT t.workspace_id,
-       COALESCE(NULLIF(trim(c.template_label), ''), NULLIF(trim(c.name), ''), 'Untitled template'),
-       COALESCE(c.sections, '[]'::jsonb),
-       c.id
-FROM public.advance_form_configs c
-JOIN public.tours t ON t.id = c.tour_id
-WHERE c.is_template = true
-  AND t.workspace_id IS NOT NULL
-  AND NOT EXISTS (
-    SELECT 1 FROM public.advance_layout_templates l WHERE l.source_config_id = c.id
-  );
+-- Copy old per-tour templates in. Written against whatever columns this
+-- database actually has: is_template / template_label come from migration 011,
+-- which isn't applied everywhere (no is_template → there are no old templates
+-- to copy; no template_label → the config's name is used).
+DO $$
+DECLARE
+  has_flag  boolean;
+  has_label boolean;
+BEGIN
+  SELECT EXISTS (SELECT 1 FROM information_schema.columns
+                 WHERE table_schema = 'public' AND table_name = 'advance_form_configs' AND column_name = 'is_template')
+    INTO has_flag;
+  SELECT EXISTS (SELECT 1 FROM information_schema.columns
+                 WHERE table_schema = 'public' AND table_name = 'advance_form_configs' AND column_name = 'template_label')
+    INTO has_label;
+  IF NOT has_flag THEN
+    RAISE NOTICE '276: advance_form_configs.is_template is absent, so there are no old templates to copy';
+    RETURN;
+  END IF;
+  EXECUTE format($q$
+    INSERT INTO public.advance_layout_templates (workspace_id, name, sections, source_config_id)
+    SELECT t.workspace_id,
+           COALESCE(%s NULLIF(trim(c.name), ''), 'Untitled template'),
+           COALESCE(c.sections, '[]'::jsonb),
+           c.id
+    FROM public.advance_form_configs c
+    JOIN public.tours t ON t.id = c.tour_id
+    WHERE c.is_template = true
+      AND t.workspace_id IS NOT NULL
+      AND NOT EXISTS (SELECT 1 FROM public.advance_layout_templates l WHERE l.source_config_id = c.id)
+  $q$, CASE WHEN has_label THEN 'NULLIF(trim(c.template_label), ''''),' ELSE '' END);
+END $$;
 
 -- 2. Day type → template ------------------------------------------------------
 CREATE TABLE IF NOT EXISTS public.advance_day_type_templates (
