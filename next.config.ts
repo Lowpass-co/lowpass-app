@@ -22,13 +22,23 @@ const nextConfig: NextConfig = {
      finds its worker next to itself. Pinned by src/lib/pdfBundling.test.tsx.
      Same lesson as RC-5 below: a runtime-resolved file is invisible to the
      bundler and fails only in production. */
-  serverExternalPackages: ['pdf-parse'],
-  /* …and pdf.js picks that worker up by a runtime path ("./pdf.worker.mjs"
-     next to legacy/build/pdf.mjs), which the file tracer can't see — so Vercel
-     would ship pdf.mjs without its worker and fail the same way. Ship it with
-     every API route (that's where PDFs are read). */
+  serverExternalPackages: ['pdf-parse', '@napi-rs/canvas'],
+  /* …and two more files pdf.js loads by runtime paths the file tracer can't
+     see, so Vercel would ship the function without them:
+       - its worker ("./pdf.worker.mjs" next to legacy/build/pdf.mjs);
+       - @napi-rs/canvas + its Linux binary, which pdf.js loads to polyfill
+         DOMMatrix / ImageData / Path2D. Without it, on Node 20 (what Vercel
+         appears to run here) reading fails with "DOMMatrix is not defined"
+         (reproduced with a standalone build run in isolation under Node 20;
+         Node 22 gets by, which is why the first fix passed locally).
+     Shipped with every API route (that's where PDFs are read; ~30 MB, the
+     largest function stays well under Vercel's 250 MB). */
   outputFileTracingIncludes: {
-    '/api/**/*': ['./node_modules/pdfjs-dist/legacy/build/pdf.worker.mjs'],
+    '/api/**/*': [
+      './node_modules/pdfjs-dist/legacy/build/pdf.worker.mjs',
+      './node_modules/@napi-rs/canvas/**/*',
+      './node_modules/@napi-rs/canvas-linux-x64-gnu/**/*',
+    ],
   },
 
   /* RC-5 removed the outputFileTracingIncludes block that lived here. It existed
