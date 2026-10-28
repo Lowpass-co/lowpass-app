@@ -71,6 +71,10 @@ export function PackFlow({
   const [over, setOver] = useState(false);
   const [progress, setProgress] = useState<Record<number, { label: string; pct: number; done?: boolean; error?: string }>>({});
   const [uploaded, setUploaded] = useState<Uploaded[]>([]);
+  const uploadedRef = useRef<Uploaded[]>([]); // set with `uploaded`, read by extract()
+  // What happened to each file, said once the read is back — a file that
+  // couldn't be read, or had nothing for these questions, is never silent.
+  const [notice, setNotice] = useState<string | null>(null);
   const [assign, setAssign] = useState<Record<string, string>>({});
   const [queue, setQueue] = useState<string[]>([]);
   const [qi, setQi] = useState(0);
@@ -126,6 +130,33 @@ export function PackFlow({
           method: 'POST',
           body: JSON.stringify({ mode: 'extract', routingId: rid, paths }),
         });
+        // Per-file outcome on the file rows, then the honest summary.
+        setProgress((p) => {
+          const next = { ...p };
+          for (const f of out.files) {
+            const i = uploadedRef.current.findIndex((u) => u.path === f.path);
+            if (i < 0) continue;
+            next[i] = f.error
+              ? { label: f.error, pct: 100, error: f.error }
+              : { label: f.found ? `${f.found} answer${f.found === 1 ? '' : 's'} found` : 'Read — nothing for these questions', pct: 100, done: true };
+          }
+          return next;
+        });
+        const failed = out.files.filter((f) => f.error);
+        const empty = out.files.filter((f) => !f.error && !f.found);
+        const lines = [
+          ...failed.map((f) => `Couldn’t read ${f.name}: ${f.error}`),
+          ...(out.suggestions.length ? empty.map((f) => `${f.name} was read, but nothing in it answers these questions.`) : []),
+        ];
+        if (failed.length === out.files.length) {
+          // Nothing was read: stay on the file list (each row says why) rather
+          // than showing every question as "not in the packs".
+          setError(lines.join(' '));
+          setStage('reading');
+          return;
+        }
+        if (!out.suggestions.length && empty.length) lines.push(`Read ${empty.map((f) => f.name).join(', ')}, but found nothing that answers these questions.`);
+        setNotice(lines.length ? lines.join(' ') : null);
         setEx(out);
         const d: Record<string, Decision> = {};
         for (const s of out.suggestions) d[kk(s)] = { status: undefined as never, value: show(s.value) };
@@ -178,6 +209,7 @@ export function PackFlow({
             setProgress((p) => ({ ...p, [i]: { label: 'Uploaded', pct: 45 } }));
           }),
         );
+        uploadedRef.current = ups;
         setUploaded(ups);
         if (fixedRoutingId) {
           setQueue([fixedRoutingId]);
@@ -399,6 +431,9 @@ export function PackFlow({
         </div>
       ) : null}
       {error ? <div className="adv-banner" style={{ margin: '12px 20px 0', fontSize: 'var(--lp-text-sm)' }}>{error}</div> : null}
+      {notice && (stage === 'review' || stage === 'gaps') ? (
+        <div className="adv-banner adv-banner-info" role="status" style={{ margin: '12px 20px 0', fontSize: 'var(--lp-text-sm)' }}>{notice}</div>
+      ) : null}
 
       {/* ---- add / reading / match ---- */}
       {stage === 'add' || stage === 'reading' || stage === 'match' ? (

@@ -60,6 +60,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       try {
         return await toContent(await readPackFile(service, p));
       } catch (e) {
+        // An unexpected failure (not one of ours) used to vanish into a generic
+        // message — log it so the cause is in the server logs.
+        if (!(e instanceof PackReadError)) console.error('[advance/packs/read] reading failed', p, e);
         return { error: e instanceof PackReadError ? e.message : 'Couldn’t read this file', name: p.split('/').pop() ?? 'file' };
       }
     }),

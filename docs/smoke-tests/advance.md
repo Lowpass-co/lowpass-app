@@ -161,6 +161,24 @@ nothing is added unless ticked.
 **Expect**: The pack opens at that place. The pack is listed under Venue
 documents and opens from there too.
 
+#### ADV-138 — A pack that can't be read says so
+
+**Do**: Drop a file the reader can't handle (e.g. a password-protected PDF)
+on a show.
+
+**Expect**: The file row turns red with the reason and the flow stays there —
+it does not jump to "Not in the packs" with every question listed. A pack that
+reads but answers nothing says so in a note above the questions.
+
+#### ADV-139 — Text PDFs read in production; 50 MB limit
+
+**Do**: Drop the Exit/In tech pack (12 MB, Adobe Express) on its show; then
+try a file over 50 MB.
+
+**Expect**: Suggestions come back (contacts, PA, console, hotels, parking).
+The over-50 MB file is refused at upload with "Each file must be under 50 MB."
+A scanned PDF (no text) over 22 MB or 100 pages is refused with a reason.
+
 ## Day sheets retired
 
 #### ADV-134 — Old day sheet URLs land on the advance
