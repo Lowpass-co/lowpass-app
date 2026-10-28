@@ -15,6 +15,8 @@
    ============================================ */
 
 import { createServiceSupabaseClient } from '@/lib/supabase-server';
+import { limitSchemaToAsked } from '@/lib/advance/askFields';
+import { PrintableQuestions } from '@/components/advance/PrintableQuestions';
 import { loadAdvanceSections } from '@/server/advance/advanceSections';
 import {
   buildIntakeFormSchema,
@@ -40,6 +42,7 @@ interface LinkRow {
   revoked_at: string | null;
   recipient_name: string | null;
   submitted_data: AdvanceData | null;
+  ask_fields?: string[] | null;
 }
 
 /** Module-level (non-component) so the impurity rule doesn't flag the
@@ -88,17 +91,18 @@ function Notice({ title, body }: { title: string; body: string }) {
 
 export default async function AdvanceIntakePage({
   params,
+  searchParams,
 }: {
   params: Promise<{ token: string }>;
+  searchParams?: Promise<{ print?: string }>;
 }) {
   const { token } = await params;
+  const printMode = (await searchParams)?.print === '1';
   const service = createServiceSupabaseClient();
 
   const { data: link } = await service
     .from('advance_intake_links')
-    .select(
-      'id, workspace_id, tour_id, routing_id, status, expires_at, revoked_at, recipient_name, submitted_data',
-    )
+    .select('*') // '*' so this still works before migration 276 adds ask_fields
     .eq('token', token)
     .maybeSingle<LinkRow>();
 
@@ -153,7 +157,7 @@ export default async function AdvanceIntakePage({
       )
     : null;
 
-  const schema = buildIntakeFormSchema(sections);
+  const schema = limitSchemaToAsked(buildIntakeFormSchema(sections), link.ask_fields);
 
   if (schema.sections.length === 0) {
     return (
@@ -170,6 +174,19 @@ export default async function AdvanceIntakePage({
         { day: '2-digit', month: 'short', year: 'numeric' },
       )
     : null;
+
+  // ?print=1 — the same questions as a printable sheet (a PDF to attach or
+  // hand over). Only the questions; never the TM's answers.
+  if (printMode) {
+    return (
+      <PrintableQuestions
+        title={[venue?.name, dateLabel].filter(Boolean).join(' · ')}
+        tourName={tour?.name ?? null}
+        url={`/advance-intake/${token}`}
+        sections={schema.sections.map((s) => ({ label: s.label, fields: s.fields.map((f) => ({ label: f.label, type: f.type })) }))}
+      />
+    );
+  }
 
   // Checkpoint B — prefill PROPOSALS (never the current advance's TM data). The
   // instance.data is used ONLY server-side to skip already-answered fields; only

@@ -1,50 +1,23 @@
 /* ============================================
-   LOWPASS — Advance · Tour overview (Visual redesign §B)
+   LOWPASS — Advance · the tour's board (Oct 2026 rebuild)
 
-   /advance/[tourId] — renders the per-tour advance overview body.
-
-   Sprint 8.1 §2 — ProductShell + TourHeader hoisted to
-   /advance/[tourId]/layout.tsx; layout owns artist + tour fetch
-   and stats. This page renders only the show list + AdvanceOverview.
-
-   <AdvanceOverview> still owns the show list, filter chips, ⋯ menu,
-   layout-template apply, copy-from flow — none of that moves.
+   /advance/[tourId] — every show and its sections at a glance, the venue
+   request per show, search across every answer. Chrome comes from the
+   layout (<ShellV3Mount>). Data: loadAdvanceBoard (writes nothing).
    ============================================ */
 
 import { notFound } from 'next/navigation';
+import type { SupabaseClient } from '@supabase/supabase-js';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
-import { PageHeader } from '@/components/ui/PageHeader';
-import { AdvanceOverview } from '@/components/advance/AdvanceOverview';
+import { loadAdvanceBoard } from '@/server/advance/board';
+import { AdvanceBoard } from '@/components/advance/AdvanceBoard';
 
-export default async function AdvanceTourOverviewPage({
-  params,
-}: {
-  params: Promise<{ tourId: string }>;
-}) {
+export const dynamic = 'force-dynamic';
+
+export default async function AdvanceBoardPage({ params }: { params: Promise<{ tourId: string }> }) {
   const { tourId } = await params;
-  const supabase = await createServerSupabaseClient();
-
-  const { data: tour, error: tourErr } = await supabase
-    .from('tours')
-    .select('id, name')
-    .eq('id', tourId)
-    .maybeSingle();
-
-  if (tourErr || !tour) {
-    notFound();
-  }
-
-  const t = tour as { id: string; name: string | null };
-
-  return (
-    <div className="mx-auto w-full max-w-[1280px] space-y-5 px-6 py-6">
-      <PageHeader
-        eyebrow={`Advance · ${t.name ?? 'Tour'}`}
-        title="Shows"
-        subtitle="Per-show advance forms across this tour. Click a row to open the advance for that day."
-      />
-
-      <AdvanceOverview tourId={t.id} />
-    </div>
-  );
+  const supabase = (await createServerSupabaseClient()) as unknown as SupabaseClient;
+  const data = await loadAdvanceBoard(supabase, tourId);
+  if (!data) notFound();
+  return <AdvanceBoard data={data} />;
 }

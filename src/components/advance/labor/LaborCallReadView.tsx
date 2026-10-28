@@ -1,7 +1,7 @@
 /* ============================================
    LOWPASS — <LaborCallReadView> (P6)
 
-   Read-only render of a day's labor calls for the day sheet / /m/today / export.
+   Read-only render of a day's labor calls for the advance read views and the mobile show reader.
    The same registered block as the editor (registry.tsx), read surface. Crew care
    about the call schedule more than anything else on the sheet, so it renders as
    its own block. NOT payroll.

@@ -13,6 +13,7 @@
 
 import { NextResponse } from 'next/server';
 import { createServiceSupabaseClient } from '@/lib/supabase-server';
+import { limitSchemaToAsked } from '@/lib/advance/askFields';
 import { loadAdvanceSections } from '@/server/advance/advanceSections';
 import { withAiUsage } from '@/lib/ai/usage';
 import {
@@ -54,6 +55,7 @@ interface LinkRow {
   status: string;
   expires_at: string | null;
   revoked_at: string | null;
+  ask_fields?: string[] | null;
 }
 
 export async function POST(request: Request, { params }: { params: Promise<{ token: string }> }) {
@@ -63,7 +65,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ tok
   const service = createServiceSupabaseClient();
   const { data: link } = await service
     .from('advance_intake_links')
-    .select('id, workspace_id, routing_id, advance_instance_id, status, expires_at, revoked_at')
+    .select('*') // '*' so this still works before migration 276 adds ask_fields
     .eq('token', token)
     .maybeSingle<LinkRow>();
   if (!link || link.revoked_at || link.status === 'revoked') return NextResponse.json({ error: 'Link not found' }, { status: 404 });
@@ -82,7 +84,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ tok
   } catch {
     return softFail('The reader is unavailable right now — please fill in the form below.');
   }
-  const schema = buildIntakeFormSchema(sections);
+  const schema = limitSchemaToAsked(buildIntakeFormSchema(sections), link.ask_fields);
   if (schema.sections.length === 0) return softFail('There are no questions to answer yet — please check back later.');
 
   // Parse + guard the upload (mirror receipts).

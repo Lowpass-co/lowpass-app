@@ -172,7 +172,7 @@ describe('SHELL-06 — collapsed icons are identifiable', () => {
 
   it('every rail item can name itself when collapsed', () => {
     mount(`/operations/${T}/routing`, '', { denseRail: true });
-    for (const id of ['routing', 'day-sheets', 'advance', 'crew', 'rooming', 'travel', 'files']) {
+    for (const id of ['routing', 'advance', 'crew', 'rooming', 'travel', 'files']) {
       fireEvent.mouseEnter(screen.getByTestId(`nav-item-${id}`));
       expect(screen.getByTestId('nav-tooltip').textContent).toBeTruthy();
     }

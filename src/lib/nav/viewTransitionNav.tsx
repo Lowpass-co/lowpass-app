@@ -72,9 +72,9 @@ export function useSpineNavigate(): (href: string) => void {
 }
 
 /** True when a shell-rail hop should morph: both ends are spine surfaces
- *  (routing ledger / day sheets / advance) — the "everything flows from the
+ *  (routing ledger / advance) — the "everything flows from the
  *  routing" set. Exported for the NavRail predicate + tests. */
-const SPINE_RE = /\/(routing|day|advance)(\/|$)/;
+const SPINE_RE = /\/(routing|advance)(\/|$)/;
 export function isSpineHop(fromPathname: string, toHref: string): boolean {
   return SPINE_RE.test(fromPathname) && SPINE_RE.test(toHref);
 }

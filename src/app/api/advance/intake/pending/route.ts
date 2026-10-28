@@ -4,9 +4,11 @@
    GET  ?advance_instance_id=uuid → pending answers for the TM's Review queue,
         with the current value per field (oldValue) + field/section labels.
    POST { advance_instance_id, accept: [id…], reject: [id…] } → the APPLY GATE:
-        accepted normal fields run through mergeIntakeIntoAdvance (never-clobber)
-        into advance_instances.data; accepted LABOR-call fields apply additively
-        to the labor_calls table (P6); rows are marked accepted/rejected.
+        accepted normal fields (non-empty values only) go through mergeAnswers →
+        advance_merge_answers() — the one atomic answer write — and are marked
+        as coming from the venue; accepted LABOR-call fields apply additively to
+        the labor_calls table (P6); rows are marked accepted/rejected only after
+        the answers are written.
 
    Authenticated + workspace-scoped (RLS + explicit filter).
    ============================================ */
@@ -14,11 +16,12 @@
 import { NextResponse } from 'next/server';
 import { requireWrite } from '@/lib/auth/workspace-check';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
-import { buildIntakeFormSchema, mergeIntakeIntoAdvance, type IntakeSection, type AdvanceData } from '@/lib/advance/intake';
+import { buildIntakeFormSchema, isEmptyAnswer, type IntakeSection, type AdvanceData } from '@/lib/advance/intake';
 import { pendingToAdvanceData, LABOR_CALL_FIELD_TYPE } from '@/lib/advance/intake-pending';
 import { applyRowsToDay } from '@/lib/labor-calls/server';
 import type { LaborCallRow } from '@/lib/labor-calls/types';
 import { loadAdvanceSections } from '@/server/advance/advanceSections';
+import { mergeAnswers, type SourceChanges } from '@/server/advance/answers';
 
 interface PendingRow {
   id: string;
@@ -114,9 +117,9 @@ export async function POST(request: Request) {
 
   const { data: instance } = await c.supabase
     .from('advance_instances')
-    .select('id, routing_id, form_config_id, data')
+    .select('id, routing_id, form_config_id')
     .eq('id', instanceId)
-    .maybeSingle<{ id: string; routing_id: string | null; form_config_id: string | null; data: AdvanceData | null }>();
+    .maybeSingle<{ id: string; routing_id: string | null; form_config_id: string | null }>();
   if (!instance) return NextResponse.json({ error: 'Advance not found' }, { status: 404 });
   const sections = await loadAdvanceSections(c.supabase, instance.form_config_id);
 
@@ -142,13 +145,25 @@ export async function POST(request: Request) {
     }
   }
 
-  // Normal fields → the SAME never-clobber merge, now at accept-time.
-  if (normal.length > 0) {
-    const merged = mergeIntakeIntoAdvance(instance.data, pendingToAdvanceData(normal));
-    await c.supabase
-      .from('advance_instances')
-      .update({ data: merged, last_updated_at: new Date().toISOString() })
-      .eq('id', instanceId);
+  // Normal fields → the one atomic answer merge (empty venue values never
+  // blank a TM answer), each marked as the venue's.
+  const nowIso = new Date().toISOString();
+  const changes: Record<string, Record<string, unknown>> = {};
+  const sources: SourceChanges = {};
+  for (const [sid, fields] of Object.entries(pendingToAdvanceData(normal))) {
+    for (const [fid, value] of Object.entries(fields ?? {})) {
+      if (isEmptyAnswer(value)) continue;
+      (changes[sid] ??= {})[fid] = value;
+      if (fid !== 'contacts') sources[`${sid}:${fid}`] = { kind: 'venue', at: nowIso };
+    }
+  }
+  if (Object.keys(changes).length) {
+    try {
+      await mergeAnswers(c.supabase, instanceId, changes, sources);
+    } catch (e) {
+      console.error('[intake/pending] accept failed', e);
+      return NextResponse.json({ error: 'Could not save the accepted answers' }, { status: 500 });
+    }
   }
 
   // Labor-call fields → the P6 additive/never-clobber apply to labor_calls.
@@ -159,7 +174,6 @@ export async function POST(request: Request) {
     await applyRowsToDay(c.supabase, { workspaceId: c.workspaceId, tourId, routingId: instance.routing_id }, laborRows);
   }
 
-  const nowIso = new Date().toISOString();
   if (acceptIds.length) {
     await c.supabase
       .from('intake_pending_answers')

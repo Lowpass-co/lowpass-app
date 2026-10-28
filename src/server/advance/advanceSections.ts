@@ -37,10 +37,23 @@ export async function loadAdvanceSections(
 
   const sections = Array.isArray(config?.sections) ? config.sections : [];
   if (!sections.length) return [];
+  const [out] = await markTmOnly(client, [sections]);
+  return out;
+}
 
+/**
+ * Marks TM-only sections on several section lists with ONE template lookup
+ * (the board does every show at once). Fails closed, like the loader above.
+ */
+export async function markTmOnly<S extends { template_id: string; tm_only?: boolean }>(
+  client: SupabaseClient,
+  lists: S[][],
+): Promise<S[][]> {
   // Only UUID-shaped ids can be template rows; a custom section's slug id in
   // an `.in('id', …)` would make Postgres reject the whole query.
-  const ids = [...new Set(sections.map((s) => s.template_id).filter((id) => typeof id === 'string' && UUID.test(id)))];
+  const ids = [
+    ...new Set(lists.flat().map((s) => s.template_id).filter((id) => typeof id === 'string' && UUID.test(id))),
+  ];
   const tmOnly = new Set<string>();
   if (ids.length) {
     const { data: rows, error: tErr } = await client
@@ -50,7 +63,6 @@ export async function loadAdvanceSections(
     if (tErr) throw new Error(`advance sections (tm_only): ${tErr.message}`);
     for (const r of (rows ?? []) as { id: string; tm_only: boolean | null }[]) if (r.tm_only) tmOnly.add(r.id);
   }
-
   // A flag already on the snapshot is kept: either source saying TM-only wins.
-  return sections.map((s) => ({ ...s, tm_only: s.tm_only === true || tmOnly.has(s.template_id) }));
+  return lists.map((l) => l.map((s) => ({ ...s, tm_only: s.tm_only === true || tmOnly.has(s.template_id) })));
 }
