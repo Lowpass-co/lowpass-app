@@ -7,6 +7,7 @@
 
 'use client';
 
+import { NumberField } from '@/components/ui/NumberField';
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
@@ -151,31 +152,28 @@ export function TourEditForm({ tour }: { tour: Tour }) {
       <div className="grid grid-cols-3 gap-4">
         <div>
           <label className="mb-1 block text-sm font-medium text-lp-text-secondary">Principal artists</label>
-          <input
-            type="number"
+          <NumberField
             min={0}
             value={principalCount}
-            onChange={(e) => setPrincipalCount(parseInt(e.target.value, 10) || 0)}
+            onValue={(n) => setPrincipalCount(Math.max(0, Math.trunc(n)))}
             className="w-full rounded-lg border border-lp-border bg-lp-surface px-3 py-2 text-lp-text focus:border-lp-orange focus:outline-none focus:ring-1 focus:ring-lp-orange"
           />
         </div>
         <div>
           <label className="mb-1 block text-sm font-medium text-lp-text-secondary">Band members</label>
-          <input
-            type="number"
+          <NumberField
             min={0}
             value={bandCount}
-            onChange={(e) => setBandCount(parseInt(e.target.value, 10) || 0)}
+            onValue={(n) => setBandCount(Math.max(0, Math.trunc(n)))}
             className="w-full rounded-lg border border-lp-border bg-lp-surface px-3 py-2 text-lp-text focus:border-lp-orange focus:outline-none focus:ring-1 focus:ring-lp-orange"
           />
         </div>
         <div>
           <label className="mb-1 block text-sm font-medium text-lp-text-secondary">Crew</label>
-          <input
-            type="number"
+          <NumberField
             min={0}
             value={crewCount}
-            onChange={(e) => setCrewCount(parseInt(e.target.value, 10) || 0)}
+            onValue={(n) => setCrewCount(Math.max(0, Math.trunc(n)))}
             className="w-full rounded-lg border border-lp-border bg-lp-surface px-3 py-2 text-lp-text focus:border-lp-orange focus:outline-none focus:ring-1 focus:ring-lp-orange"
           />
         </div>

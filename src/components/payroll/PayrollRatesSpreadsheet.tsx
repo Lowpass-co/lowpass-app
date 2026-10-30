@@ -75,17 +75,15 @@ function buildLeadColumns(canSeeCommission: boolean): GridColumn<PersonnelRate>[
 
 /** One editable currency column per canonical rate type, in the catalog's
  *  (already canonical) order. Cells read/write personnel_rate_lines.amount.
- *  Zero renders blank — a sea of $0.00 is noise, an empty cell is a prompt. */
+ *  No line → blank (a prompt). A line set to 0 shows £0.00 — it used to render
+ *  blank too, so typing 0 looked like it hadn't saved (Oct 2026, Adam). */
 function buildRateTypeColumns(rateTypes: RateTypeMeta[], amountMap: LineAmountMap, ccy: string): GridColumn<PersonnelRate>[] {
   return [...rateTypes]
     .sort((a, b) => a.orderIndex - b.orderIndex)
     .map((t) => ({
       id: rtColId(t.id),
       header: t.name,
-      accessor: (r: PersonnelRate) => {
-        const v = amountOf(amountMap, r.id, t.id);
-        return v === 0 ? null : v;
-      },
+      accessor: (r: PersonnelRate) => (amountMap.get(r.id)?.has(t.id) ? amountOf(amountMap, r.id, t.id) : null),
       type: { kind: 'currency' as const, currency: ccy, decimals: 2 },
       align: 'right' as const,
       // Lump sums (flat tour, advance) run to thousands; day rates don't.

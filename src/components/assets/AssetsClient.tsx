@@ -13,6 +13,7 @@
    StyledSelect (no window.prompt), placement filter server-agnostic.
    ============================================================ */
 
+import { NumberField } from '@/components/ui/NumberField';
 import { useCallback, useMemo, useState } from 'react';
 import { DataTable } from '@/components/data-table/DataTable';
 import type { ColumnDef } from '@/components/data-table/types';
@@ -279,7 +280,7 @@ function MoveDialog({ count, spaces, containers, tours, onClose, onMove }: {
         {mode === 'tour' ? (
           <label className="flex items-center gap-2" style={{ fontSize: 'var(--lp-text-sm)', color: 'var(--lp-text-secondary)' }}>
             Quantity per item
-            <input type="number" min={1} value={qty} onChange={(e) => setQty(Number(e.target.value) || 1)} data-testid="assets-move-qty" style={{ width: 72, padding: '4px 8px', borderRadius: 'var(--lp-radius-md)', border: '1px solid var(--lp-border-strong)', background: 'var(--lp-surface)', color: 'var(--lp-text)' }} />
+            <NumberField min={1} value={qty} blank={null} onValue={(n) => setQty(Math.max(1, Math.trunc(n)))} data-testid="assets-move-qty" style={{ width: 72, padding: '4px 8px', borderRadius: 'var(--lp-radius-md)', border: '1px solid var(--lp-border-strong)', background: 'var(--lp-surface)', color: 'var(--lp-text)' }} />
           </label>
         ) : null}
         <div className="flex justify-end gap-2">

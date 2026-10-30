@@ -26,8 +26,9 @@
    unified here.
    ============================================ */
 
-import { forwardRef, useId } from 'react';
-import type { InputHTMLAttributes, ReactNode } from 'react';
+import { forwardRef, useId, useState } from 'react';
+import type { ChangeEvent, InputHTMLAttributes, ReactNode } from 'react';
+import { readNumber } from '@/components/ui/NumberField';
 import { cn } from '@/lib/utils';
 
 type Size = 'sm' | 'md' | 'lg';
@@ -166,12 +167,23 @@ export const NumberInput = forwardRef<HTMLInputElement, NumberInputProps>(functi
   { value, onValueChange, className, ...rest },
   ref,
 ) {
+  // Keep what's typed (even empty) while focused — see <NumberField>.
+  const [draft, setDraft] = useState<string | null>(null);
+  const draftProps = {
+    value: draft ?? String(value ?? ''),
+    onFocus: () => setDraft(String(value ?? '')),
+    onBlur: () => setDraft(null),
+    onChange: (e: ChangeEvent<HTMLInputElement>) => {
+      setDraft(e.target.value);
+      const n = readNumber(e.target.value, 0, 1);
+      if (n !== null) onValueChange?.(n);
+    },
+  };
   return (
     <TextInput
       ref={ref}
       type="number"
-      value={value}
-      onChange={(e) => onValueChange?.(Number(e.target.value) || 0)}
+      {...draftProps}
       className={cn('text-right tabular-nums', className)}
       {...rest}
     />

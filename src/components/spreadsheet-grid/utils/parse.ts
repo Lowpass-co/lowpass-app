@@ -16,7 +16,10 @@ export function parseInput(raw: string, type: CellType): ParseResult {
     return { ok: false, error: 'Use true/false or 1/0' };
   }
   if (type.kind === 'number' || type.kind === 'currency') {
-    const n = parseFloat(t.replace(NUM_CLEAN, ''));
+    // Cleared cell → 0 (Oct 2026, Adam: "it can't default to 0 once you've
+    // typed"). Blank used to be refused with "Enter a number", so a cell could
+    // never be emptied. A column with a higher `min` still refuses it below.
+    const n = t === '' ? 0 : parseFloat(t.replace(NUM_CLEAN, ''));
     if (Number.isNaN(n)) return { ok: false, error: 'Enter a number' };
     if (type.kind === 'number' && type.min != null && n < type.min) return { ok: false, error: `Min ${type.min}` };
     if (type.kind === 'number' && type.max != null && n > type.max) return { ok: false, error: `Max ${type.max}` };
@@ -24,7 +27,7 @@ export function parseInput(raw: string, type: CellType): ParseResult {
   }
   if (type.kind === 'percent') {
     const cleaned = t.replace(/%/g, '').trim();
-    const n = parseFloat(cleaned.replace(NUM_CLEAN, ''));
+    const n = cleaned === '' ? 0 : parseFloat(cleaned.replace(NUM_CLEAN, ''));
     if (Number.isNaN(n)) return { ok: false, error: 'Enter a percent' };
     return { ok: true, value: n / 100 };
   }
