@@ -4,6 +4,7 @@
 import { describe, it, expect } from 'vitest';
 import { buildStays, nightsOf, roomLabel, summariseStays, type NightInput } from './stays';
 
+// As the grid writes it: one room row per hotel + code, one row per person per night.
 const night = (person: string, roomType: string, date: string, hotelKey = 'h1'): NightInput => ({
   hotelKey, person, roomId: `room-${hotelKey}-${roomType}`, roomType, roomNumber: null, startsOn: date, endsOn: date,
 });
@@ -54,6 +55,13 @@ describe('stays', () => {
   it('rooms needed per night follow the people in them', () => {
     const rows = [night('Ann', 'SGL', '2026-09-09'), night('Ben', 'SGL', '2026-09-09'), night('Ann', 'SGL', '2026-09-10')];
     expect(summariseStays(buildStays(rows)).perNight).toEqual([{ night: '2026-09-09', rooms: 2 }, { night: '2026-09-10', rooms: 1 }]);
+  });
+
+  it('separate room rows of the same type are separate rooms (ranged stays)', () => {
+    const rows: NightInput[] = [1, 2].map((n) => ({ hotelKey: 'h1', person: `P${n}`, roomId: `r${n}`, roomType: 'DBL', roomNumber: null, startsOn: '2026-08-10', endsOn: '2026-08-16' }));
+    rows.push({ hotelKey: 'h1', person: 'P3', roomId: 'r1', roomType: 'DBL', roomNumber: null, startsOn: '2026-08-10', endsOn: '2026-08-16' });
+    const stays = buildStays(rows);
+    expect(stays.map((s) => [s.guests.join('+'), s.nights])).toEqual([['P1+P3', 6], ['P2', 6]]);
   });
 
   it('labels read as a hotel would write them', () => {

@@ -122,7 +122,9 @@ export async function loadRoomingExportData(
         nights.push({
           hotelKey: key,
           person: person?.full_name ?? null,
-          roomId: room.id ?? null,
+          // Unbooked nights are separate placeholder hotels (separate room
+          // rows per night): identify their rooms by code so a run merges.
+          roomId: key.startsWith('~unbooked|') ? null : room.id ?? null,
           roomType: room.room_type ?? null,
           roomNumber: room.room_number ?? null,
           startsOn: ra.starts_on,

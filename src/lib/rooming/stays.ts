@@ -11,19 +11,23 @@
    hotel expects:
      1. expand each assignment to the nights it covers (a range is
         [starts_on, ends_on); a same-day / reversed one is that one night);
-     2. decide which physical room each guest-night is in — a numbered room is
-        that room; SGL / Single is one room per person; any other code
-        (DBL (A), Twin…) is one room per code per hotel per night, shared by
-        everyone on it;
+     2. decide which physical room each guest-night is in: a room row is one
+        room (the grid keeps one row per hotel + code, so DBL (A) is one room
+        shared by everyone on it), EXCEPT a single (SGL / Single), which is one
+        room per person even when the grid files every single under one row.
+        With no room row id (unbooked nights grouped across placeholder
+        hotels) the code itself identifies the room;
      3. merge consecutive nights where the same room holds the same guests.
 
-   Pure — no I/O. Used by the rooming export (PDF + Excel).
+   Pure — no I/O. Used by the rooming export (PDF + Excel) and the hotel
+   budget lines (computeHotelTotals).
    ============================================ */
 
 export interface NightInput {
   /** The hotel group this stay belongs to (a hotel id, or a placeholder key). */
   hotelKey: string;
   person: string | null;
+  /** The room row; null → the room is identified by its code + number. */
   roomId: string | null;
   roomType: string | null;
   roomNumber: string | null;
@@ -33,6 +37,8 @@ export interface NightInput {
 
 export interface Stay {
   hotelKey: string;
+  /** The room row the stay is in (null when identified by code). */
+  roomId: string | null;
   roomType: string | null;
   roomNumber: string | null;
   guests: string[];
@@ -90,7 +96,7 @@ const isEmptyRoom = (type: string | null) => {
 
 export function buildStays(input: NightInput[], range?: { from: string | null; to: string | null }): Stay[] {
   // night → room identity → occupants
-  type Slot = { hotelKey: string; roomType: string | null; roomNumber: string | null; guests: Set<string> };
+  type Slot = { hotelKey: string; roomId: string | null; roomType: string | null; roomNumber: string | null; guests: Set<string> };
   const byNight = new Map<string, Map<string, Slot>>();
   for (const a of input) {
     if (isEmptyRoom(a.roomType) && !a.roomNumber) continue;
@@ -98,14 +104,11 @@ export function buildStays(input: NightInput[], range?: { from: string | null; t
     for (const night of nightsOf(a.startsOn, a.endsOn)) {
       if (range?.from && night < range.from) continue;
       if (range?.to && night > range.to) continue;
-      const roomKey = a.roomNumber
-        ? `${a.hotelKey}|#${a.roomId ?? a.roomNumber}`
-        : isSingle(a.roomType)
-          ? `${a.hotelKey}|SGL|${guest}`
-          : `${a.hotelKey}|${(a.roomType ?? '').trim().toUpperCase()}`;
+      const room = `${a.hotelKey}|${a.roomId ?? `${(a.roomType ?? '').trim().toUpperCase()}#${a.roomNumber ?? ''}`}`;
+      const roomKey = isSingle(a.roomType) ? `${room}|${guest}` : room;
       const rooms = byNight.get(night) ?? new Map<string, Slot>();
       byNight.set(night, rooms);
-      const slot = rooms.get(roomKey) ?? { hotelKey: a.hotelKey, roomType: a.roomType, roomNumber: a.roomNumber, guests: new Set<string>() };
+      const slot = rooms.get(roomKey) ?? { hotelKey: a.hotelKey, roomId: a.roomId, roomType: a.roomType, roomNumber: a.roomNumber, guests: new Set<string>() };
       slot.guests.add(guest);
       rooms.set(roomKey, slot);
     }
@@ -116,7 +119,7 @@ export function buildStays(input: NightInput[], range?: { from: string | null; t
   const open = new Map<string, Stay & { sig: string; last: string }>();
   const done: Stay[] = [];
   const closeStay = (s: Stay & { sig: string; last: string }) => {
-    done.push({ hotelKey: s.hotelKey, roomType: s.roomType, roomNumber: s.roomNumber, guests: s.guests, checkIn: s.checkIn, checkOut: s.checkOut, nights: s.nights });
+    done.push({ hotelKey: s.hotelKey, roomId: s.roomId, roomType: s.roomType, roomNumber: s.roomNumber, guests: s.guests, checkIn: s.checkIn, checkOut: s.checkOut, nights: s.nights });
   };
   for (const night of [...byNight.keys()].sort()) {
     const rooms = byNight.get(night)!;
@@ -134,6 +137,7 @@ export function buildStays(input: NightInput[], range?: { from: string | null; t
       if (cur) closeStay(cur);
       open.set(roomKey, {
         hotelKey: slot.hotelKey,
+        roomId: slot.roomId,
         roomType: slot.roomType,
         roomNumber: slot.roomNumber,
         guests,
