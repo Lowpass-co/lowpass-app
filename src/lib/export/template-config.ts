@@ -20,7 +20,7 @@
  *  export_templates.surface CHECK (migration 272, pinned by a test) all derive
  *  from it — the API and the CHECK used to hold their own copy of the first
  *  four, so templates could never be saved for any surface added later. */
-export const EXPORT_SURFACES = ['budget', 'rooming', 'payroll', 'routing', 'channel-list', 'stage-plot', 'settlement', 'gear-manifest', 'carnet'] as const;
+export const EXPORT_SURFACES = ['budget', 'rooming', 'payroll', 'routing', 'channel-list', 'stage-plot', 'settlement', 'gear-manifest', 'carnet', 'advance', 'advance-questions'] as const;
 export type ExportSurface = (typeof EXPORT_SURFACES)[number];
 export type PageSize = 'A4' | 'Letter';
 /** Output format — a styled print PDF, or a flat machine-readable Excel grid. */
@@ -80,7 +80,10 @@ export interface HeaderStyle {
   logoAlign: Align; // 'left' (the logo is the first flex child today)
   logoMaxHeight: number; // 48 (matches .lp-lh-logo height)
   logoRadius: number; // 0
-  logoAssetPath: string | null; // null — an uploaded header logo (storage path); overrides the artist logo
+  /** RETIRED Oct 2026 — exports always use the artist's logo (templates are
+   *  workspace-wide, so an uploaded logo leaked across artists). Kept in the type
+   *  so saved configs parse; normalizeHeader always clears it. */
+  logoAssetPath: string | null;
   bgAssetPath: string | null; // null — a faded background image (storage path)
   bgOpacity: number; // 0.15 (only applies when bgAssetPath set)
   elements: HeaderElement[]; // [artist, tour, dates], all shown
@@ -154,6 +157,18 @@ export interface ChannelListOptions {
   spares: { mode: 'count' | 'percent'; mics: number; stands: number; cables: number };
 }
 
+/** Oct 2026 — advance exports ('advance' = one show's filled advance;
+ *  'advance-questions' = the sheet of questions sent to the venue). */
+export interface AdvanceExportOptions {
+  /** Filled advance: list questions that have no answer yet ('show'), or leave them out. */
+  unanswered: 'show' | 'hide';
+  /** Filled advance: note where an answer came from (info pack page, venue, earlier show). */
+  sources: boolean;
+  /** Question sheet: print the answers already held, for the venue to confirm. */
+  prefill: boolean;
+}
+export const DEFAULT_ADVANCE_OPTIONS: AdvanceExportOptions = { unanswered: 'show', sources: false, prefill: false };
+
 export interface TemplateConfig {
   /** Schema version (forward-compat). */
   v: 1;
@@ -184,6 +199,8 @@ export interface TemplateConfig {
   channelList?: ChannelListOptions;
   /** Oct 2026 — stage-plot options (only meaningful for surface 'stage-plot'). */
   stagePlot?: StagePlotOptions;
+  /** Oct 2026 — advance export options ('advance' / 'advance-questions'). */
+  advance?: AdvanceExportOptions;
 }
 
 /** Oct 2026 — stage-plot export options. The plot page is drawn like the
@@ -227,6 +244,8 @@ const CHANNEL_LIST_DEFAULT_ON = new Set<string>(['inputs', 'outputs']);
 /** `input-list` = inputs + outputs (kept as one id — saved templates use it).
  *  The IO-box and pull sections are the channel-list export's, unchanged. */
 export const STAGE_PLOT_SECTION_IDS = ['stage-diagram', 'input-list', 'io-boxes', 'mic-pull', 'stand-pull', 'cable-pull', 'loom-pull'] as const;
+export const ADVANCE_SECTION_IDS = ['overview', 'answers', 'contacts', 'crew-calls', 'logistics', 'documents'] as const;
+export const ADVANCE_QUESTIONS_SECTION_IDS = ['intro', 'questions', 'contacts-blank'] as const;
 
 /** Human labels for the editor's section list. */
 export const SECTION_LABELS: Record<string, string> = {
@@ -247,6 +266,15 @@ export const SECTION_LABELS: Record<string, string> = {
   'loom-pull': 'Looms / sub-snakes',
   'stage-diagram': 'Stage diagram',
   'input-list': 'Input + output lists',
+  overview: 'Show overview',
+  answers: 'Advance answers',
+  contacts: 'Key contacts',
+  'crew-calls': 'Local crew calls',
+  logistics: 'Hotel, travel & deal',
+  documents: 'Venue documents',
+  intro: 'How to reply',
+  questions: 'Questions',
+  'contacts-blank': 'Contacts to fill in',
 };
 
 export const HEADER_ELEMENT_LABELS: Record<HeaderElementId, string> = {
@@ -426,7 +454,35 @@ export const DEFAULT_SETTLEMENT_CONFIG: TemplateConfig = {
   routing: DEFAULT_ROUTING_OPTIONS,
 };
 
+const ADVANCE_BASE = {
+  v: 1 as const,
+  format: 'pdf' as const,
+  pageSize: 'A4' as const,
+  logo: true,
+  general: DEFAULT_GENERAL,
+  header: DEFAULT_HEADER,
+  footer: DEFAULT_FOOTER,
+  dateRange: DEFAULT_DATE_RANGE,
+  payroll: DEFAULT_PAYROLL_OPTIONS,
+  routing: DEFAULT_ROUTING_OPTIONS,
+  advance: DEFAULT_ADVANCE_OPTIONS,
+};
+/** One show's filled advance. Documents (a list of the packs kept) is off by default. */
+export const DEFAULT_ADVANCE_CONFIG: TemplateConfig = {
+  ...ADVANCE_BASE,
+  surface: 'advance',
+  sections: ADVANCE_SECTION_IDS.map((id) => ({ id, show: id !== 'documents' })),
+};
+/** The venue's question sheet. */
+export const DEFAULT_ADVANCE_QUESTIONS_CONFIG: TemplateConfig = {
+  ...ADVANCE_BASE,
+  surface: 'advance-questions',
+  sections: ADVANCE_QUESTIONS_SECTION_IDS.map((id) => ({ id, show: true })),
+};
+
 export function defaultConfig(surface: ExportSurface): TemplateConfig {
+  if (surface === 'advance') return structuredClone(DEFAULT_ADVANCE_CONFIG);
+  if (surface === 'advance-questions') return structuredClone(DEFAULT_ADVANCE_QUESTIONS_CONFIG);
   if (surface === 'budget') return structuredClone(DEFAULT_BUDGET_CONFIG);
   if (surface === 'payroll') return structuredClone(DEFAULT_PAYROLL_CONFIG);
   if (surface === 'routing') return structuredClone(DEFAULT_ROUTING_CONFIG);
@@ -506,7 +562,7 @@ function normalizeHeader(input: unknown): HeaderStyle {
   base.logoRadius = clamp(h.logoRadius, 0, 40, DEFAULT_HEADER.logoRadius);
   base.bgOpacity = clamp(h.bgOpacity, 0, 1, DEFAULT_HEADER.bgOpacity);
   base.bgAssetPath = typeof h.bgAssetPath === 'string' && h.bgAssetPath.trim() ? h.bgAssetPath.trim() : null;
-  base.logoAssetPath = typeof h.logoAssetPath === 'string' && h.logoAssetPath.trim() ? h.logoAssetPath.trim() : null;
+  base.logoAssetPath = null; // retired — see HeaderStyle.logoAssetPath
   base.showTitle = bool(h.showTitle, DEFAULT_HEADER.showTitle);
   base.showSubtitle = bool(h.showSubtitle, DEFAULT_HEADER.showSubtitle);
   base.showGenerated = bool(h.showGenerated, DEFAULT_HEADER.showGenerated);
@@ -624,7 +680,24 @@ export function normalizeConfig(surface: ExportSurface, input: unknown): Templat
   if (surface === 'routing') base.routing = normalizeRouting(c.routing);
   if (surface === 'channel-list' || surface === 'stage-plot') base.channelList = normalizeChannelList(c.channelList);
   if (surface === 'stage-plot') base.stagePlot = normalizeStagePlot(c.stagePlot);
+  if (surface === 'advance' || surface === 'advance-questions') {
+    // Advance exports are PDF only (no flat Excel form).
+    base.format = 'pdf';
+    base.advance = normalizeAdvanceOptions(c.advance);
+  }
   return base;
+}
+
+/** Untrusted request body → advance export options (anything unknown → default). */
+export function normalizeAdvanceOptions(input: unknown): AdvanceExportOptions {
+  const d = DEFAULT_ADVANCE_OPTIONS;
+  if (!input || typeof input !== 'object') return { ...d };
+  const o = input as Partial<AdvanceExportOptions>;
+  return {
+    unanswered: o.unanswered === 'hide' ? 'hide' : 'show',
+    sources: bool(o.sources, d.sources),
+    prefill: bool(o.prefill, d.prefill),
+  };
 }
 
 const PLOT_TOGGLES: PlotToggle[] = ['plot', 'on', 'off'];

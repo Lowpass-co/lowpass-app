@@ -179,6 +179,37 @@ try a file over 50 MB.
 The over-50 MB file is refused at upload with "Each file must be under 50 MB."
 A scanned PDF (no text) over 22 MB or 100 pages is refused with a reason.
 
+## Advance PDFs (export dialog)
+
+#### ADV-140 — Export a show's filled advance
+
+**Do**: Show page → **Export…**. Toggle sections, "Questions not answered
+yet" and "Where each answer came from"; save a template; Download PDF.
+
+**Expect**: Lowpass letterhead with the ARTIST's logo, a show card (date, day
+type, venue, address, answered count), each question group with its answers
+("Not answered yet" in grey; TM-only groups tagged "Only you"), key contacts,
+local crew calls, and hotel / travel / deal. Preview matches the PDF.
+
+#### ADV-141 — Venue question sheet
+
+**Do**: Request from venue → pick a few questions → **PDF of the questions**.
+
+**Expect**: The export dialog opens on the question sheet: the online link in
+an orange callout, only the questions picked (never "Only you" groups), an
+answer box per question (time boxes, Yes/No and option ticks, a crew-call
+grid), and "Your contacts on the day" to fill in. "Print the answers we
+already have" prints them for the venue to confirm. Making the PDF does not
+mark the request sent.
+
+#### ADV-142 — Logos are the artist's
+
+**Do**: Export a routing (or advance) for two different artists using the same
+saved template.
+
+**Expect**: Each PDF shows its own artist's logo. The Header panel has no logo
+upload any more — it says to change the logo in Edit artist.
+
 ## Day sheets retired
 
 #### ADV-134 — Old day sheet URLs land on the advance
@@ -234,14 +265,11 @@ show reader.
 
 ## Known broken
 
-#### ADV-137 — No TM-side export of a filled advance
-
-**Currently**: The old header "Export advance" button (ADV-115/116) was not
-carried into the rebuild. The venue-facing printable question list exists
-(`?print=1`); an export of the filled advance does not.
-**Tracked in**: Advance rebuild PR — follow-up.
+(none)
 
 ## Retired
+
+- ADV-137 — No TM-side export of a filled advance (closed by ADV-140)
 
 Retired by the Advance rebuild (Oct 2026); the surfaces they describe no
 longer exist. IDs are never recycled.

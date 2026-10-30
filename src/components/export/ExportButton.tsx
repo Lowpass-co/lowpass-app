@@ -21,6 +21,8 @@ export function ExportButton({
   initialScope,
   label = 'Export…',
   title,
+  endpoint,
+  extraBody,
 }: {
   surface: ExportSurface;
   tourId: string;
@@ -28,6 +30,9 @@ export function ExportButton({
   initialScope?: BudgetScope;
   label?: string;
   title?: string;
+  /** Per-show exports (advance): where the preview/pdf routes live. */
+  endpoint?: string;
+  extraBody?: Record<string, unknown>;
 }) {
   const [open, setOpen] = useState(false);
   return (
@@ -51,7 +56,7 @@ export function ExportButton({
         {label}
       </button>
       {open ? (
-        <ExportTemplateEditor surface={surface} tourId={tourId} versionId={versionId} initialScope={initialScope} onClose={() => setOpen(false)} />
+        <ExportTemplateEditor surface={surface} tourId={tourId} versionId={versionId} initialScope={initialScope} endpoint={endpoint} extraBody={extraBody} onClose={() => setOpen(false)} />
       ) : null}
     </>
   );

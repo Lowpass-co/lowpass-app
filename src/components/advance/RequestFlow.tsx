@@ -14,6 +14,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Check, Copy, ExternalLink, Lock, Mail, Printer } from 'lucide-react';
 import { Modal } from '@/components/ui/Modal';
+import { ExportTemplateEditor } from '@/components/export/ExportTemplateEditor';
 import { useToast } from '@/components/ui/Toast';
 import { makeRequest, markSent } from './api';
 import { fmtDay, fmtLong } from './format';
@@ -51,6 +52,8 @@ export function RequestFlow({ tourId, routingIds, shows, onClose }: { tourId: st
   const [off, setOff] = useState<Set<string>>(new Set());
   const [onlyMissing, setOnlyMissing] = useState(true);
   const [link, setLink] = useState<{ id: string; url: string; key: string } | null>(null);
+  // The question sheet PDF (export dialog) for this request's link.
+  const [sheetFor, setSheetFor] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState<Set<string>>(new Set());
   const [copied, setCopied] = useState<string | null>(null);
@@ -173,10 +176,13 @@ export function RequestFlow({ tourId, routingIds, shows, onClose }: { tourId: st
     await navigator.clipboard.writeText(l.url);
     await sent(l, 'link');
   };
+  // A styled PDF of exactly the questions this request asks, with its link —
+  // through the export dialog (templates, header, page size). Making the PDF
+  // doesn't mark the request sent; sending it is still up to you.
   const printPdf = async () => {
     const l = await ensureLink();
     if (!l) return;
-    window.open(`${l.url}?print=1`, '_blank');
+    setSheetFor(l.id);
   };
 
   const next = () => (idx < routingIds.length - 1 ? setIdx(idx + 1) : onClose());
@@ -285,6 +291,15 @@ export function RequestFlow({ tourId, routingIds, shows, onClose }: { tourId: st
             ) : null}
           </div>
         </div>
+      ) : null}
+      {sheetFor ? (
+        <ExportTemplateEditor
+          surface="advance-questions"
+          tourId={tourId}
+          endpoint={`/api/tours/${tourId}/advance/${routingId}/export/questions`}
+          extraBody={{ linkId: sheetFor }}
+          onClose={() => setSheetFor(null)}
+        />
       ) : null}
     </Modal>
   );
