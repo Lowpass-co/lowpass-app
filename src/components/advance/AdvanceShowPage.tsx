@@ -23,6 +23,7 @@ import { ShowSections } from './ShowSections';
 import { CustomiseDrawer } from './CustomiseDrawer';
 import { RequestFlow } from './RequestFlow';
 import { PackFlow } from './packs/PackFlow';
+import { ExportButton } from '@/components/export/ExportButton';
 import { SourceViewer } from './packs/SourceViewer';
 import { dayTypeLabel, fmtDay, fmtLong, fmtWhen } from './format';
 import './advance.css';
@@ -241,6 +242,7 @@ export function AdvanceShowPage({ show, rail, templates }: { show: AdvanceShowDa
             <button type="button" className="adv-btn" onClick={() => fileInput.current?.click()}>
               <FileUp size={15} aria-hidden /> Drop info pack
             </button>
+            <ExportButton surface="advance" tourId={tourId} endpoint={`/api/tours/${tourId}/advance/${routingId}/export/sheet`} title="Export this show’s advance as a PDF" />
             <button type="button" className="adv-btn" onClick={() => setCustomise(true)}>
               <Settings2 size={15} aria-hidden /> Customise this day
             </button>

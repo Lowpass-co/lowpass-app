@@ -24,6 +24,8 @@ import {
   BOX_COLUMN_LABELS,
   DEFAULT_CHANNEL_LIST_OPTIONS,
   DEFAULT_STAGE_PLOT_OPTIONS,
+  DEFAULT_ADVANCE_OPTIONS,
+  type AdvanceExportOptions,
   type ChannelListOptions,
   type PlotToggle,
   type StagePlotOptions,
@@ -152,10 +154,15 @@ export interface ExportTemplateEditorProps {
   versionId?: string | null;
   /** Budget only — initial scope (e.g. from a prior dialog default). */
   initialScope?: BudgetScope;
+  /** Where the preview/pdf routes live, when not /api/<surface>/<tourId>/export
+   *  (the advance exports are per show). `${endpoint}/preview` + `${endpoint}/pdf`. */
+  endpoint?: string;
+  /** Extra fields sent with every preview/pdf call (e.g. the request a venue sheet is for). */
+  extraBody?: Record<string, unknown>;
   onClose: () => void;
 }
 
-export function ExportTemplateEditor({ surface, tourId, versionId = null, initialScope, onClose }: ExportTemplateEditorProps) {
+export function ExportTemplateEditor({ surface, tourId, versionId = null, initialScope, endpoint, extraBody, onClose }: ExportTemplateEditorProps) {
   const { showToast } = useToast();
 
   const [config, setConfig] = useState<TemplateConfig>(() => {
@@ -194,9 +201,13 @@ export function ExportTemplateEditor({ surface, tourId, versionId = null, initia
   const LAST_USED_KEY = `lp-export-last-template:${surface}`;
 
   // Stage-plot is plot-id keyed (/api/stage-plots/[id]/…); the rest are tour-id keyed.
-  const base = surface === 'stage-plot'
-    ? `/api/stage-plots/${encodeURIComponent(tourId)}/export`
-    : `/api/${surface}/${encodeURIComponent(tourId)}/export`;
+  const base = endpoint
+    ?? (surface === 'stage-plot'
+      ? `/api/stage-plots/${encodeURIComponent(tourId)}/export`
+      : `/api/${surface}/${encodeURIComponent(tourId)}/export`);
+  // Advance exports are PDF only (no flat Excel form), like the stage plot.
+  const pdfOnly = surface === 'stage-plot' || surface === 'advance' || surface === 'advance-questions';
+  const extraJson = JSON.stringify(extraBody ?? {});
 
   // Debounced live preview — POST the live config, render the returned HTML into
   // the iframe. The server builder is the SAME one the PDF route uses → WYSIWYG.
@@ -212,7 +223,7 @@ export function ExportTemplateEditor({ surface, tourId, versionId = null, initia
           const res = await fetch(`${base}/preview`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ config, versionId }),
+            body: JSON.stringify({ ...(JSON.parse(extraJson) as Record<string, unknown>), config, versionId }),
           });
           if (id !== reqId.current) return; // a newer request superseded this one
           if (!res.ok) {
@@ -234,7 +245,7 @@ export function ExportTemplateEditor({ surface, tourId, versionId = null, initia
       })();
     }, 300);
     return () => clearTimeout(t);
-  }, [base, config, versionId]);
+  }, [base, config, versionId, extraJson]);
 
   const toggleSection = useCallback((sectionId: string) => {
     setConfig((c) => ({ ...c, sections: c.sections.map((s) => (s.id === sectionId ? { ...s, show: !s.show } : s)) }));
@@ -475,8 +486,8 @@ export function ExportTemplateEditor({ surface, tourId, versionId = null, initia
 
   // Upload a header image (background / logo) → the private export-assets bucket;
   // store the returned path in the config (the render resolves it to a data-URI).
-  const [uploading, setUploading] = useState<null | 'bgAssetPath' | 'logoAssetPath'>(null);
-  const uploadAsset = useCallback(async (field: 'bgAssetPath' | 'logoAssetPath', file: File) => {
+  const [uploading, setUploading] = useState<null | 'bgAssetPath'>(null);
+  const uploadAsset = useCallback(async (field: 'bgAssetPath', file: File) => {
     setUploading(field);
     try {
       const fd = new FormData();
@@ -504,7 +515,7 @@ export function ExportTemplateEditor({ surface, tourId, versionId = null, initia
       const res = await fetch(isExcel ? '/api/export/xlsx' : `${base}/pdf`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(isExcel ? { surface, tourId, config, versionId } : { config, versionId }),
+        body: JSON.stringify(isExcel ? { surface, tourId, config, versionId } : { ...(JSON.parse(extraJson) as Record<string, unknown>), config, versionId }),
       });
       if (!res.ok) {
         showToast(res.status === 404 ? 'Tour not found' : isExcel ? 'Could not generate the Excel file' : 'Could not generate the PDF', 'error');
@@ -527,7 +538,7 @@ export function ExportTemplateEditor({ surface, tourId, versionId = null, initia
       showToast('Could not generate the export', 'error');
       setBusy(false);
     }
-  }, [base, busy, config, onClose, showToast, surface, tourId, versionId]);
+  }, [base, busy, config, extraJson, onClose, showToast, surface, tourId, versionId]);
 
   // Dirty = the config diverged from the last clean point (open / apply / save).
   const dirty = baselineRef.current !== JSON.stringify(config);
@@ -575,7 +586,9 @@ export function ExportTemplateEditor({ surface, tourId, versionId = null, initia
         : surface === 'routing' ? 'Export Routing'
           : surface === 'channel-list' ? 'Export Channel list'
             : surface === 'stage-plot' ? 'Export Stage plot'
-              : 'Export Rooming list';
+              : surface === 'advance' ? 'Export Advance'
+                : surface === 'advance-questions' ? 'Export Advance questions'
+                  : 'Export Rooming list';
 
   // Portal to <body> so a transformed/positioned app-chrome ancestor (the
   // ProductHeader) can't constrain or bleed through this full-viewport modal.
@@ -663,7 +676,7 @@ export function ExportTemplateEditor({ surface, tourId, versionId = null, initia
           <div style={{ width: 320, flex: '0 0 320px', borderLeft: '1px solid var(--lp-border)', overflowY: 'auto', padding: 'var(--lp-space-5)', display: 'flex', flexDirection: 'column', gap: 'var(--lp-space-5)' }}>
             {/* Stage-plot is PDF-only — the shared xlsx route is tour-id keyed; a plot
                 isn't a tour, and the diagram has no tabular Excel form. */}
-            {surface === 'stage-plot' ? null : (
+            {pdfOnly ? null : (
               <AccordionGroup id="format" label="Format" defaultOpen>
                 <Segmented options={FORMATS} value={config.format} onChange={(v) => setConfig((c) => ({ ...c, format: v }))} />
               </AccordionGroup>
@@ -774,6 +787,26 @@ export function ExportTemplateEditor({ surface, tourId, versionId = null, initia
                 ) : null}
               </AccordionGroup>
             ) : null}
+
+            {surface === 'advance' || surface === 'advance-questions' ? (() => {
+              const ao = config.advance ?? DEFAULT_ADVANCE_OPTIONS;
+              const setAdvance = (patch: Partial<AdvanceExportOptions>) => setConfig((c) => ({ ...c, advance: { ...(c.advance ?? DEFAULT_ADVANCE_OPTIONS), ...patch } }));
+              return (
+                <AccordionGroup id="advance" label="Advance" defaultOpen>
+                  {surface === 'advance' ? (
+                    <>
+                      <Toggle label="Questions not answered yet" checked={ao.unanswered === 'show'} onChange={(v) => setAdvance({ unanswered: v ? 'show' : 'hide' })} />
+                      <Toggle label="Where each answer came from" checked={ao.sources} onChange={(v) => setAdvance({ sources: v })} />
+                    </>
+                  ) : (
+                    <>
+                      <Toggle label="Print the answers we already have (to confirm)" checked={ao.prefill} onChange={(v) => setAdvance({ prefill: v })} />
+                      <p style={{ fontSize: 11, color: 'var(--lp-text-tertiary)' }}>Only the questions this request asks. Questions only you can see never print.</p>
+                    </>
+                  )}
+                </AccordionGroup>
+              );
+            })() : null}
 
             {surface === 'stage-plot' ? (() => {
               const sp = config.stagePlot ?? DEFAULT_STAGE_PLOT_OPTIONS;
@@ -941,13 +974,7 @@ export function ExportTemplateEditor({ surface, tourId, versionId = null, initia
               <Segmented options={LOGO_ALIGNS} value={config.header.logoAlign === 'right' ? 'right' : 'left'} onChange={(v) => setHeader('logoAlign', v)} />
               <Slider label="Logo height" value={config.header.logoMaxHeight} min={16} max={120} step={2} format={(v) => `${Math.round(v)}px`} onChange={(v) => setHeader('logoMaxHeight', v)} />
               <Slider label="Logo corner radius" value={config.header.logoRadius} min={0} max={40} step={1} format={(v) => `${Math.round(v)}px`} onChange={(v) => setHeader('logoRadius', v)} />
-              <ImageField
-                label="Header logo (overrides artist logo)"
-                set={Boolean(config.header.logoAssetPath)}
-                uploading={uploading === 'logoAssetPath'}
-                onPick={(f) => void uploadAsset('logoAssetPath', f)}
-                onClear={() => setHeader('logoAssetPath', null)}
-              />
+              <p style={{ fontSize: 11, color: 'var(--lp-text-tertiary)' }}>The logo is the artist’s own — change it in Edit artist.</p>
               <ImageField
                 label="Background image (faded)"
                 set={Boolean(config.header.bgAssetPath)}

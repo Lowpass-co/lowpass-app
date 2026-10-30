@@ -54,6 +54,8 @@ const packs = await import('./[id]/advance/[routingId]/packs/route');
 const templateSet = await import('../advance/template-set/route');
 const templateOne = await import('../advance/template-set/[templateId]/route');
 const pendingRoute = await import('../advance/intake/pending/route');
+const sheetPreview = await import('./[id]/advance/[routingId]/export/sheet/preview/route');
+const questionsPreview = await import('./[id]/advance/[routingId]/export/questions/preview/route');
 const { loadAdvanceBoard } = await import('@/server/advance/board');
 const { loadAdvanceShow } = await import('@/server/advance/show');
 
@@ -262,5 +264,37 @@ describe('venue review', () => {
     const r = await pendingRoute.POST(json({ advance_instance_id: inst.id, accept: ['pa1'] }));
     expect(r!.status).toBe(500);
     expect(db.t('intake_pending_answers')[0].status).toBe('pending');
+  });
+});
+
+describe('advance exports', () => {
+  it('the filled advance renders the show, its answers and its TM-only group', async () => {
+    await answers.POST(json({ changes: { 'tpl-sched': { doors: '19:00' }, '0d0d0d0d-0000-4000-8000-00000000000a': { when: 'After the show' } } }), p('r1'));
+    const r = await sheetPreview.POST(json({}), p('r1'));
+    expect(r.status).toBe(200);
+    const { html } = (await r.json()) as { html: string };
+    expect(html).toContain('O2 Apollo Manchester');
+    expect(html).toContain('19:00');
+    expect(html).toContain('After the show');
+    expect(html).toContain('Only you');
+    expect(html).toContain('Charlotte Sands');
+  });
+
+  it('the question sheet asks only what the request asked — never the TM-only group', async () => {
+    await answers.POST(json({ changes: { 'tpl-sched': { doors: '19:00' } } }), p('r1'));
+    const made = await request.POST(json({ askFields: ['tpl-sched:curfew'] }), p('r1'));
+    const { link } = (await made.json()) as { link: { id: string } };
+    const r = await questionsPreview.POST(json({ linkId: link.id }), p('r1'));
+    expect(r.status).toBe(200);
+    const { html } = (await r.json()) as { html: string };
+    expect(html).toContain('Curfew');
+    expect(html).not.toContain('Doors');
+    expect(html).not.toContain('Settlement');
+    expect(html).toMatch(/\/advance-intake\/[^"<\s]+/);
+  });
+
+  it('a show in another tour is not found', async () => {
+    const r = await sheetPreview.POST(json({}), { params: Promise.resolve({ id: 'tour-x', routingId: 'r1' }) });
+    expect(r.status).toBe(404);
   });
 });

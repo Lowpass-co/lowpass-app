@@ -29,6 +29,9 @@ import { analyseCarnetCompleteness } from '@/lib/export/carnet-completeness';
 import { fetchLogoDataUri, fetchExportAssetDataUri } from '@/lib/export/logo';
 import type { FooterStyle, TemplateConfig } from '@/lib/export/template-config';
 import { loadSettlementWalk } from '@/lib/settlement/loadWalk';
+import { resolveArtistLogoUrl } from '@/lib/artists/imageUrl';
+import { loadAdvanceExportData, loadAdvanceQuestionsData } from '@/lib/export/advance-data';
+import { buildAdvanceBodyHtml, buildAdvanceQuestionsBodyHtml } from '@/lib/export/advance-pdf';
 import { buildSettlementBodyHtml } from '@/lib/export/settlement-pdf';
 
 /** Oct 2026 — what the channel-list export dialog needs to offer choices:
@@ -75,19 +78,17 @@ function nowStamp(): string {
   return new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
 }
 
-/** The letterhead logo data-URI: an uploaded header logo (config.header.logoAssetPath,
- *  private export-assets bucket) takes precedence; otherwise the artist logo. Both
- *  degrade to null (→ initials block). */
+/** The letterhead logo data-URI: the ARTIST's logo, always (Oct 2026, Adam).
+ *  Templates are shared by the whole workspace and not tied to an artist, so a
+ *  logo uploaded into one (the old header.logoAssetPath) put one artist's logo on
+ *  another's export; templates are layout only now. Degrades to null (→ initials).
+ *  The supabase / workspace / config params stay so every caller reads the same. */
 async function resolveLogo(
-  supabase: SupabaseClient,
-  workspaceId: string,
-  config: TemplateConfig,
+  _supabase: SupabaseClient,
+  _workspaceId: string,
+  _config: TemplateConfig,
   artistLogoUrl: string | null | undefined,
 ): Promise<string | null> {
-  if (config.header.logoAssetPath) {
-    const uploaded = await fetchExportAssetDataUri(supabase, workspaceId, config.header.logoAssetPath);
-    if (uploaded) return uploaded;
-  }
   return fetchLogoDataUri(artistLogoUrl);
 }
 
@@ -145,8 +146,8 @@ export async function buildSettlementExport(
   const currency = tour.currency ?? 'GBP';
   const [{ data: artist }, { data: routing }, walk] = await Promise.all([
     tour.artist_id
-      ? supabase.from('artists').select('name').eq('id', tour.artist_id).maybeSingle()
-      : Promise.resolve({ data: null as { name?: string } | null }),
+      ? supabase.from('artists').select('name, branding, spotify_id, spotify_image_url').eq('id', tour.artist_id).maybeSingle()
+      : Promise.resolve({ data: null as { name?: string; branding?: unknown; spotify_id?: string | null; spotify_image_url?: string | null } | null }),
     supabase.from('routing').select('date, city, venue_name').eq('id', routingId).maybeSingle(),
     loadSettlementWalk(supabase, routingId, workspaceId, currency),
   ]);
@@ -155,7 +156,7 @@ export async function buildSettlementExport(
   const showDate = (routing?.date as string | null) ?? null;
   const artistName = (artist?.name as string | undefined) ?? null;
 
-  const logoDataUri = config.logo ? await resolveLogo(supabase, workspaceId, config, null) : null;
+  const logoDataUri = config.logo && artist ? await resolveLogo(supabase, workspaceId, config, await resolveArtistLogoUrl(artist as Parameters<typeof resolveArtistLogoUrl>[0])) : null;
   const bgDataUri = await fetchExportAssetDataUri(supabase, workspaceId, config.header.bgAssetPath);
 
   const html = renderDocument({
@@ -475,5 +476,81 @@ export async function buildCarnetExport(
 
   const footerNote = `${data.scopeLabel} · Carnet general list (not a carnet)`;
   const filename = `${sanitize(data.scopeLabel, 'Gear')} — Carnet general list.pdf`;
+  return { html, footerNote, filename, footer: config.footer, runningHeader: config.header.show ? footerNote : null };
+}
+
+/* ---------- Advance (Oct 2026) ---------- */
+
+/** One show's filled advance. Returns null when the show isn't in this tour
+ *  (or isn't visible to the caller under RLS). */
+export async function buildAdvanceExport(
+  supabase: SupabaseClient,
+  tourId: string,
+  routingId: string,
+  workspaceId: string,
+  config: TemplateConfig,
+): Promise<ExportBuild | null> {
+  const data = await loadAdvanceExportData(supabase, tourId, routingId, { sources: config.advance?.sources === true });
+  if (!data) return null;
+  const logoDataUri = config.logo ? await resolveLogo(supabase, workspaceId, config, data.artist.logoUrl) : null;
+  const bgDataUri = await fetchExportAssetDataUri(supabase, workspaceId, config.header.bgAssetPath);
+  const venue = data.show.venue.name ?? data.show.city ?? 'Show';
+  const html = renderDocument({
+    letterhead: {
+      artistName: data.artist.name,
+      tourName: data.tour.name,
+      tourDates: tourDateRange(data.tour.start_date, data.tour.end_date),
+      logoDataUri,
+      showLogo: config.logo,
+      generatedOn: nowStamp(),
+    },
+    pageSize: config.pageSize,
+    title: 'Advance',
+    subtitle: [venue, fmtDate(data.show.date)].filter(Boolean).join(' · '),
+    general: config.general,
+    header: config.header,
+    bgDataUri,
+    bodyHtml: buildAdvanceBodyHtml(data, config),
+  });
+  const footerNote = `${data.artist.name ? `${data.artist.name} — ` : ''}${data.tour.name} · Advance · ${venue}`;
+  const filename = `${sanitize(data.artist.name ?? '', '')} — ${sanitize(venue, 'Show')} ${data.show.date.slice(0, 10)} — Advance.pdf`.replace(/^ — /, '');
+  return { html, footerNote, filename, footer: config.footer, runningHeader: config.header.show ? footerNote : null };
+}
+
+/** The questions sent to a venue, as a sheet to fill in. `linkId` ties it to a
+ *  request (its questions + its online form); without one, every question the
+ *  venue form would show. */
+export async function buildAdvanceQuestionsExport(
+  supabase: SupabaseClient,
+  tourId: string,
+  routingId: string,
+  workspaceId: string,
+  config: TemplateConfig,
+  opts: { linkId: string | null; origin: string },
+): Promise<ExportBuild | null> {
+  const data = await loadAdvanceQuestionsData(supabase, tourId, routingId, opts);
+  if (!data) return null;
+  const logoDataUri = config.logo ? await resolveLogo(supabase, workspaceId, config, data.artist.logoUrl) : null;
+  const bgDataUri = await fetchExportAssetDataUri(supabase, workspaceId, config.header.bgAssetPath);
+  const venue = data.show.venue.name ?? data.show.city ?? 'Show';
+  const html = renderDocument({
+    letterhead: {
+      artistName: data.artist.name,
+      tourName: data.tour.name,
+      tourDates: tourDateRange(data.tour.start_date, data.tour.end_date),
+      logoDataUri,
+      showLogo: config.logo,
+      generatedOn: nowStamp(),
+    },
+    pageSize: config.pageSize,
+    title: 'Advance questions',
+    subtitle: [venue, fmtDate(data.show.date)].filter(Boolean).join(' · '),
+    general: config.general,
+    header: config.header,
+    bgDataUri,
+    bodyHtml: buildAdvanceQuestionsBodyHtml(data, config),
+  });
+  const footerNote = `${data.artist.name ? `${data.artist.name} — ` : ''}${data.tour.name} · Advance questions · ${venue}`;
+  const filename = `${sanitize(data.artist.name ?? '', '')} — ${sanitize(venue, 'Show')} ${data.show.date.slice(0, 10)} — Advance questions.pdf`.replace(/^ — /, '');
   return { html, footerNote, filename, footer: config.footer, runningHeader: config.header.show ? footerNote : null };
 }
