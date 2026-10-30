@@ -14,6 +14,7 @@
 
 'use client';
 
+import { NumberField } from '@/components/ui/NumberField';
 import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
@@ -264,10 +265,10 @@ function ProjectionDefaultsCard({ tourId, tourCurrency }: { tourId: string; tour
     <div className="flex items-center gap-3" key={key}>
       <span className="w-32 shrink-0" title={hint} style={{ fontSize: 'var(--lp-text-sm)', color: 'var(--lp-text)', cursor: 'help' }}>{label}</span>
       <div className="flex items-center gap-1">
-        <input
-          type="number" min={0} step={0.5}
-          value={s ? +(s[key] * 100).toFixed(2) : ''}
-          onChange={(e) => save({ [key]: (Number(e.target.value) || 0) / 100 } as Partial<ProjDefaults>)}
+        <NumberField
+          min={0} step={0.5}
+          value={s ? s[key] : null} scale={100} decimals={2}
+          onValue={(f) => save({ [key]: f } as Partial<ProjDefaults>)}
           disabled={!s}
           className="w-16"
           style={{ ...inputStyle, textAlign: 'right' }}
@@ -291,10 +292,10 @@ function ProjectionDefaultsCard({ tourId, tourCurrency }: { tourId: string; tour
           <span className="w-32 shrink-0" style={{ fontSize: 'var(--lp-text-sm)', color: 'var(--lp-text)' }}>Merch $/head</span>
           <div className="flex items-center gap-1">
             <span style={{ color: 'var(--lp-text-tertiary)' }}>{native}</span>
-            <input
-              type="number" min={0} step={0.5}
-              value={s ? +s.default_dollars_per_head.toFixed(2) : ''}
-              onChange={(e) => save({ default_dollars_per_head: Number(e.target.value) || 0 })}
+            <NumberField
+              min={0} step={0.5}
+              value={s ? s.default_dollars_per_head : null} decimals={2}
+              onValue={(n) => save({ default_dollars_per_head: n })}
               disabled={!s}
               className="w-16"
               style={{ ...inputStyle, textAlign: 'right' }}
@@ -402,12 +403,11 @@ function OverheadsCard({ tourId }: { tourId: string }) {
           {label}
         </span>
         <div className="flex items-center gap-1">
-          <input
-            type="number"
+          <NumberField
             min={0}
             step={0.5}
-            value={s ? +(s[pctKey] * 100).toFixed(2) : ''}
-            onChange={(e) => save({ [pctKey]: (Number(e.target.value) || 0) / 100 } as Partial<OverheadSettings>)}
+            value={s ? s[pctKey] : null} scale={100} decimals={2}
+            onValue={(f) => save({ [pctKey]: f } as Partial<OverheadSettings>)}
             disabled={!s}
             className="w-16"
             style={{ ...inputStyle, textAlign: 'right' }}
@@ -453,12 +453,11 @@ function OverheadsCard({ tourId }: { tourId: string }) {
             Merch COGS
           </span>
           <div className="flex items-center gap-1">
-            <input
-              type="number"
+            <NumberField
               min={0}
               step={0.5}
-              value={s ? +(s.merch_cogs_pct * 100).toFixed(2) : ''}
-              onChange={(e) => save({ merch_cogs_pct: (Number(e.target.value) || 0) / 100 })}
+              value={s ? s.merch_cogs_pct : null} scale={100} decimals={2}
+              onValue={(f) => save({ merch_cogs_pct: f })}
               disabled={!s}
               className="w-16"
               style={{ ...inputStyle, textAlign: 'right' }}
@@ -474,17 +473,15 @@ function OverheadsCard({ tourId }: { tourId: string }) {
             Bank FX margin
           </span>
           <div className="flex items-center gap-1">
-            <input
-              type="number"
+            <NumberField
               min={0}
               max={49}
               step={0.25}
               aria-label="Bank FX margin percentage"
-              value={s ? +(s.fx_margin_pct * 100).toFixed(2) : ''}
-              onChange={(e) => {
-                const pct = Number(e.target.value) || 0;
-                if (pct < 0 || pct >= 50) return; // the DB caps it below 50%
-                save({ fx_margin_pct: pct / 100 });
+              value={s ? s.fx_margin_pct : null} scale={100} decimals={2}
+              onValue={(f) => {
+                if (f < 0 || f >= 0.5) return; // the DB caps it below 50%
+                save({ fx_margin_pct: f });
               }}
               disabled={!s}
               className="w-16"
@@ -683,13 +680,12 @@ function CommissionsCard({ tourId }: { tourId: string }) {
                 }}
               />
               <div className="flex items-center gap-1">
-                <input
-                  type="number"
+                <NumberField
                   min={0}
                   step={0.5}
-                  value={+(r.percentage * 100).toFixed(2)}
-                  onChange={(e) => setLocalPct(r.id, (Number(e.target.value) || 0) / 100)}
-                  onBlur={(e) => commit(r.id, { percentage: (Number(e.target.value) || 0) / 100 })}
+                  value={r.percentage} scale={100} decimals={2}
+                  onValue={(f) => setLocalPct(r.id, f)}
+                  onCommit={(f) => commit(r.id, { percentage: f })}
                   className="w-16"
                   style={{ ...inputStyle, textAlign: 'right' }}
                   aria-label={`${r.label} percentage`}

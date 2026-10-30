@@ -9,6 +9,7 @@
    1..64. Remount via key={open} in the parent resets the count.
    ============================================ */
 
+import { NumberField } from '@/components/ui/NumberField';
 import { useState } from 'react';
 import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
@@ -57,13 +58,12 @@ export function AddManyChannelsModal({ open, onClose, onConfirm }: AddManyChanne
     >
       <label className="flex flex-col gap-1">
         <span className="text-xs font-semibold text-lp-text-secondary">How many channels?</span>
-        <input
-          type="number"
+        <NumberField
           min={MIN}
           max={MAX}
           value={count}
           autoFocus
-          onChange={(e) => setCount(e.target.value === '' ? 0 : clamp(Number(e.target.value)))}
+          onValue={(n) => setCount(n === 0 ? 0 : clamp(n))}
           onKeyDown={(e) => {
             if (e.key === 'Enter' && !busy) void submit();
           }}

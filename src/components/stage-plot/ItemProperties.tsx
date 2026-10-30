@@ -9,6 +9,7 @@
    ============================================ */
 'use client';
 
+import { NumberField } from '@/components/ui/NumberField';
 import { useEffect, useState } from 'react';
 import { getIcon } from '@/lib/stage-plot/icons';
 import { octantLabel } from '@/lib/stage-plot/geometry';
@@ -61,8 +62,7 @@ const numInputStyle: React.CSSProperties = { ...inputStyle, fontFamily: 'var(--l
 
 function Num({ value, onChange, step = 0.5, min }: { value: number; onChange: (n: number) => void; step?: number; min?: number }) {
   return (
-    <input type="number" value={value} step={step} min={min} style={numInputStyle}
-      onChange={(e) => { const n = parseFloat(e.target.value); if (!Number.isNaN(n)) onChange(n); }} />
+    <NumberField value={value} step={step} min={min} style={numInputStyle} blank={null} onValue={onChange} />
   );
 }
 
