@@ -34,7 +34,7 @@ import {
   IMAGE_TYPES,
   PDF_TYPE,
 } from '@/lib/budget/mediaType';
-import type { ReceiptDocument } from '@/lib/budget/receiptDocuments';
+import type { ReceiptDocument, TicketFacts } from '@/lib/budget/receiptDocuments';
 
 export type { ReceiptDocument };
 
@@ -57,6 +57,8 @@ export const isScannable = (file: File): boolean => isScannableFile(file.name, f
 
 /** The OCR route's JSON shape (Claude Vision). All fields may be null. */
 export interface ReceiptOcr {
+  /** Airline tickets only — matched to the tour's flights (Oct 2026). */
+  ticket?: TicketFacts | null;
   vendor: string | null;
   date: string | null;
   total_amount: number | null;
@@ -176,6 +178,7 @@ export function useReceiptScan(tourId: string, tourCurrency: string): UseReceipt
                   category: first.category,
                   description: first.description,
                   payment_method: first.payment_method,
+                  ticket: first.ticket ?? null,
                 }
               : null,
             documents,

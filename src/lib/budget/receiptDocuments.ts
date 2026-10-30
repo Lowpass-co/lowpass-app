@@ -23,6 +23,14 @@
    proposal engine still decides what any of it means.
    ============================================ */
 
+/** Oct 2026 — what an airline ticket / e-ticket receipt says, so it can be
+ *  linked to the flight it paid for. Null on any other receipt. */
+export interface TicketFacts {
+  bookingRef: string | null;
+  passengers: string[];
+  legs: { flightNumber: string | null; date: string | null; from: string | null; to: string | null }[];
+}
+
 /** One extracted document — the per-receipt fields, unchanged since RC-2. */
 export interface ReceiptDocument {
   /** 1-based page numbers this document occupies. `[1]` for a single image. */
@@ -35,6 +43,8 @@ export interface ReceiptDocument {
   description: string | null;
   payment_method: string | null;
   line_items: Array<{ description: string | null; amount: number | null }> | null;
+  /** Airline tickets only (Oct 2026). */
+  ticket?: TicketFacts | null;
 }
 
 function str(v: unknown): string | null {
@@ -86,6 +96,27 @@ function pages(v: unknown, pageCount: number | null): number[] | null {
   return [...seen].sort((a, b) => a - b);
 }
 
+/** The model's `ticket` object → TicketFacts, or null when there's nothing to match on. */
+export function ticketFacts(v: unknown): TicketFacts | null {
+  if (!v || typeof v !== 'object' || Array.isArray(v)) return null;
+  const o = v as Record<string, unknown>;
+  const passengers = Array.isArray(o.passengers) ? o.passengers.map(str).filter((x): x is string => !!x).slice(0, 20) : [];
+  const legs = Array.isArray(o.legs)
+    ? o.legs
+        .filter((l): l is Record<string, unknown> => !!l && typeof l === 'object')
+        .map((l) => ({
+          flightNumber: str(l.flight_number)?.replace(/\s+/g, '').toUpperCase() ?? null,
+          date: str(l.date),
+          from: str(l.from)?.toUpperCase() ?? null,
+          to: str(l.to)?.toUpperCase() ?? null,
+        }))
+        .slice(0, 12)
+    : [];
+  const bookingRef = str(o.booking_ref)?.replace(/\s+/g, '').toUpperCase() ?? null;
+  if (!bookingRef && !legs.some((l) => l.flightNumber)) return null;
+  return { bookingRef, passengers, legs };
+}
+
 function toDocument(raw: Record<string, unknown>, pageCount: number | null): ReceiptDocument {
   return {
     pages: pages(raw.pages, pageCount),
@@ -97,6 +128,7 @@ function toDocument(raw: Record<string, unknown>, pageCount: number | null): Rec
     description: str(raw.description),
     payment_method: str(raw.payment_method),
     line_items: lineItems(raw.line_items),
+    ticket: ticketFacts(raw.ticket),
   };
 }
 
