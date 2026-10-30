@@ -303,18 +303,12 @@ export function PayrollRatesSpreadsheet({
   }
 
   return (
-    <div
-      className={cn('rounded-xl border border-lp-border shadow-sm', 'print:break-inside-avoid print:border-lp-border')}
-      style={{ background: 'var(--lp-panel)' }}
-    >
+    // Sits flush inside the payroll Summary card (PayrollView), so no border of its own.
+    <div className="print:break-inside-avoid">
       {hiddenTypeCount > 0 || showAllTypes ? (
-        <div className="flex items-center justify-end gap-2 px-3 pt-2" style={{ fontSize: 'var(--lp-text-xs)', color: 'var(--lp-text-tertiary)' }}>
+        <div className="pay-summary-tools">
           {showAllTypes ? 'Showing every rate type.' : `${hiddenTypeCount} unused rate type${hiddenTypeCount === 1 ? '' : 's'} hidden.`}
-          <button
-            type="button"
-            onClick={() => setShowAllTypes((v) => !v)}
-            className="rounded border border-lp-border px-2 py-0.5 text-lp-text-secondary hover:text-lp-text"
-          >
+          <button type="button" onClick={() => setShowAllTypes((v) => !v)} className="pay-btn pay-btn-sm">
             {showAllTypes ? 'Hide unused' : 'Show all rate types'}
           </button>
         </div>

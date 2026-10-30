@@ -636,10 +636,12 @@ Zero-rate people show no rate. Folded into the role line to hold the 52px row he
 **Code-verified**; **Needs-live**.
 
 #### PAY-16 — Finalize locks payroll SERVER-SIDE; admin unlock restores
-**Do**: Click **Finalize payroll**. Try to paint a day cell / edit a rate. Then (as
+**Do**: Click **Finalize** (top right, beside Export). Try to paint a day cell / edit a rate. Then (as
 admin) **Unlock to edit**.
-**Expect**: after finalize, an amber "Finalized <date> — read-only" bar shows; the
-matrix paint/fill and the rates grid are read-only in the UI. Critically the LOCK IS
+**Expect**: after finalize, an amber "Finalized <date>. Rates and days are read-only." banner
+shows and the Finalize button leaves the header; the brush, Fill all, the
+matrix and the rates grid are read-only (brush greyed). A failed finalize/unlock shows an
+error toast, not a browser alert. Critically the LOCK IS
 SERVER-SIDE — `POST /api/budget/payroll` and `PATCH /api/budget/rate-lines` both
 return **409** ("Payroll is finalized…") while `tours.payroll_finalized_at` is set,
 regardless of the UI. **Unlock is admin-only** (`DELETE /api/tours/[id]/payroll/finalize`)
@@ -675,17 +677,20 @@ regardless of the UI. **Unlock is admin-only** (`DELETE /api/tours/[id]/payroll/
 
 ## Payroll — Summary + weeks, after Adam's Sheets (Oct 2026)
 
-- [ ] **PAY-17 — Summary at the top, open.** Payroll opens with a black
-  **SUMMARY** band over a table: Role · Name · the rate columns (type straight
+- [ ] **PAY-17 — Summary at the top, open.** Payroll opens with a
+  **Summary** card (chevron, sentence-case title, one border — no box inside
+  a box) over a table: Role · Name · the rate columns (type straight
   in) · Shows · Off / travel · **Total fee** · **Total PD** (bold) ·
   Employment · Notes. At 1440 wide, Total PD is visible without scrolling.
-  The band still collapses when clicked.
+  The card collapses when its header is clicked.
 
-- [ ] **PAY-18 — One block per week.** Below: a black band per week reading
-  "W/C 12 Oct" with that week's fee and PD on the right; under it Role ·
-  Name · Monday…Sunday · Total fee · Total PD. Each day header shows the
-  weekday, date, city and the day type in its colour. Days outside the tour
-  are hatched and say "No tour".
+- [ ] **PAY-18 — One card per week.** Below a **Days** heading and the
+  brush bar: a card per week headed "Week of 12 Oct · N tour days" with that
+  week's Fees and Per diem on the right; under it Person (name, role beneath)
+  · Mon…Sun · Fee · Per diem. Each day header shows the weekday, date, city
+  and the day type as a small coloured chip. Days outside the tour are hatched
+  and say "No tour". Scrolling the page, the brush bar stays at the top;
+  scrolling a week sideways (narrow window), the Person column stays put.
 
 - [ ] **PAY-19 — Days in words, in the sheet colours.** Cells read SHOW,
   TRAVEL, OFF, REHEARSAL, PROMO, PD ONLY in full, on Adam's colours (show
@@ -697,6 +702,12 @@ regardless of the UI. **Unlock is admin-only** (`DELETE /api/tours/[id]/payroll/
   Total fee + any advance / flat tour fee (named in the note under the weeks)
   equals Total fee in the Summary; the same for PD. A flat-fee person's week
   fee shows "—" and their cells are dimmed with a "flat" tag.
+
+- [ ] **PAY-25 — Totals at the top.** Under the title ("N people · N tour
+  days"): three figures — Fees (with "incl. £X advances & flat fees" when
+  there are any), Per diems, and Total payroll in orange. Fees equals the sum
+  of the Summary's Total fee column; Per diems the sum of Total PD; Total is
+  the two added.
 
 ## One place for rates (Oct 2026)
 

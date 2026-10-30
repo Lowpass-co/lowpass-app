@@ -164,10 +164,9 @@ export default async function OperationsTourPayrollPage({
     );
 
   return (
-    // G2-2b — the payroll matrix is the work surface: full-bleed (no narrow
-    // max-w wrapper) and full-height so the grid fills the page and scrolls
-    // internally instead of leaving dead space below.
-    <div className="flex h-full min-h-0 flex-col px-4 pt-4 pb-3">
+    // Full-bleed (no narrow max-w wrapper): the week cards use the width.
+    // Same gutters as the other Operations pages.
+    <div className="w-full px-4 pt-6 pb-16">
       <PayrollView
         tourId={tour.id}
         tourName={tour.name}

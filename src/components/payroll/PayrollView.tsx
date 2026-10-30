@@ -17,17 +17,19 @@
 
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
-import { Lock, Unlock } from 'lucide-react';
+import { ChevronDown, Lock, Unlock } from 'lucide-react';
+import { useToast } from '@/components/ui/Toast';
 import type { PersonnelRate } from '@/types';
 import type { RateBucket, RateBasis, DayStatus } from '@/lib/payroll/fees';
 import { canonicalOrderOf, CANONICAL_RATE_TYPE_IDS, type RateTypeMeta } from '@/lib/payroll/rateLines';
 import { PayrollRatesSpreadsheet } from './PayrollRatesSpreadsheet';
 import { PayrollDaysMatrix } from './PayrollDaysMatrix';
-import { buildAmountMap, type RateLineRecord } from './rateLinesClient';
+import { buildAmountMap, oneOffTotals, personTotals, type RateLineRecord } from './rateLinesClient';
 import { usePayrollGrid, type RoutingDay } from './usePayrollGrid';
 import { AddPersonToTourButton } from '@/components/operations/personnel/AddPersonToTourButton';
 import { PayrollExportButton } from '@/components/payroll/PayrollExportButton';
 import { PageTitle } from '@/components/ui/PageHeader';
+import './payroll.css';
 
 interface RateTypeRow { id: string; name: string; bucket: string; basis: string; day_statuses: string[] | null; order_index: number; }
 
@@ -106,6 +108,29 @@ export function PayrollView({
 
   const { statusOf, saveDayStatus, saveDayType, tourDayTypeOf, isExplicit, fillDays, effectiveCountsFor } = usePayrollGrid(tourId, routingDates as RoutingDay[], payrollEntries);
 
+  const money = useMemo(
+    () => new Intl.NumberFormat('en-GB', { style: 'currency', currency: (currency || 'GBP').trim().toUpperCase(), maximumFractionDigits: 0 }),
+    [currency],
+  );
+
+  // Tour totals — the same fees.ts engine and EFFECTIVE day counts as the
+  // Summary's Total fee / Total PD columns, so the three figures always add up
+  // to the Summary. One-offs (advances, flat tour fees) are in the fee total
+  // but not in any week, so say how much of it they are.
+  const totals = useMemo(() => {
+    let fee = 0, pd = 0, oneOff = 0;
+    for (const r of rates) {
+      const id = r.id as string;
+      const counts = effectiveCountsFor(id);
+      const t = personTotals(amountMap, id, types, counts);
+      fee += t.totalFee;
+      pd += t.totalPerDiem;
+      oneOff += oneOffTotals(amountMap, id, types, counts).fee;
+    }
+    return { fee, pd, total: fee + pd, oneOff };
+  }, [rates, effectiveCountsFor, amountMap, types]);
+  const tourDays = useMemo(() => new Set(routingDates.map((d) => d.date?.slice(0, 10)).filter(Boolean)).size, [routingDates]);
+
   // Persist one rate-line cell edit; optimistic, reverts on failure.
   const onRateLineCommit = useCallback(
     async (personnelRateId: string, rateTypeId: string, amount: number) => {
@@ -132,10 +157,16 @@ export function PayrollView({
   );
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 12, height: '100%', minHeight: 0 }}>
-      <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
-        <PageTitle>Payroll</PageTitle>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+    <div className="pay-page">
+      <header className="pay-head">
+        <div>
+          <PageTitle>Payroll</PageTitle>
+          <p className="pay-sub">
+            <b>{rates.length}</b> {rates.length === 1 ? 'person' : 'people'} · <b>{tourDays}</b> tour {tourDays === 1 ? 'day' : 'days'}
+          </p>
+        </div>
+        <div className="pay-actions">
+          {finalized ? null : <FinalizeButton tourId={tourId} />}
           <PayrollExportButton tourId={tourId} />
           <AddPersonToTourButton
             tourId={tourId}
@@ -143,72 +174,83 @@ export function PayrollView({
             onAdded={(result) => { if (result?.rateCard) setRates((prev) => [...prev, result.rateCard as Record<string, unknown>]); }}
           />
         </div>
+      </header>
+
+      {finalized ? <FinalizedBanner tourId={tourId} finalizedAt={finalizedAt} /> : null}
+
+      <div className="pay-stats" role="group" aria-label="Tour payroll totals">
+        <div className="pay-stat">
+          <span className="pay-stat-label">Fees</span>
+          <span className="pay-stat-value">{money.format(totals.fee)}</span>
+          {totals.oneOff > 0 ? <span className="pay-stat-note">incl. {money.format(totals.oneOff)} advances &amp; flat fees</span> : null}
+        </div>
+        <div className="pay-stat">
+          <span className="pay-stat-label">Per diems</span>
+          <span className="pay-stat-value">{money.format(totals.pd)}</span>
+        </div>
+        <div className="pay-stat" data-total="true">
+          <span className="pay-stat-label">Total payroll</span>
+          <span className="pay-stat-value">{money.format(totals.total)}</span>
+        </div>
       </div>
 
-      <FinalizeBar tourId={tourId} finalizedAt={finalizedAt} />
-
       {/* Oct 2026 — Adam's SUMMARY tab: everyone's rates, show / off-travel
-          days and totals, OPEN at the top (it was a collapsed "Rates" panel).
-          Rates are typed straight in; the weeks below are where days are set. */}
+          days and totals, OPEN at the top. Rates are typed straight in; the
+          weeks below are where days are set. */}
       <Disclosure
         label="Summary"
-        hint={`${rates.length} ${rates.length === 1 ? 'person' : 'people'} · rates, days and totals — type rates straight in`}
+        hint="Rates, days and totals for everyone — type rates straight in"
         open={ratesOpen}
         onToggle={setRatesOpen}
       >
-        <div className="lp-sheet-summary">
-        <PayrollRatesSpreadsheet
-          currency={currency}
-          initialRates={rates as unknown as PersonnelRate[]}
-          canSeeCommission={false}
-          rateTypes={types}
-          amountMap={amountMap}
-          countsFor={effectiveCountsFor}
-          onRateLineCommit={onRateLineCommit}
-          highlightRowId={flashKey}
-          finalized={finalized}
-        />
+        <div className="lp-sheet-summary pay-summary-body">
+          <PayrollRatesSpreadsheet
+            currency={currency}
+            initialRates={rates as unknown as PersonnelRate[]}
+            canSeeCommission={false}
+            rateTypes={types}
+            amountMap={amountMap}
+            countsFor={effectiveCountsFor}
+            onRateLineCommit={onRateLineCommit}
+            highlightRowId={flashKey}
+            finalized={finalized}
+          />
         </div>
       </Disclosure>
 
-      <section style={{ display: 'flex', flexDirection: 'column', gap: 6, flex: 1, minHeight: 0 }}>
-        <PayrollDaysMatrix
-          routingDates={routingDates}
-          personnelRates={rates}
-          currency={currency}
-          statusOf={statusOf}
-          saveDayStatus={saveDayStatus}
-          saveDayType={saveDayType}
-          tourDayTypeOf={tourDayTypeOf}
-          isExplicit={isExplicit}
-          fillDays={fillDays}
-          rateTypes={types}
-          amountMap={amountMap}
-          effectiveCountsFor={effectiveCountsFor}
-          focusRowId={flashKey}
-          finalized={finalized}
-        />
-      </section>
-
+      <PayrollDaysMatrix
+        routingDates={routingDates}
+        personnelRates={rates}
+        currency={currency}
+        statusOf={statusOf}
+        saveDayStatus={saveDayStatus}
+        saveDayType={saveDayType}
+        tourDayTypeOf={tourDayTypeOf}
+        isExplicit={isExplicit}
+        fillDays={fillDays}
+        rateTypes={types}
+        amountMap={amountMap}
+        oneOffFee={totals.oneOff}
+        focusRowId={flashKey}
+        finalized={finalized}
+      />
     </div>
   );
 }
 
-/** M1-C — the finalize lock bar. When finalized: an amber banner + admin Unlock.
- *  When editable: a subtle "Finalize payroll" action. The server enforces the lock
- *  regardless (src/lib/payroll/finalize.ts); this is the affordance + the cue. */
-function FinalizeBar({ tourId, finalizedAt }: { tourId: string; finalizedAt: string | null }) {
+/** M1-C — finalize / unlock. The server enforces the lock regardless
+ *  (src/lib/payroll/finalize.ts); these are the affordance and the cue. */
+function useFinalizeAction(tourId: string) {
   const router = useRouter();
+  const { showToast } = useToast();
   const [busy, setBusy] = useState(false);
-  const finalized = !!finalizedAt;
-
   async function act(method: 'POST' | 'DELETE') {
     setBusy(true);
     try {
       const res = await fetch(`/api/tours/${tourId}/payroll/finalize`, { method });
       if (!res.ok) {
         const j = await res.json().catch(() => ({}));
-        alert(typeof j.error === 'string' ? j.error : 'Action failed');
+        showToast(typeof j.error === 'string' ? j.error : 'That didn’t work — try again.', 'error');
         return;
       }
       router.refresh();
@@ -216,57 +258,45 @@ function FinalizeBar({ tourId, finalizedAt }: { tourId: string; finalizedAt: str
       setBusy(false);
     }
   }
+  return { busy, act };
+}
 
-  if (finalized) {
-    const when = finalizedAt ? new Date(finalizedAt).toLocaleDateString() : '';
-    return (
-      <div
-        className="flex flex-wrap items-center justify-between"
-        style={{
-          gap: 8, padding: '8px 12px', borderRadius: 'var(--lp-radius-md)',
-          background: 'color-mix(in srgb, var(--color-lp-warning) 8%, transparent)',
-          border: '1px solid color-mix(in srgb, var(--color-lp-warning) 40%, transparent)',
-        }}
-      >
-        <span className="flex items-center" style={{ gap: 6, fontSize: 'var(--lp-text-sm)', color: 'var(--lp-text)' }}>
-          <Lock size={14} /> Finalized {when} — rates &amp; days are read-only.
-        </span>
-        <button type="button" disabled={busy} onClick={() => void act('DELETE')} className="btn-transition inline-flex items-center" style={{ gap: 4, padding: '4px 10px', fontSize: 'var(--lp-text-sm)', color: 'var(--lp-text-secondary)', background: 'transparent', border: '1px solid var(--lp-border-strong)', borderRadius: 'var(--lp-radius-md)', cursor: 'pointer' }}>
-          <Unlock size={13} /> Unlock to edit
-        </button>
-      </div>
-    );
-  }
+function FinalizeButton({ tourId }: { tourId: string }) {
+  const { busy, act } = useFinalizeAction(tourId);
   return (
-    <div className="flex justify-end">
-      <button type="button" disabled={busy} onClick={() => void act('POST')} className="btn-transition inline-flex items-center" style={{ gap: 4, padding: '4px 10px', fontSize: 'var(--lp-text-xs)', color: 'var(--lp-text-tertiary)', background: 'transparent', border: '1px solid var(--lp-border-subtle)', borderRadius: 'var(--lp-radius-md)', cursor: 'pointer' }} title="Lock rates + days so they can't be edited">
-        <Lock size={12} /> Finalize payroll
+    <button type="button" className="pay-btn pay-btn-ghost" disabled={busy} onClick={() => void act('POST')} title="Lock rates and days so they can’t be edited">
+      <Lock size={14} aria-hidden /> Finalize
+    </button>
+  );
+}
+
+function FinalizedBanner({ tourId, finalizedAt }: { tourId: string; finalizedAt: string | null }) {
+  const { busy, act } = useFinalizeAction(tourId);
+  const when = finalizedAt ? new Date(finalizedAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' }) : '';
+  return (
+    <div className="pay-banner" role="status">
+      <span><Lock size={14} aria-hidden /> Finalized {when}. Rates and days are read-only.</span>
+      <button type="button" className="pay-btn pay-btn-sm" disabled={busy} onClick={() => void act('DELETE')}>
+        <Unlock size={13} aria-hidden /> Unlock to edit
       </button>
     </div>
   );
 }
 
-/** Collapsed-by-default disclosure — the compact chrome for Rates / Summary so
- *  the Days matrix dominates the page (G2-1b). Native <details> for the toggle. */
+/** The Summary card — native <details> so it collapses without JS state. */
 function Disclosure({ label, hint, children, open, onToggle }: { label: string; hint?: string; children: ReactNode; open?: boolean; onToggle?: (open: boolean) => void }) {
   return (
     <details
+      className="pay-card"
       open={open}
       onToggle={onToggle ? (e) => onToggle((e.currentTarget as HTMLDetailsElement).open) : undefined}
-      style={{ border: '1px solid var(--lp-border)', borderRadius: 'var(--lp-radius-md)', background: 'var(--lp-bg)', overflow: 'hidden' }}
     >
-      <summary
-        style={{
-          cursor: 'pointer', padding: '8px 14px', display: 'flex', alignItems: 'baseline', gap: 8,
-          fontSize: 'var(--lp-text-md)', fontWeight: 800, letterSpacing: '0.02em', textTransform: 'uppercase',
-          background: 'var(--lp-sheet-band-bg)', color: 'var(--lp-sheet-band-fg)',
-        }}
-      >
-        {label}
-        {hint ? <span style={{ fontSize: 'var(--lp-text-xs)', fontWeight: 400, textTransform: 'none', letterSpacing: 0, opacity: 0.75 }}>· {hint}</span> : null}
+      <summary className="pay-card-head" style={{ justifyContent: 'flex-start' }}>
+        <ChevronDown size={16} className="pay-chev" aria-hidden />
+        <span className="pay-card-title">{label}</span>
+        {hint ? <span className="pay-card-hint">{hint}</span> : null}
       </summary>
-      <div style={{ padding: '8px 12px 12px' }}>{children}</div>
+      {children}
     </details>
   );
 }
-
