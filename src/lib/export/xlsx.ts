@@ -15,6 +15,7 @@ import { getEffectiveActual } from '@/lib/budget/transactions';
 import { isIncomeRow } from '@/lib/budget/income-rows';
 import { fxMargin, isHeldDeposit, lineInTour } from '@/lib/budget/lineMoney';
 import { isPlaceholderHotelName } from '@/lib/rooming/nightsSummary';
+import { roomLabel } from '@/lib/rooming/stays';
 import { loadBudgetExportData } from '@/lib/export/budget-data';
 import { loadRoomingExportData } from '@/lib/export/rooming-data';
 import { loadPayrollExportData } from '@/lib/export/payroll-data';
@@ -181,13 +182,13 @@ function roomingSheet(data: RoomingExportData): SheetSpec {
     // Auto-placeholder hotels (legacy 'Unassigned Hotel' OR the grid's
     // 'Hotel — {city} · {date}' name-marker) fall back to the place label.
     const named = Boolean(h.name && h.name.trim()) && !isPlaceholderHotelName(h.name);
-    const hotelLabel = named ? h.name : place || '—';
+    const hotelLabel = named && h.name ? h.name : `No hotel booked yet${place ? ` — ${place}` : ''}`;
     return h.rows.map((r) => ({
       hotel: hotelLabel,
       city: h.city || '',
       country: h.country || '',
       guest: r.guest || '—',
-      roomType: r.roomType || '',
+      roomType: r.roomType ? roomLabel(r.roomType, null) : '',
       roomNumber: r.roomNumber || '',
       checkIn: r.checkIn || '',
       checkOut: r.checkOut || '',

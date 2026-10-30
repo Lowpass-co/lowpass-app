@@ -2,110 +2,118 @@
    LOWPASS — Rooming PDF body (#8 Document Export, Rooming slice)
 
    buildRoomingBodyHtml(data) → the per-surface BODY the shared shell (shell.ts)
-   wraps. The standard hotel rooming-list you email a hotel: grouped by hotel
-   (name · address · phone · date span), each a table of
-   guest · room type · check-in · check-out · # nights.
+   wraps: the rooming list you email a hotel.
 
-   Pure (no I/O). Reuses the shell's shared table primitives + tokens; does NOT
-   modify shell.ts (it stays generic for Payroll / Routing).
+   Oct 2026 rework (Adam: "a really clear rooming list"). Per hotel:
+     - a header card: name, address, phone, confirmation, dates, and the
+       counts a hotel books by — people, rooms (peak night), room-nights —
+       with the rooms needed each night when it changes;
+     - one line per ROOM per stay (data from src/lib/rooming/stays.ts): room
+       type, the guest(s) in it, arrive, depart, nights. A single is one
+       person's room; sharers sit together in one line.
+   Nights nobody stays never print. Unbooked nights (no hotel yet) are grouped
+   by city under "No hotel booked yet".
+
+   Pure (no I/O). Reuses the shell's table primitives + tokens.
    ============================================ */
 
 import { escapeHtml as esc } from '@/lib/export/shell';
-import { isPlaceholderHotelName } from '@/lib/rooming/nightsSummary';
+import { roomLabel } from '@/lib/rooming/stays';
 import type { RoomingExportData, RoomingHotel } from '@/lib/export/rooming-data';
 import type { TemplateConfig } from '@/lib/export/template-config';
 
+const STYLE = `<style>
+.rl-hotel { margin: 0 0 20px; }
+.rl-head { display: flex; gap: 16px; align-items: stretch; padding: 11px 14px; border: 1px solid var(--lp-border); border-left: 3px solid var(--lp-orange); border-radius: 8px; background: var(--lp-bg-subtle); break-inside: avoid; break-after: avoid; }
+.rl-head-main { flex: 1 1 auto; min-width: 0; }
+.rl-name { font-size: 14px; font-weight: 800; color: var(--lp-text); line-height: 1.2; }
+.rl-name.rl-unbooked { color: var(--lp-text-secondary); }
+.rl-meta { font-size: 9px; color: var(--lp-text-tertiary); margin-top: 2px; }
+.rl-dates { font-size: 9.5px; font-weight: 600; color: var(--lp-text-secondary); margin-top: 4px; }
+.rl-counts { flex: 0 0 auto; display: flex; gap: 14px; align-items: center; padding-left: 14px; border-left: 1px solid var(--lp-border); }
+.rl-count { text-align: center; }
+.rl-count b { display: block; font-size: 16px; font-weight: 800; line-height: 1; color: var(--lp-text); font-variant-numeric: tabular-nums; }
+.rl-count span { font-size: 7.5px; font-weight: 700; letter-spacing: 0.5px; text-transform: uppercase; color: var(--lp-text-tertiary); }
+.rl-nightly { font-size: 8.5px; color: var(--lp-text-tertiary); margin: 5px 2px 0; }
+.rl-tbl { margin-top: 6px; }
+.rl-tbl td { vertical-align: top; }
+.rl-room { font-weight: 700; white-space: nowrap; }
+.rl-guest { display: block; }
+.rl-guest + .rl-guest { margin-top: 2px; }
+.rl-tbl tbody tr { break-inside: avoid; }
+</style>`;
+
 function fmtDate(d: string | null): string {
   if (!d) return '—';
-  const parsed = new Date(`${d}T12:00:00`);
+  const parsed = new Date(`${d}T12:00:00Z`);
   if (Number.isNaN(parsed.getTime())) return esc(d);
-  return parsed.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' });
+  return parsed.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' });
 }
-function dateSpan(start: string | null, end: string | null): string {
-  if (!start && !end) return '';
-  const f = (d: string | null) => (d ? new Date(`${d}T12:00:00`).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : '—');
-  return `${f(start)} → ${f(end)}`;
+function longDate(d: string | null): string {
+  if (!d) return '';
+  const parsed = new Date(`${d}T12:00:00Z`);
+  return Number.isNaN(parsed.getTime()) ? '' : parsed.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' });
 }
-
-/** A small room-type chip (doc-local styling via the shell's tokens). */
-function roomChip(t: string | null): string {
-  if (!t) return '<span class="lp-native">—</span>';
-  return `<span style="display:inline-block;padding:1px 7px;border-radius:9px;font-size:8px;font-weight:600;background:var(--lp-bg-subtle);border:1px solid var(--lp-border);color:var(--lp-text-secondary);">${esc(t)}</span>`;
-}
+const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 
 function hotelBlock(h: RoomingHotel): string {
-  const place = [h.city, h.country].filter(Boolean).map((s) => esc(String(s))).join(', ');
-  const contact = [h.address ? esc(h.address) : '', place, h.phone ? esc(h.phone) : ''].filter(Boolean).join('  ·  ');
-  const span = dateSpan(h.spanStart, h.spanEnd);
-  const totalNights = h.rows.reduce((sum, r) => sum + r.nights, 0);
-  const summary = h.rows.length
-    ? `${h.rows.length} guest${h.rows.length === 1 ? '' : 's'} · ${totalNights} night${totalNights === 1 ? '' : 's'}${span ? ` · ${esc(span)}` : ''}`
-    : 'No guests assigned';
+  const place = [h.city, h.country].filter(Boolean).join(', ');
+  const heading = h.name ? esc(h.name) : `No hotel booked yet${place ? ` — ${esc(place)}` : ''}`;
+  const meta = [h.address, h.name ? place : null, h.phone].filter(Boolean).map((x) => esc(String(x))).join('  ·  ');
+  const conf = h.confirmation ? `Confirmation ${esc(h.confirmation)}` : '';
+  const dates = h.spanStart ? `Arrive ${esc(longDate(h.spanStart))}  →  Depart ${esc(longDate(h.spanEnd))}` : '';
+  const s = h.summary;
+  const varies = s.perNight.length > 1 && s.perNight.some((n) => n.rooms !== s.peakRooms);
+  const nightly = varies
+    ? `<div class="rl-nightly">Rooms each night: ${s.perNight.map((n) => `${esc(fmtDate(n.night))} <b>${n.rooms}</b>`).join(' · ')}</div>`
+    : '';
 
-  // Heading: the hotel name, but for an unnamed / auto-placeholder hotel
-  // (legacy 'Unassigned Hotel' OR the grid's 'Hotel — {city} · {date}' —
-  // shared name-marker, see isPlaceholderHotelName) fall back to city/country
-  // (Part E) so the block still reads as a place.
-  const named = Boolean(h.name && h.name.trim()) && !isPlaceholderHotelName(h.name);
-  const heading = named ? esc(h.name) : place || 'Hotel';
+  const head = `<div class="rl-head">
+      <div class="rl-head-main">
+        <div class="rl-name${h.name ? '' : ' rl-unbooked'}">${heading}</div>
+        ${meta ? `<div class="rl-meta">${meta}</div>` : ''}
+        ${conf ? `<div class="rl-meta">${conf}</div>` : ''}
+        ${dates ? `<div class="rl-dates">${dates}</div>` : ''}
+      </div>
+      <div class="rl-counts">
+        <div class="rl-count"><b>${s.people}</b><span>${s.people === 1 ? 'Person' : 'People'}</span></div>
+        <div class="rl-count"><b>${s.peakRooms}</b><span>${s.peakRooms === 1 ? 'Room' : 'Rooms'}</span></div>
+        <div class="rl-count"><b>${s.roomNights}</b><span>Room-nights</span></div>
+      </div>
+    </div>${nightly}`;
 
-  // Branded hotel header band (orange left accent + contact + summary).
-  const head = `
-    <div style="border-left:3px solid var(--lp-orange);padding:5px 0 5px 10px;margin:16px 0 4px;">
-      <div style="font-size:13px;font-weight:800;color:var(--lp-text);">${heading}</div>
-      ${contact ? `<div style="font-size:9px;color:var(--lp-text-tertiary);margin-top:1px;">${contact}</div>` : ''}
-      <div style="font-size:9px;color:var(--lp-text-secondary);margin-top:2px;font-weight:600;">${summary}</div>
-    </div>`;
+  const rows = h.stays
+    .map(
+      (st) => `<tr>
+        <td class="rl-room">${esc(roomLabel(st.roomType, st.roomNumber))}</td>
+        <td>${st.guests.map((g) => `<span class="rl-guest">${esc(g)}</span>`).join('')}</td>
+        <td>${fmtDate(st.checkIn)}</td>
+        <td>${fmtDate(st.checkOut)}</td>
+        <td class="num">${st.nights}</td>
+      </tr>`,
+    )
+    .join('');
 
-  if (h.rows.length === 0) return head;
-
-  // Group guests sharing a room (rows are pre-sorted by roomKey) — the room-type
-  // cell spans the sharers so the sharing is clear (Adam: keep the formatting).
-  const groups: Array<{ key: string; items: typeof h.rows }> = [];
-  for (const r of h.rows) {
-    const last = groups[groups.length - 1];
-    if (last && last.key === r.roomKey) last.items.push(r);
-    else groups.push({ key: r.roomKey, items: [r] });
-  }
-  let body = '';
-  groups.forEach((g, gi) => {
-    const zebra = gi % 2 === 1 ? ' style="background:#faf8f5;"' : '';
-    g.items.forEach((r, ri) => {
-      const roomCell =
-        ri === 0
-          ? `<td rowspan="${g.items.length}" style="vertical-align:middle;">${roomChip(r.roomType)}${r.roomNumber ? ` <span class="lp-native">#${esc(r.roomNumber)}</span>` : ''}${g.items.length > 1 ? `<div class="lp-native" style="margin-top:2px;">shared · ${g.items.length}</div>` : ''}</td>`
-          : '';
-      body += `<tr${zebra}>
-        <td>${esc(r.guest || '—')}</td>
-        ${roomCell}
-        <td>${fmtDate(r.checkIn)}</td>
-        <td>${fmtDate(r.checkOut)}</td>
-        <td class="num">${r.nights}</td>
-      </tr>`;
-    });
-  });
-  return `${head}
-    <table class="lp-tbl">
-      <thead><tr><th>Guest</th><th>Room type</th><th>Check-in</th><th>Check-out</th><th class="num">Nights</th></tr></thead>
+  return `<div class="rl-hotel">${head}
+    <table class="lp-tbl rl-tbl">
+      <thead><tr><th style="width:18%">Room</th><th>Guest${h.stays.some((x) => x.guests.length > 1) ? 's' : ''}</th><th style="width:15%">Arrive</th><th style="width:15%">Depart</th><th class="num" style="width:9%">Nights</th></tr></thead>
       <tbody>
-        ${body}
-        <tr class="lp-subtotal"><td colspan="4">${h.rows.length} guest${h.rows.length === 1 ? '' : 's'}</td><td class="num">${totalNights}</td></tr>
+        ${rows}
+        <tr class="lp-subtotal"><td colspan="4">${plural(h.stays.length, 'room booking')} · ${plural(s.people, 'person', 'people')}</td><td class="num">${s.roomNights}</td></tr>
       </tbody>
-    </table>`;
+    </table></div>`;
 }
 
-/** P1 template builder. Rooming has one coarse section (`hotels`) for now — the
- *  config's show/hide toggles it; the order is trivial with a single section.
- *  DEFAULT (hotels shown) reproduces the pre-template output. Presentation only. */
+/** Rooming has one coarse section (`hotels`); the config's show/hide toggles it. */
 export function buildRoomingBodyHtml(data: RoomingExportData, config: TemplateConfig): string {
   const sections: Record<string, () => string> = {
-    hotels: () =>
-      data.hotels.length === 0
-        ? `<p class="lp-native">No hotels booked for this tour.</p>`
-        : data.hotels.map(hotelBlock).join(''),
+    hotels: () => (data.hotels.length === 0 ? `<p class="lp-native">Nobody is booked into a hotel on these dates.</p>` : data.hotels.map(hotelBlock).join('')),
   };
-  return config.sections
-    .filter((s) => s.show)
-    .map((s) => sections[s.id]?.() ?? '')
-    .join('');
+  return (
+    STYLE +
+    config.sections
+      .filter((s) => s.show)
+      .map((s) => sections[s.id]?.() ?? '')
+      .join('')
+  );
 }
