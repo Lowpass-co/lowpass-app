@@ -4,9 +4,12 @@
    Mirrors the rooming PAGE's loaders (src/app/(app)/operations/[tourId]/rooming/
    page.tsx) so the exported hotel rooming-list matches exactly what the Rooming
    surface shows — same canonical source (hotels / rooms / room_assignments /
-   persons, migration 051), the same roster filter (only tour-roster members'
-   assignments render; a not-yet-linked null person_id is kept, never dropped),
-   and the same nights derivation.
+   persons, migration 051) and the same roster filter (only tour-roster members'
+   assignments render; a not-yet-linked null person_id is kept, never dropped).
+
+   Oct 2026 — the grid's one-row-per-person-per-night data is turned into real
+   stays (src/lib/rooming/stays.ts): one line per room per run of nights, a
+   single per person, sharers together, nobody-staying nights left out.
 
    Read-only. Caller has already auth'd + workspace-scoped the tour. Adds the
    letterhead inputs (artist name + logo) the shared shell needs.
@@ -14,6 +17,8 @@
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { resolveArtistLogoUrl } from '@/lib/artists/imageUrl';
+import { isPlaceholderHotelName } from '@/lib/rooming/nightsSummary';
+import { buildStays, summariseStays, type NightInput, type Stay, type StaySummary } from '@/lib/rooming/stays';
 
 export interface RoomingAssignmentRow {
   guest: string | null;
@@ -22,19 +27,26 @@ export interface RoomingAssignmentRow {
   checkIn: string;
   checkOut: string;
   nights: number;
-  /** Stable key for grouping guests who share a room (Part E). */
+  /** Stable key for grouping guests who share a room (one per stay). */
   roomKey: string;
 }
 
 export interface RoomingHotel {
-  name: string;
+  /** Null for an unbooked night (a placeholder the grid made) — the heading
+   *  then says no hotel is booked yet, with the city. */
+  name: string | null;
   address: string | null;
   city: string | null;
   country: string | null;
   phone: string | null;
-  /** Earliest check-in / latest check-out across this hotel's rows. */
+  confirmation: string | null;
+  /** Earliest check-in / latest check-out across this hotel's stays. */
   spanStart: string | null;
   spanEnd: string | null;
+  /** One per room per unbroken run of nights with the same guests. */
+  stays: Stay[];
+  summary: StaySummary;
+  /** The same, one row per guest per stay (the Excel sheet's shape). */
   rows: RoomingAssignmentRow[];
 }
 
@@ -44,32 +56,6 @@ export interface RoomingExportData {
   /** Raw (network) artist logo URL — the route inlines it to a data URI. */
   logoUrl: string | null;
   hotels: RoomingHotel[];
-}
-
-const nightsBetween = (checkIn: string, checkOut: string): number =>
-  Math.max(
-    0,
-    Math.round(
-      (new Date(`${checkOut}T12:00:00`).getTime() - new Date(`${checkIn}T12:00:00`).getTime()) /
-        (24 * 60 * 60 * 1000),
-    ),
-  );
-
-function addDays(date: string, days: number): string {
-  const d = new Date(`${date}T12:00:00`);
-  if (Number.isNaN(d.getTime())) return date;
-  d.setDate(d.getDate() + days);
-  return d.toISOString().slice(0, 10);
-}
-
-/** Presentation-only nights/checkout calc (Part E — fix the off-by-one). A block
- *  whose stored ends_on is on/before its starts_on is ONE night: nights = 1,
- *  check-out = the day after check-in. Multi-day stays are unchanged (ends_on is the
- *  checkout date). Never mutates the source room data. */
-function stayNights(startsOn: string, endsOn: string): { nights: number; checkOut: string } {
-  const raw = nightsBetween(startsOn, endsOn);
-  if (raw < 1) return { nights: 1, checkOut: addDays(startsOn, 1) };
-  return { nights: raw, checkOut: endsOn };
 }
 
 export async function loadRoomingExportData(
@@ -106,6 +92,7 @@ export async function loadRoomingExportData(
     city?: string | null;
     country?: string | null;
     phone?: string | null;
+    confirmation_number?: string | null;
     rooms?: Array<{
       id?: string;
       room_type?: string | null;
@@ -119,39 +106,61 @@ export async function loadRoomingExportData(
     }>;
   }>;
 
-  const hotels: RoomingHotel[] = hotelsRaw.map((h) => {
-    const rows: RoomingAssignmentRow[] = (h.rooms ?? []).flatMap((room) => {
-      const roomKey = room.id ?? `${room.room_type ?? ''}|${room.room_number ?? ''}`;
-      return (room.room_assignments ?? [])
+  // Every guest-night, then stays. Unbooked nights (the grid's per-night
+  // placeholder hotels) are grouped by city so a run of them reads as one
+  // block, not a hotel per night.
+  const groupKey = (h: (typeof hotelsRaw)[number]) =>
+    isPlaceholderHotelName(h.name) || !h.name?.trim() ? `~unbooked|${(h.city ?? '').trim().toLowerCase()}` : h.id;
+  const nights: NightInput[] = [];
+  for (const h of hotelsRaw) {
+    const key = groupKey(h);
+    for (const room of h.rooms ?? []) {
+      for (const ra of room.room_assignments ?? []) {
         // Mirror the page filter: roster members (or a not-yet-linked null id).
-        .filter((ra) => !ra.person_id || rosterPersonIds.has(ra.person_id))
-        // Part E/G shared date range — keep stays that OVERLAP [from,to] (null = open).
-        .filter((ra) => (!range?.from || ra.ends_on >= range.from) && (!range?.to || ra.starts_on <= range.to))
-        .map((ra) => {
-          const person = Array.isArray(ra.persons) ? ra.persons[0] : ra.persons;
-          const { nights, checkOut } = stayNights(ra.starts_on, ra.ends_on);
-          return {
-            guest: person?.full_name ?? null,
-            roomType: room.room_type ?? null,
-            roomNumber: room.room_number ?? null,
-            checkIn: ra.starts_on,
-            checkOut,
-            nights,
-            roomKey,
-          };
+        if (ra.person_id && !rosterPersonIds.has(ra.person_id)) continue;
+        const person = Array.isArray(ra.persons) ? ra.persons[0] : ra.persons;
+        nights.push({
+          hotelKey: key,
+          person: person?.full_name ?? null,
+          // Unbooked nights are separate placeholder hotels (separate room
+          // rows per night): identify their rooms by code so a run merges.
+          roomId: key.startsWith('~unbooked|') ? null : room.id ?? null,
+          roomType: room.room_type ?? null,
+          roomNumber: room.room_number ?? null,
+          startsOn: ra.starts_on,
+          endsOn: ra.ends_on,
         });
+      }
+    }
+  }
+  const stays = buildStays(nights, range);
+
+  const seen = new Set<string>();
+  const hotels: RoomingHotel[] = [];
+  for (const h of hotelsRaw) {
+    const key = groupKey(h);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    const own = stays.filter((s) => s.hotelKey === key);
+    if (!own.length) continue; // nobody staying — not a line on a rooming list
+    const unbooked = key.startsWith('~unbooked|');
+    hotels.push({
+      name: unbooked ? null : h.name,
+      address: unbooked ? null : h.address ?? null,
+      city: h.city ?? null,
+      country: h.country ?? null,
+      phone: unbooked ? null : h.phone ?? null,
+      confirmation: unbooked ? null : h.confirmation_number ?? null,
+      spanStart: own.reduce<string | null>((m, s) => (m === null || s.checkIn < m ? s.checkIn : m), null),
+      spanEnd: own.reduce<string | null>((m, s) => (m === null || s.checkOut > m ? s.checkOut : m), null),
+      stays: own,
+      summary: summariseStays(own),
+      rows: own.flatMap((s, i) =>
+        s.guests.map((g) => ({ guest: g, roomType: s.roomType, roomNumber: s.roomNumber, checkIn: s.checkIn, checkOut: s.checkOut, nights: s.nights, roomKey: `${key}#${i}` })),
+      ),
     });
-    // Group guests sharing a room: order by room, then check-in, then guest.
-    rows.sort(
-      (a, b) =>
-        a.roomKey.localeCompare(b.roomKey) ||
-        (a.checkIn ?? '').localeCompare(b.checkIn ?? '') ||
-        (a.guest ?? '').localeCompare(b.guest ?? ''),
-    );
-    const spanStart = rows.reduce<string | null>((min, r) => (min === null || r.checkIn < min ? r.checkIn : min), null);
-    const spanEnd = rows.reduce<string | null>((max, r) => (max === null || r.checkOut > max ? r.checkOut : max), null);
-    return { name: h.name, address: h.address ?? null, city: h.city ?? null, country: h.country ?? null, phone: h.phone ?? null, spanStart, spanEnd, rows };
-  });
+  }
+  hotels.sort((a, b) => (a.spanStart ?? '').localeCompare(b.spanStart ?? ''));
 
   const artistRow = artistRes.data as { id: string; name: string; branding: unknown; spotify_id: string | null; spotify_image_url: string | null } | null;
   const logoUrl = artistRow ? await resolveArtistLogoUrl(artistRow) : null;

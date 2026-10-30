@@ -300,3 +300,38 @@ describe('derived lines — approved budgets and failures', () => {
     expect(db.writes()).toBe(0);
   });
 });
+
+describe('hotel cost from the rooming grid (one row per person per night)', () => {
+  // Grid shape: one room row per hotel + code; one assignment per person per night.
+  function seedGrid(db: FakeDb) {
+    db.seed('tours', [{ id: TOUR, workspace_id: WS, currency: 'GBP' }]);
+    db.seed('hotels', [
+      { id: 'hg', tour_id: TOUR, workspace_id: WS, name: 'Hampton Inn', city: 'Nashville', check_in_at: '2026-09-09' },
+      { id: 'hp', tour_id: TOUR, workspace_id: WS, name: 'Hotel — Atlanta · 2026-09-13', city: 'Atlanta', check_in_at: '2026-09-13' },
+    ]);
+    db.seed('rooms', [
+      { id: 'sgl', hotel_id: 'hg', workspace_id: WS, room_type: 'SGL', cost_amount: 100, cost_currency: 'GBP' },
+      { id: 'dbla', hotel_id: 'hg', workspace_id: WS, room_type: 'DBL (A)', cost_amount: 150, cost_currency: 'GBP' },
+      { id: 'psgl', hotel_id: 'hp', workspace_id: WS, room_type: 'SGL', cost_amount: 80, cost_currency: 'GBP' },
+    ]);
+    const night = (room: string, person: string, d: string) => ({ room_id: room, person_id: person, workspace_id: WS, starts_on: d, ends_on: d });
+    db.seed('room_assignments', [
+      ...['p1', 'p2', 'p3'].flatMap((p) => ['2026-09-09', '2026-09-10'].map((d) => night('sgl', p, d))),
+      ...['p4', 'p5'].flatMap((p) => ['2026-09-09', '2026-09-10'].map((d) => night('dbla', p, d))),
+      night('psgl', 'p1', '2026-09-13'),
+    ]);
+  }
+
+  it('singles cost one room each, a shared code one room, and a one-night booking its night', async () => {
+    const db = newDb();
+    seedGrid(db);
+    const res = await reconcileDerivedBudgetLines(db.client(), TOUR, WS, { families: ['hotel_booking'] });
+    expect(res.errors).toEqual([]);
+    const byHotel = Object.fromEntries(lines(db, 'hotel_booking').map((l) => [l.source_entity_id, l]));
+    // 3 singles × 2 nights × £100 + 1 shared double × 2 nights × £150
+    expect(byHotel.hg.proposed_cost).toBe(900);
+    expect(byHotel.hg.label).toContain('4 rooms');
+    // was £0: a same-day row is one night
+    expect(byHotel.hp.proposed_cost).toBe(80);
+  });
+});

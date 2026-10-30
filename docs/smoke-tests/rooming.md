@@ -129,3 +129,21 @@ sets any of these → `BudgetGridView.tsx`, `BudgetIncomeGrid.tsx`,
   change made from the Cards or Nights view moves it too. Before 273 is
   pasted it shows "—" and nothing else breaks.
 
+
+## Rooming list export (Oct 2026)
+
+#### ROOM-11 — One line per room per stay
+
+**Do**: Rooming → Export… on a tour where three people have SGL and two share
+DBL (A) for three nights at one hotel.
+
+**Expect**: Three "Single" lines (one per person, Arrive →
+Depart, 3 nights each) and one "Double (A)" line listing both guests. The hotel
+card reads 5 people · 4 rooms · 12 room-nights. No line repeats per night.
+
+#### ROOM-12 — No blank days; unbooked nights grouped
+
+**Do**: Include nights where nobody has a room, and nights with no hotel yet.
+
+**Expect**: Nights nobody stays don't appear. Nights without a hotel appear
+once per city under "No hotel booked yet — <city>", merged into stays.

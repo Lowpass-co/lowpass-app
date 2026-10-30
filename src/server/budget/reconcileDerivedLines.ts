@@ -34,6 +34,7 @@
        converted into the line's currency before they become its actual.
    ============================================ */
 
+import { buildStays, summariseStays, type NightInput } from '@/lib/rooming/stays';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { countDayStatuses, computeTotals } from '@/lib/payroll/fees';
 import { effectiveStatuses } from '@/lib/payroll/effectiveDayType';
@@ -98,14 +99,6 @@ function must<T>(what: string, res: { data: T | null; error: { message?: string;
 const isPermissionError = (code?: string | null): boolean =>
   code === '42501' || code === 'PGRST301' || code === '401' || code === '403';
 
-function nightsBetween(start: unknown, end: unknown): number {
-  if (!start || !end) return 0;
-  const a = new Date(`${String(start).slice(0, 10)}T12:00:00Z`);
-  const b = new Date(`${String(end).slice(0, 10)}T12:00:00Z`);
-  const ms = b.getTime() - a.getTime();
-  if (!Number.isFinite(ms) || ms <= 0) return 0;
-  return Math.round(ms / 86_400_000);
-}
 
 /* ---- Sources → desired lines ------------------------------------ */
 
@@ -137,9 +130,18 @@ export interface HotelTotal {
   rooms: number;
 }
 
-/** Per-hotel cost: Σ(room.cost_amount × nights) with each room's assignments
- *  collapsed to one range, so a shared room is counted once, not per occupant.
- *  THE hotel formula — the rooming API reads this too. */
+/** Per-hotel cost: Σ over the rooms actually occupied, each night, of that
+ *  room's nightly rate (room.cost_amount). THE hotel formula — the rooming API
+ *  reads this too.
+ *
+ *  Nights come from src/lib/rooming/stays.ts, which reads both shapes rooming
+ *  is stored in: ranged assignments ([starts_on, ends_on)) and the grid's one
+ *  row per person per night. A room row is one room shared by everyone in it,
+ *  except a single, which is one room per person (the grid files every single
+ *  at a hotel under one SGL row). Before Oct 2026 this collapsed each room's
+ *  assignments to min→max, so every single at a hotel cost as ONE room, a
+ *  one-night grid booking cost nothing, and a run of grid nights was one
+ *  night short. */
 export async function computeHotelTotals(
   supabase: SupabaseClient,
   tourId: string,
@@ -161,20 +163,40 @@ export async function computeHotelTotals(
   );
   const roomIds = rooms.map((r) => r.id);
   const assignments = roomIds.length
-    ? must<Array<{ room_id: string; starts_on: string | null; ends_on: string | null }>>(
+    ? must<Array<{ id?: string; room_id: string; person_id: string | null; starts_on: string | null; ends_on: string | null }>>(
         'room assignments',
-        await supabase.from('room_assignments').select('room_id, starts_on, ends_on').eq('workspace_id', workspaceId).in('room_id', roomIds),
+        await supabase.from('room_assignments').select('id, room_id, person_id, starts_on, ends_on').eq('workspace_id', workspaceId).in('room_id', roomIds),
       )
     : [];
 
-  const rangeByRoom = new Map<string, { start: string; end: string }>();
-  for (const a of assignments) {
-    if (!a.starts_on || !a.ends_on) continue;
-    const prev = rangeByRoom.get(a.room_id);
-    rangeByRoom.set(a.room_id, prev
-      ? { start: a.starts_on < prev.start ? a.starts_on : prev.start, end: a.ends_on > prev.end ? a.ends_on : prev.end }
-      : { start: a.starts_on, end: a.ends_on });
-  }
+  // Occupied room-nights per room row (a row's singles counted one each).
+  const roomById = new Map(rooms.map((r) => [r.id, r]));
+  const groupBy = <T,>(xs: T[], k: (x: T) => string) => {
+    const m = new Map<string, T[]>();
+    for (const x of xs) m.set(k(x), [...(m.get(k(x)) ?? []), x]);
+    return m;
+  };
+  const stays = buildStays(
+    assignments
+      .filter((a) => a.starts_on && roomById.has(a.room_id))
+      .map((a) => {
+        const r = roomById.get(a.room_id)!;
+        return {
+          hotelKey: r.hotel_id,
+          // An unlinked occupant is still a person: key them by the assignment.
+          person: a.person_id ?? `assignment:${a.id ?? `${a.room_id}:${a.starts_on}`}`,
+          roomId: r.id,
+          roomType: r.room_type,
+          roomNumber: null,
+          startsOn: String(a.starts_on).slice(0, 10),
+          endsOn: String(a.ends_on ?? a.starts_on).slice(0, 10),
+        } satisfies NightInput;
+      }),
+  );
+  const nightsByRoom = new Map<string, number>();
+  const peakByHotel = new Map<string, number>();
+  for (const [hid, list] of groupBy(stays, (st) => st.hotelKey)) peakByHotel.set(hid, summariseStays(list).peakRooms);
+  for (const st of stays) if (st.roomId) nightsByRoom.set(st.roomId, (nightsByRoom.get(st.roomId) ?? 0) + st.nights);
 
   // Each hotel's line currency = the currency most of its costed rooms use.
   const ccyVotes = new Map<string, Map<string, number>>();
@@ -191,15 +213,13 @@ export async function computeHotelTotals(
     return [...votes.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))[0][0];
   };
 
-  for (const h of hotels) totals.set(h.id, { hotelId: h.id, total: 0, currency: hotelCcy(h.id), rooms: 0 });
+  for (const h of hotels) totals.set(h.id, { hotelId: h.id, total: 0, currency: hotelCcy(h.id), rooms: peakByHotel.get(h.id) ?? 0 });
   for (const r of rooms) {
     const t = totals.get(r.hotel_id);
     if (!t) continue;
-    const type = String(r.room_type ?? '').trim();
-    if (type && type !== '-') t.rooms += 1;
-    const range = rangeByRoom.get(r.id);
-    if (!range) continue;
-    const cost = Number(r.cost_amount ?? 0) * nightsBetween(range.start, range.end);
+    const roomNights = nightsByRoom.get(r.id) ?? 0;
+    if (!roomNights) continue;
+    const cost = Number(r.cost_amount ?? 0) * roomNights;
     const roomCcy = sourceCurrency(r.cost_currency, money.tourCurrency) ?? money.tourCurrency;
     t.total += money.convert(cost, roomCcy, t.currency);
   }

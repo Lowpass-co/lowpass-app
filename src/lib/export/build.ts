@@ -198,7 +198,9 @@ export async function buildRoomingExport(
   const bgDataUri = await fetchExportAssetDataUri(supabase, workspaceId, config.header.bgAssetPath);
 
   const rangeLabel = config.dateRange.from || config.dateRange.to ? tourDateRange(config.dateRange.from, config.dateRange.to) : null;
-  const subtitle = [`${data.hotels.length} hotel${data.hotels.length === 1 ? '' : 's'}`, rangeLabel].filter(Boolean).join(' · ');
+  const booked = data.hotels.filter((h) => h.name).length;
+  const unbooked = data.hotels.length - booked;
+  const subtitle = [`${booked} hotel${booked === 1 ? '' : 's'}`, unbooked ? `${unbooked} not booked yet` : null, rangeLabel].filter(Boolean).join(' · ');
 
   const html = renderDocument({
     letterhead: {
