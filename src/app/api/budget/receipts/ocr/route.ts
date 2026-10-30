@@ -238,10 +238,14 @@ Decide which, and return ONLY valid JSON in this shape:
       "category": "string - one of: hotel, transport, production, catering, misc",
       "description": "string - brief description of what was purchased",
       "payment_method": "string - one of: card, cash, bank_transfer",
-      "line_items": [{"description": "string", "amount": number}]
+      "line_items": [{"description": "string", "amount": number}],
+      "ticket": null
     }
   ]
 }
+
+"ticket" — ONLY for an airline ticket, e-ticket receipt or flight itinerary/invoice; null for anything else:
+{"booking_ref": "string - the booking reference / PNR / confirmation code", "passengers": ["string - each passenger's name as printed"], "legs": [{"flight_number": "string e.g. DL1234", "date": "YYYY-MM-DD", "from": "3-letter airport code", "to": "3-letter airport code"}]}
 
 Rules that matter:
 - ONE logical document = ONE array element, however many pages it covers. Do NOT split a multi-page invoice into one element per page.

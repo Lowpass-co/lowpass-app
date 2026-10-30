@@ -26,6 +26,7 @@ import {
   type ReceiptFacts,
   type TransactionFacts,
 } from '@/lib/budget/receiptMatch';
+import { flightFacts, matchTicket, splitAmount, type FlightFacts } from '@/lib/budget/ticketMatch';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
@@ -78,7 +79,7 @@ export async function POST(request: Request): Promise<NextResponse> {
        are why this is two sequential reads rather than one parallel pair. */
     const { data: lineRows } = await supabase
       .from('budget_line_items')
-      .select('id, section, section_id, label, category, proposed_cost, actual_cost')
+      .select('id, section, section_id, label, category, proposed_cost, actual_cost, flight_id, source_entity_type, source_entity_id')
       .eq('tour_id', tourId);
 
     const lineIds = (lineRows ?? []).map((l) => l.id as string);
@@ -153,13 +154,67 @@ export async function POST(request: Request): Promise<NextResponse> {
       name: (s.name as string | null) ?? '',
     }));
 
-    const pending = incoming.map((r) => {
+    /* Oct 2026 — airline tickets go to the flight they paid for. A flight is
+       one person's ticket for one leg, and its money lives on its derived
+       budget line (budget_line_items.flight_id). Only read when a receipt is a
+       ticket. */
+    let flights: FlightFacts[] = [];
+    if (incoming.some((r) => r.ocr?.ticket)) {
+      const lineByFlight = new Map<string, string>();
+      // A flight's line is linked by flight_id (derived lines) or, on older
+      // rows, by source_entity_type 'flight' + source_entity_id.
+      for (const l of lineRows ?? []) {
+        const row = l as { flight_id?: string | null; source_entity_type?: string | null; source_entity_id?: string | null };
+        const fid = row.flight_id ?? (row.source_entity_type === 'flight' ? row.source_entity_id : null);
+        if (fid && !lineByFlight.has(fid)) lineByFlight.set(fid, l.id as string);
+      }
+      const { data: flightRows } = await supabase
+        .from('flights')
+        .select('id, person_name, airline, flight_number, pnr, confirmation, depart_at, origin_airport, destination_airport')
+        .eq('tour_id', tourId);
+      flights = ((flightRows ?? []) as Array<Parameters<typeof flightFacts>[0]>).map((f) => flightFacts(f, lineByFlight.get(f.id) ?? null));
+    }
+
+    const pending = incoming.flatMap((r): Record<string, unknown>[] => {
+      const ticket = matchTicket(r.ocr?.ticket, flights);
+      if (ticket) {
+        const dup = proposeForReceipt(r.ocr, [], transactions, {});
+        const total = r.ocr.total_amount;
+        const shares = total !== null && total !== undefined ? splitAmount(total, ticket.flights.length) : ticket.flights.map(() => null);
+        return ticket.flights.map((f, i) => ({
+          workspace_id: workspaceId,
+          batch_id: batch.id,
+          target: 'receipt_txn' as const,
+          receipt_id: r.receiptId,
+          value: {
+            vendor: r.ocr.vendor,
+            date: r.ocr.date,
+            amount: shares[i],
+            currency: r.ocr.currency,
+            lineItemId: f.lineItemId,
+            flightId: f.id,
+            reason:
+              ticket.flights.length > 1
+                ? `${ticket.reason} · ${f.personName ?? 'ticket'} ${f.from && f.to ? `${f.from}→${f.to} ` : ''}(split ${i + 1}/${ticket.flights.length})`
+                : ticket.reason,
+            score: 1,
+          },
+          source_ref: numberById.get(r.receiptId) ?? null,
+          provenance: 'receipt_ocr',
+          dup_of: dup.dupOf,
+          dup_reason: dup.dupReason,
+          // Ticked in the review queue by default (unless it looks like a
+          // duplicate); the TM still applies it. Several flights → an even split,
+          // one row each, editable before applying.
+          status: dup.dupOf === null ? 'pending' : 'skipped',
+        }));
+      }
       const p = proposeForReceipt(r.ocr, lines, transactions, {
         tourStart: tour.start_date as string | null,
         tourEnd: tour.end_date as string | null,
         sections,
       });
-      return {
+      return [{
         workspace_id: workspaceId,
         batch_id: batch.id,
         target: p.target,
@@ -178,7 +233,7 @@ export async function POST(request: Request): Promise<NextResponse> {
         // Duplicates stage as 'skipped' so the default decision is visible in the
         // data, not just the UI — matches X1-B's default-skip intent.
         status: p.defaultAccept ? 'pending' : 'skipped',
-      };
+      }];
     });
 
     const { data: inserted, error: insErr } = await supabase

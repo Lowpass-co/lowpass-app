@@ -51,6 +51,8 @@ export interface ReceiptFacts {
   currency: string | null;
   category: string | null;
   description: string | null;
+  /** Airline tickets only (Oct 2026) — matched to the tour's flights first. */
+  ticket?: import('./receiptDocuments').TicketFacts | null;
 }
 
 import { resolveSection, type SectionOption } from './receiptSection';

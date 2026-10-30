@@ -226,6 +226,7 @@ export function useReceiptDropQueue(tourId: string, tourCurrency: string) {
               category: doc.category,
               description: doc.description,
               payment_method: doc.payment_method,
+              ticket: doc.ticket ?? null,
             },
             pages: doc.pages ?? null,
             note: pageRangeLabel(doc.pages) || null,
@@ -246,6 +247,7 @@ export function useReceiptDropQueue(tourId: string, tourCurrency: string) {
           category: first.category,
           description: first.description,
           payment_method: first.payment_method,
+          ticket: first.ticket ?? null,
         },
         pages: first.pages ?? null,
         note: siblings.length
