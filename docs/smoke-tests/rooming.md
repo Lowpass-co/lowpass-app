@@ -137,7 +137,7 @@ sets any of these → `BudgetGridView.tsx`, `BudgetIncomeGrid.tsx`,
 **Do**: Rooming → Export… on a tour where three people have SGL and two share
 DBL (A) for three nights at one hotel.
 
-**Expect**: Five singles? No — three "Single" lines (one per person, Arrive →
+**Expect**: Three "Single" lines (one per person, Arrive →
 Depart, 3 nights each) and one "Double (A)" line listing both guests. The hotel
 card reads 5 people · 4 rooms · 12 room-nights. No line repeats per night.
 
