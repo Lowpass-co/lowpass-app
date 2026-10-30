@@ -180,7 +180,12 @@ export function AdvanceBoard({ data }: { data: BoardData }) {
       </div>
 
       <div className="adv-board" role="table" aria-label="Advance by show">
-        <div className="adv-board-grid adv-board-head" style={grid} role="row">
+       {/* One grid for the whole table; every row is a subgrid of it, so the
+           header and each row share the SAME column tracks. (Each row used to
+           be its own grid: the header's longer labels made its columns wider
+           than the rows', so the blocks drifted off their headings.) */}
+       <div className="adv-board-table" style={grid}>
+        <div className="adv-board-grid adv-board-head" role="row">
           <span className="adv-th" style={{ textAlign: 'left', padding: 0 }} role="columnheader">Show</span>
           <span className="adv-th" style={{ textAlign: 'left' }} role="columnheader">Venue request</span>
           {cols.map((c) => (
@@ -209,7 +214,7 @@ export function AdvanceBoard({ data }: { data: BoardData }) {
               onClick={(e) => open(e, r)}
               className="adv-board-grid adv-board-row"
               data-review={r.toReview > 0}
-              style={{ ...grid, ['--i' as string]: i }}
+              style={{ ['--i' as string]: i }}
               role="row"
             >
               <span style={{ display: 'flex', gap: 12, alignItems: 'center', minWidth: 0 }} role="cell">
@@ -247,6 +252,7 @@ export function AdvanceBoard({ data }: { data: BoardData }) {
             </a>
           ),
         )}
+       </div>
       </div>
 
       <div className="adv-row-flex" style={{ gap: 18, fontSize: 'var(--lp-text-xs)', color: 'var(--lp-text-tertiary)' }} aria-label="Key">
