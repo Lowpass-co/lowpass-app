@@ -71,9 +71,11 @@ a.adv-tag:hover { color: var(--lp-text); border-color: var(--lp-border-strong); 
 
 /* ---------- the board ---------- */
 .adv-board { border: 1px solid var(--lp-border); border-radius: 10px; background: var(--lp-panel); overflow: auto; }
-.adv-board-grid { display: grid; align-items: center; min-width: max-content; }
-.adv-th { font-size: 11px; letter-spacing: .04em; text-transform: uppercase; color: var(--lp-text-tertiary); font-weight: 600; padding: 0 6px; text-align: center; white-space: nowrap; }
-.adv-board-head { height: 40px; padding: 0 14px; border-bottom: 1px solid var(--lp-border); background: var(--lp-surface); position: sticky; top: 0; z-index: 1; }
+.adv-board-table { display: grid; min-width: max-content; }
+.adv-board-table > * { grid-column: 1 / -1; }
+.adv-board-grid { display: grid; grid-template-columns: subgrid; align-items: center; }
+.adv-th { font-size: 11px; letter-spacing: .04em; text-transform: uppercase; color: var(--lp-text-tertiary); font-weight: 600; padding: 6px; text-align: center; line-height: 1.25; text-wrap: balance; }
+.adv-board-head { min-height: 40px; padding: 0 14px; border-bottom: 1px solid var(--lp-border); background: var(--lp-surface); position: sticky; top: 0; z-index: 1; }
 .adv-board-row {
   min-height: 56px; padding: 0 14px; border-bottom: 1px solid var(--lp-border-light);
   text-decoration: none; color: inherit; cursor: pointer;
