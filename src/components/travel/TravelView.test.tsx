@@ -121,6 +121,28 @@ describe('<TravelView>', () => {
     });
   });
 
+  it('several people on one flight: one ticket each, cost per ticket', async () => {
+    fetchMock.mockImplementation((url: string) =>
+      Promise.resolve(new Response(JSON.stringify(url.startsWith('/api/budget/flights') ? { flights: [], count: 2 } : { flights: [] }), { status: 200 })),
+    );
+    render(<TravelView tourId="t" tourCurrency="GBP" crewNames={['Ann Lee', 'Ben Ray']} />);
+    fireEvent.click(await screen.findByText('Add flight'));
+    const who = screen.getByLabelText(/^Who/);
+    fireEvent.change(who, { target: { value: 'Ann Lee' } }); // picked from the list → added
+    fireEvent.change(who, { target: { value: 'Cat Fox' } });
+    fireEvent.keyDown(who, { key: 'Enter' });
+    expect(screen.getByTestId('travel-people').textContent).toContain('Ann Lee');
+    expect(screen.getByTestId('travel-people').textContent).toContain('Cat Fox');
+    expect(screen.getByLabelText('Cost per ticket (GBP)')).toBeTruthy();
+    fireEvent.change(screen.getByLabelText(/^Date/), { target: { value: '2026-10-14' } });
+    fireEvent.submit(screen.getByTestId('travel-add-form'));
+    await waitFor(() => expect(fetchMock.mock.calls.some((c) => c[0] === '/api/budget/flights')).toBe(true));
+    const call = fetchMock.mock.calls.find((c) => c[0] === '/api/budget/flights')!;
+    const body = JSON.parse((call[1] as RequestInit).body as string);
+    expect(body.person_names).toEqual(['Ann Lee', 'Cat Fox']);
+    expect(body.person_name).toBeUndefined();
+  });
+
   it('Add refuses a flight with nobody on it, and says why', async () => {
     fetchMock.mockResolvedValue(new Response(JSON.stringify({ flights: [] }), { status: 200 }));
     render(<TravelView tourId="t" tourCurrency="GBP" crewNames={[]} />);

@@ -7,8 +7,12 @@
 
    Layout, top to bottom:
      1. PageHeader — "Travel", what the page is for, and the Add button.
-     2. The add form (opens in place, every field labelled).
-     3. The list (<DataTable>). Click a row → <FlightSlideOver> to edit/delete.
+     2. The add form (opens in place, every field labelled). "Who" takes
+        several people: each gets their own ticket (a flight row with the same
+        details), and the cost is per ticket — so each person's e-ticket
+        matches one row and lands on its own budget line (Oct 2026).
+     3. The list (<DataTable>), the same flight's tickets side by side.
+        Click a row → <FlightSlideOver> to edit/delete.
 
    TIMES ARE WALL-CLOCK. Every flight writer in the app stores the time typed
    as if it were UTC and every reader slices it back out, so 10:00 in Joburg is
@@ -21,7 +25,7 @@
 
 import { useCallback, useEffect, useId, useMemo, useState } from 'react';
 import type { FormEvent } from 'react';
-import { Plane, Plus } from 'lucide-react';
+import { Plane, Plus, X } from 'lucide-react';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { Button } from '@/components/ui/Button';
 import { TextInput } from '@/components/ui/TextInput';
@@ -70,12 +74,20 @@ const EMPTY_FORM = {
   who: '', from: '', to: '', date: '', time: '', airline: '', flightNumber: '', confirmation: '', cost: '',
 };
 
+/** Flights in date order, the same flight's tickets together. */
+export function sortForList(flights: Flight[]): Flight[] {
+  const key = (f: Flight) => `${(f.departAt ?? '').slice(0, 16)}|${f.airline ?? ''}|${f.flightNumber ?? ''}|${f.originAirport}|${f.destinationAirport}`;
+  return [...flights].sort((a, b) => key(a).localeCompare(key(b)) || (a.personName ?? '').localeCompare(b.personName ?? ''));
+}
+
 export function TravelView({ tourId, tourCurrency, crewNames }: TravelViewProps) {
   const [flights, setFlights] = useState<Flight[] | undefined>(undefined);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [openId, setOpenId] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
   const [form, setForm] = useState(EMPTY_FORM);
+  // Everyone on this flight; `form.who` is the name being typed.
+  const [people, setPeople] = useState<string[]>([]);
   const [formError, setFormError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const listId = useId();
@@ -83,7 +95,7 @@ export function TravelView({ tourId, tourCurrency, crewNames }: TravelViewProps)
   const load = useCallback(async () => {
     try {
       setLoadError(null);
-      setFlights(await listFlights(tourId));
+      setFlights(sortForList(await listFlights(tourId)));
     } catch (e) {
       setLoadError((e as Error).message || 'Could not load flights');
       setFlights([]);
@@ -97,9 +109,21 @@ export function TravelView({ tourId, tourCurrency, crewNames }: TravelViewProps)
   const set = (k: keyof typeof EMPTY_FORM) => (e: { target: { value: string } }) =>
     setForm((f) => ({ ...f, [k]: e.target.value }));
 
+  const addPerson = (raw: string) => {
+    const names = raw.split(/[,;\n]/).map((n) => n.trim()).filter(Boolean);
+    if (!names.length) return;
+    setPeople((p) => [...p, ...names.filter((n) => !p.some((x) => x.toLowerCase() === n.toLowerCase()))]);
+    setForm((f) => ({ ...f, who: '' }));
+  };
+  const removePerson = (name: string) => setPeople((p) => p.filter((x) => x !== name));
+  const notYetAdded = crewNames.filter((n) => !people.some((p) => p.toLowerCase() === n.toLowerCase()));
+
   const submit = async (e: FormEvent) => {
     e.preventDefault();
-    if (!form.who.trim()) return setFormError('Who is flying?');
+    // Whatever is still typed in Who counts too.
+    const typed = form.who.split(/[,;\n]/).map((n) => n.trim()).filter(Boolean);
+    const who = [...people, ...typed.filter((n) => !people.some((x) => x.toLowerCase() === n.toLowerCase()))];
+    if (!who.length) return setFormError('Who is flying?');
     if (!form.date) return setFormError('Pick the date of the flight.');
     const cost = form.cost.trim() === '' ? 0 : Number(form.cost);
     if (!Number.isFinite(cost) || cost < 0) return setFormError('Cost must be a number.');
@@ -111,7 +135,7 @@ export function TravelView({ tourId, tourCurrency, crewNames }: TravelViewProps)
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           tour_id: tourId,
-          person_name: form.who.trim(),
+          ...(who.length === 1 ? { person_name: who[0] } : { person_names: who }),
           origin_code: form.from.trim().toUpperCase() || 'TBD',
           destination_code: form.to.trim().toUpperCase() || 'TBD',
           departure_date: form.date,
@@ -126,9 +150,10 @@ export function TravelView({ tourId, tourCurrency, crewNames }: TravelViewProps)
         const j = (await res.json().catch(() => ({}))) as { error?: string };
         throw new Error(j.error || 'Could not save the flight');
       }
-      // Keep who + date: the next flight is usually the same person's return
-      // leg or the next person on the same day.
-      setForm((f) => ({ ...EMPTY_FORM, who: f.who, date: f.date }));
+      // Keep who + date: the next flight is usually the same people's return
+      // leg or the next leg on the same day.
+      setPeople(who);
+      setForm((f) => ({ ...EMPTY_FORM, date: f.date }));
       await load();
     } catch (err) {
       setFormError((err as Error).message);
@@ -207,7 +232,47 @@ export function TravelView({ tourId, tourCurrency, crewNames }: TravelViewProps)
             {crewNames.map((n) => <option key={n} value={n} />)}
           </datalist>
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            <TextInput label="Who" placeholder="Name" value={form.who} onChange={set('who')} list={listId} autoFocus required />
+            <div className="sm:col-span-2 lg:col-span-4">
+              <TextInput
+                label="Who"
+                placeholder={people.length ? 'Add someone else' : 'Name — add as many people as are on this flight'}
+                value={form.who}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  // Picking from the list fills the whole name: add it straight away.
+                  if (crewNames.includes(v)) addPerson(v);
+                  else setForm((f) => ({ ...f, who: v }));
+                }}
+                onKeyDown={(e) => {
+                  if ((e.key === 'Enter' || e.key === ',') && form.who.trim()) {
+                    e.preventDefault();
+                    addPerson(form.who);
+                  } else if (e.key === 'Backspace' && !form.who && people.length) {
+                    removePerson(people[people.length - 1]);
+                  }
+                }}
+                list={listId}
+                autoFocus
+                helper={people.length > 1 ? `${people.length} people — one ticket each, same details` : 'Enter or comma adds a person'}
+              />
+              {people.length || notYetAdded.length ? (
+                <div className="mt-2 flex flex-wrap items-center gap-1.5" data-testid="travel-people">
+                  {people.map((p) => (
+                    <span key={p} className="inline-flex items-center gap-1 rounded-full border border-lp-border bg-lp-surface-hover px-2.5 py-1 text-xs text-lp-text">
+                      {p}
+                      <button type="button" aria-label={`Remove ${p}`} className="text-lp-text-tertiary hover:text-lp-text" onClick={() => removePerson(p)}>
+                        <X className="h-3 w-3" aria-hidden />
+                      </button>
+                    </span>
+                  ))}
+                  {notYetAdded.length > 1 ? (
+                    <button type="button" className="rounded-full px-2.5 py-1 text-xs text-lp-text-secondary underline-offset-2 hover:underline" onClick={() => setPeople((p) => [...p, ...notYetAdded])}>
+                      + Everyone on the tour ({notYetAdded.length})
+                    </button>
+                  ) : null}
+                </div>
+              ) : null}
+            </div>
             <TextInput label="From" placeholder="LHR" value={form.from} onChange={set('from')} maxLength={4} helper="Airport code" />
             <TextInput label="To" placeholder="JFK" value={form.to} onChange={set('to')} maxLength={4} helper="Airport code" />
             <TextInput label="Date" type="date" value={form.date} onChange={set('date')} required />
@@ -216,7 +281,7 @@ export function TravelView({ tourId, tourCurrency, crewNames }: TravelViewProps)
             <TextInput label="Flight number" placeholder="BA117" value={form.flightNumber} onChange={set('flightNumber')} />
             <TextInput label="Booking ref" placeholder="ABC123" value={form.confirmation} onChange={set('confirmation')} />
             <TextInput
-              label={`Cost (${tourCurrency})`} type="number" step="0.01" min="0" inputMode="decimal"
+              label={people.length > 1 ? `Cost per ticket (${tourCurrency})` : `Cost (${tourCurrency})`} type="number" step="0.01" min="0" inputMode="decimal"
               currencySymbol={symbol} value={form.cost} onChange={set('cost')} placeholder="0.00"
             />
           </div>
@@ -224,11 +289,11 @@ export function TravelView({ tourId, tourCurrency, crewNames }: TravelViewProps)
             <p role="alert" className="mt-3 text-sm" style={{ color: 'var(--color-lp-error)' }}>{formError}</p>
           ) : null}
           <div className="mt-4 flex items-center justify-end gap-2">
-            <Button type="button" variant="ghost" onClick={() => { setAdding(false); setFormError(null); setForm(EMPTY_FORM); }}>
+            <Button type="button" variant="ghost" onClick={() => { setAdding(false); setFormError(null); setForm(EMPTY_FORM); setPeople([]); }}>
               Done
             </Button>
             <Button type="submit" variant="primary" loading={saving} disabled={saving}>
-              Save flight
+              {people.length + (form.who.trim() ? 1 : 0) > 1 ? `Save ${people.length + (form.who.trim() ? 1 : 0)} tickets` : 'Save flight'}
             </Button>
           </div>
         </form>

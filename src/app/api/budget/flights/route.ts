@@ -137,7 +137,10 @@ export async function POST(request: Request) {
 
   let body: {
     tour_id: string;
-    person_name: string;
+    person_name?: string;
+    /** Oct 2026 — several people on the same flight: one ticket (row) each,
+     *  same details, the cost per ticket. */
+    person_names?: string[];
     role?: string | null;
     origin_code?: string | null;
     destination_code?: string | null;
@@ -156,12 +159,20 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
   }
 
-  const { tour_id, person_name } = body;
-  if (!tour_id || !person_name?.trim()) {
+  const { tour_id } = body;
+  const names: string[] = [];
+  for (const raw of Array.isArray(body.person_names) ? body.person_names : [body.person_name]) {
+    const n = typeof raw === 'string' ? raw.trim().slice(0, 120) : '';
+    if (n && !names.some((x) => x.toLowerCase() === n.toLowerCase())) names.push(n);
+  }
+  if (!tour_id || names.length === 0) {
     return NextResponse.json(
-      { error: 'tour_id and person_name are required' },
+      { error: 'tour_id and at least one person are required' },
       { status: 400 }
     );
+  }
+  if (names.length > 60) {
+    return NextResponse.json({ error: 'At most 60 people per flight' }, { status: 400 });
   }
 
   const { data: tour } = await supabase
@@ -182,37 +193,40 @@ export async function POST(request: Request) {
   const arriveAt = new Date(new Date(departAt).getTime() + 2 * 60 * 60 * 1000).toISOString();
   const costAmount = Number(body.actual_cost ?? body.proposed_cost) || 0;
 
-  const { data: created, error } = await supabase
-    .from('flights')
-    .insert({
-      tour_id,
-      workspace_id: profile.workspace_id,
-      person_name: person_name.trim(),
-      role: body.role ?? null,
-      origin_airport: (body.origin_code ?? 'TBD').toUpperCase(),
-      destination_airport: (body.destination_code ?? 'TBD').toUpperCase(),
-      cost_amount: costAmount,
-      // Was hard-coded 'GBP' on every tour. The amount typed here is in the
-      // tour's currency (the budget grid's currency).
-      cost_currency: String((tour as { currency?: string | null }).currency ?? 'GBP').toUpperCase(),
-      airline: body.airline ?? null,
-      flight_number: body.flight_number ?? null,
-      pnr: body.confirmation ?? null,
-      confirmation: body.confirmation ?? null,
-      depart_at: departAt,
-      arrive_at: arriveAt,
-      leg_order: Number(body.leg_order) || 1,
-      created_by: user.id,
-      updated_by: user.id,
-    })
-    .select()
-    .single();
+  const rows = names.map((person_name) => ({
+    tour_id,
+    workspace_id: profile.workspace_id,
+    person_name,
+    role: body.role ?? null,
+    origin_airport: (body.origin_code ?? 'TBD').toUpperCase(),
+    destination_airport: (body.destination_code ?? 'TBD').toUpperCase(),
+    cost_amount: costAmount,
+    // Was hard-coded 'GBP' on every tour. The amount typed here is in the
+    // tour's currency (the budget grid's currency).
+    cost_currency: String((tour as { currency?: string | null }).currency ?? 'GBP').toUpperCase(),
+    airline: body.airline ?? null,
+    flight_number: body.flight_number ?? null,
+    pnr: body.confirmation ?? null,
+    confirmation: body.confirmation ?? null,
+    depart_at: departAt,
+    arrive_at: arriveAt,
+    leg_order: Number(body.leg_order) || 1,
+    created_by: user.id,
+    updated_by: user.id,
+  }));
+  const { data: createdRows, error } = await supabase.from('flights').insert(rows).select();
 
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  if (error || !createdRows?.length) {
+    return NextResponse.json({ error: error?.message ?? 'Could not save the flight' }, { status: 500 });
   }
 
-  const flight = created as {
+  // One budget refresh for the whole set (each ticket is its own line).
+  await refreshDerivedLines(supabase, tour_id, profile.workspace_id, 'flights');
+  if (createdRows.length > 1) {
+    return NextResponse.json({ flights: createdRows, count: createdRows.length });
+  }
+
+  const flight = createdRows[0] as {
     id: string;
     line_item_id?: string | null;
     origin_airport: string;
@@ -220,7 +234,6 @@ export async function POST(request: Request) {
     depart_at: string;
     cost_amount: number | null;
   };
-  await refreshDerivedLines(supabase, tour_id, profile.workspace_id, 'flights');
   const { data: lineItem } = await supabase
     .from('budget_line_items')
     .select('id')
