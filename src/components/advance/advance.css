@@ -40,7 +40,7 @@
 .adv-btn-ghost { background: transparent; }
 .adv-btn-sm { height: 28px; padding: 0 10px; font-size: var(--lp-text-xs); border-radius: var(--lp-radius-md); }
 .adv-link { display: inline-flex; align-items: center; gap: 4px; background: none; border: 0; padding: 0; color: var(--lp-orange); font-size: var(--lp-text-sm); cursor: pointer; text-decoration: none; font-family: inherit; }
-.adv-shows-rail > a:first-child { gap: 6px; }
+.adv-shows-rail > a:first-child { display: flex; grid-column: 1 / -1; gap: 6px; }
 .adv-link:hover { text-decoration: underline; }
 .adv-kbd { font-size: 10.5px; border: 1px solid currentColor; border-radius: 4px; padding: 0 5px; opacity: 0.7; }
 
@@ -120,12 +120,18 @@ a.adv-tag:hover { color: var(--lp-text); border-color: var(--lp-border-strong); 
 
 /* ---------- show page ---------- */
 .adv-show { display: flex; min-height: 0; flex: 1; }
-.adv-shows-rail { width: 236px; flex-shrink: 0; border-right: 1px solid var(--lp-border); padding: 14px 10px; display: flex; flex-direction: column; gap: 2px; overflow-y: auto; }
+/* One grid for the whole list; each show is a subgrid row of it, so the date
+   column is as wide as the longest date ("Wed 14 Oct"), never wraps, and every
+   venue name starts at the same x. (A fixed 64px wrapped the longer dates.) */
+.adv-shows-rail {
+  width: 248px; flex-shrink: 0; border-right: 1px solid var(--lp-border); padding: 14px 10px; overflow-y: auto;
+  display: grid; grid-template-columns: auto max-content minmax(0, 1fr); align-content: start; row-gap: 2px; column-gap: 10px;
+}
 @media (max-width: 1100px) { .adv-shows-rail { display: none; } }
-.adv-shows-rail a { display: flex; gap: 10px; align-items: center; padding: 9px 12px; border-radius: var(--lp-radius-md); text-decoration: none; color: var(--lp-text-secondary); font-size: var(--lp-text-sm); transition: background var(--lp-dur-base); }
+.adv-shows-rail a { display: grid; grid-column: 1 / -1; grid-template-columns: subgrid; column-gap: 10px; align-items: center; padding: 9px 12px; border-radius: var(--lp-radius-md); text-decoration: none; color: var(--lp-text-secondary); font-size: var(--lp-text-sm); transition: background var(--lp-dur-base); }
 .adv-shows-rail a:hover { background: var(--lp-surface-hover); }
 .adv-shows-rail a[aria-current="page"] { background: var(--lp-surface); color: var(--lp-text); box-shadow: inset 2px 0 0 var(--lp-orange); }
-.adv-shows-rail .when { font-family: var(--lp-font-numeric); font-size: var(--lp-text-xs); width: 64px; flex-shrink: 0; }
+.adv-shows-rail .when { font-family: var(--lp-font-numeric); font-size: var(--lp-text-xs); white-space: nowrap; }
 .adv-shows-rail .name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 .adv-eyebrow { font-family: var(--lp-font-numeric); font-size: var(--lp-text-xs); color: var(--lp-text-tertiary); letter-spacing: .04em; text-transform: uppercase; }
