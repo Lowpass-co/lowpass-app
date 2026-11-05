@@ -25,7 +25,7 @@ import {
   SunMoon,
   Users,
 } from 'lucide-react';
-import { TUTORIAL_OPEN_EVENT } from '@/components/tutorial/TutorialPanel';
+import { ONBOARDING_OPEN_EVENT } from '@/components/onboarding/GettingStarted';
 import { AccountAvatar } from '@/components/ui/AccountAvatar';
 import { DarkModeToggle } from '@/components/layout/DarkModeToggle';
 import { createClient as createBrowserSupabase } from '@/lib/supabase-client';
@@ -236,13 +236,13 @@ export function ProductHeaderAvatarMenu({
             style={{ borderTop: '1px solid var(--lp-border)' }}
           />
 
-          {/* Tutorial — re-entry point for the App tour & tutorial panel.
-              Dispatches the global open event consumed by <TutorialPanel>
-              (mounted in AppShell), then closes this menu. */}
+          {/* Getting started — reopens the welcome cards (and brings the
+              "Get set up" checklist back). Dispatches the global event
+              consumed by <GettingStarted> in AppShell, then closes this menu. */}
           <button
             type="button"
             onClick={() => {
-              window.dispatchEvent(new CustomEvent(TUTORIAL_OPEN_EVENT));
+              window.dispatchEvent(new CustomEvent(ONBOARDING_OPEN_EVENT));
               close();
             }}
             className="w-full px-3 py-2 text-left"
@@ -254,7 +254,7 @@ export function ProductHeaderAvatarMenu({
                 className="h-4 w-4"
                 style={{ color: 'var(--lp-text-tertiary)' }}
               />
-              App tour &amp; tutorial
+              Getting started
             </span>
           </button>
 

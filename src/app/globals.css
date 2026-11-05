@@ -1843,3 +1843,51 @@ input[type='radio'] {
 }
 .lp-sheet-summary thead th > span > svg { display: none; }
 
+
+/* ============================================================
+   Getting started — welcome cards + "Get set up" checklist (Nov 2026)
+   Every animation runs FROM a hidden/offset state TO the element's own
+   style, so with motion reduced (animation: none) the final picture is
+   simply shown. Classes are lp-onb-*; used only by src/components/onboarding.
+   ============================================================ */
+@keyframes lp-onb-rise { from { opacity: 0; transform: translateY(8px); } }
+@keyframes lp-onb-pop { from { opacity: 0; transform: scale(0.9); } }
+@keyframes lp-onb-slide-l { from { opacity: 0; transform: translateX(16px); } }
+@keyframes lp-onb-slide-r { from { opacity: 0; transform: translateX(-16px); } }
+@keyframes lp-onb-grow { from { transform: scaleX(0); } }
+@keyframes lp-onb-fill { from { background: var(--lp-surface-hover); border-color: var(--lp-border); } }
+@keyframes lp-onb-select {
+  from { border-color: var(--lp-border); background: var(--lp-panel); box-shadow: none; }
+}
+@keyframes lp-onb-rail {
+  0%, 14%   { transform: translateY(0); }
+  18%, 31%  { transform: translateY(100%); }
+  35%, 48%  { transform: translateY(200%); }
+  52%, 65%  { transform: translateY(300%); }
+  69%, 82%  { transform: translateY(400%); }
+  86%, 100% { transform: translateY(0); }
+}
+@keyframes lp-onb-bob { 50% { transform: translateY(-3px); } }
+@keyframes lp-onb-ping {
+  0% { box-shadow: 0 0 0 0 #FF450059; }
+  100% { box-shadow: 0 0 0 6px #FF450000; }
+}
+@keyframes lp-onb-ring { from { stroke-dashoffset: var(--lp-onb-ring-from, 0); } }
+
+.lp-onb-rise    { animation: lp-onb-rise var(--lp-duration-page) var(--lp-ease-emphasized) both; }
+.lp-onb-pop     { animation: lp-onb-pop var(--lp-duration-slower) var(--lp-ease-emphasized) both; }
+.lp-onb-next    { animation: lp-onb-slide-l var(--lp-duration-page) var(--lp-ease-emphasized) both; }
+.lp-onb-prev    { animation: lp-onb-slide-r var(--lp-duration-page) var(--lp-ease-emphasized) both; }
+.lp-onb-grow    { transform-origin: left center; animation: lp-onb-grow 700ms var(--lp-ease-emphasized) both; }
+.lp-onb-fill    { animation: lp-onb-fill 400ms var(--lp-ease-out) both; }
+.lp-onb-select  { animation: lp-onb-select var(--lp-duration-page) var(--lp-ease-out) both; animation-delay: 900ms; }
+.lp-onb-rail    { animation: lp-onb-rail 6s var(--lp-ease-emphasized) infinite; }
+.lp-onb-bob     { animation: lp-onb-bob 2.4s var(--lp-ease-standard) infinite; }
+.lp-onb-ping    { animation: lp-onb-ping 1.6s var(--lp-ease-out) infinite; }
+.lp-onb-ring    { transition: stroke-dashoffset 600ms var(--lp-ease-emphasized); }
+
+@media (prefers-reduced-motion: reduce) {
+  .lp-onb-rise, .lp-onb-pop, .lp-onb-next, .lp-onb-prev, .lp-onb-grow, .lp-onb-fill,
+  .lp-onb-select, .lp-onb-rail, .lp-onb-bob, .lp-onb-ping { animation: none; }
+  .lp-onb-ring { transition: none; }
+}

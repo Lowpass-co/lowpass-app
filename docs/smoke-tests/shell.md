@@ -665,3 +665,41 @@ wrong" from the error boundary, with the page never rendering. If you see that:
   headers and hint text are visibly lighter grey than before and easy to read
   on the dark background; nothing looks washed out or harsh.
 
+
+## Getting started — welcome + "Get set up" (Nov 2026)
+
+Replaces the old "App tour & tutorial" panel. To see the welcome again in a
+browser, clear `lp-onboarding-v2` (and `lp-tutorial-v1`) from localStorage.
+
+- [ ] **SHELL-GS-01 — A new workspace is welcomed once.** Sign up fresh. Within
+  a second of landing, a four-card welcome opens: an animated sketch on top,
+  a progress bar, a title and two lines. ← / → step through; Esc or Skip
+  closes. Reload: it does not open again.
+
+- [ ] **SHELL-GS-02 — An established workspace is not.** Sign in as an existing
+  user on a browser that has never seen the welcome: nothing opens.
+
+- [ ] **SHELL-GS-03 — Checklist ticks itself.** After the welcome, "Get set up"
+  sits bottom-right above the bug button. Only the next step shows a hint and
+  a button. Add artist → the artist panel opens; create one → the first step
+  ticks within a few seconds (no clicking the box). New tour → the tour window
+  opens; after creating, Create a tour and (once you add a show date) Add your
+  show dates tick.
+
+- [ ] **SHELL-GS-04 — Links go to the real page.** Open advance / Open receipts
+  / Invite go to this tour's Advance board, Budget → Receipts and Settings →
+  Team & roles, and the checklist folds to a pill with a progress ring.
+
+- [ ] **SHELL-GS-05 — Fold, hide, bring back.** The chevron folds to the pill;
+  the pill opens it. The × hides it and it stays hidden after reload. Avatar
+  menu → **Getting started** reopens the welcome at card 1; finishing or
+  skipping brings the checklist back.
+
+- [ ] **SHELL-GS-06 — Done state.** With all six done the header reads "You're
+  set up" with a full green ring, and **Close checklist** hides it.
+
+- [ ] **SHELL-GS-07 — Read-only members.** A read-only member who has just joined
+  gets the welcome (last button "Let's go") and never sees the checklist.
+
+- [ ] **SHELL-GS-08 — Reduced motion.** With the OS set to reduce motion, the
+  welcome sketches show their finished state with nothing hidden or moving.

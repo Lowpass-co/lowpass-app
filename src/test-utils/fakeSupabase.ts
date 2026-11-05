@@ -123,10 +123,13 @@ class Query implements PromiseLike<Result> {
   private lim: number | null = null;
   private mode: 'many' | 'single' | 'maybe' = 'many';
   private embeds: Array<{ alias: string; table: string; fk: string }> = [];
+  /** select(cols, { count: 'exact', head? }) — PostgREST's count; head drops the rows. */
+  private counting: { head: boolean } | null = null;
 
   constructor(private db: FakeDb, private table: string) {}
 
-  select(cols = '*') {
+  select(cols = '*', o?: { count?: 'exact' | 'planned' | 'estimated'; head?: boolean }) {
+    if (o?.count) this.counting = { head: o.head === true };
     if (this.op === 'select') this.op = 'select';
     else this.returning = true;
     for (const m of cols.matchAll(/(\w+):(\w+)\(/g)) {
@@ -209,7 +212,12 @@ class Query implements PromiseLike<Result> {
     if (this.op === 'select') {
       db.log.push({ op: 'select', table: this.table });
       if (db.failReads.has(this.table)) return { data: null, error: { message: `read of ${this.table} failed`, code: 'XX000' } };
-      return this.shape(this.matches());
+      const rows = this.matches();
+      if (this.counting) {
+        const shaped = this.shape(rows);
+        return { data: this.counting.head ? null : shaped.data, error: shaped.error, count: rows.length };
+      }
+      return this.shape(rows);
     }
     for (const h of [...db.beforeWrite]) h(this.op, this.table);
     const wErr = db.failWrites.get(this.table);

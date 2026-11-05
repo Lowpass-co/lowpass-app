@@ -335,6 +335,24 @@ recreate a `_legacy/` tree: delete dead code instead of parking it.
 - Retired system templates keep their rows (`retired_at`) — saved budgets may
   point at them; `orderTemplates` hides them.
 
+### Getting started — welcome + "Get set up" (Nov 2026, Adam)
+
+- Replaces the old "App tour & tutorial" panel (deleted with its registry).
+  `src/components/onboarding/GettingStarted.tsx` is mounted once in AppShell;
+  rules are pure in `src/lib/onboarding/checklist.ts`; facts come from
+  `GET /api/onboarding/status` (`src/server/onboarding/status.ts`, read-only,
+  count queries).
+- The checklist TICKS ITSELF from real data — never add a hand-ticked step.
+  Every step's link must be a page the rail has (a test checks this against
+  `ia.ts`). Admins/managers get the checklist; read-only members get the
+  welcome only.
+- The welcome opens by itself once, only for a new workspace (no tour) or a
+  member who joined in the last 14 days. Only "seen / hidden / folded" lives in
+  localStorage (`lp-onboarding-v2`); the status call is made only while
+  something could show.
+- Welcome art is live-drawn from the app's own labels (`WelcomeArt.tsx`) —
+  when a rail label or template changes, update the sketch too.
+
 ### Advance — board, show, templates (rebuild, Oct 2026, Adam)
 
 - **Three pages**: the board (`AdvanceBoard`, every show × question group,
