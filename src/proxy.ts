@@ -67,8 +67,27 @@ export async function proxy(request: NextRequest) {
     return NextResponse.next({ request });
   }
 
-  // 3. Page routes: session refresh + auth redirects (unchanged).
+  // 3. An email link that came back to the HOME page instead of
+  //    /auth/callback. Supabase sends a confirm / magic link to its Site URL
+  //    root whenever the requested return address isn't on its Redirect URLs
+  //    allow-list, so the one-time `code` (or `token_hash` + `type`) arrives
+  //    at "/" — where nothing reads it, so the new account never signs in.
+  //    Hand it to the callback that does. Root only: no other page uses these.
+  const forward = authLinkForward(request.nextUrl);
+  if (forward) return NextResponse.redirect(forward);
+
+  // 4. Page routes: session refresh + auth redirects (unchanged).
   return await updateSession(request);
+}
+
+/** "/?code=…" or "/?token_hash=…&type=…" → the same params on /auth/callback. */
+export function authLinkForward(url: URL): URL | null {
+  if (url.pathname !== '/') return null;
+  const p = url.searchParams;
+  if (!p.get('code') && !(p.get('token_hash') && p.get('type'))) return null;
+  const to = new URL('/auth/callback', url);
+  to.search = p.toString();
+  return to;
 }
 
 export const config = {
