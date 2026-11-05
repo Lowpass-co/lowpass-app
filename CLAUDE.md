@@ -317,6 +317,24 @@ recreate a `_legacy/` tree: delete dead code instead of parking it.
   there is no manual FX endpoint. Actuals keep their `locked_fx_rate`.
 - Tests for all of the above run against `src/test-utils/fakeSupabase.ts`.
 
+### Tour templates — new-tour "Budget & advance" step (Nov 2026, Adam)
+
+- The lists live in ONE file, `src/lib/templates/tourTemplates.ts`: six budget
+  templates by scale (Support tour, Club, Theatre, Arena, Stadium, Press tour),
+  the percentage fields (blank = 0%, suggestions for insurance / contingency /
+  merch cost of goods), and four advance starters (Headline / Support / Festival
+  show day, Day off). Migration 280 seeds the budget templates from it — the
+  parity test fails if the two drift; regenerate the SQL rather than hand-edit.
+- Template section names are a contract with `reconcileDerivedBudgetLines`:
+  Salaries, Per Diems, Hotels (alias of Accommodation), Transport (takes
+  flights), Production (takes gear hire). Never add a manual Flights / salary /
+  per-diem / hotel line to a template — those are automatic and would double.
+- Creating a tour POSTs `/api/tours/[id]/start-from` (`startTourFromTemplates`),
+  which is additive and re-runnable. A tour's own advance choice lives in
+  `tour_advance_day_templates` and beats the workspace day-type mapping.
+- Retired system templates keep their rows (`retired_at`) — saved budgets may
+  point at them; `orderTemplates` hides them.
+
 ### Advance — board, show, templates (rebuild, Oct 2026, Adam)
 
 - **Three pages**: the board (`AdvanceBoard`, every show × question group,

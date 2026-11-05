@@ -16,6 +16,7 @@
 import { NextResponse } from 'next/server';
 import { requireWrite } from '@/lib/auth/workspace-check';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
+import { orderTemplates, type TemplateRow } from '@/lib/templates/tourTemplates';
 
 async function resolveWorkspace() {
   const supabase = await createServerSupabaseClient();
@@ -87,7 +88,11 @@ export async function GET(request: Request) {
     .order('name', { ascending: true });
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  const ids = (templates ?? []).map((t) => t.id);
+  // Migration 280 — retired presets are hidden, and the scale templates keep
+  // their own order (Support tour → Stadium → Press tour). Filtered here, not
+  // in the query, so the list still works before 280 is pasted.
+  const live = orderTemplates((templates ?? []) as TemplateRow[]);
+  const ids = live.map((t) => t.id);
   let sectionsByTemplate: Record<string, unknown[]> = {};
   if (ids.length > 0) {
     const { data: sections } = await supabase
@@ -103,7 +108,7 @@ export async function GET(request: Request) {
       {},
     );
   }
-  const hydrated = (templates ?? []).map((t) => ({
+  const hydrated = live.map((t) => ({
     ...t,
     sections: sectionsByTemplate[t.id] ?? [],
   }));

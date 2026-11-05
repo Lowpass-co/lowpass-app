@@ -99,7 +99,7 @@ export async function loadAdvanceBoard(client: SupabaseClient, tourId: string, n
 
   const [{ data: routingRows, error: rErr }, set] = await Promise.all([
     client.from('routing').select(ROUTING_VENUE_SELECT).eq('tour_id', tourId).order('date', { ascending: true }),
-    loadTemplateSet(client, tour.workspace_id),
+    loadTemplateSet(client, tour.workspace_id, tourId),
   ]);
   if (rErr) throw new Error(`advance board routing: ${rErr.message}`);
   const routing = (routingRows ?? []) as RoutingRow[];

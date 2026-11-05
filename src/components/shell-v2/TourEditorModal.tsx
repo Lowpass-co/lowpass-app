@@ -14,7 +14,10 @@
 
    Step 1 (Details): Artist (Existing/New for create; locked on edit) · Name · Dates ·
    Region · Currency. NO party-size counts (staffing lives in personnel).
-   Step 2 (Routing): the venue-first RoutingGrid, one row per date.
+   Step 2 (Budget & advance, create only — Nov 2026): budget template by scale
+   or Custom, the percentages (blank = 0%), and the advance questions. Sent
+   to POST /api/tours/[id]/start-from once the tour exists.
+   Step 3 (Routing): the venue-first RoutingGrid, one row per date.
 
    Minimum to create = artist + name + dates (routing fully skippable).
    ============================================ */
@@ -26,6 +29,7 @@ import { Modal } from '@/components/ui/Modal';
 import { useToast } from '@/components/ui/Toast';
 import { TOUR_CURRENCIES, DEFAULT_TOUR_CURRENCY } from '@/lib/currencies';
 import { RoutingGrid, type RoutingRow } from '@/components/routing/RoutingGrid';
+import { TourStartFrom, EMPTY_START_FROM, startFromError, type StartFromValue } from './TourStartFrom';
 
 const REGION_OPTIONS: ReadonlyArray<{ value: string; label: string }> = [
   { value: 'UK', label: 'UK' },
@@ -116,7 +120,8 @@ function TourEditorModalInner({
   const isEdit = mode === 'edit';
   const today = useMemo(() => todayIso(), []);
 
-  const [tab, setTab] = useState<'details' | 'routing' | 'import'>('details');
+  const [tab, setTab] = useState<'details' | 'start' | 'routing' | 'import'>('details');
+  const [startFrom, setStartFrom] = useState<StartFromValue>(EMPTY_START_FROM);
   // Oct 2026 — "Start from a tour book": the AI import, inline, for a new tour.
   const [importDirty, setImportDirty] = useState(false);
   const [confirmDiscard, setConfirmDiscard] = useState(false);
@@ -168,7 +173,8 @@ function TourEditorModalInner({
   const datesValid = !!startDate && !!endDate && startDate <= endDate;
   const effectiveArtistId = isEdit ? editInitial?.artist_id ?? null : artistMode === 'existing' ? pickedArtistId || null : null;
   const trimmedName = name.trim();
-  const canSave = !!trimmedName && datesValid && (isEdit || !!effectiveArtistId || (artistMode === 'new' && !!newArtistName.trim())) && !submitting;
+  const startFromProblem = isEdit ? null : startFromError(startFrom);
+  const canSave = !!trimmedName && datesValid && (isEdit || !!effectiveArtistId || (artistMode === 'new' && !!newArtistName.trim())) && !startFromProblem && !submitting;
 
   const filledRowCount = useMemo(() => rows.filter(isRowFilled).length, [rows]);
 
@@ -280,19 +286,41 @@ function TourEditorModalInner({
       const body = (await res.json().catch(() => null)) as { id?: string; name?: string; error?: string } | null;
       if (!res.ok || !body?.id) { setError(body?.error ?? `Create failed (${res.status})`); setSubmitting(false); return; }
       await persistRouting(body.id, includeRouting);
-      showToast('Tour created');
+      // Budget template, percentages (blank = 0%) and advance questions.
+      let setupOk = false;
+      try {
+        const sRes = await fetch(`/api/tours/${body.id}/start-from`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            budgetTemplateId: startFrom.budgetTemplateId,
+            money: startFrom.money,
+            advanceShow: startFrom.advanceShow,
+            advanceDaysOff: startFrom.advanceDaysOff,
+          }),
+        });
+        if (sRes.ok) setupOk = true;
+        else {
+          const j = (await sRes.json().catch(() => null)) as { error?: string } | null;
+          showToast(`Tour created, but the budget & advance setup didn’t save: ${j?.error ?? sRes.status}. Set them on the Budget and Advance pages.`, 'error');
+        }
+      } catch {
+        showToast('Tour created, but the budget & advance setup didn’t save. Set them on the Budget and Advance pages.', 'error');
+      }
+      if (setupOk) showToast('Tour created');
       onSaved?.({ id: body.id, name: body.name ?? trimmedName });
       onClose();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Network error');
       setSubmitting(false);
     }
-  }, [canSave, isEdit, tourId, trimmedName, currency, region, startDate, endDate, persistRouting, effectiveArtistId, artistMode, newArtistName, showToast, onSaved, onClose]);
+  }, [canSave, isEdit, tourId, trimmedName, currency, region, startDate, endDate, persistRouting, effectiveArtistId, artistMode, newArtistName, startFrom, showToast, onSaved, onClose]);
 
   const footer = tab === 'import' ? null : (
     <div className="flex w-full items-center justify-between gap-2">
       <div>
         {tab === 'routing' ? (
+          <button type="button" onClick={() => setTab(isEdit ? 'details' : 'start')} className="btn-transition" style={btnGhost}>{isEdit ? '← Details' : '← Budget & advance'}</button>
+        ) : tab === 'start' ? (
           <button type="button" onClick={() => setTab('details')} className="btn-transition" style={btnGhost}>← Details</button>
         ) : null}
       </div>
@@ -303,6 +331,8 @@ function TourEditorModalInner({
           </button>
         ) : null}
         {tab === 'details' && !isEdit ? (
+          <button type="button" onClick={() => setTab('start')} disabled={!canSave} className="btn-transition" style={btnPrimary(canSave)}>Next: budget & advance →</button>
+        ) : tab === 'start' ? (
           <button type="button" onClick={goRouting} disabled={!canSave} className="btn-transition" style={btnPrimary(canSave)}>Next: routing →</button>
         ) : (
           <button type="button" onClick={() => void save(true)} disabled={!canSave} className="btn-transition" style={btnPrimary(canSave)}>
@@ -326,7 +356,7 @@ function TourEditorModalInner({
       ) : null}
       {/* Tabs */}
       <div className="mb-4 flex items-center gap-4 border-b" style={{ borderColor: 'var(--lp-border)' }}>
-        {(['details', 'routing'] as const).map((t) => {
+        {(isEdit ? (['details', 'routing'] as const) : (['details', 'start', 'routing'] as const)).map((t) => {
           const on = tab === t;
           return (
             <button
@@ -336,7 +366,7 @@ function TourEditorModalInner({
               className="btn-transition -mb-px border-b-2 px-1 pb-2 text-sm"
               style={{ borderColor: on ? 'var(--lp-orange)' : 'transparent', color: on ? 'var(--lp-text)' : 'var(--lp-text-tertiary)', fontWeight: on ? 700 : 500 }}
             >
-              {t === 'details' ? 'Details' : 'Routing'}
+              {t === 'details' ? 'Details' : t === 'start' ? 'Budget & advance' : 'Routing'}
             </button>
           );
         })}
@@ -353,6 +383,8 @@ function TourEditorModalInner({
           onCancel={() => { setImportDirty(false); setTab('details'); }}
           onUse={applyImported}
         />
+      ) : tab === 'start' ? (
+        <TourStartFrom value={startFrom} onChange={setStartFrom} />
       ) : tab === 'details' ? (
         <div className="flex flex-col gap-4">
           {!isEdit ? (

@@ -334,3 +334,30 @@ longer exist. IDs are never recycled.
 
 Day sheet tests (DAY-*, ROLE-*) are retired with day sheets — see
 `docs/smoke-tests/day.md`.
+
+## Tour templates — advance starters (Nov 2026 — needs migration 280)
+
+- [ ] **ADV-TPL-01 — A scale picks the show-day questions.** New tour → Budget &
+  advance. Pick Support tour: "Show days ask" switches to Support show day. Pick
+  Arena: it switches to Headline show day. Pick Press tour: it goes back to
+  Workspace setting. Change the dropdown yourself, then pick another template:
+  your choice stays.
+
+- [ ] **ADV-TPL-02 — Starters are installed once.** Create a tour with Support
+  show day + "Advance days off too". Advance → Templates now lists "Support
+  show day", "Festival day" and "Day off". Create a second tour with the same
+  choices: no duplicates appear.
+
+- [ ] **ADV-TPL-03 — The tour's choice beats the workspace.** With the workspace
+  mapping show days → "Show day", the new tour's show opens with the Support
+  show day sections (Key Contacts, Schedule, Venue Info, Production, …). A
+  festival date opens with the festival sections. An older tour still opens
+  with "Show day".
+
+- [ ] **ADV-TPL-04 — Days off.** With "Advance days off too" ticked, an off day
+  on the board has an advance with Local Info, Airport and Local Distances,
+  Personal Vehicle Parking, Bus and Trailer. Without it, off days have no
+  advance (unchanged behaviour).
+
+- [ ] **ADV-TPL-05 — Editing a starter.** Edit "Day off" in Templates (remove a
+  section). Days off that are neither customised nor sent pick up the change.

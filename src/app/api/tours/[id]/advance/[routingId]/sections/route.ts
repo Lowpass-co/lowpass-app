@@ -71,7 +71,7 @@ export async function POST(request: Request, { params }: Params) {
   const client = supabase as unknown as SupabaseClient;
   try {
     const adv = await ensureAdvance(client, tourId, routingId, auth.user.id);
-    const set = await loadTemplateSet(client, auth.workspaceId);
+    const set = await loadTemplateSet(client, auth.workspaceId, tourId);
     let templateId: string | null = null;
     if (body.action === 'use-template') {
       templateId = typeof body.templateId === 'string' ? body.templateId : null;
