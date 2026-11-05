@@ -21,9 +21,12 @@ export interface TemplateSet {
   templates: AdvTemplate[];
   /** day type → template id */
   mapping: Record<string, string>;
+  /** Migration 280 — this tour's own choice (day type → template id). Wins
+   *  over `mapping`. Empty when no tour was asked for, or none chosen. */
+  tourMapping?: Record<string, string>;
 }
 
-export async function loadTemplateSet(client: SupabaseClient, workspaceId: string): Promise<TemplateSet> {
+export async function loadTemplateSet(client: SupabaseClient, workspaceId: string, tourId?: string): Promise<TemplateSet> {
   const [{ data: rows, error }, { data: map, error: mErr }] = await Promise.all([
     client
       .from('advance_layout_templates')
@@ -43,7 +46,19 @@ export async function loadTemplateSet(client: SupabaseClient, workspaceId: strin
   for (const m of (map ?? []) as { day_type: string; layout_template_id: string }[]) {
     if (ids.has(m.layout_template_id)) mapping[m.day_type] = m.layout_template_id;
   }
-  return { templates, mapping };
+  const tourMapping: Record<string, string> = {};
+  if (tourId) {
+    const { data: tm, error: tErr } = await client
+      .from('tour_advance_day_templates')
+      .select('day_type, layout_template_id')
+      .eq('tour_id', tourId);
+    // Before migration 280 is pasted the table doesn't exist: no tour choice.
+    if (tErr && tErr.code !== '42P01' && tErr.code !== 'PGRST205') throw new Error(`tour advance templates: ${tErr.message}`);
+    for (const m of (tm ?? []) as { day_type: string; layout_template_id: string }[]) {
+      if (ids.has(m.layout_template_id)) tourMapping[m.day_type] = m.layout_template_id;
+    }
+  }
+  return { templates, mapping, tourMapping };
 }
 
 /**
@@ -53,9 +68,12 @@ export async function loadTemplateSet(client: SupabaseClient, workspaceId: strin
  */
 export function templateForDay(set: TemplateSet, dayType: string | null | undefined): AdvTemplate | null {
   const types = dayTypes(dayType);
-  for (const t of types) {
-    const id = set.mapping[t];
-    if (id) return set.templates.find((x) => x.id === id) ?? null;
+  // The tour's own choice first, then the workspace's.
+  for (const map of [set.tourMapping ?? {}, set.mapping]) {
+    for (const t of types) {
+      const id = map[t];
+      if (id) return set.templates.find((x) => x.id === id) ?? null;
+    }
   }
   if (types.some((t) => ADVANCE_DAY_TYPES_DEFAULT.includes(t)) || types.length === 0) {
     return set.templates.find((t) => t.name.trim().toLowerCase() === 'show day') ?? null;
@@ -115,5 +133,5 @@ export function dayHasAdvance(set: TemplateSet, dayType: string | null | undefin
   if (hasInstance) return true;
   const types = dayTypes(dayType);
   if (types.some((t) => ADVANCE_DAY_TYPES_DEFAULT.includes(t))) return true;
-  return types.some((t) => !!set.mapping[t]);
+  return types.some((t) => !!set.mapping[t] || !!set.tourMapping?.[t]);
 }

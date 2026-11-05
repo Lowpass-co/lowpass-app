@@ -2343,3 +2343,45 @@ breaks.
   appears in the income breakdown (PDF) / under the grand total (workbook), a
   deposit owed back is not in any expense total, and section totals match the
   sheet.
+
+## Tour templates — budget (Nov 2026 — needs migration 280)
+
+Paste `database/migrations/280_tour_templates.sql` first. Before it is pasted
+the template list still shows the old three, and choosing advance questions on
+a new tour fails with the "setup didn't save" toast (the tour, its budget
+template and percentages are still saved).
+
+- [ ] **BUD-TPL-01 — Six templates by scale.** New tour → Details → **Next:
+  budget & advance**. The cards read Support tour, Club, Theatre, Arena,
+  Stadium, Press tour, then any workspace templates, then Custom. "Club /
+  Support run", "Headline tour" and "Festival run" are gone. Custom is picked
+  by default.
+
+- [ ] **BUD-TPL-02 — Template lands in the budget.** Pick Arena, create the
+  tour, open Budget. Sections: Salaries, Per Diems, Hotels (all empty),
+  Transport (7 lines), Production (15 lines). No Flights line.
+
+- [ ] **BUD-TPL-03 — Automatic lines land in the template's sections.** On that
+  tour, add a hotel stay, a crew rate on Payroll and a flight. The hotel line
+  appears in **Hotels** (no second "Accommodation" section), salaries in
+  Salaries, the flight in **Transport** (no new "Flights" section).
+
+- [ ] **BUD-TPL-04 — Blank is 0%.** Create a tour, typing only Management 15
+  and Agency 10. The step says "Leave a box blank and it's 0%". Budget sheet:
+  Management 15% and Agency 10% of show income (pre-tax), Legal and Merch 0%;
+  Insurance, Contingency, Accountancy and Merch cost of goods all 0%.
+
+- [ ] **BUD-TPL-05 — Suggestions.** Insurance, Contingency and Merch cost of
+  goods show "Use 3%", "Use 2%" and "Use 35%" while empty. Clicking one fills
+  the box and the button disappears. Type "ten" in any box: an error appears
+  and Create is disabled.
+
+- [ ] **BUD-TPL-06 — Custom stays blank.** Create with Custom: the budget has no
+  sections until something automatic (a hotel, a rate) adds one. The
+  percentages typed are still saved.
+
+- [ ] **BUD-TPL-07 — The tour still saves if templates fail.** (Dev: block
+  `/api/tours/*/start-from` in DevTools.) Create a tour: one red toast, "Tour created,
+  but the budget & advance setup didn't save … Set them on the Budget and
+  Advance pages." — no green "Tour created" beside it. The tour exists with its
+  dates and routing.

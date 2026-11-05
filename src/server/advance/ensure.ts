@@ -52,7 +52,7 @@ export async function ensureAdvance(
 
   let formConfigId = existingCfg?.id ?? null;
   if (!formConfigId) {
-    const set = await loadTemplateSet(client, tour.workspace_id);
+    const set = await loadTemplateSet(client, tour.workspace_id, tourId);
     const tpl = templateForDay(set, routing.day_type);
     const sections: AdvSection[] = (tpl?.sections ?? []).map((s, i) => ({ ...s, order: i }));
     const { data: cfg, error } = await client

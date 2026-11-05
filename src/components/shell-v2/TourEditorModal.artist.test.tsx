@@ -18,11 +18,12 @@ beforeEach(() => {
   vi.stubGlobal('fetch', vi.fn(() => Promise.resolve({ ok: true, json: () => Promise.resolve({ dates: [] }) })));
 });
 
-/** The primary CTA — "Next: routing →" on the details tab. All the footer CTAs
- *  share `disabled={!canSave}`, so any of them proves the gate. */
+/** The primary CTA — "Next: budget & advance →" on the details tab of a new
+ *  tour. All the footer CTAs share `disabled={!canSave}`, so any of them
+ *  proves the gate. */
 function saveButton(): HTMLButtonElement | null {
   const btns = Array.from(document.querySelectorAll('button'));
-  return (btns.find((b) => /next: routing/i.test(b.textContent ?? '')) as HTMLButtonElement) ?? null;
+  return (btns.find((b) => /next: budget & advance/i.test(b.textContent ?? '')) as HTMLButtonElement) ?? null;
 }
 
 describe('TourEditorModal — artist seeding (F-2)', () => {

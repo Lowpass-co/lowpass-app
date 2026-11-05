@@ -103,7 +103,7 @@ export async function loadAdvanceShow(
   const routing = routingRow as RoutingRow;
 
   const [set, { data: inst }, { data: artist }] = await Promise.all([
-    loadTemplateSet(client, tour.workspace_id),
+    loadTemplateSet(client, tour.workspace_id, tourId),
     client
       .from('advance_instances')
       .select('id, form_config_id, data, field_sources, last_updated_at')

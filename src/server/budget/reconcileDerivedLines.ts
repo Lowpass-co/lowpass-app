@@ -74,6 +74,8 @@ export interface ReconcileResult {
 }
 
 const SECTION_ACCOMMODATION = 'Accommodation';
+/** Adam's budgets (and the tour templates, migration 280) call it Hotels. */
+const ACCOMMODATION_ALIASES = ['Hotels', 'Hotel'];
 const SECTION_SALARY = 'Salaries';
 const SALARY_ALIASES = ['Salary'];
 const SECTION_PER_DIEM = 'Per Diems';
@@ -669,7 +671,7 @@ export async function reconcileDerivedBudgetLines(
   const sectionFor = async (family: DerivedFamily, needed: boolean): Promise<string | null> => {
     switch (family) {
       case 'hotel_booking':
-        return findOrCreateSection(supabase, tourId, workspaceId, SECTION_ACCOMMODATION, [], needed);
+        return findOrCreateSection(supabase, tourId, workspaceId, SECTION_ACCOMMODATION, ACCOMMODATION_ALIASES, needed);
       case 'payroll':
         return findOrCreateSection(supabase, tourId, workspaceId, SECTION_SALARY, SALARY_ALIASES, needed);
       case 'payroll_per_diem':
