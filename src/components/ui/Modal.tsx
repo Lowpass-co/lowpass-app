@@ -42,6 +42,8 @@ interface ModalProps {
   /** When false, backdrop click does not close (use for
    *  dirty-state guards — the consumer wires its own confirm). */
   closeOnBackdrop?: boolean;
+  /** Accessible name when there is no visible title. */
+  ariaLabel?: string;
 }
 
 const SIZE_CLASS: Record<Size, string> = {
@@ -61,6 +63,7 @@ export function Modal({
   footer,
   children,
   closeOnBackdrop = true,
+  ariaLabel,
 }: ModalProps) {
   const dialogRef = useRef<HTMLDivElement>(null);
   const titleId = useId();
@@ -97,12 +100,15 @@ export function Modal({
         role="dialog"
         aria-modal="true"
         aria-labelledby={title ? titleId : undefined}
+        aria-label={title ? undefined : ariaLabel}
         tabIndex={-1}
         className={cn(
           'lp-modal-enter flex max-h-[90vh] w-full flex-col rounded-xl border shadow-2xl outline-none',
           SIZE_CLASS[size],
         )}
-        style={{ background: 'var(--lp-surface)', borderColor: 'var(--lp-border-strong)' }}
+        // The box takes focus so Tab starts inside it; it is not a control, so no
+        // ring (the global *:focus-visible would otherwise outline the whole dialog).
+        style={{ background: 'var(--lp-surface)', borderColor: 'var(--lp-border-strong)', outline: 'none' }}
         onClick={(e) => e.stopPropagation()}
       >
         {title ? (

@@ -38,7 +38,7 @@ import {
 import { CommandPalette } from '@/components/command-palette/CommandPalette';
 import { ConnectionStatusProvider } from '@/components/realtime/ConnectionIndicator';
 import { ViewTransitionResolver } from '@/lib/nav/viewTransitionNav';
-import { TutorialPanel } from '@/components/tutorial/TutorialPanel';
+import { GettingStarted } from '@/components/onboarding/GettingStarted';
 
 /**
  * UX08b — Global ⌘K listener. Mounted inside CommandPaletteProvider so it
@@ -117,11 +117,11 @@ export function AppShell({
           {/* UX08b: ⌘K command palette — global mount + keyboard shortcut. */}
           <CommandPaletteShortcut />
           <CommandPalette />
-          {/* App tour & tutorial panel — opened via the 'lp:tutorial-open'
-              CustomEvent (avatar menu) and once automatically on first
-              login. usePathname only (no useSearchParams), so no Suspense
-              boundary is needed. */}
-          <TutorialPanel />
+          {/* Getting started — welcome cards + the self-ticking "Get set up"
+              checklist. Opens by itself once for someone new; reopened from
+              the avatar menu ('lp:onboarding-open'). usePathname only, so no
+              Suspense boundary is needed. */}
+          <GettingStarted />
           <GlobalDropGuard />
           {/* R5-3 completion — resolves pending spine-morph view transitions on route commit. */}
           <ViewTransitionResolver />
