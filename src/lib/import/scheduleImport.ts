@@ -100,6 +100,17 @@ export function isRealDate(iso: string): boolean {
 }
 
 const clip = (v: unknown, max = 300) => String(v ?? '').replace(/\s+/g, ' ').trim().slice(0, max);
+/** A table's "nothing here" mark ("—", "-", "–", "/") is not a value. Tour
+ *  books and Daysheets exports fill every empty cell with one, and the model
+ *  sometimes copies it through — it would be saved as a venue called "—". */
+const value = (v: unknown, max = 300) => {
+  const s = clip(v, max);
+  return /[\p{L}\p{N}]/u.test(s) ? s : '';
+};
+/** "Off · London · London" — the city typed into the venue column is not a
+ *  venue. Saving it would put a show-style venue called "London" on the
+ *  advance board for a day off. */
+const venueOf = (venue: string, city: string) => (venue && city && venue.toLowerCase() === city.toLowerCase() ? '' : venue);
 const clipNotes = (v: unknown) => String(v ?? '').trim().slice(0, 2000);
 
 /* ---- the model's output → clean days ---- */
@@ -156,13 +167,14 @@ export function normaliseExtraction(raw: unknown): NormalisedExtraction {
       warnings.push(`Skipped an entry with no usable date${d?.date ? ` (“${clip(d.date, 30)}”)` : ''}.`);
       continue;
     }
+    const city = value(d.city, 120);
     const day: ImportedDay = {
       date,
       day_type: normaliseDayType(clip(d.day_type, 60)),
-      venue_name: clip(d.venue_name ?? d.venue, 160),
-      city: clip(d.city, 120),
-      country: clip(d.country, 80),
-      address: clip(d.address, 300),
+      venue_name: venueOf(value(d.venue_name ?? d.venue, 160), city),
+      city,
+      country: value(d.country, 80),
+      address: value(d.address, 300),
       notes: clipNotes(d.notes),
       confidence: asConfidence(d.confidence),
       source: clip(d.source, 240),

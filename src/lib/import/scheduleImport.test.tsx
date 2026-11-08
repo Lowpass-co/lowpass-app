@@ -109,3 +109,50 @@ describe('long documents', () => {
     expect(m.meta.tourName).toBe('T');
   });
 });
+
+/* A real Daysheets routing export (Chance Peña — Myles Smith Support '26,
+   Nov 2026). The PDF's text layer — what the import route sends the model —
+   puts "—" in every empty cell and the city in the venue column on days off.
+   This is the model answer shape for that file; it pins what gets SAVED. */
+describe('a Daysheets routing export', () => {
+  const row = (date: string, day_type: string, city: string, venue_name: string, address = '') => ({
+    date, day_type, city, venue_name, address, confidence: 'high',
+  });
+  const out = normaliseExtraction({
+    tour: { name: "Myles Smith Support '26", artist: 'Chance Peña', start_date: '2026-10-30', end_date: '2026-11-22' },
+    days: [
+      row('2026-10-30', 'Travel', 'Amsterdam', '—'),
+      row('2026-11-01', 'Rehearsal', 'Amsterdam', 'Q Factory', 'Atlantisplein 1, 1093 NE Amsterdam, Netherlands'),
+      row('2026-11-04', 'Show', 'Amsterdam', 'Ziggo Dome', 'De Passage 100, 1101 AX Amsterdam, Netherlands'),
+      row('2026-11-05', 'Off', 'London', 'London', 'London, UK'),
+      row('2026-11-10', 'Show', 'Glasgow', 'The OVO Hydro', '—'),
+      row('2026-11-21', 'Travel', 'Home', '—'),
+      row('2026-11-22', '—', '—', '—'),
+    ],
+  });
+  const day = (d: string) => out.days.find((x) => x.date === d)!;
+
+  it('keeps the tour, artist and dates', () => {
+    expect(out.meta).toEqual({ tourName: "Myles Smith Support '26", artistName: 'Chance Peña', startDate: '2026-10-30', endDate: '2026-11-22' });
+  });
+  it('reads the day types it uses', () => {
+    expect(out.days.map((x) => x.day_type)).toEqual(['travel', 'rehearsal', 'show', 'off', 'show', 'travel', '']);
+  });
+  it('an empty cell ("—") is saved as nothing, never as a venue called "—"', () => {
+    expect(day('2026-10-30').venue_name).toBe('');
+    expect(day('2026-11-10').address).toBe('');
+    expect(day('2026-11-22')).toMatchObject({ venue_name: '', city: '', address: '' });
+  });
+  it('a day off in London is not a venue called "London"', () => {
+    expect(day('2026-11-05')).toMatchObject({ venue_name: '', city: 'London' });
+  });
+  it('real venues and addresses come through untouched', () => {
+    expect(day('2026-11-04')).toMatchObject({ venue_name: 'Ziggo Dome', city: 'Amsterdam', address: 'De Passage 100, 1101 AX Amsterdam, Netherlands' });
+  });
+  it('on a new tour every day is NEW and nothing blank is written', () => {
+    const rows = diffDays(out.days, []);
+    expect(rows.every((r) => r.status === 'new')).toBe(true);
+    const fields = toApplyDays(rows).find((a) => a.date === '2026-10-30')!.fields;
+    expect(fields).not.toHaveProperty('venue_name');
+  });
+});
