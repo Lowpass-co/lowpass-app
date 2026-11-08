@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { Loader2 } from 'lucide-react';
 import { SlideOver } from '@/components/ui/SlideOver';
+import { LinkedFilesPanel } from '@/components/files/LinkedFilesPanel';
 import { getEntityDescriptor } from '@/lib/entities/registry';
 import type { ShowEntity } from '@/lib/entities/show';
 
@@ -86,6 +87,11 @@ export default function ShowSlideOver({ id, onClose }: { id: string; onClose: ()
               <dd style={{ color: 'var(--lp-text)' }}>{show.day_type || '—'}</dd>
             </div>
           </dl>
+        )}
+        {!loading && !error && show && (
+          <div style={{ borderTop: '1px solid var(--lp-border)', paddingTop: 'var(--lp-space-4)' }}>
+            <LinkedFilesPanel type="show" id={show.id} tourId={show.tour_id} />
+          </div>
         )}
       </div>
     </SlideOver>

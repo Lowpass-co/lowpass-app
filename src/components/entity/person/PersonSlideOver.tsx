@@ -7,6 +7,7 @@ import { deleteTourPersonnel, getPersonById, updatePerson, updateTourPersonnel, 
 import type { Person, TourPerson } from '@/lib/types/person';
 import { cn } from '@/lib/utils';
 import { SlideOver } from '@/components/ui/SlideOver';
+import { LinkedFilesPanel } from '@/components/files/LinkedFilesPanel';
 
 const IC =
   'w-full rounded-lg border border-lp-border bg-lp-surface px-3 py-2 text-sm text-lp-text outline-none focus:border-lp-orange';
@@ -336,6 +337,9 @@ export default function PersonSlideOver({ id, onClose }: { id: string; onClose: 
                   ))
                 )}
               </div>
+            </Section>
+            <Section title="Files">
+              <LinkedFilesPanel type="person" id={id} heading={null} emptyText="Nothing linked yet. In tour Files, ⋯ → Link to… → Crew." />
             </Section>
             <Section title="Notes">
               <textarea className={cn(IC, 'min-h-24')} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Notes" />
