@@ -17,9 +17,9 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { X, FileUp, Check } from 'lucide-react';
-import { createClient } from '@/lib/supabase-client';
 import type { Extra, Suggestion } from '@/lib/advance/packs';
 import { advanceCall, packFileUrl, saveAnswers } from '../api';
+import { uploadDirect } from '@/lib/uploads/directUpload';
 import { fmtDay } from '../format';
 import { RequestFlow } from '../RequestFlow';
 import { PackViewer } from './PackViewer';
@@ -198,13 +198,16 @@ export function PackFlow({
           `/api/tours/${tourId}/advance/packs/upload`,
           { method: 'POST', body: JSON.stringify({ files: list.map((f) => ({ name: f.name, size: f.size, type: f.type })) }) },
         );
-        const sb = createClient();
         const ups: Uploaded[] = [];
         await Promise.all(
           prep.uploads.map(async (u, i) => {
             setProgress((p) => ({ ...p, [i]: { label: 'Uploading…', pct: 25 } }));
-            const { error: upErr } = await sb.storage.from(prep.bucket).uploadToSignedUrl(u.path, u.token, list[i], { contentType: list[i].type || undefined });
-            if (upErr) throw new Error(`Couldn’t upload ${list[i].name}`);
+            // Resumable above 6 MB — a dropped connection picks up, not starts over.
+            await uploadDirect({ bucket: prep.bucket, path: u.path, token: u.token }, list[i], {
+              onProgress: (f) => setProgress((p) => ({ ...p, [i]: { label: `Uploading ${Math.round(f * 100)}%`, pct: 5 + Math.round(f * 40) } })),
+            }).catch(() => {
+              throw new Error(`Couldn’t upload ${list[i].name}`);
+            });
             ups[i] = { name: list[i].name, path: u.path, size: list[i].size, type: list[i].type };
             setProgress((p) => ({ ...p, [i]: { label: 'Uploaded', pct: 45 } }));
           }),

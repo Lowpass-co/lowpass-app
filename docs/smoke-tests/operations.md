@@ -769,6 +769,28 @@ side in a private window (not signed in).
 - [ ] **OPS-FS-08 — Deleting a file kills its file link** ("This link doesn't
   exist").
 
-- [ ] **OPS-FS-09 — Uploads over ~4.5MB.** KNOWN LIMIT: Vercel caps request bodies
-  at about 4.5MB, so larger uploads fail with "Too large to upload through this link" on the live site —
-  same as the normal Files upload today.
+- [ ] **OPS-FS-09 — Big files through a link.** A 40 MB PDF through an edit link
+  shows a % while uploading and lands in Files. Over 100 MB is refused before
+  anything uploads.
+
+## Files — uploads straight to storage (Nov 2026 — needs migration 282)
+
+Paste `database/migrations/282_direct_uploads.sql`. Then, in Supabase →
+Storage → Settings, set the project's upload limit to at least 100 MB (needs
+Pro; Free caps every file at 50 MB).
+
+- [ ] **OPS-UP-01 — Big files upload.** Tour → Files → Upload a 50 MB venue pack:
+  the button shows "Uploading N%", then the file appears in the open folder.
+  (Before this change anything over ~4.5 MB failed.)
+- [ ] **OPS-UP-02 — Drop and resume.** Start a 40 MB upload, turn Wi-Fi off for
+  ~10 s at about a third, turn it back on: the % carries on from where it was and
+  the upload finishes. Open the file — it's complete.
+- [ ] **OPS-UP-03 — Limits.** 100 MB uploads; 100 MB + 1 byte is refused with
+  "Each file must be 100 MB or less" before anything uploads. Empty files refused.
+- [ ] **OPS-UP-04 — Artist Files** upload the same way.
+- [ ] **OPS-UP-05 — Advance info packs** take up to 100 MB and show a % while
+  uploading.
+- [ ] **OPS-UP-06 — Abandoned uploads are swept.** Start a big upload and close
+  the tab half way. Next day, `SELECT count(*) FROM storage_upload_grants WHERE
+  completed_at IS NULL AND created_at < now() - interval '24 hours'` is 0 (the
+  daily /api/cron/upload-sweep ran).

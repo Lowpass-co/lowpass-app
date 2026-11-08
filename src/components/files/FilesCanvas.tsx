@@ -59,6 +59,7 @@ import { useToast } from '@/components/ui/Toast';
 import { PageTitle } from '@/components/ui/PageHeader';
 import { createClient } from '@/lib/supabase-client';
 import { ShareLinkDialog, type ShareTarget } from '@/components/files/ShareLinkDialog';
+import { uploadToFiles } from '@/lib/uploads/filesUpload';
 
 const FileSlideOver = dynamic(() => import('@/components/entity/file/FileSlideOver'), { ssr: false });
 
@@ -138,6 +139,8 @@ export function FilesCanvas({ initial, uploadScope, title = 'Files', subtitle }:
   const [path, setPath] = useState('');
   const [selected, setSelected] = useState<FileVm | null>(null);
   const [uploading, setUploading] = useState(false);
+  /** Overall % across the files being uploaded (null when idle). */
+  const [uploadPct, setUploadPct] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
   const [dragActive, setDragActive] = useState(false);
   const [draggingFileId, setDraggingFileId] = useState<string | null>(null);
@@ -236,32 +239,33 @@ export function FilesCanvas({ initial, uploadScope, title = 'Files', subtitle }:
     [rows, folderOf],
   );
 
-  /* ---- upload: the EXACT existing POST flow + folder into metadata ---- */
+  /* ---- upload: straight to Storage (ask → send → finish), into the open folder ---- */
   const doUpload = useCallback(
     async (files: File[]) => {
       if (!uploadScope || files.length === 0) return;
       const folder = path; // uploads land in the folder that was open
+      const scope = uploadScope.type === 'artist' ? 'artist' : 'tour';
       setUploading(true);
+      const total = files.reduce((n, f) => n + f.size, 0) || 1;
+      let doneBytes = 0;
+      setUploadPct(0);
       for (const file of files) {
         try {
-          const fd = new FormData();
-          fd.append('file', file);
-          fd.append('linked_to_type', uploadScope.type);
-          fd.append('linked_to_id', uploadScope.id);
-          if (folder) fd.append('folder', folder);
-          const res = await fetch('/api/files', { method: 'POST', body: fd });
-          const json = (await res.json().catch(() => null)) as { file?: FileVm; error?: string } | null;
-          if (!res.ok || !json?.file) {
-            showToast(json?.error ?? `Could not upload ${file.name}`, 'error');
-            continue;
-          }
-          const vm = json.file as FileVm;
+          const vm = await uploadToFiles({
+            scope,
+            scopeId: uploadScope.id,
+            folder: folder || null,
+            file,
+            onProgress: (f) => setUploadPct(Math.round(((doneBytes + f * file.size) / total) * 100)),
+          });
           setRows((prev) => [vm, ...prev]); // no-reload optimistic prepend
           if (folder) setFolderOf((prev) => ({ ...prev, [vm.id]: folder }));
-        } catch {
-          showToast(`Could not upload ${file.name}`, 'error');
+        } catch (e) {
+          showToast(e instanceof Error ? e.message : `Could not upload ${file.name}`, 'error');
         }
+        doneBytes += file.size;
       }
+      setUploadPct(null);
       setUploading(false);
     },
     [uploadScope, path, showToast],
@@ -560,7 +564,7 @@ export function FilesCanvas({ initial, uploadScope, title = 'Files', subtitle }:
               style={{ background: 'var(--color-lp-orange)', color: 'var(--lp-text-inverse, #fff)' }}
             >
               <Upload className="h-4 w-4" aria-hidden />
-              {uploading ? 'Uploading…' : 'Upload'}
+              {uploading ? (uploadPct !== null ? `Uploading ${uploadPct}%` : 'Uploading…') : 'Upload'}
             </button>
             <input
               ref={inputRef}
