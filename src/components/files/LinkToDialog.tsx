@@ -20,7 +20,7 @@ export function LinkToDialog({ tourId, file, onClose }: { tourId: string; file: 
 }
 
 const GROUPS: Array<{ type: EntityType; title: string; hint: string }> = [
-  { type: 'show', title: 'Shows', hint: 'On that show’s advance page and Schedule panel.' },
+  { type: 'show', title: 'Shows', hint: 'On that show’s advance page and its day in Dates & routing.' },
   { type: 'venue', title: 'Venues', hint: 'On every show at that venue — this tour and future ones.' },
   { type: 'person', title: 'Crew', hint: 'On their person panel.' },
 ];

@@ -11,7 +11,7 @@
    meaning.
    ============================================ */
 
-import { BedDouble, CalendarRange, Check, Command, Plane, ReceiptText, Send, Table2, Users, Wallet, type LucideIcon } from 'lucide-react';
+import { Check, Command, FileText, ReceiptText, Send, Shapes, Table2, TrendingUp, Wallet, type LucideIcon } from 'lucide-react';
 import type { WelcomeArt as Art } from '@/lib/onboarding/checklist';
 
 const delay = (ms: number): React.CSSProperties => ({ animationDelay: `${ms}ms` });
@@ -28,36 +28,44 @@ export function WelcomeArt({ art }: { art: Art }) {
   );
 }
 
-/* 1 — the rail: one tour, grouped by job; the highlight walks the run. */
-/* Labels and icons as in TOUR_RAIL (src/lib/nav/ia.ts). */
-const RAIL_RUN: Array<[string, LucideIcon]> = [['Schedule', CalendarRange], ['Advance', Send], ['Crew', Users], ['Hotels & rooming', BedDouble], ['Travel', Plane]];
-const RAIL_MONEY: Array<[string, LucideIcon]> = [['Budget', Table2], ['Payroll', Wallet], ['Receipts', ReceiptText]];
+/* 1 — the rail: one tour, grouped around Advance, Budget and Production; the
+   highlight walks the Budget group. Labels and icons as in TOUR_RAIL
+   (src/lib/nav/ia.ts). The highlight's keyframes (lp-onb-rail) step over
+   exactly RAIL_BUDGET.length rows. */
+const RAIL_BUDGET: Array<[string, LucideIcon]> = [['Budget', Table2], ['Income & settlements', TrendingUp], ['Payroll', Wallet], ['Receipts', ReceiptText]];
+const RAIL_PRODUCTION: Array<[string, LucideIcon]> = [['Riders', FileText], ['Stage plot', Shapes]];
 const ROW = 24;
 
 function RailArt() {
+  const heading = (label: string) => (
+    <div style={{ ...tiny, color: 'var(--lp-text-tertiary)', padding: 'var(--lp-space-2) var(--lp-space-2) var(--lp-space-1)' }}>{label}</div>
+  );
+  const quiet = ([l, Icon]: [string, LucideIcon]) => (
+    <div key={l} className="flex items-center" style={{ ...tiny, height: ROW, gap: 'var(--lp-space-2)', padding: '0 var(--lp-space-2)', color: 'var(--lp-text-tertiary)' }}>
+      <Icon size={12} strokeWidth={2} />
+      {l}
+    </div>
+  );
   return (
     <div className="lp-onb-rise absolute flex overflow-hidden" style={{ ...frame, inset: 'var(--lp-space-5) var(--lp-space-6) 0' }}>
-      <div style={{ width: 150, padding: 'var(--lp-space-3) var(--lp-space-2)', borderRight: '1px solid var(--lp-border)', background: 'var(--lp-bg)' }}>
-        <div style={{ ...tiny, color: 'var(--lp-text-tertiary)', padding: '0 var(--lp-space-2) var(--lp-space-1)' }}>The run</div>
+      <div style={{ width: 160, padding: 'var(--lp-space-1) var(--lp-space-2) var(--lp-space-3)', borderRight: '1px solid var(--lp-border)', background: 'var(--lp-bg)' }}>
+        {heading('Tour')}
+        {quiet(['Advance', Send])}
+        {heading('Budget')}
         <div className="relative">
           <div
             className="lp-onb-rail absolute"
             style={{ left: 0, right: 0, top: 0, height: ROW, borderRadius: 'var(--lp-radius-sm)', background: '#FF450014', borderLeft: '2px solid var(--lp-orange)' }}
           />
-          {RAIL_RUN.map(([l, Icon]) => (
-            <div key={l} className="relative flex items-center" style={{ ...tiny, height: ROW, gap: 'var(--lp-space-2)', padding: '0 var(--lp-space-2)', color: 'var(--lp-text-secondary)' }}>
+          {RAIL_BUDGET.map(([l, Icon]) => (
+            <div key={l} className="relative flex items-center" style={{ ...tiny, height: ROW, gap: 'var(--lp-space-2)', padding: '0 var(--lp-space-2)', color: 'var(--lp-text-secondary)', whiteSpace: 'nowrap' }}>
               <Icon size={12} strokeWidth={2} />
               {l}
             </div>
           ))}
         </div>
-        <div style={{ ...tiny, color: 'var(--lp-text-tertiary)', padding: 'var(--lp-space-2) var(--lp-space-2) var(--lp-space-1)' }}>Money</div>
-        {RAIL_MONEY.map(([l, Icon]) => (
-          <div key={l} className="flex items-center" style={{ ...tiny, height: ROW, gap: 'var(--lp-space-2)', padding: '0 var(--lp-space-2)', color: 'var(--lp-text-tertiary)' }}>
-            <Icon size={12} strokeWidth={2} />
-            {l}
-          </div>
-        ))}
+        {heading('Production')}
+        {RAIL_PRODUCTION.map(quiet)}
       </div>
       <div className="flex flex-1 flex-col" style={{ padding: 'var(--lp-space-4)', gap: 'var(--lp-space-3)' }}>
         <div style={line('40%')} />

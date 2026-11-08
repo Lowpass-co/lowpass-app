@@ -20,7 +20,7 @@
      subtle surface tint) — it never hides the rest of the list.
 
    Navigation semantics (preserved from the previous version, Q4):
-   a row click NAVIGATES IN via router.push(tourHref(id)) — the
+   a row click NAVIGATES IN via router.push(tourHomeHref(id)) — the
    tour's last-used product with Operations fallback. We do NOT call
    setSelectedTourId here: ArtistTourContext derives selectedTourId
    from the destination path, and calling the setter would only race
@@ -37,7 +37,7 @@ import { ContextMenu } from '@/components/ui/ContextMenu';
 import { TourDeleteConfirmationModal } from '@/components/shell-v2/TourDeleteConfirmationModal';
 import { useArtistTourContext } from '@/contexts/ArtistTourContext';
 import { useTourEditor } from '@/contexts/TourEditorContext';
-import { tourHref } from '@/lib/nav/lastProduct';
+import { tourHomeHref } from '@/lib/nav/ia';
 import { DayTypeLegend, TourFingerprint } from '@/components/tour/TourFingerprint';
 import { dayTypesPresent } from '@/lib/routing/dayTypesPresent';
 import { tourPhase, type TourPhase } from '@/lib/derive/tourStatus';
@@ -175,7 +175,7 @@ export function TourPicker({ tours }: { tours: HomeTourSummary[] }) {
     // Q4 — a row click NAVIGATES IN to the tour's last-used product
     // (Operations fallback). No setSelectedTourId: context derives the
     // selection from the destination path (see header comment).
-    router.push(tourHref(id));
+    router.push(tourHomeHref(id));
   };
 
   if (tours.length === 0) {

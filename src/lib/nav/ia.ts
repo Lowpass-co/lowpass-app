@@ -101,23 +101,25 @@ const budgetTab = (tab: string) => (p: string, s: string) => {
 };
 
 /*
- * ONE TOUR RAIL (UX simplification, Oct 2026 — Adam's call).
+ * ONE TOUR RAIL (UX simplification, Oct 2026 — Adam's call), regrouped
+ * around the three things Lowpass is for (Nov 2026 nav audit, Adam):
  *
- * The tour used to be split into three rails behind a TOUR / MONEY /
- * PRODUCTION switch in the top bar: three menus stacked on top of each other,
- * with Payroll in "Money" but Crew in "Tour", and settings filed under
- * "Reports & workbook". It is now a single list, grouped by job, in plain
- * words, with every page reachable in one click and nothing greyed out.
+ *   Tour        Advance — where a tour opens (tourHomeHref)
+ *   Budget      the sheet, what the shows pay, payroll, receipts
+ *   Production  riders, channel list, stage plot, gear
+ *   Logistics   crew, hotels, travel, files
+ *   Setup       Tour settings — details, dates & routing, money settings
+ *
+ * The day-by-day Schedule is no longer a destination: Master Tour / Daysheets
+ * own the itinerary, and Lowpass should not ask for it twice. The dates still
+ * drive everything (advance days, payroll days, hotel nights), so the editor
+ * lives on, under Tour settings › Dates & routing, with the import beside it.
  *
  * `TourMode` still exists — other code asks which product tree a URL is in —
  * but every mode returns this same rail.
  */
 const TOUR_RAIL: RailEntry[] = [
-  g('The run'),
-  {
-    kind: 'item', id: 'routing', label: 'Schedule', icon: 'CalendarRange', badge: 'days', resource: 'operations.routing',
-    href: (c) => `/operations/${c.tourId}/routing`,
-  },
+  g('Tour'),
   /* Day sheets were retired in the Advance rebuild (Oct 2026, Adam): the
      show's advance is the per-day page now, and local crew calls live on it. */
   {
@@ -125,12 +127,7 @@ const TOUR_RAIL: RailEntry[] = [
     href: (c) => `/advance/${c.tourId}`,
     match: (p) => p.startsWith('/advance/'),
   },
-  g('People & logistics'),
-  { kind: 'item', id: 'crew', label: 'Crew', icon: 'Users', resource: 'operations.personnel', href: (c) => `/operations/${c.tourId}/personnel` },
-  { kind: 'item', id: 'rooming', label: 'Hotels & rooming', icon: 'BedDouble', resource: 'operations.rooming', href: (c) => `/operations/${c.tourId}/rooming` },
-  { kind: 'item', id: 'travel', label: 'Travel', icon: 'Plane', href: (c) => `/operations/${c.tourId}/travel` },
-  { kind: 'item', id: 'files', label: 'Files', icon: 'FolderOpen', resource: 'operations.files', href: (c) => `/operations/${c.tourId}/files` },
-  g('Money'),
+  g('Budget'),
   {
     /* Oct 2026 — ONE budget sheet (totals + commissions on top, every line
        below), after Adam's Sheets template. Summary is merged in, so old
@@ -152,23 +149,36 @@ const TOUR_RAIL: RailEntry[] = [
     href: (c) => `/budget/${c.tourId}?tab=receipts`, match: budgetTab('receipts'),
   },
   g('Production'),
-  { kind: 'item', id: 'assets', label: 'Gear', icon: 'Package', badge: 'gear', href: (c) => `/operations/${c.tourId}/hire` },
-  /* Patch is a mode of Channel list, not a page — so it has no item. */
-  { kind: 'item', id: 'channel-list', label: 'Channel list', icon: 'ListOrdered', resource: 'operations.channel_list', href: (c) => `/operations/${c.tourId}/channel-list` },
-  { kind: 'item', id: 'stage-plot', label: 'Stage plot', icon: 'Shapes', resource: 'operations.stage_plot', href: (c) => `/operations/${c.tourId}/stage-plot` },
   {
     kind: 'item', id: 'riders', label: 'Riders', icon: 'FileText', resource: 'operations.riders',
     href: (c) => `/operations/${c.tourId}/riders`,
     match: (p) => /^\/operations\/[^/]+\/riders(\/|$)/.test(p),
   },
-  g('Tour'),
+  /* Patch is a mode of Channel list, not a page — so it has no item. */
+  { kind: 'item', id: 'channel-list', label: 'Channel list', icon: 'ListOrdered', resource: 'operations.channel_list', href: (c) => `/operations/${c.tourId}/channel-list` },
+  { kind: 'item', id: 'stage-plot', label: 'Stage plot', icon: 'Shapes', resource: 'operations.stage_plot', href: (c) => `/operations/${c.tourId}/stage-plot` },
+  { kind: 'item', id: 'assets', label: 'Gear', icon: 'Package', badge: 'gear', href: (c) => `/operations/${c.tourId}/hire` },
+  g('Logistics'),
+  { kind: 'item', id: 'crew', label: 'Crew', icon: 'Users', resource: 'operations.personnel', href: (c) => `/operations/${c.tourId}/personnel` },
+  { kind: 'item', id: 'rooming', label: 'Hotels & rooming', icon: 'BedDouble', resource: 'operations.rooming', href: (c) => `/operations/${c.tourId}/rooming` },
+  { kind: 'item', id: 'travel', label: 'Travel', icon: 'Plane', href: (c) => `/operations/${c.tourId}/travel` },
+  { kind: 'item', id: 'files', label: 'Files', icon: 'FolderOpen', resource: 'operations.files', href: (c) => `/operations/${c.tourId}/files` },
+  g('Setup'),
   {
-    /* Was "Reports & workbook" — but the page is the tour's settings:
-       approval, overheads, commissions, exchange rates, exports. */
-    kind: 'item', id: 'reports', label: 'Tour settings', icon: 'Settings2',
-    href: (c) => `/budget/${c.tourId}?tab=settings`, match: budgetTab('settings'),
+    /* Three pages, one item (TourSettingsTabs): Details (name, dates,
+       currency, delete), Dates & routing (the old Schedule page) and Money
+       (approval, overheads, commissions, exchange rates, exports). */
+    kind: 'item', id: 'tour-settings', label: 'Tour settings', icon: 'Settings2',
+    href: (c) => `/operations/${c.tourId}/settings`,
+    match: (p, s) => /^\/operations\/[^/]+\/(settings|routing)(\/|$)/.test(p) || budgetTab('settings')(p, s),
   },
 ];
+
+/** Where a tour opens — the same place every time, on every device. (It used
+ *  to be whichever product was last used on THIS browser.) */
+export function tourHomeHref(tourId: string): string {
+  return `/advance/${tourId}`;
+}
 
 /* ── ARTIST scope ─────────────────────────────────────────────────────────── */
 

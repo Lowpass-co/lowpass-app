@@ -1859,13 +1859,13 @@ input[type='radio'] {
 @keyframes lp-onb-select {
   from { border-color: var(--lp-border); background: var(--lp-panel); box-shadow: none; }
 }
+/* Steps over the welcome sketch's four Budget rows (WelcomeArt RAIL_BUDGET). */
 @keyframes lp-onb-rail {
-  0%, 14%   { transform: translateY(0); }
-  18%, 31%  { transform: translateY(100%); }
-  35%, 48%  { transform: translateY(200%); }
-  52%, 65%  { transform: translateY(300%); }
-  69%, 82%  { transform: translateY(400%); }
-  86%, 100% { transform: translateY(0); }
+  0%, 17%   { transform: translateY(0); }
+  21%, 38%  { transform: translateY(100%); }
+  42%, 59%  { transform: translateY(200%); }
+  63%, 80%  { transform: translateY(300%); }
+  84%, 100% { transform: translateY(0); }
 }
 @keyframes lp-onb-bob { 50% { transform: translateY(-3px); } }
 @keyframes lp-onb-ping {

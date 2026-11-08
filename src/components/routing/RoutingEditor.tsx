@@ -10,7 +10,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import dynamic from 'next/dynamic';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { LayoutGrid, Calendar, MapPin, Download, Copy, Check, X, ClipboardCheck, Calculator, LayoutDashboard, Sparkles, Upload } from 'lucide-react';
 import { ScheduleImportModal } from '@/components/import/ScheduleImportModal';
 import { useToast } from '@/components/ui/Toast';
@@ -402,6 +402,18 @@ export function RoutingEditor({
     setImportFiles(files);
     setImportOpen(true);
   }, [readOnly, flushSave]);
+  /* ?import=1 opens the import straight away — the Advance board's "Add
+     dates" lands here (Nov 2026: the dates live under Tour settings, but you
+     get to them from where you work). The flag is dropped from the URL so a
+     refresh doesn't reopen it. */
+  const searchParams = useSearchParams();
+  const wantsImport = searchParams?.get('import') === '1';
+  useEffect(() => {
+    if (!wantsImport || readOnly) return;
+    setImportFiles([]);
+    setImportOpen(true);
+    router.replace(`/operations/${tourId}/routing`, { scroll: false });
+  }, [wantsImport, readOnly, router, tourId]);
   const onImported = useCallback(() => {
     hasUserEditedRef.current = false;
     router.refresh();

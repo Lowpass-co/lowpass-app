@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { itemsFor } from '@/lib/nav/ia';
+import { activeItemFor } from '@/lib/nav/ia';
 import {
   STEPS,
   WELCOME_CARDS,
@@ -44,12 +44,14 @@ describe('checklist', () => {
     expect(items.find((i) => i.id === 'team')?.action).toEqual({ kind: 'link', href: '/settings/members' });
   });
 
-  it('every link it can produce is a page the rail actually has', () => {
-    const tourHrefs = itemsFor('tour', null).map((i) => i.href({ scope: 'tour', tourId: 't1', artistId: 'a1', mode: null }));
-    const youHrefs = itemsFor('you', null).map((i) => i.href({ scope: 'you', tourId: null, artistId: null, mode: null }));
+  it('every link it can produce lands on a page the rail lights up', () => {
+    /* Not "is a rail href": Dates & routing is a tab of Tour settings, so the
+       rail item's own href is Details. What matters is that you arrive
+       somewhere the sidebar shows you are. */
     for (const item of checklistFor(going)) {
       if (item.action.kind !== 'link') continue;
-      expect([...tourHrefs, ...youHrefs], item.id).toContain(item.action.href);
+      const [path, query = ''] = item.action.href.split('?');
+      expect(activeItemFor(path, query ? `?${query}` : ''), item.id).not.toBeNull();
     }
   });
 });

@@ -28,18 +28,10 @@ import { ScheduleImportFlow, type ScheduleImportResult } from '@/components/impo
 import { Modal } from '@/components/ui/Modal';
 import { useToast } from '@/components/ui/Toast';
 import { TOUR_CURRENCIES, DEFAULT_TOUR_CURRENCY } from '@/lib/currencies';
+import { REGION_OPTIONS } from '@/lib/tours/regions';
 import { RoutingGrid, type RoutingRow } from '@/components/routing/RoutingGrid';
 import { TourStartFrom, EMPTY_START_FROM, startFromError, type StartFromValue } from './TourStartFrom';
 
-const REGION_OPTIONS: ReadonlyArray<{ value: string; label: string }> = [
-  { value: 'UK', label: 'UK' },
-  { value: 'EU', label: 'EU' },
-  { value: 'US', label: 'US' },
-  { value: 'AUS', label: 'AUS' },
-  { value: 'ASIA', label: 'ASIA' },
-  { value: 'GLOBAL', label: 'Global' },
-  { value: 'OTHER', label: 'Other' },
-];
 
 export interface TourArtistOption {
   id: string;

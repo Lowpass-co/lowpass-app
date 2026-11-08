@@ -11,7 +11,7 @@
 
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import Link from 'next/link';
-import { Search, FileUp, LayoutTemplate, Send } from 'lucide-react';
+import { CalendarPlus, Search, FileUp, LayoutTemplate, Send } from 'lucide-react';
 import type { BoardData, BoardShowRow } from '@/server/advance/board';
 import { useSpineNavigate } from '@/lib/nav/viewTransitionNav';
 import { PackFlow } from './packs/PackFlow';
@@ -130,6 +130,9 @@ export function AdvanceBoard({ data }: { data: BoardData }) {
             {data.counts.done ? <> · <span style={{ color: 'color-mix(in srgb, var(--color-lp-success) 60%, var(--lp-text))' }}>{data.counts.done} done</span></> : null}
           </p>
         </div>
+        <Link className="adv-btn" href={`/operations/${tourId}/routing?import=1`} title="Import a routing, tour book or Daysheets export">
+          <CalendarPlus size={15} aria-hidden /> Add dates
+        </Link>
         <Link className="adv-btn" href={`/advance/${tourId}/templates`}>
           <LayoutTemplate size={15} aria-hidden /> Templates
         </Link>
@@ -196,7 +199,17 @@ export function AdvanceBoard({ data }: { data: BoardData }) {
 
         {visible.length === 0 ? (
           <div style={{ padding: '40px 16px', textAlign: 'center', color: 'var(--lp-text-tertiary)', fontSize: 'var(--lp-text-sm)' }}>
-            {words.length ? <>Nothing on this tour mentions “{q}”.</> : shows.length ? 'No shows in this filter.' : 'No show days on this tour yet — add them on the Schedule.'}
+            {words.length ? (
+              <>Nothing on this tour mentions “{q}”.</>
+            ) : shows.length ? (
+              'No shows in this filter.'
+            ) : (
+              <>
+                No show days on this tour yet.{' '}
+                <Link href={`/operations/${tourId}/routing?import=1`}>Import a routing or tour book</Link>, or add them in{' '}
+                <Link href={`/operations/${tourId}/routing`}>Tour settings › Dates &amp; routing</Link>.
+              </>
+            )}
           </div>
         ) : null}
 

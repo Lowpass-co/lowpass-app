@@ -56,6 +56,8 @@ import { useToast } from '@/components/ui/Toast';
 import { SlideOver } from '@/components/ui/SlideOver';
 import { useAutoSave } from '@/lib/forms/useAutoSave';
 import { SaveStatus } from '@/components/forms/SaveStatus';
+import { REGION_OPTIONS, withCurrent } from '@/lib/tours/regions';
+import { TOUR_CURRENCIES } from '@/lib/currencies';
 
 interface OutOfWindowRow {
   id: string;
@@ -84,16 +86,9 @@ interface EditTourSlideOverProps {
   onSaved: () => void;
 }
 
-const CURRENCIES = ['GBP', 'EUR', 'USD', 'CAD', 'AUD'] as const;
-const CONTINENTS = [
-  { value: '', label: '—' },
-  { value: 'Europe', label: 'Europe' },
-  { value: 'North America', label: 'North America' },
-  { value: 'South America', label: 'South America' },
-  { value: 'Asia', label: 'Asia' },
-  { value: 'Africa', label: 'Africa' },
-  { value: 'Oceania', label: 'Oceania' },
-] as const;
+/* Nov 2026 — the SAME lists New tour uses (regions.ts, currencies.ts). This
+   offered 'Europe' / 'North America' while New tour saved 'UK' / 'EU', so a
+   UK tour opened here showed "—". The tour's current value is always kept. */
 
 function formatDate(iso: string): string {
   const d = new Date(iso);
@@ -469,16 +464,16 @@ function EditTourSlideOverInner({
                 onChange={(e) => setSafe((p) => ({ ...p, currency: e.target.value }))}
                 style={inputStyle}
               >
-                {CURRENCIES.map((c) => (
-                  <option key={c} value={c}>
-                    {c}
+                {withCurrent(TOUR_CURRENCIES, safe.currency).map((c) => (
+                  <option key={c.value} value={c.value}>
+                    {c.label}
                   </option>
                 ))}
               </select>
             </div>
             <div style={{ minWidth: 0 }}>
               <label htmlFor="lp-edit-tour-continent" className="lp-label-caps" style={labelStyle}>
-                Continent
+                Region
               </label>
               <select
                 id="lp-edit-tour-continent"
@@ -486,7 +481,7 @@ function EditTourSlideOverInner({
                 onChange={(e) => setSafe((p) => ({ ...p, continent: e.target.value }))}
                 style={inputStyle}
               >
-                {CONTINENTS.map((c) => (
+                {withCurrent([{ value: '', label: '—' }, ...REGION_OPTIONS], safe.continent).map((c) => (
                   <option key={c.value} value={c.value}>
                     {c.label}
                   </option>

@@ -245,3 +245,32 @@ and `/api/artists/[id]/tours`).
   row on the artist page (current and past rows) → confirm → the row goes.
 - [ ] **NAV-PK-11 — Phone.** Narrow window: the trigger is avatar + tour name.
   Tap → full-height sheet; tap an artist to expand its tours; tap a tour to go.
+
+## Tour menu around Advance, Budget, Production (Nov 2026)
+
+#### NAV-TOUR-01 — The tour menu
+Open any tour. The sidebar reads, top to bottom: **Tour** (Advance) · **Budget**
+(Budget, Income & settlements, Payroll, Receipts) · **Production** (Riders,
+Channel list, Stage plot, Gear) · **Logistics** (Crew, Hotels & rooming,
+Travel, Files) · **Setup** (Tour settings). No "Schedule" item.
+
+#### NAV-TOUR-02 — A tour always opens on Advance
+From an artist's tour list, the top-bar picker (from the artist or workspace
+page), an old `/tours/<id>` link and `/operations/<id>`: all land on the
+Advance board, whatever you used last. (Switching tour while on a page — e.g.
+Payroll — still keeps you on that page.) A member who can't see the advance
+lands on Crew.
+
+#### NAV-TOUR-03 — Tour settings
+Tour settings › **Details**: name, artist, dates, days, currency, region.
+**Edit details** opens Edit tour; a UK tour shows Region **UK** (not "—").
+Narrowing the dates lists the shows that would fall outside before saving.
+**Delete tour…** shows what goes with it; after deleting you're on the artist.
+Tabs **Dates & routing** (the old Schedule page) and **Money** (approval,
+overheads, FX, exports) keep "Tour settings" lit in the sidebar. Read-only
+members see the details without Edit / Delete.
+
+#### NAV-TOUR-04 — Dates from the Advance
+On the Advance board, **Add dates** opens Dates & routing with the import open.
+On a tour with no days, the board says so with "Import a routing or tour book"
+and "Tour settings › Dates & routing" links.

@@ -7,7 +7,7 @@
    the thing exists in the workspace, never because someone clicked a box.
 
    Every action points at a real, current surface (see src/lib/nav/ia.ts):
-   Schedule, Advance, Budget → Receipts, Settings → Team & roles.
+   Tour settings › Dates & routing, Advance, Budget → Receipts, Settings → Team & roles.
    ============================================ */
 
 export type StepId = 'artist' | 'tour' | 'show' | 'advance' | 'receipt' | 'team';
@@ -53,7 +53,7 @@ export const STEPS: readonly StepDef[] = [
   { id: 'artist', title: 'Add your artist', hint: 'Everything hangs off them: tours, riders, files.', cta: 'Add artist' },
   { id: 'tour', title: 'Create a tour', hint: 'Pick a template by size. Budget lines and advance questions come ready.', cta: 'New tour' },
   {
-    id: 'show', title: 'Add your show dates', hint: 'The schedule drives the advance, hotels and budget.', cta: 'Open schedule',
+    id: 'show', title: 'Add your show dates', hint: 'Drop in a routing or tour book, or type them. They drive the advance, hotels and budget.', cta: 'Add dates',
     needsTour: true, href: (t) => `/operations/${t}/routing`,
   },
   {
@@ -101,7 +101,7 @@ export const WELCOME_CARDS: readonly WelcomeCard[] = [
   {
     art: 'rail',
     title: 'Your whole tour, in one place',
-    body: 'Schedule, advance, crew, hotels, travel and money live side by side. The rail on the left is the map: one tour, grouped by job.',
+    body: 'Advance, budget and production side by side, with crew, hotels and travel. The sidebar is the map: every page of a tour is one click away.',
   },
   {
     art: 'templates',
