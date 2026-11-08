@@ -2385,3 +2385,41 @@ template and percentages are still saved).
   but the budget & advance setup didn't save … Set them on the Budget and
   Advance pages." — no green "Tour created" beside it. The tour exists with its
   dates and routing.
+
+## Row delete (Nov 2026)
+
+On the budget grid. Delete / Backspace still clear cells; rows go with the
+bin, right-click or ⌘⌫, and come back with Undo for 6 seconds.
+
+- [ ] **BUD-DEL-01 — Bin on hover.** Hover a MANUAL row: a bin shows left of
+  Open. Click it: the row disappears and a toast says "Deleted 1 row · Undo".
+  An AUTO row (Payroll, Hotels, Travel, Gear) shows no bin.
+
+- [ ] **BUD-DEL-02 — Undo.** Delete a row, click Undo within 6 s: the row is
+  back with its receipts and notes. Reload: still there (nothing was sent).
+  Delete again and wait 6 s, reload: gone, and the totals above the grid have
+  dropped by its amount.
+
+- [ ] **BUD-DEL-03 — Several at once.** Click one row's item, shift-click
+  another three rows down, press ⌘⌫ (Ctrl+Backspace on Windows): all four go,
+  "Deleted 4 rows". Right-click inside the highlighted rows: the menu reads
+  "Delete 4 rows". More → the delete item reads "Delete 4 rows" too.
+
+- [ ] **BUD-DEL-04 — Automatic rows are kept.** Highlight two manual rows and
+  one Payroll row, ⌘⌫: "Deleted 2 rows · kept 1 automatic"; the Payroll row
+  stays. Only automatic rows highlighted: a red toast says which page they come
+  from and nothing is deleted.
+
+- [ ] **BUD-DEL-05 — Spending asks first.** Delete a manual row with an actual:
+  a dialog says it also deletes its transactions and documents. Cancel keeps it;
+  Delete removes it (and Undo still works).
+
+- [ ] **BUD-DEL-06 — Locked budget.** On an approved, locked version, try any
+  delete: the Unlock / New version dialog opens and no row disappears.
+
+- [ ] **BUD-DEL-07 — Grouped by status.** More → Group by Status. Click a row,
+  ⌘⌫: the row that was highlighted is the one deleted (not a row from another
+  section).
+
+- [ ] **BUD-DEL-08 — Leaving the page sends it.** Delete a row and navigate to
+  Payroll within 6 s. Come back: the row is gone.

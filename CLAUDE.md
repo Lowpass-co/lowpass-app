@@ -290,6 +290,29 @@ recreate a `_legacy/` tree: delete dead code instead of parking it.
   the snapshot→live FKs). Deleting a live line/section never touches a saved
   version; drafts are tidied by trigger.
 
+### Budget row delete (Nov 2026, Adam)
+
+- Grid prop `onDeleteRows(uids)` — fired by the row's hover bin, right-click →
+  Delete, ⌘⌫ / Ctrl+Backspace and More → Delete, always with the rows
+  HIGHLIGHTED ON SCREEN. Plain Delete / Backspace still only clears cells.
+- Selection → rows goes through `viewRows()` (`src/components/grid/gridModel.ts`),
+  never `flat()`: grouped by phase / status, `flat()[i]` is a different row from
+  the one on screen. `groupedBuckets()` is the one place grouped order is decided
+  (the renderer reads it too). Other selection ops (clear, copy, paste, fill)
+  still use `flat()` — known wrong when grouped; not yet fixed.
+- `BudgetGridView` hides the rows, shows "Deleted N rows · Undo" for 6 s, THEN
+  sends `DELETE /api/budget/line-items?ids=` (keepalive; sent at once on
+  unmount / pagehide). Undo never re-creates a line — nothing was deleted yet.
+- Automatic lines (`isDerivedLine`) are never deleted: the client says where
+  they come from (`planRowDelete`), the server keeps them (`kept`, or 409
+  DERIVED_LINE when all are automatic). Locked budget → 409 VERSION_LOCKED.
+  Rows with actuals ask first (their transactions + documents cascade).
+- The Grid remounts on `allLines.length` (server rows + optimistic adds /
+  deletes), not `lines.length` — keyed on the server count, a just-added or
+  just-deleted row didn't show until the next refresh.
+- Workbook import drops totals and blanks (`skipRowReason`) and offers
+  percentage / no-amount rows UNTICKED (`reviewHint`).
+
 ### Money — one writer, one formula (money repair, Oct 2026)
 
 - **Automatic budget lines** (hotels, salaries, per diems, flights, gear) are

@@ -14,9 +14,11 @@
    ============================================ */
 
 import { isScannableFile } from '@/lib/budget/mediaType';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Grid } from '@/components/grid/Grid';
+import { Grid, autoSourcePage } from '@/components/grid/Grid';
+import { useBudgetConfirm } from '@/components/budget/BudgetConfirmDialog';
+import { autoSourcesText, deletedToastText, planRowDelete } from '@/lib/budget/rowDelete';
 import { VersionLockModal } from '@/components/budget/versioning/VersionLockModal';
 import type { VersionStatus, BudgetVersionVm } from '@/components/budget/versioning/versionApi';
 import { AddReceiptPanel, type AddReceiptResult } from '@/components/budget/AddReceiptPanel';
@@ -46,6 +48,9 @@ const CURRENCIES = ['GBP', 'USD', 'EUR', 'CAD', 'AUD', 'JPY'];
    reports an empty or generic type routinely, and refusing on `file.type` alone
    silently turned away real receipts. Resolved from the filename too. */
 const RECEIPT_MAX_SIZE = 10 * 1024 * 1024;
+
+/** How long a row delete can be undone before it is sent. */
+const UNDO_DELETE_MS = 6000;
 
 /** BUD-01 — receipt chip label: the receipt's own number, plus the vendor when
  *  set (attach-created receipts are blank, so this is graceful when empty).
@@ -421,30 +426,136 @@ export function BudgetGridView({
     }).catch(() => undefined); // optimistic; the grid already renamed locally
   }, []);
 
-  const onDeleteRow = useCallback((rowUid: string) => {
-    // No-reload: hide the row optimistically; restore + refresh only on failure.
-    setPendingDeletes((prev) => new Set(prev).add(rowUid));
-    const revert = () =>
-      setPendingDeletes((prev) => {
-        const next = new Set(prev);
-        next.delete(rowUid);
-        return next;
+  /* Row delete (Nov 2026) — the rows disappear at once and an Undo toast
+     stays up for UNDO_DELETE_MS; only then is the DELETE sent. Undo just
+     un-hides them: nothing was deleted yet, so transactions, documents and the
+     row id all survive. Leaving the page (unmount / pagehide) sends what's
+     pending straight away, keepalive, so a delete is never silently dropped. */
+  const { requestConfirm, dialog: confirmDialog } = useBudgetConfirm();
+  const stagedRef = useRef(new Map<number, { ids: string[]; timer: ReturnType<typeof setTimeout> }>());
+  const batchSeq = useRef(0);
+
+  const unhide = useCallback((ids: string[]) => {
+    setPendingDeletes((prev) => {
+      const next = new Set(prev);
+      for (const id of ids) next.delete(id);
+      return next;
+    });
+  }, []);
+
+  const commitDelete = useCallback(
+    (batch: number, onPageExit = false) => {
+      const staged = stagedRef.current.get(batch);
+      if (!staged) return; // undone, or already sent
+      stagedRef.current.delete(batch);
+      clearTimeout(staged.timer);
+      const req = fetch(`/api/budget/line-items?ids=${staged.ids.map(encodeURIComponent).join(',')}`, {
+        method: 'DELETE',
+        keepalive: true,
       });
-    void fetch(`/api/budget/line-items?id=${encodeURIComponent(rowUid)}`, { method: 'DELETE' })
-      .then((res) => {
-        if (!res.ok) {
-          showToast('Could not delete the line', 'error');
-          revert();
+      if (onPageExit) return; // nobody left to tell
+      void req
+        .then(async (res) => {
+          const j = (await res.json().catch(() => null)) as { code?: string; error?: string; kept?: Array<{ id: string }> } | null;
+          if (res.status === 409 && j?.code === 'VERSION_LOCKED') {
+            unhide(staged.ids);
+            setLockModalOpen(true);
+            return;
+          }
+          if (!res.ok) {
+            unhide(staged.ids);
+            showToast(j?.error ?? 'Could not delete the rows', 'error');
+            router.refresh();
+            return;
+          }
+          // Anything the server kept comes back on screen; then pull the true
+          // state so the sheet totals above the grid drop the deleted rows.
+          if (j?.kept?.length) unhide(j.kept.map((k) => k.id));
           router.refresh();
+        })
+        .catch(() => {
+          unhide(staged.ids);
+          showToast('Could not delete the rows', 'error');
+          router.refresh();
+        });
+    },
+    [router, showToast, unhide],
+  );
+
+  // Mount-once: re-running this effect would run its cleanup, which sends
+  // everything pending and cuts the Undo window short.
+  const commitRef = useRef(commitDelete);
+  useEffect(() => {
+    commitRef.current = commitDelete;
+  }, [commitDelete]);
+  useEffect(() => {
+    const staged = stagedRef.current;
+    const flush = () => {
+      for (const batch of [...staged.keys()]) commitRef.current(batch, true);
+    };
+    window.addEventListener('pagehide', flush);
+    return () => {
+      window.removeEventListener('pagehide', flush);
+      flush();
+    };
+  }, []);
+
+  const linesById = useMemo(() => new Map(allLines.map((l) => [l.id, l])), [allLines]);
+
+  const onDeleteRows = useCallback(
+    (uids: string[]) => {
+      if (versionLocked) {
+        setLockModalOpen(true);
+        return;
+      }
+      const plan = planRowDelete(uids, linesById);
+      if (plan.manual.length === 0) {
+        if (plan.auto.length) {
+          showToast(
+            `Automatic ${plan.auto.length === 1 ? 'row comes' : 'rows come'} from ${autoSourcesText(plan.auto, autoSourcePage)} — change ${plan.auto.length === 1 ? 'it' : 'them'} there.`,
+            'error',
+          );
         }
-      })
-      .catch(() => {
-        showToast('Could not delete the line', 'error');
-        revert();
-        router.refresh();
+        return;
+      }
+      const stage = () => {
+        const batch = ++batchSeq.current;
+        const ids = plan.manual;
+        setPendingDeletes((prev) => {
+          const next = new Set(prev);
+          for (const id of ids) next.add(id);
+          return next;
+        });
+        stagedRef.current.set(batch, { ids, timer: setTimeout(() => commitDelete(batch), UNDO_DELETE_MS) });
+        showToast(deletedToastText(ids.length, plan.auto.length), 'success', {
+          durationMs: UNDO_DELETE_MS,
+          action: {
+            label: 'Undo',
+            onClick: () => {
+              const staged = stagedRef.current.get(batch);
+              if (!staged) return; // already sent
+              clearTimeout(staged.timer);
+              stagedRef.current.delete(batch);
+              unhide(ids);
+            },
+          },
+        });
+      };
+      if (plan.withActuals.length === 0) {
+        stage();
+        return;
+      }
+      const n = plan.withActuals.length;
+      requestConfirm({
+        title: n === 1 ? 'Delete a row with spending?' : `Delete ${n} rows with spending?`,
+        message: `${n === plan.manual.length ? (n === 1 ? 'This row has' : 'These rows have') : `${n} of these rows have`} actual spending recorded. Deleting ${n === 1 ? 'it' : 'them'} also deletes ${n === 1 ? 'its' : 'their'} transactions and attached documents.`,
+        confirmLabel: plan.manual.length === 1 ? 'Delete row' : `Delete ${plan.manual.length} rows`,
+        tone: 'danger',
+        onConfirm: stage,
       });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [router]);
+    },
+    [versionLocked, linesById, showToast, requestConfirm, commitDelete, unhide],
+  );
 
   // Reorder persistence (BUD-42). Optimistic — the grid already shows the new
   // order; PATCH each uid with its new index. On any failure, toast + refresh
@@ -664,9 +775,12 @@ export function BudgetGridView({
         </div>
       ) : null}
       <Grid
-        // re-init when the line/section COUNT changes (add/delete via a refresh);
-        // cell edits don't change counts, so the grid keeps its session state.
-        key={`${tourId}:${lines.length}:${sections.length}:${versionLocked ? 'locked' : 'draft'}:${showEmptyAuto ? 'all' : 'tidy'}:${hasRates ? 'rates' : 'plain'}`}
+        // re-init when the line/section COUNT changes; cell edits don't change
+        // counts, so the grid keeps its session state. Counted on allLines (the
+        // server rows + the optimistic adds / deletes), not `lines`: keyed on
+        // the server count, a just-added or just-deleted row didn't show until
+        // the next refresh.
+        key={`${tourId}:${allLines.length}:${sections.length}:${versionLocked ? 'locked' : 'draft'}:${showEmptyAuto ? 'all' : 'tidy'}:${hasRates ? 'rates' : 'plain'}`}
         initialColumns={columns}
         initialData={data}
         fx={fx}
@@ -682,7 +796,7 @@ export function BudgetGridView({
         toolbarAddLine
         onAddSection={onAddSection}
         onRenameSection={onRenameSection}
-        onDeleteRow={onDeleteRow}
+        onDeleteRows={onDeleteRows}
         onReorderRow={onReorderRow}
         onReorderSection={onReorderSection}
         onFileDropToRow={handleFileDropToRow}
@@ -701,6 +815,7 @@ export function BudgetGridView({
         versions={versions}
         onClose={() => setLockModalOpen(false)}
       />
+      {confirmDialog}
       {receiptPanel ? (
         <AddReceiptPanel
           tourId={tourId}

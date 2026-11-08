@@ -5,15 +5,30 @@ import { cn } from '@/lib/utils';
 
 type ToastType = 'success' | 'error';
 
+/** One button on the toast (e.g. Undo). Clicking it runs onClick and closes
+ *  the toast. */
+export interface ToastAction {
+  label: string;
+  onClick: () => void;
+}
+
+export interface ToastOptions {
+  action?: ToastAction;
+  /** How long it stays up. Default 3 s; give an action toast long enough to
+   *  be read and clicked. */
+  durationMs?: number;
+}
+
 interface ToastItem {
   id: number;
   message: string;
   type: ToastType;
+  action?: ToastAction;
   exiting?: boolean;
 }
 
 interface ToastContextValue {
-  showToast: (message: string, type?: ToastType) => void;
+  showToast: (message: string, type?: ToastType, options?: ToastOptions) => void;
 }
 
 const ToastContext = createContext<ToastContextValue | null>(null);
@@ -36,16 +51,18 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
   const [toasts, setToasts] = useState<ToastItem[]>([]);
   const nextIdRef = useRef(0);
 
-  const showToast = useCallback((message: string, type: ToastType = 'success') => {
-    const id = nextIdRef.current++;
-    setToasts((prev) => [...prev, { id, message, type }]);
+  const dismiss = useCallback((id: number) => {
+    setToasts((prev) => prev.map((t) => (t.id === id ? { ...t, exiting: true } : t)));
     setTimeout(() => {
-      setToasts((prev) => prev.map((t) => (t.id === id ? { ...t, exiting: true } : t)));
-      setTimeout(() => {
-        setToasts((prev) => prev.filter((t) => t.id !== id));
-      }, 200);
-    }, AUTO_DISMISS_MS);
+      setToasts((prev) => prev.filter((t) => t.id !== id));
+    }, 200);
   }, []);
+
+  const showToast = useCallback((message: string, type: ToastType = 'success', options?: ToastOptions) => {
+    const id = nextIdRef.current++;
+    setToasts((prev) => [...prev, { id, message, type, action: options?.action }]);
+    setTimeout(() => dismiss(id), options?.durationMs ?? AUTO_DISMISS_MS);
+  }, [dismiss]);
 
   return (
     <ToastContext.Provider value={{ showToast }}>
@@ -67,6 +84,18 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
             )}
           >
             {t.message}
+            {t.action ? (
+              <button
+                type="button"
+                onClick={() => {
+                  dismiss(t.id);
+                  t.action?.onClick();
+                }}
+                className="ml-3 rounded px-2 py-0.5 font-semibold underline underline-offset-2 hover:no-underline"
+              >
+                {t.action.label}
+              </button>
+            ) : null}
           </div>
         ))}
       </div>

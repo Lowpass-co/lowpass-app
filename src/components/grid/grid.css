@@ -352,6 +352,38 @@
 }
 .lp-grid .openbtn:hover .ow { max-width: 50px; opacity: 1; margin-left: 2px; }
 
+/* Row delete bin — only on manual rows, only on row hover / keyboard focus
+   (a red bin on every row would shout). Sits just left of Open. */
+.lp-grid .delbtn {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 20px;
+  padding: 0;
+  color: var(--gr-text-3);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--lp-radius-md);
+  cursor: pointer;
+  opacity: 0;
+  transition: 0.16s var(--ease);
+}
+.lp-grid .delbtn + .openbtn { margin-left: var(--lp-space-1); }
+.lp-grid .row:hover .delbtn,
+.lp-grid .delbtn:focus-visible { opacity: 1; }
+.lp-grid .delbtn:hover,
+.lp-grid .delbtn:focus-visible {
+  color: var(--gr-red);
+  background: color-mix(in srgb, var(--gr-red) 12%, transparent);
+  border-color: color-mix(in srgb, var(--gr-red) 45%, transparent);
+}
+@media (hover: none) {
+  /* Touch: no hover — the bin stays faintly visible so it can be found. */
+  .lp-grid .delbtn { opacity: 0.6; }
+}
+
 .lp-grid .cell { cursor: cell; position: relative; }
 /* SOLID box-shadow ring — no color-mix here (some Chrome builds drop a
    box-shadow that contains color-mix, which hid the active ring). */

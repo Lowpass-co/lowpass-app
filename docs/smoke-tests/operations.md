@@ -815,3 +815,17 @@ Pro; Free caps every file at 50 MB).
   it was linked to.
 - [ ] **OPS-FL-07 — Private.** A second workspace with a show at the same venue never
   sees your venue files.
+
+## People search (Nov 2026)
+
+#### PPL-01 — Search the People list
+Workspace → People. A search box sits above the chips; **/** jumps to it.
+- "sam" finds Sam (preferred name); "engineer" finds every engineer; "zoe" finds Zoë.
+- "crew foh" finds only FOH engineers in Crew — every word must match.
+- "tm" or "tour manager" finds the tour managers.
+- A phone typed any way ("07700 900", "+44 7700", "(07700) 900-123") finds the person.
+- The count reads "N of 65 people"; Esc clears the box.
+- With **Crew** chip on, the search narrows within Crew; no match says
+  "No one matches "…" in Crew."
+- Tick two people, then type in the box: the selection clears (so "Delete N
+  selected" can never include someone the search hid).

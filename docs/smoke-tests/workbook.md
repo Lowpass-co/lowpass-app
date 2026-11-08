@@ -46,3 +46,15 @@ Covers the parse + dedupe engine that drives every smoke:
 /api/budget/line-items` path (internal call, forwarded session — no parallel insert),
 via the `import_pending_lines` proposal table (migration 244). Nothing writes until
 you accept — Adam's drafts-you-approve rule.
+
+#### XLS-06 — Import skips totals and blanks, unticks percentages and headings ✅ **automated core**
+**Run**: `npx vitest run src/lib/import/parseWorkbook.test.tsx`
+**Live**: import a sheet whose Budget tab has, besides real lines, rows named
+"TOTAL EXPENSES", "NET INCOME", "Salaries total", a blank row, "INSURANCE (3%)"
+and "SALARY CREW" (no amounts). The review screen:
+- says "Skipped 3 total rows — the budget adds these up itself (…)" and "Skipped
+  1 blank row", and those rows are not in the list;
+- lists "INSURANCE (3%)" **unticked**, with "Looks worked out from a percentage";
+- lists "SALARY CREW" **unticked**, with "No amount — looks like a heading";
+- every other line ticked as before. The same skips apply after mapping a
+  foreign layout's columns.

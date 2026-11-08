@@ -37,9 +37,9 @@
      - extended_profile.visa.expiry < today.
    ============================================ */
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Plus, Trash2, Upload, UserCog, UserPlus } from 'lucide-react';
+import { Plus, Search, Trash2, Upload, UserCog, UserPlus } from 'lucide-react';
 import { useToast } from '@/components/ui/Toast';
 import { PersonnelImportModal } from './PersonnelImportModal';
 import {
@@ -55,6 +55,7 @@ import { FilterChips, type FilterChipOption } from '@/components/ui/FilterChips'
 import { DeleteConfirmationModal } from '@/components/ui/DeleteConfirmationModal';
 import { PersonnelGrid } from './PersonnelGrid';
 import { toTitleCase } from '@/lib/text/toTitleCase';
+import { searchPeople } from '@/lib/personnel/search';
 
 export interface PersonnelLibraryRow {
   id: string;
@@ -183,7 +184,29 @@ function PersonnelLibraryClientBody({
   } | null>(null);
   const [panel, setPanel] = useState<PersonnelPanelState>(null);
   const [filter, setFilter] = useState<FilterKey>('all');
+  /* Nov 2026 — search box. Composes with the chips: the chip picks the set,
+     the words narrow it (see searchPeople for what matches). */
+  const [query, setQuery] = useState('');
+  const searchRef = useRef<HTMLInputElement>(null);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  // "/" jumps to the search box from anywhere on the page (not while typing).
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const t = e.target as HTMLElement | null;
+      if (e.key !== '/' || e.metaKey || e.ctrlKey || e.altKey) return;
+      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable)) return;
+      e.preventDefault();
+      searchRef.current?.focus();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+  /* A search hides rows; a selection that included them would let "Delete N
+     selected" remove people you can't see. Typing clears the selection. */
+  const onQueryChange = (q: string) => {
+    setQuery(q);
+    if (selectedIds.length) setSelectedIds([]);
+  };
   const [deleting, setDeleting] = useState(false);
   /* Sprint 9 §14.4 — replaced the prior window.confirm with the
      repo's <DeleteConfirmationModal> primitive (type-DELETE-to-
@@ -253,7 +276,7 @@ function PersonnelLibraryClientBody({
     }
   };
 
-  const filteredRows = useMemo(() => {
+  const chipRows = useMemo(() => {
     if (filter === 'all') return initial;
     const groupKey = groupKeyFromFilter(filter);
     if (groupKey) {
@@ -278,6 +301,7 @@ function PersonnelLibraryClientBody({
       }
     });
   }, [filter, initial, recentlyUpdatedCutoff, untouchedCutoff]);
+  const filteredRows = useMemo(() => searchPeople(chipRows, query), [chipRows, query]);
 
   const filterCounts = useMemo(() => {
     let conflicts = 0;
@@ -341,6 +365,7 @@ function PersonnelLibraryClientBody({
             color: 'var(--lp-text-secondary)',
           }}
         >
+          {query.trim() ? `${filteredRows.length} of ` : ''}
           {initial.length} {initial.length === 1 ? 'person' : 'people'}
           {totals.issues > 0
             ? ` · ${totals.issues} active issue${totals.issues === 1 ? '' : 's'}`
@@ -437,6 +462,48 @@ function PersonnelLibraryClientBody({
           <FilterChips> primitive is shared with any future chip
           row; visual style matches the existing FilterSelect
           dropdowns so chip + select read as one filter row. */}
+      <div
+        // The ring sits on the box, not the bare input inside it.
+        className="flex min-w-0 items-center border border-[var(--lp-border)] focus-within:border-[var(--lp-orange)]"
+        style={{
+          gap: 'var(--lp-space-2)',
+          width: 'min(100%, 360px)',
+          padding: '0 var(--lp-space-3)',
+          background: 'var(--lp-bg-secondary)',
+          borderRadius: 'var(--lp-radius-md)',
+        }}
+      >
+        <Search size={14} aria-hidden style={{ flexShrink: 0, color: 'var(--lp-text-tertiary)' }} />
+        <input
+          ref={searchRef}
+          type="search"
+          value={query}
+          onChange={(e) => onQueryChange(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Escape') {
+              onQueryChange('');
+              e.currentTarget.blur();
+            }
+          }}
+          placeholder="Search name, role, email, phone…"
+          aria-label="Search people"
+          className="min-w-0 flex-1 bg-transparent outline-none"
+          style={{ padding: 'var(--lp-space-2) 0', fontSize: 'var(--lp-text-sm)', color: 'var(--lp-text)', outline: 'none' }}
+        />
+        <kbd
+          aria-hidden
+          style={{
+            fontSize: 'var(--lp-text-2xs)',
+            color: 'var(--lp-text-tertiary)',
+            border: '1px solid var(--lp-border)',
+            borderRadius: 'var(--lp-radius-sm)',
+            padding: '0 var(--lp-space-1)',
+          }}
+        >
+          /
+        </kbd>
+      </div>
+
       <FilterChips<FilterKey>
         ariaLabel="Personnel filters"
         value={filter}
@@ -549,6 +616,8 @@ function PersonnelLibraryClientBody({
         emptyState={
           initial.length === 0
             ? 'No people in this workspace yet — click + Add new or Import to get started.'
+            : query.trim()
+            ? `No one matches “${query.trim()}”${filter !== 'all' ? ` in ${FILTER_LABELS[filter]}` : ''}.`
             : filter !== 'all' && filteredRows.length === 0
             ? `No people match the "${FILTER_LABELS[filter]}" filter.`
             : 'No people match your search.'

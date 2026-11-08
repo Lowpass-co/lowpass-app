@@ -13,6 +13,8 @@ import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { reconcileDerivedBudgetLines, type DerivedFamily } from '@/server/budget/reconcileDerivedLines';
 import { resolveLockState, writeProposedToActiveDraft } from '@/server/budget/versions';
 import { removeRecordChunksSafe } from '@/lib/ai/rag/reindex';
+import { isDerivedLine, perLineSourceLabel } from '@/lib/grid/budgetAdapter';
+import type { BudgetLineItem } from '@/types';
 
 /** Fields that are part of the VERSIONED proposed (structure + proposed value);
  *  a write touching any of these against an APPROVED version is rejected (423).
@@ -532,6 +534,19 @@ export async function PATCH(request: Request) {
   return NextResponse.json(data);
 }
 
+/** Most rows one DELETE may remove (a whole imported sheet is well under it). */
+const MAX_DELETE_IDS = 200;
+
+/** DELETE ?id=<one> | ?ids=a,b,c | body { id } | body { ids }.
+ *  - Only your workspace's lines; ids that aren't there are reported as
+ *    `missing` (already gone — a retried delete is harmless).
+ *  - AUTOMATIC lines (hotels, payroll, per diems, flights, gear — see
+ *    isDerivedLine) are never deleted here: reconcile would only write them
+ *    back. They're returned as `kept` with where they come from. If EVERY
+ *    asked-for line is automatic → 409 DERIVED_LINE.
+ *  - An approved & locked budget refuses the whole request (409
+ *    VERSION_LOCKED), like adding a line does.
+ *  200 { deleted, kept: [{ id, source }], missing }. */
 export async function DELETE(request: Request) {
   const supabase = await createServerSupabaseClient();
   const auth = await requireWrite(supabase);
@@ -550,39 +565,80 @@ export async function DELETE(request: Request) {
   if (!profile?.workspace_id) {
     return NextResponse.json({ error: 'No workspace' }, { status: 403 });
   }
+  const workspaceId = profile.workspace_id as string;
 
-  // Accept the id via query string (?id=) OR JSON body. The grid's bulk
-  // delete uses the query form; older callers send a body. Reading the
-  // query first means a body-less DELETE no longer 400s on JSON parse.
+  // Query first (?ids= / ?id=), then a JSON body ({ ids } / { id }).
   const { searchParams } = new URL(request.url);
-  let id = searchParams.get('id');
-  if (!id) {
+  let raw: unknown[] = [];
+  const q = searchParams.get('ids') ?? searchParams.get('id');
+  if (q) raw = q.split(',');
+  else {
     try {
-      const body = (await request.json()) as { id?: string };
-      id = body.id ?? null;
+      const body = (await request.json()) as { id?: unknown; ids?: unknown };
+      raw = Array.isArray(body.ids) ? body.ids : body.id != null ? [body.id] : [];
     } catch {
       // no body — fall through to the missing-id error
     }
   }
-
-  if (!id) {
+  const ids = [...new Set(raw.map((v) => (typeof v === 'string' ? v.trim() : '')).filter(Boolean))];
+  if (ids.length === 0) {
     return NextResponse.json({ error: 'id is required' }, { status: 400 });
   }
-
-  const { error } = await supabase
-    .from('budget_line_items')
-    .delete()
-    .eq('id', id)
-    .eq('workspace_id', profile.workspace_id);
-
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  if (ids.length > MAX_DELETE_IDS) {
+    return NextResponse.json({ error: `At most ${MAX_DELETE_IDS} lines at once.` }, { status: 400 });
   }
 
-  // RAG erasure cascade: drop the chunk for the deleted line item. (Create/
+  const { data: found, error: readErr } = await supabase
+    .from('budget_line_items')
+    .select('id, tour_id, source_entity_type, hotel_id, room_id, flight_id, gear_id, tour_gear_id')
+    .in('id', ids)
+    .eq('workspace_id', workspaceId);
+  if (readErr) {
+    return NextResponse.json({ error: readErr.message }, { status: 500 });
+  }
+  const rows = (found ?? []) as unknown as Array<BudgetLineItem & { tour_id: string }>;
+  const foundIds = new Set(rows.map((r) => r.id));
+  const missing = ids.filter((id) => !foundIds.has(id));
+  const kept = rows.filter((r) => isDerivedLine(r)).map((r) => ({ id: r.id, source: perLineSourceLabel(r) }));
+  const deletable = rows.filter((r) => !isDerivedLine(r));
+
+  if (deletable.length === 0 && kept.length > 0) {
+    return NextResponse.json(
+      {
+        error: `Automatic lines can’t be deleted — they come from ${[...new Set(kept.map((k) => k.source))].join(', ')}. Change them there.`,
+        code: 'DERIVED_LINE',
+        kept,
+      },
+      { status: 409 },
+    );
+  }
+
+  for (const tourId of new Set(deletable.map((r) => r.tour_id))) {
+    const { locked, version } = await resolveLockState(supabase, tourId, workspaceId);
+    if (locked) {
+      return NextResponse.json(
+        { error: 'This budget is approved & locked.', code: 'VERSION_LOCKED', versionId: version?.id ?? null },
+        { status: 409 },
+      );
+    }
+  }
+
+  const deleted = deletable.map((r) => r.id);
+  if (deleted.length > 0) {
+    const { error } = await supabase
+      .from('budget_line_items')
+      .delete()
+      .in('id', deleted)
+      .eq('workspace_id', workspaceId);
+    if (error) {
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+  }
+
+  // RAG erasure cascade: drop the chunk for each deleted line item. (Create/
   // update embedding is left to the bulk reindex — budget line items churn
   // too frequently in the grid to embed per-keystroke. See done report.)
-  removeRecordChunksSafe(profile.workspace_id, 'budget_line_item', id);
+  for (const id of deleted) removeRecordChunksSafe(workspaceId, 'budget_line_item', id);
 
-  return new Response(null, { status: 204 });
+  return NextResponse.json({ deleted, kept, missing });
 }
