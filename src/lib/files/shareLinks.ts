@@ -16,8 +16,8 @@
 export type ShareAccess = 'view' | 'edit';
 export type ShareTargetKind = 'file' | 'folder';
 
-/** Uploads through a link are capped like normal uploads. */
-export const SHARE_MAX_BYTES = 25 * 1024 * 1024;
+/** Uploads through a link are capped like every upload (src/lib/uploads/limits.ts). */
+export { MAX_UPLOAD_BYTES as SHARE_MAX_BYTES } from '@/lib/uploads/limits';
 /** Per link, per rolling hour — counted from file_share_events, so it holds
  *  across server instances (the in-memory limiter does not). */
 export const SHARE_UPLOADS_PER_HOUR = 60;
@@ -114,13 +114,28 @@ export function cleanActorName(raw: unknown): string | null {
   return s.slice(0, 60);
 }
 
-/** Storage object name for an upload: the same shape /api/files uses. */
-export function storagePath(workspaceId: string, tourId: string, fileName: string, now = Date.now()): string {
+/** Storage object name for an upload: <workspace>/<scope>/<id>/<name>-<time>.<ext>.
+ *  The one shape for Files and share links; the finish step checks a path
+ *  starts with scopePrefix() before accepting it. */
+export function storagePath(workspaceId: string, scopeId: string, fileName: string, now = Date.now(), scope: 'tour' | 'artist' = 'tour'): string {
   const safe = (fileName || 'file').replace(/[^a-zA-Z0-9._-]/g, '_').slice(0, 100) || 'file';
   const dot = safe.lastIndexOf('.');
   const base = dot > 0 ? safe.slice(0, dot) : safe;
   const ext = dot > 0 ? safe.slice(dot + 1) : 'bin';
-  return `${workspaceId}/tour/${tourId}/${base}-${now}.${ext}`;
+  // A random tail: two uploads of the same name in the same millisecond never collide.
+  const tail = Math.random().toString(36).slice(2, 8);
+  return `${scopePrefix(workspaceId, scope, scopeId)}${base}-${now}-${tail}.${ext}`;
+}
+
+export function scopePrefix(workspaceId: string, scope: 'tour' | 'artist', scopeId: string): string {
+  return `${workspaceId}/${scope}/${scopeId}/`;
+}
+
+/** A path the browser hands back is ours only if it sits directly in the scope's folder. */
+export function isScopePath(path: unknown, workspaceId: string, scope: 'tour' | 'artist', scopeId: string): path is string {
+  if (typeof path !== 'string' || path.length > 400 || path.includes('..') || path.includes('\\')) return false;
+  const prefix = scopePrefix(workspaceId, scope, scopeId);
+  return path.startsWith(prefix) && !path.slice(prefix.length).includes('/') && path.length > prefix.length;
 }
 
 /** A display file name: trimmed, no control characters or slashes, ≤200. */

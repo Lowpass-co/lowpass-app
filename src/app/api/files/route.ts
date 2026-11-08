@@ -2,22 +2,22 @@
    LOWPASS — /api/files (G1-A #2 · tour + artist file uploads
                 Files v2 · Drive-style folder canvas)
 
-   The writable side of the Files surfaces. Uploads a file to the `tour-files`
-   Storage bucket and records a `file_references` row (the same model the Files
-   surfaces read). Scope is polymorphic: linked_to_type = 'tour' | 'artist',
+   The writable side of the Files surfaces. Uploads go straight from the
+   browser to the `tour-files` bucket (POST /api/files/upload-url, then
+   /api/files/complete — Nov 2026); this route lists, renames/moves and
+   deletes the `file_references` rows the Files surfaces read. Scope is polymorphic: linked_to_type = 'tour' | 'artist',
    linked_to_id = the tour/artist id. RLS scopes every read/write to the caller's
    workspace.
 
    Folders (zero-migration): metadata.folder on the row is a '/'-joined path
    string ("Contracts/2026"). No folders table — a folder exists if a file
-   carries it. POST accepts an optional `folder` form field; PATCH lets the
+   carries it. /api/files/complete takes an optional `folder`; PATCH lets the
    canvas rename a file or move it between folders.
 
    Bucket to create in Supabase Dashboard → Storage (name: `tour-files`, private)
    with the RLS policy shipped in database/migrations/241_tour_files_bucket.sql.
 
      GET    ?linked_to_type=…&linked_to_id=…    → { files: [{ id, file_name, metadata }] }
-     POST   multipart { file, linked_to_type, linked_to_id, folder? } → { file }
      PATCH  { id, file_name?, metadata: { folder? } }                 → { ok, file }
      DELETE ?refId=…                                                  → { ok }
    ============================================================ */
@@ -29,7 +29,6 @@ import { sanitizeFolder } from '@/lib/files/shareLinks';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 
 const BUCKET = 'tour-files';
-const MAX_SIZE = 25 * 1024 * 1024; // 25MB
 const ALLOWED_SCOPES = new Set(['tour', 'artist']);
 
 async function getWorkspaceId(
@@ -69,105 +68,6 @@ export async function GET(request: Request) {
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
   return NextResponse.json({ files: data ?? [] });
-}
-
-export async function POST(request: Request) {
-  const supabase = await createServerSupabaseClient();
-  const auth = await requireWrite(supabase);
-  if ('error' in auth) return auth.error;
-  const ctx = await getWorkspaceId(supabase);
-  if (!ctx) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-
-  const formData = await request.formData();
-  const file = formData.get('file') as File | null;
-  const linkedToType = (formData.get('linked_to_type') as string | null)?.trim();
-  const linkedToId = (formData.get('linked_to_id') as string | null)?.trim();
-  const folder = sanitizeFolder(formData.get('folder'));
-
-  if (!file || !linkedToType || !linkedToId) {
-    return NextResponse.json({ error: 'Missing file, linked_to_type, or linked_to_id' }, { status: 400 });
-  }
-  if (!ALLOWED_SCOPES.has(linkedToType)) {
-    return NextResponse.json({ error: 'linked_to_type must be tour or artist' }, { status: 400 });
-  }
-  if (file.size > MAX_SIZE) {
-    return NextResponse.json({ error: 'File too large (max 25MB)' }, { status: 400 });
-  }
-
-  const safeName = (file.name || 'file').replace(/[^a-zA-Z0-9._-]/g, '_').slice(0, 100) || 'file';
-  const dot = safeName.lastIndexOf('.');
-  const base = dot > 0 ? safeName.slice(0, dot) : safeName;
-  const ext = dot > 0 ? safeName.slice(dot + 1) : 'bin';
-  const path = `${ctx.workspaceId}/${linkedToType}/${linkedToId}/${base}-${Date.now()}.${ext}`;
-
-  const buffer = Buffer.from(await file.arrayBuffer());
-  const up = await supabase.storage.from(BUCKET).upload(path, buffer, {
-    contentType: file.type || 'application/octet-stream',
-    upsert: false,
-  });
-  if (up.error) {
-    if (up.error.message?.includes('Bucket not found')) {
-      return NextResponse.json(
-        { error: `Storage bucket "${BUCKET}" not found. Create it in Supabase Dashboard → Storage.` },
-        { status: 503 },
-      );
-    }
-    return NextResponse.json({ error: up.error.message }, { status: 500 });
-  }
-
-  const { data: ref, error: refErr } = await supabase
-    .from('file_references')
-    .insert({
-      workspace_id: ctx.workspaceId,
-      file_name: file.name || safeName,
-      file_type: file.type || null,
-      file_size: file.size,
-      storage_provider: BUCKET,
-      provider_file_id: up.data.path,
-      linked_to_type: linkedToType,
-      linked_to_id: linkedToId,
-      // Files v2 — uploads land in the folder that was open on the canvas.
-      ...(folder ? { metadata: { folder } } : {}),
-    })
-    .select('id, file_name, file_type, file_size, storage_provider, provider_file_id, linked_to_type, linked_to_id, created_at')
-    .maybeSingle();
-
-  if (refErr || !ref) {
-    // Roll back the orphaned object so a failed insert doesn't leave storage litter.
-    await supabase.storage.from(BUCKET).remove([up.data.path]);
-    return NextResponse.json({ error: refErr?.message ?? 'Could not record the file' }, { status: 500 });
-  }
-
-  const r = ref as {
-    id: string;
-    file_name: string;
-    file_type: string | null;
-    file_size: number;
-    provider_file_id: string;
-    linked_to_type: string;
-    created_at: string;
-  };
-  // Shape mirrors FileVm so the client can prepend it without a refetch.
-  return NextResponse.json({
-    file: {
-      id: `ref:${r.id}`,
-      source: 'other',
-      filename: r.file_name,
-      mimeType: r.file_type,
-      size: r.file_size,
-      uploadedAt: r.created_at,
-      uploadedByName: null,
-      showId: null,
-      personId: null,
-      riderPackId: null,
-      storageBucket: BUCKET,
-      storagePath: r.provider_file_id,
-      externalUrl: null,
-      previewUrl: null,
-      linkedSummary: r.linked_to_type === 'artist' ? 'Artist file' : 'Tour file',
-      linkedHref: null,
-    },
-  });
 }
 
 export async function PATCH(request: Request) {

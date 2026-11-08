@@ -16,6 +16,15 @@ import { ChevronRight, Download, File as FileIcon, Folder, FolderOpen, Lock, Ref
 import { Button } from '@/components/ui/Button';
 import { formatBytes } from '@/lib/files/shareLinks';
 import type { LinkContents, SharedFile } from '@/server/files/shareLinks';
+import { MAX_UPLOAD_BYTES, MAX_UPLOAD_MB, tooLargeMessage } from '@/lib/uploads/limits';
+import { uploadDirect, type DirectTarget } from '@/lib/uploads/directUpload';
+
+async function postJson<T = unknown>(url: string, body: unknown): Promise<T> {
+  const r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  const j = (await r.json().catch(() => ({}))) as T & { error?: string };
+  if (!r.ok) throw new Error(j.error ?? `Upload failed (${r.status})`);
+  return j;
+}
 
 type State = { s: 'loading' } | { s: 'password'; wrong: boolean } | { s: 'error'; title: string; body: string } | { s: 'ready'; data: LinkContents };
 
@@ -23,6 +32,7 @@ interface Job {
   id: string;
   name: string;
   status: 'up' | 'done' | 'failed';
+  pct?: number;
   message?: string;
 }
 
@@ -143,16 +153,16 @@ export function PublicFileLinkView({ token }: { token: string }) {
     for (const file of files) {
       const id = `${Date.now()}-${file.name}`;
       setJobs((x) => [{ id, name: file.name, status: 'up' }, ...x]);
-      const fd = new FormData();
-      fd.append('file', file);
-      fd.append('name', who);
-      if (password) fd.append('password', password);
-      if (replaceFileId) fd.append('replaceFileId', replaceFileId);
-      else if (path) fd.append('folder', path);
+      const base = `/api/public/file-link/${encodeURIComponent(token)}`;
+      const common = { password, name: who, folder: replaceFileId ? null : path || null, replaceFileId };
       try {
-        const r = await fetch(`/api/public/file-link/${encodeURIComponent(token)}/upload`, { method: 'POST', body: fd });
-        const j = (await r.json().catch(() => ({}))) as { error?: string };
-        if (!r.ok) throw new Error(r.status === 413 ? (j.error ?? 'Too large to upload through this link') : (j.error ?? 'Upload failed'));
+        if (file.size > MAX_UPLOAD_BYTES) throw new Error(tooLargeMessage());
+        // Ask → send straight to Storage (resumable when big) → finish.
+        const target = await postJson<DirectTarget>(`${base}/upload-url`, { ...common, file: { name: file.name, size: file.size } });
+        await uploadDirect(target, file, {
+          onProgress: (f) => setJobs((x) => x.map((k) => (k.id === id ? { ...k, pct: Math.round(f * 100) } : k))),
+        });
+        await postJson(`${base}/complete`, { ...common, path: target.path, fileName: file.name });
         setJobs((x) =>
           x.map((k) =>
             k.id === id
@@ -574,7 +584,7 @@ export function PublicFileLinkView({ token }: { token: string }) {
               >
                 Drop files to add them to <strong>{path ? path.split('/').pop() : d.title}</strong>
               </div>
-              <div style={muted}>{needName ? 'Add your name above first.' : 'Up to 25MB each.'}</div>
+              <div style={muted}>{needName ? 'Add your name above first.' : `Up to ${MAX_UPLOAD_MB} MB each.`}</div>
               <Button variant="secondary" size="sm" disabled={needName} onClick={() => addInput.current?.click()}>
                 Choose files
               </Button>
@@ -626,7 +636,7 @@ export function PublicFileLinkView({ token }: { token: string }) {
                 >
                   {j.status === 'failed' ? <X size={12} aria-hidden /> : <Upload size={12} aria-hidden />}
                   <span className="min-w-0 flex-1 truncate">{j.name}</span>
-                  <span>{j.status === 'up' ? 'Uploading…' : j.message}</span>
+                  <span>{j.status === 'up' ? `Uploading${j.pct ? ` ${j.pct}%` : '…'}` : j.message}</span>
                 </li>
               ))}
             </ul>

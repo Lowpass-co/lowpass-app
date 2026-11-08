@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { FakeDb } from '@/test-utils/fakeSupabase';
 import { hashPassword } from '@/lib/rider-packs/web-links';
 import { SHARE_UPLOADS_PER_HOUR } from '@/lib/files/shareLinks';
+import type { GrantStorage } from '@/server/uploads/grants';
 import {
   ShareError,
   createLink,
@@ -13,7 +14,8 @@ import {
   previousVersionUrl,
   repointFolderLinks,
   revokeLink,
-  uploadViaLink,
+  prepareLinkUpload,
+  completeLinkUpload,
   type ShareStorage,
 } from './shareLinks';
 
@@ -23,15 +25,6 @@ const NOW = new Date('2026-11-08T12:00:00Z');
 const TOKEN = 'tok_AAAAAAAAAAAAAAAAAAAAAAAA';
 
 class Store implements ShareStorage {
-  uploads: string[] = [];
-  removed: string[] = [];
-  failUpload = false;
-  async upload(path: string) {
-    if (this.failUpload) return { error: 'boom' };
-    this.uploads.push(path);
-    return { error: null };
-  }
-  async remove(path: string) { this.removed.push(path); }
   async signedDownloadUrl(path: string, _s: number, name: string) { return `signed://${path}?download=${name}`; }
 }
 
@@ -149,94 +142,165 @@ describe('download', () => {
   });
 });
 
-describe('upload through an edit link', () => {
-  const bytes = new Uint8Array([1, 2, 3]);
-  const up = (l: Awaited<ReturnType<typeof seedLink>>, extra: Record<string, unknown> = {}) =>
-    uploadViaLink(db.client(), store, l, { fileName: 'Settlement.pdf', contentType: 'application/pdf', bytes, actor: 'Sam', ...extra }, NOW);
+/** Storage as the browser leaves it: objects appear when "uploaded". */
+class Objects implements GrantStorage {
+  objects = new Map<string, { size: number; contentType: string | null }>();
+  signed: string[] = [];
+  removed: string[] = [];
+  async signUpload(_b: string, path: string) { this.signed.push(path); return `signed-${path}`; }
+  async info(_b: string, path: string) { return this.objects.get(path) ?? null; }
+  async remove(_b: string, paths: string[]) { for (const p of paths) { this.removed.push(p); this.objects.delete(p); } }
+  /** What the browser does between prepare and complete. */
+  put(path: string, size = 3, contentType: string | null = 'application/pdf') { this.objects.set(path, { size, contentType }); }
+}
 
-  it('view links cannot upload or replace', async () => {
+describe('upload through an edit link (straight to storage)', () => {
+  let objs: Objects;
+  beforeEach(() => { objs = new Objects(); });
+  type L = Awaited<ReturnType<typeof seedLink>>;
+  const prep = (l: L, extra: Record<string, unknown> = {}) =>
+    prepareLinkUpload(db.client(), objs, l, { fileName: 'Settlement.pdf', size: 3, actor: 'Sam', ...extra }, NOW);
+  const done = (l: L, path: string, extra: Record<string, unknown> = {}) =>
+    completeLinkUpload(db.client(), objs, l, { path, fileName: 'Settlement.pdf', actor: 'Sam', ...extra }, NOW);
+  async function upload(l: L, extra: Record<string, unknown> = {}, size = 3) {
+    const g = await prep(l, { ...extra, size });
+    objs.put(g.path, size);
+    return { g, r: await done(l, g.path, extra) };
+  }
+
+  it('view links get no upload at all', async () => {
     const l = await seedLink(db);
-    await rejects(up(l), 403, 'view_only');
-    await rejects(up(l, { replaceFileId: 'top' }), 403, 'view_only');
-    expect(store.uploads).toEqual([]);
+    await rejects(prep(l), 403, 'view_only');
+    await rejects(prep(l, { replaceFileId: 'top' }), 403, 'view_only');
+    expect(objs.signed).toEqual([]);
   });
 
-  it('needs a name, a non-empty file and stays under 25MB', async () => {
+  it('needs a name, a non-empty file, and at most 100 MB — before any upload URL exists', async () => {
     const l = await seedLink(db, { access: 'edit' });
-    await rejects(up(l, { actor: '  ' }), 400, 'name_required');
-    await rejects(up(l, { bytes: new Uint8Array(0) }), 400, 'empty');
-    await rejects(up(l, { bytes: new Uint8Array(25 * 1024 * 1024 + 1) }), 413, 'too_large');
+    await rejects(prep(l, { actor: '  ' }), 400, 'name_required');
+    await rejects(prep(l, { size: 0 }), 400, 'empty');
+    await rejects(prep(l, { size: 'big' }), 400, 'empty');
+    await rejects(prep(l, { size: 100 * 1024 * 1024 + 1 }), 413, 'too_large');
+    expect(objs.signed).toEqual([]);
+    await expect(prep(l, { size: 100 * 1024 * 1024 })).resolves.toMatchObject({ bucket: 'tour-files' });
   });
 
-  it('lands in the chosen subfolder, tagged with who sent it, and is logged', async () => {
+  it('the server picks the path, inside this workspace and tour, and records the grant', async () => {
     const l = await seedLink(db, { access: 'edit' });
-    const r = await up(l, { folder: '2026/Signed' });
-    expect(r).toMatchObject({ action: 'upload', file: { name: 'Settlement.pdf', folder: '2026/Signed', available: true } });
-    const row = db.t('file_references').find((f) => f.file_name === 'Settlement.pdf')!;
-    expect(row).toMatchObject({ workspace_id: WS, linked_to_type: 'tour', linked_to_id: T1, storage_provider: 'tour-files' });
+    const g = await prep(l, { fileName: '../../etc/passwd' });
+    expect(g.path.startsWith(`${WS}/tour/${T1}/`)).toBe(true);
+    expect(g.path.slice(`${WS}/tour/${T1}/`.length)).not.toContain('/');
+    expect(db.t('storage_upload_grants')).toMatchObject([{ path: g.path, link_id: 'l-1', declared_size: 3, created_at: NOW.toISOString() }]);
+    expect(db.t('storage_upload_grants')[0].completed_at ?? null).toBeNull();
+  });
+
+  it('lands in the chosen subfolder, tagged with who sent it, sized by storage not the browser', async () => {
+    const l = await seedLink(db, { access: 'edit' });
+    const g = await prep(l, { folder: '2026/Signed', size: 3 });
+    objs.put(g.path, 5_000, 'application/pdf'); // the browser said 3 bytes; storage says 5,000
+    const r = await done(l, g.path, { folder: '2026/Signed' });
+    expect(r).toMatchObject({ action: 'upload', file: { name: 'Settlement.pdf', folder: '2026/Signed', size: 5_000, available: true } });
+    const row = db.t('file_references').find((f) => f.provider_file_id === g.path)!;
+    expect(row).toMatchObject({ workspace_id: WS, linked_to_type: 'tour', linked_to_id: T1, file_size: 5_000 });
     expect(row.metadata).toEqual({ folder: 'Contracts/2026/Signed', uploaded_via_link: { link_id: 'l-1', by: 'Sam' } });
-    expect(String(row.provider_file_id).startsWith(`${WS}/tour/${T1}/`)).toBe(true);
-    expect(db.t('file_share_events')).toMatchObject([{ action: 'upload', actor_name: 'Sam', file_name: 'Settlement.pdf' }]);
+    expect(db.t('file_share_events')).toMatchObject([{ action: 'upload', actor_name: 'Sam', file_name: 'Settlement.pdf', bytes: 5_000 }]);
+    expect(db.t('storage_upload_grants')[0].completed_at).toBe(NOW.toISOString());
+  });
+
+  it('finishing twice makes one file, not two', async () => {
+    const l = await seedLink(db, { access: 'edit' });
+    const { g, r } = await upload(l);
+    const again = await done(l, g.path);
+    expect(again.file.id).toBe(r.file.id);
+    expect(db.t('file_references').filter((f) => f.provider_file_id === g.path)).toHaveLength(1);
+    expect(db.t('file_share_events')).toHaveLength(1);
+  });
+
+  it('refuses a finish for an upload that never arrived, or a path it never granted', async () => {
+    const l = await seedLink(db, { access: 'edit' });
+    const g = await prep(l);
+    await rejects(done(l, g.path), 409, 'not_uploaded');
+    await rejects(done(l, `${WS}/tour/${T1}/made-up.pdf`), 404, 'not_found');
+    await rejects(done(l, `${WS}/tour/tour-2/x.pdf`), 400, 'bad_request');
+    await rejects(done(l, `${WS}/tour/${T1}/../../x.pdf`), 400, 'bad_request');
+    expect(db.t('file_references').filter((f) => String(f.provider_file_id).includes('made-up'))).toHaveLength(0);
+  });
+
+  it('a grant issued to one link can’t be finished through another', async () => {
+    const l = await seedLink(db, { access: 'edit' });
+    db.seed('file_share_links', [link({ id: 'l-2', token: 'tok_CCCCCCCCCCCCCCCCCCCCCCCC', access: 'edit' })]);
+    const other = await openLink(db.client(), 'tok_CCCCCCCCCCCCCCCCCCCCCCCC', null, NOW);
+    const g = await prep(l);
+    objs.put(g.path);
+    await rejects(done(other, g.path), 404, 'not_found');
+  });
+
+  it('an oversized object is deleted at finish even if the browser lied about its size', async () => {
+    const l = await seedLink(db, { access: 'edit' });
+    const g = await prep(l, { size: 10 });
+    objs.put(g.path, 100 * 1024 * 1024 + 1);
+    await rejects(done(l, g.path), 413, 'too_large');
+    expect(objs.removed).toEqual([g.path]);
+    expect(db.t('storage_upload_grants')).toHaveLength(0);
   });
 
   it('a file link only takes a new version, never a new file', async () => {
     const l = await seedLink(db, { access: 'edit', target_kind: 'file', file_id: 'top', folder_path: null });
-    await rejects(up(l), 400, 'bad_request');
+    await rejects(prep(l), 400, 'bad_request');
   });
 
   it('a new version keeps the file id and folder, and keeps the old one on record', async () => {
     const l = await seedLink(db, { access: 'edit' });
-    const r = await up(l, { replaceFileId: 'deep', fileName: 'Deal v2.pdf' });
+    const { g, r } = await upload(l, { replaceFileId: 'deep', fileName: 'Deal v2.pdf' });
     expect(r).toMatchObject({ action: 'new_version', file: { id: 'deep', folder: '2026', versions: 1 } });
     const row = db.t('file_references').find((f) => f.id === 'deep')!;
     expect(row.file_name).toBe('deep.pdf');
-    expect(row.provider_file_id).toBe(store.uploads[0]);
+    expect(row.provider_file_id).toBe(g.path);
     expect((row.metadata as { folder: string }).folder).toBe('Contracts/2026');
     expect((row.metadata as { versions: { path: string; replaced_by: string }[] }).versions[0]).toMatchObject({ path: `${WS}/tour/${T1}/deep.pdf`, replaced_by: 'Sam' });
     expect(db.t('file_share_events')).toMatchObject([{ action: 'new_version', previous_path: `${WS}/tour/${T1}/deep.pdf`, previous_name: 'deep.pdf' }]);
-    expect(store.removed).toEqual([]);
+    expect(objs.removed).toEqual([]);
   });
 
-  it('if someone replaced it first, the second upload is refused and its object cleaned up', async () => {
+  it('if someone replaced it first, the second version is refused and its object removed', async () => {
     const l = await seedLink(db, { access: 'edit' });
+    const g = await prep(l, { replaceFileId: 'deep' });
+    objs.put(g.path);
     db.beforeWrite.push((op, table) => {
       if (op === 'update' && table === 'file_references') {
         const r = db.t('file_references').find((f) => f.id === 'deep')!;
         r.provider_file_id = 'someone-else.pdf';
       }
     });
-    await rejects(up(l, { replaceFileId: 'deep' }), 409, 'conflict');
-    expect(store.removed).toEqual(store.uploads);
+    await rejects(done(l, g.path, { replaceFileId: 'deep' }), 409, 'conflict');
+    expect(objs.removed).toEqual([g.path]);
     expect(db.t('file_share_events')).toHaveLength(0);
   });
 
-  it('a failed database write never leaves an orphaned object; a failed upload writes nothing', async () => {
+  it('a failed database write never leaves an orphaned object', async () => {
     const l = await seedLink(db, { access: 'edit' });
+    const g = await prep(l);
+    objs.put(g.path);
     db.failWrites.set('file_references', { message: 'nope', code: 'XX000' });
-    await rejects(up(l), 500, 'error');
-    expect(store.removed).toEqual(store.uploads);
-    db.failWrites.clear();
-    store.failUpload = true;
-    const before = db.t('file_references').length;
-    await rejects(up(l), 500, 'error');
-    expect(db.t('file_references')).toHaveLength(before);
+    await rejects(done(l, g.path), 500, 'error');
+    expect(objs.removed).toEqual([g.path]);
   });
 
-  it('stops at the hourly cap, counted from the log', async () => {
+  it('the hourly cap counts upload URLs ISSUED — never finishing doesn’t get round it', async () => {
     const l = await seedLink(db, { access: 'edit' });
-    db.seed('file_share_events', Array.from({ length: SHARE_UPLOADS_PER_HOUR }, (_, i) => ({
-      id: `e${i}`, link_id: 'l-1', workspace_id: WS, tour_id: T1, action: 'upload', created_at: '2026-11-08T11:30:00Z',
-    })));
-    await rejects(up(l), 429, 'rate_limited');
-    // Older than an hour doesn't count.
-    db.t('file_share_events').forEach((e) => { e.created_at = '2026-11-08T10:00:00Z'; });
-    await expect(up(l)).resolves.toMatchObject({ action: 'upload' });
+    for (let i = 0; i < SHARE_UPLOADS_PER_HOUR; i++) await prep(l); // asked, never finished
+    await rejects(prep(l), 429, 'rate_limited');
+    db.t('storage_upload_grants').forEach((g) => { g.created_at = '2026-11-08T10:00:00Z'; });
+    await expect(prep(l)).resolves.toMatchObject({ bucket: 'tour-files' });
   });
 
   it('a revoked edit link can do nothing', async () => {
     const l = await seedLink(db, { access: 'edit' });
+    const g = await prep(l);
+    objs.put(g.path);
     const off = { ...l, revoked_at: '2026-11-08T11:00:00Z' };
-    await rejects(up(off), 403, 'view_only');
+    await rejects(prep(off), 403, 'view_only');
+    await rejects(done(off, g.path), 403, 'view_only');
     await rejects(downloadUrl(db.client(), store, off, 'top', null), 410, 'gone');
   });
 });
@@ -281,7 +345,10 @@ describe('owner side', () => {
 
   it('lists activity, and the owner can get a replaced version back', async () => {
     const l = await seedLink(db, { access: 'edit' });
-    await uploadViaLink(db.client(), store, l, { fileName: 'v2.pdf', contentType: 'application/pdf', bytes: new Uint8Array([1]), actor: 'Sam', replaceFileId: 'top' }, NOW);
+    const objs = new Objects();
+    const g = await prepareLinkUpload(db.client(), objs, l, { fileName: 'v2.pdf', size: 1, actor: 'Sam', replaceFileId: 'top' }, NOW);
+    objs.put(g.path, 1);
+    await completeLinkUpload(db.client(), objs, l, { path: g.path, fileName: 'v2.pdf', actor: 'Sam', replaceFileId: 'top' }, NOW);
     const { links, events } = await listLinks(db.client(), { workspaceId: WS, tourId: T1, folder: 'Contracts' });
     expect(links.map((x) => x.id)).toEqual(['l-1']);
     expect(events).toMatchObject([{ action: 'new_version', actor: 'Sam', previousName: 'top.pdf', hasPrevious: true }]);

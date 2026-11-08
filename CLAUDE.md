@@ -370,8 +370,25 @@ recreate a `_legacy/` tree: delete dead code instead of parking it.
 - Public upload cap is counted from `file_share_events` (60/link/hour), not the
   in-memory limiter. Folder renames on the canvas call
   `/api/file-share-links/repoint` so links follow.
-- Known limit: Vercel caps request bodies at ~4.5MB, so uploads above that fail
-  on the live site (same for /api/files). Fix = signed direct-to-storage uploads.
+- Uploads go straight to Storage — see §"Uploads — straight to Storage".
+
+### Uploads — straight to Storage (Nov 2026, Adam)
+
+- **No upload passes through a Vercel function** (they refuse bodies over
+  ~4.5 MB). Three steps: the server checks and issues a one-time signed upload
+  for a path IT chooses (`issueGrant`, recorded in `storage_upload_grants`,
+  migration 282) → the browser sends the bytes with `uploadDirect()`
+  (`src/lib/uploads/directUpload.ts`: one request ≤ 6 MB, resumable TUS above,
+  retries resume after a drop) → a finish call (`completeGrant`) accepts only a
+  path granted to that workspace (and link), reads size/type from Storage, and
+  claims the grant exactly once.
+- Files: `/api/files/upload-url` + `/api/files/complete` (the multipart POST is
+  gone). Share links: `/api/public/file-link/[token]/upload-url` + `/complete`;
+  their hourly cap counts ISSUED grants. Advance packs use `uploadDirect` too.
+- One limit: `MAX_UPLOAD_BYTES` (100 MB) in `src/lib/uploads/limits.ts`; the
+  bucket is set to match. The Supabase project's global limit must be ≥ it.
+- `/api/cron/upload-sweep` (daily) deletes objects whose grant never completed
+  in 24 h. Never add a new multipart upload route into tour-files.
 
 ### Advance — board, show, templates (rebuild, Oct 2026, Adam)
 

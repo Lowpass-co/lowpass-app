@@ -80,6 +80,7 @@ const UNGUARDED: Record<string, string> = {
   '/advance-packets/[tourId]/[routingId]': /* POST */ 'PERMANENT — public. Token-addressed packet fetch/record for an external recipient.',
   '/cron/dispatch-notifications': /* POST */ 'PERMANENT — cron. Authorized by CRON_SECRET; there is no user, so there is no role to check.',
   '/cron/intake-reminders': /* POST */ 'PERMANENT — cron. Authorized by CRON_SECRET; same no-user rule.',
+  '/cron/upload-sweep': /* POST */ 'PERMANENT — cron. Authorized by CRON_SECRET; deletes only objects whose upload grant never completed in 24h.',
   '/intake/[token]/submit': /* POST */ 'PERMANENT — public. Token-scoped intake submission, no session by design.',
   '/profile': /* PATCH */ 'PERMANENT — self-scoped. A member edits their OWN profile row; readonly must keep this.',
   '/profile/avatar': /* POST */ 'PERMANENT — self-scoped. Own avatar upload; same rule as /profile.',
@@ -89,7 +90,8 @@ const UNGUARDED: Record<string, string> = {
   '/public/rider/[token]': /* POST */ 'PERMANENT — public. Tokenised rider view for people outside the workspace.',
   '/public/file-link/[token]': /* POST */ 'PERMANENT — public. File/folder share link (migration 281): the unguessable token (+ optional password in the body) IS the grant; contents are scoped by fileInLink().',
   '/public/file-link/[token]/download': /* POST */ 'PERMANENT — public. Same token grant; signs a 60s forced-download URL only for a file fileInLink() places inside the link.',
-  '/public/file-link/[token]/upload': /* POST */ 'PERMANENT — public. Same token grant; EDIT links only, scope + 25MB + hourly cap enforced in uploadViaLink(); never renames, moves or deletes.',
+  '/public/file-link/[token]/upload-url': /* POST */ 'PERMANENT — public. Same token grant; EDIT links only. prepareLinkUpload() checks access, scope, 100MB and the hourly cap (counted from issued grants) before issuing a one-time signed upload for a server-chosen path.',
+  '/public/file-link/[token]/complete': /* POST */ 'PERMANENT — public. Same token grant; completeLinkUpload() accepts only a path granted to THIS link, reads size/type from Storage, records the file or new version. Never renames, moves or deletes.',
   '/public/show-link/[token]': /* POST */ 'PERMANENT — public. Tokenised show view (migration 257 show_links); the unguessable token (+ optional password in the body) IS the grant — the viewer has no session.',
 
   /* ── S1 D-1 — gear documents (read-only) ── */

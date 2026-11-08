@@ -4,6 +4,7 @@ import {
   cleanActorName,
   cleanFileName,
   inFolder,
+  isScopePath,
   linkState,
   parseCreate,
   relativeFolder,
@@ -84,8 +85,18 @@ describe('input', () => {
     expect(cleanFileName('')).toBe('file');
   });
 
-  it('storage names stay inside the workspace/tour prefix', () => {
-    expect(storagePath('ws', 't1', '../../Rider v3.pdf', 1)).toBe('ws/tour/t1/.._.._Rider_v3-1.pdf');
+  it('storage names stay inside the workspace/scope prefix and never collide', () => {
+    expect(storagePath('ws', 't1', '../../Rider v3.pdf', 1)).toMatch(/^ws\/tour\/t1\/\.\._\.\._Rider_v3-1-[a-z0-9]{1,6}\.pdf$/);
+    expect(storagePath('ws', 'a1', 'x.pdf', 1, 'artist')).toMatch(/^ws\/artist\/a1\/x-1-/);
+    expect(storagePath('ws', 't1', 'x.pdf', 1)).not.toBe(storagePath('ws', 't1', 'x.pdf', 1));
+    const p = storagePath('ws', 't1', 'x.pdf');
+    expect(isScopePath(p, 'ws', 'tour', 't1')).toBe(true);
+    expect(isScopePath(p, 'ws', 'tour', 't2')).toBe(false);
+    expect(isScopePath(p, 'other', 'tour', 't1')).toBe(false);
+    expect(isScopePath('ws/tour/t1/../t2/x.pdf', 'ws', 'tour', 't1')).toBe(false);
+    expect(isScopePath('ws/tour/t1/sub/x.pdf', 'ws', 'tour', 't1')).toBe(false);
+    expect(isScopePath('ws/tour/t1/', 'ws', 'tour', 't1')).toBe(false);
+    expect(isScopePath(42, 'ws', 'tour', 't1')).toBe(false);
   });
 
   it('create: one target, valid access, sane expiry and password', () => {

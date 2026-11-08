@@ -9,8 +9,10 @@
      linkContents    what the holder sees (files + subfolders, relative)
      fileInLink      THE scope check: is this file inside this link?
      downloadUrl     60-second signed URL that forces a download
-     uploadViaLink   edit links only: new file into the folder, or a new
-                     version of a file (old object kept, metadata.versions)
+     prepareLinkUpload / completeLinkUpload
+                     edit links only, uploaded straight to Storage in between:
+                     a new file into the folder, or a new version of a file
+                     (old object kept, metadata.versions)
 
    OWNER (session client, RLS) — called by /api/file-share-links:
      createLink, listLinks, revokeLink, repointFolderLinks, versionUrl
@@ -21,6 +23,8 @@
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { generateToken, hashPassword, verifyPassword } from '@/lib/rider-packs/web-links';
+import { tooLargeMessage } from '@/lib/uploads/limits';
+import { completeGrant, grantsInLastHour, issueGrant, UploadError, type Grant, type GrantStorage } from '@/server/uploads/grants';
 import {
   SHARE_DOWNLOAD_SECONDS,
   SHARE_MAX_BYTES,
@@ -29,6 +33,7 @@ import {
   cleanActorName,
   cleanFileName,
   inFolder,
+  isScopePath,
   linkState,
   relativeFolder,
   repointFolder,
@@ -45,21 +50,12 @@ import {
 export const SHARE_BUCKET = 'tour-files';
 
 export interface ShareStorage {
-  upload(path: string, body: Uint8Array, contentType: string): Promise<{ error: string | null }>;
-  remove(path: string): Promise<void>;
   signedDownloadUrl(path: string, seconds: number, fileName: string): Promise<string | null>;
 }
 
 export function supabaseShareStorage(client: SupabaseClient): ShareStorage {
   const b = () => client.storage.from(SHARE_BUCKET);
   return {
-    async upload(path, body, contentType) {
-      const { error } = await b().upload(path, body, { contentType: contentType || 'application/octet-stream', upsert: false });
-      return { error: error ? error.message : null };
-    },
-    async remove(path) {
-      await b().remove([path]);
-    },
     async signedDownloadUrl(path, seconds, fileName) {
       // `download` sets Content-Disposition: attachment — an uploaded HTML/SVG
       // is saved, never rendered.
@@ -249,10 +245,9 @@ export async function downloadUrl(client: SupabaseClient, storage: ShareStorage,
   return url;
 }
 
-export interface UploadInput {
-  fileName: string;
-  contentType: string;
-  bytes: Uint8Array;
+export interface PrepareInput {
+  fileName: unknown;
+  size: unknown;
   actor: unknown;
   /** Folder inside the shared folder (folder links). */
   folder?: unknown;
@@ -260,42 +255,94 @@ export interface UploadInput {
   replaceFileId?: string | null;
 }
 
-export async function uploadViaLink(
-  client: SupabaseClient,
-  storage: ShareStorage,
+/** Step 1 of an upload through a link: every check, then a one-time signed
+ *  upload for a path WE choose. The grant counts toward the hourly cap now —
+ *  asking for upload URLs and never finishing can't get round it. */
+export async function prepareLinkUpload(
+  service: SupabaseClient,
+  grants: GrantStorage,
   link: ShareLinkRow,
-  input: UploadInput,
+  input: PrepareInput,
+  now = new Date(),
+): Promise<Grant> {
+  const replacing = !!input.replaceFileId;
+  if (!can(link, replacing ? 'new_version' : 'upload', now)) throw new ShareError(403, 'view_only', 'This link is view-only.');
+  if (!replacing && link.target_kind !== 'folder') throw new ShareError(400, 'bad_request', 'A file link can only take a new version of that file.');
+  if (!cleanActorName(input.actor)) throw new ShareError(400, 'name_required', 'Add your name so they know who sent it.');
+  const size = typeof input.size === 'number' ? input.size : NaN;
+  if (!(size > 0)) throw new ShareError(400, 'empty', 'That file is empty.');
+  if (size > SHARE_MAX_BYTES) throw new ShareError(413, 'too_large', tooLargeMessage());
+  if (replacing) {
+    const f = await fileInLink(service, link, input.replaceFileId!);
+    if (!f) throw new ShareError(404, 'not_found', 'That file isn’t in this link.');
+    if (f.storage_provider !== SHARE_BUCKET) throw new ShareError(409, 'unavailable', 'This file isn’t stored in Lowpass, so it can’t take a new version here.');
+  }
+  if ((await grantsInLastHour(service, link.id, now)) >= SHARE_UPLOADS_PER_HOUR) {
+    throw new ShareError(429, 'rate_limited', 'Too many uploads through this link in the last hour. Try again later.');
+  }
+  try {
+    return await issueGrant(service, grants, {
+      workspaceId: link.workspace_id,
+      bucket: SHARE_BUCKET,
+      path: storagePath(link.workspace_id, link.tour_id, cleanFileName(input.fileName), now.getTime()),
+      declaredSize: size,
+      linkId: link.id,
+      now,
+    });
+  } catch (e) {
+    throw e instanceof UploadError ? new ShareError(e.status, e.code, e.message) : e;
+  }
+}
+
+export interface CompleteInput {
+  path: unknown;
+  fileName: unknown;
+  actor: unknown;
+  folder?: unknown;
+  replaceFileId?: string | null;
+}
+
+/** Step 2: the object is really there (size/type read from Storage), the grant
+ *  was issued to THIS link, and nothing was granted twice. Then the new file
+ *  (or new version) is recorded and logged. Re-running after success is safe. */
+export async function completeLinkUpload(
+  service: SupabaseClient,
+  grants: GrantStorage,
+  link: ShareLinkRow,
+  input: CompleteInput,
   now = new Date(),
 ): Promise<{ file: SharedFile; action: 'upload' | 'new_version' }> {
   const replacing = !!input.replaceFileId;
   if (!can(link, replacing ? 'new_version' : 'upload', now)) throw new ShareError(403, 'view_only', 'This link is view-only.');
-  if (!replacing && link.target_kind !== 'folder') throw new ShareError(400, 'bad_request', 'A file link can only take a new version of that file.');
   const actor = cleanActorName(input.actor);
   if (!actor) throw new ShareError(400, 'name_required', 'Add your name so they know who sent it.');
-  if (input.bytes.byteLength === 0) throw new ShareError(400, 'empty', 'That file is empty.');
-  if (input.bytes.byteLength > SHARE_MAX_BYTES) throw new ShareError(413, 'too_large', 'That file is over 25MB.');
+  if (!isScopePath(input.path, link.workspace_id, 'tour', link.tour_id)) throw new ShareError(400, 'bad_request', 'That upload isn’t from this link.');
+  const path = input.path;
 
-  // Quota from the log, so it holds across server instances.
-  const since = new Date(now.getTime() - 3_600_000).toISOString();
-  const { count, error: qErr } = await client
-    .from('file_share_events')
-    .select('id', { count: 'exact', head: true })
-    .eq('link_id', link.id)
-    .in('action', ['upload', 'new_version'])
-    .gte('created_at', since);
-  if (qErr) throw new ShareError(500, 'error', 'Couldn’t check this link’s upload limit.');
-  if ((count ?? 0) >= SHARE_UPLOADS_PER_HOUR) throw new ShareError(429, 'rate_limited', 'Too many uploads through this link in the last hour. Try again later.');
-
+  let done: { size: number; contentType: string | null; alreadyDone: boolean };
+  try {
+    done = await completeGrant(service, grants, { workspaceId: link.workspace_id, path, linkId: link.id, now });
+  } catch (e) {
+    throw e instanceof UploadError ? new ShareError(e.status, e.code, e.message) : e;
+  }
   const name = cleanFileName(input.fileName);
-  const path = storagePath(link.workspace_id, link.tour_id, name, now.getTime());
-  const type = input.contentType || 'application/octet-stream';
+  const type = done.contentType || 'application/octet-stream';
+
+  if (done.alreadyDone) {
+    // A retried finish: hand back what the first one made.
+    const { data } = await service.from('file_references').select(FILE_COLS).eq('workspace_id', link.workspace_id).eq('provider_file_id', path).maybeSingle();
+    const f = data as FileRow | null;
+    if (!f) throw new ShareError(409, 'conflict', 'This upload is still being saved. Refresh in a moment.');
+    const rel = link.target_kind === 'folder' && folderOf(f) ? relativeFolder(link.folder_path!, folderOf(f)!) : '';
+    return { action: replacing ? 'new_version' : 'upload', file: toShared(f, rel) };
+  }
 
   if (replacing) {
-    const f = await fileInLink(client, link, input.replaceFileId!);
-    if (!f) throw new ShareError(404, 'not_found', 'That file isn’t in this link.');
-    if (f.storage_provider !== SHARE_BUCKET) throw new ShareError(409, 'unavailable', 'This file isn’t stored in Lowpass, so it can’t take a new version here.');
-    const up = await storage.upload(path, input.bytes, type);
-    if (up.error) throw new ShareError(500, 'error', 'Upload failed. Try again.');
+    const f = await fileInLink(service, link, input.replaceFileId!);
+    if (!f || f.storage_provider !== SHARE_BUCKET) {
+      await grants.remove(SHARE_BUCKET, [path]);
+      throw new ShareError(404, 'not_found', 'That file isn’t in this link any more.');
+    }
     const metadata = withPreviousVersion(f.metadata, {
       path: f.provider_file_id,
       name: f.file_name,
@@ -305,32 +352,34 @@ export async function uploadViaLink(
       replaced_by: actor,
     });
     // Only if nobody replaced it since we read it — otherwise their version would vanish from history.
-    const { data: hit, error } = await client
+    const { data: hit, error } = await service
       .from('file_references')
-      .update({ provider_file_id: path, file_size: input.bytes.byteLength, file_type: type, metadata })
+      .update({ provider_file_id: path, file_size: done.size, file_type: type, metadata })
       .eq('id', f.id)
       .eq('provider_file_id', f.provider_file_id)
       .select('id');
     if (error || !hit || (hit as unknown[]).length !== 1) {
-      await storage.remove(path);
+      await grants.remove(SHARE_BUCKET, [path]);
       if (error) throw new ShareError(500, 'error', 'Couldn’t save the new version.');
       throw new ShareError(409, 'conflict', 'Someone just replaced this file. Refresh and try again.');
     }
-    await logEvent(client, link, { action: 'new_version', fileId: f.id, actor, fileName: name, bytes: input.bytes.byteLength, previousPath: f.provider_file_id, previousName: f.file_name });
-    const after: FileRow = { ...f, provider_file_id: path, file_size: input.bytes.byteLength, file_type: type, metadata };
+    await logEvent(service, link, { action: 'new_version', fileId: f.id, actor, fileName: name, bytes: done.size, previousPath: f.provider_file_id, previousName: f.file_name });
+    const after: FileRow = { ...f, provider_file_id: path, file_size: done.size, file_type: type, metadata };
     return { action: 'new_version', file: toShared(after, link.target_kind === 'folder' ? relativeFolder(link.folder_path!, folderOf(f)!) : '') };
   }
 
+  if (link.target_kind !== 'folder') {
+    await grants.remove(SHARE_BUCKET, [path]);
+    throw new ShareError(400, 'bad_request', 'A file link can only take a new version of that file.');
+  }
   const folder = uploadFolder(link.folder_path!, input.folder);
-  const up = await storage.upload(path, input.bytes, type);
-  if (up.error) throw new ShareError(500, 'error', 'Upload failed. Try again.');
-  const { data: row, error } = await client
+  const { data: row, error } = await service
     .from('file_references')
     .insert({
       workspace_id: link.workspace_id,
       file_name: name,
       file_type: type,
-      file_size: input.bytes.byteLength,
+      file_size: done.size,
       storage_provider: SHARE_BUCKET,
       provider_file_id: path,
       linked_to_type: 'tour',
@@ -340,11 +389,11 @@ export async function uploadViaLink(
     .select(FILE_COLS)
     .single();
   if (error || !row) {
-    await storage.remove(path);
+    await grants.remove(SHARE_BUCKET, [path]);
     throw new ShareError(500, 'error', 'Couldn’t save the upload.');
   }
   const f = row as FileRow;
-  await logEvent(client, link, { action: 'upload', fileId: f.id, actor, fileName: name, bytes: input.bytes.byteLength });
+  await logEvent(service, link, { action: 'upload', fileId: f.id, actor, fileName: name, bytes: done.size });
   return { action: 'upload', file: toShared(f, relativeFolder(link.folder_path!, folder)) };
 }
 

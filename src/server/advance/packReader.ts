@@ -13,14 +13,15 @@
 
 import * as XLSX from 'xlsx';
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { MAX_UPLOAD_BYTES, MAX_UPLOAD_MB } from '@/lib/uploads/limits';
 import type { AdvSection } from '@/lib/advance/board';
 import { cleanExtraction, type Extra, type PackPage, type Suggestion } from '@/lib/advance/packs';
 
 export const PACK_BUCKET = 'tour-files';
-/** Storage caps any single file at 50 MB on the Supabase Free plan, so that's
- *  the ceiling here too (Oct 2026, Adam). Raise both together. */
-export const MAX_PACK_FILE = 50 * 1024 * 1024;
-export const MAX_PACK_MB = 50;
+/** One upload cap for the whole app (src/lib/uploads/limits.ts — 100 MB,
+ *  Nov 2026). The Supabase project's global limit must be at least this. */
+export const MAX_PACK_FILE = MAX_UPLOAD_BYTES;
+export const MAX_PACK_MB = MAX_UPLOAD_MB;
 /** A scanned PDF (no text layer) goes to the model whole, base64-encoded, and
  *  the API caps a request at 32 MB — base64 adds a third, so ~22 MB of file.
  *  The API also reads at most 100 pages of a PDF at our context size. Text
