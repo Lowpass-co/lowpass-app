@@ -733,12 +733,12 @@ describe('prefersFullWidth — the budget sheet starts with the rail folded', ()
 });
 
 describe('where a tour opens', () => {
-  it('always the advance — not whichever product this browser used last', () => {
-    expect(tourHomeHref('t-9')).toBe('/advance/t-9');
-    expect(activeItemFor(tourHomeHref('t-9'))).toBe('advance');
+  it('always the Overview — not whichever product this browser used last', () => {
+    expect(tourHomeHref('t-9')).toBe('/operations/t-9/overview');
+    expect(activeItemFor(tourHomeHref('t-9'))).toBe('overview');
   });
-  it('the Advance is the first thing in the tour rail', () => {
-    expect(itemsFor('tour', null)[0].id).toBe('advance');
+  it('Overview then Advance head the tour rail', () => {
+    expect(itemsFor('tour', null).slice(0, 2).map((i) => i.id)).toEqual(['overview', 'advance']);
   });
   it('Schedule is no longer a destination — Dates & routing is a tab of Tour settings', () => {
     expect(itemsFor('tour', null).some((i) => i.label === 'Schedule')).toBe(false);

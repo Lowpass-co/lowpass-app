@@ -249,17 +249,17 @@ and `/api/artists/[id]/tours`).
 ## Tour menu around Advance, Budget, Production (Nov 2026)
 
 #### NAV-TOUR-01 — The tour menu
-Open any tour. The sidebar reads, top to bottom: **Tour** (Advance) · **Budget**
+Open any tour. The sidebar reads, top to bottom: **Tour** (Overview, Advance) · **Budget**
 (Budget, Income & settlements, Payroll, Receipts) · **Production** (Riders,
 Channel list, Stage plot, Gear) · **Logistics** (Crew, Hotels & rooming,
 Travel, Files) · **Setup** (Tour settings). No "Schedule" item.
 
-#### NAV-TOUR-02 — A tour always opens on Advance
+#### NAV-TOUR-02 — A tour always opens on the Overview
 From an artist's tour list, the top-bar picker (from the artist or workspace
 page), an old `/tours/<id>` link and `/operations/<id>`: all land on the
-Advance board, whatever you used last. (Switching tour while on a page — e.g.
-Payroll — still keeps you on that page.) A member who can't see the advance
-lands on Crew.
+Overview, whatever you used last. (Switching tour while on a page — e.g.
+Payroll — still keeps you on that page.) Old `/operations/<id>/summary` →
+Overview; `/operations/<id>/edit` → Tour settings.
 
 #### NAV-TOUR-03 — Tour settings
 Tour settings › **Details**: name, artist, dates, days, currency, region.
@@ -274,3 +274,28 @@ members see the details without Edit / Delete.
 On the Advance board, **Add dates** opens Dates & routing with the import open.
 On a tour with no days, the board says so with "Import a routing or tour book"
 and "Tour settings › Dates & routing" links.
+
+## Tour Overview (Nov 2026)
+
+#### NAV-OV-01 — Next show
+The next show or festival day (today counts): date · venue, city · "tomorrow"
+/ "in 3 days" · Advance N of M answered · to review · venue request. **Open
+advance** goes to that show's advance. No shows ahead: "No shows coming up"
+with an import link.
+
+#### NAV-OV-02 — Needs you
+Each line is a count and a link, and only appears when it's non-zero: days in
+the next two weeks not fully advanced (Advance), advance answers to review,
+shows played but not settled (Settlements), receipts needing details
+(Receipts), crew not confirmed (Crew), budget lines over estimate (Budget).
+Clear everything → "Nothing needs you right now."
+
+#### NAV-OV-03 — Advance · Budget · Production
+One line each: "N of M days advanced · K waiting on venues"; "£X spent of £Y
+planned · £Z net planned" (the Budget page's own totals); "Rider updated … ·
+Channel list not made · Stage plot updated …". Each row opens its page.
+
+#### NAV-OV-04 — Only what you can open
+As a member without Budget access: no Budget row, no money lines, no settle /
+over-estimate items. Without Receipts / Crew / Riders access, those go too.
+Loading the Overview never changes anything (no budget refresh runs).
