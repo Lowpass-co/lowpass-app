@@ -806,7 +806,7 @@ Pro; Free caps every file at 50 MB).
 - [ ] **OPS-FL-03 — Venue packs carry over.** On a show at a venue, choose
   "Every show at <venue>" and upload. Open a show at the same venue on ANOTHER
   tour: the file is there, labelled "every show at <venue> · from <first tour>".
-  Settings → Venues → that venue → Files lists it.
+  Avatar menu → Venues → that venue → Files lists it.
 - [ ] **OPS-FL-04 — Crew.** Link a passport to a crew member (Link to… → Crew).
   Their person panel → Files lists it.
 - [ ] **OPS-FL-05 — Unlink never deletes.** × on a linked file removes it from that
