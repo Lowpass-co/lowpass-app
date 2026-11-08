@@ -19,6 +19,8 @@
    Nothing in the import path ever deletes a day.
    ============================================ */
 
+import { venueIsCity } from '@/lib/venues/notAVenue';
+
 export const IMPORT_FIELDS = ['day_type', 'venue_name', 'city', 'country', 'address', 'notes'] as const;
 export type ImportField = (typeof IMPORT_FIELDS)[number];
 
@@ -107,10 +109,9 @@ const value = (v: unknown, max = 300) => {
   const s = clip(v, max);
   return /[\p{L}\p{N}]/u.test(s) ? s : '';
 };
-/** "Off · London · London" — the city typed into the venue column is not a
- *  venue. Saving it would put a show-style venue called "London" on the
- *  advance board for a day off. */
-const venueOf = (venue: string, city: string) => (venue && city && venue.toLowerCase() === city.toLowerCase() ? '' : venue);
+/** "Off · London · London" — the city in the venue column is not a venue
+ *  (see venueIsCity). */
+const venueOf = (venue: string, city: string) => (venueIsCity(venue, city) ? '' : venue);
 const clipNotes = (v: unknown) => String(v ?? '').trim().slice(0, 2000);
 
 /* ---- the model's output → clean days ---- */

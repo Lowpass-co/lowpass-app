@@ -427,6 +427,18 @@ recreate a `_legacy/` tree: delete dead code instead of parking it.
   UI: `<LinkedFilesPanel>` (advance show page card, Schedule's show panel, venue
   editor, person panel) and **Link to…** on a tour file's ⋯ menu.
 
+### A city is not a venue (Nov 2026, Adam)
+
+- Days off / travel days have a city, never a venue. `venueIsCity()` /
+  `isCityPlace()` (`src/lib/venues/notAVenue.ts`) are the rule; applied in the
+  Schedule save (PUT), the row PATCH, the import apply and the AI import's
+  `normaliseExtraction` — and a Google pick of a town in the Venue box fills the
+  city instead (no place id → no library venue).
+- Migration 284 holds the same rule as a trigger on `routing` (backstop for
+  every writer) and cleaned the rows already saved that way. The shared
+  `canonical_venues` table was NOT cleaned — "venues" named after a city may
+  remain there; the migration ends with a read-only query listing them.
+
 ### Advance — board, show, templates (rebuild, Oct 2026, Adam)
 
 - **Three pages**: the board (`AdvanceBoard`, every show × question group,

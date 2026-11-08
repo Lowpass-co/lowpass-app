@@ -9,6 +9,7 @@
         edit. (Was delete-all-reinsert, which cascade-wiped them.)
    ============================================ */
 
+import { venueIsCity } from '@/lib/venues/notAVenue';
 import { NextResponse } from 'next/server';
 import { requireWrite } from '@/lib/auth/workspace-check';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
@@ -217,7 +218,13 @@ async function postHandler(
     notes?: string; latitude?: number; longitude?: number; transport_to_next?: string;
     place_id?: string | null; canonical_venue_id?: string | null;
   };
-  const typedRows = rows as IncomingRow[];
+  // A city in the venue box ("London" on a day off) is not a venue: drop it
+  // before it can be linked to — or create — a library venue (notAVenue.ts).
+  const typedRows = (rows as IncomingRow[]).map((r) =>
+    venueIsCity(r.venue_name, r.city)
+      ? { ...r, venue_name: '', venue_website: '', venue_phone: '', venue_capacity: null, place_id: null, canonical_venue_id: null }
+      : r,
+  );
 
   // Resolve any freshly-picked Place IDs to canonical venues (service-role,
   // deduped). Rows without a place_id keep their round-tripped canonical link

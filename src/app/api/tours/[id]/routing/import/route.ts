@@ -20,6 +20,7 @@
    refreshed afterwards (withDerivedRefresh), like the Schedule's own save.
    ============================================ */
 
+import { venueIsCity } from '@/lib/venues/notAVenue';
 import { NextResponse } from 'next/server';
 import { requireWrite } from '@/lib/auth/workspace-check';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
@@ -89,13 +90,19 @@ async function postHandler(request: Request, { params }: { params: Promise<{ id:
 
   const { data: existing, error: exErr } = await supabase
     .from('routing')
-    .select('id, date, venue_name')
+    .select('id, date, venue_name, city')
     .eq('tour_id', tourId)
     .in('date', dates);
   if (exErr) return NextResponse.json({ error: exErr.message }, { status: 500 });
   const existingByDate = new Map(
-    ((existing ?? []) as Array<{ id: string; date: string; venue_name: string | null }>).map((r) => [String(r.date).slice(0, 10), r]),
+    ((existing ?? []) as Array<{ id: string; date: string; venue_name: string | null; city: string | null }>).map((r) => [String(r.date).slice(0, 10), r]),
   );
+  // A venue that is just the day's city is no venue (notAVenue.ts) — the
+  // reviewer may have typed it in, after the extraction already dropped it.
+  for (const date of dates) {
+    const f = byDate.get(date)!;
+    if (f.venue_name !== undefined && venueIsCity(f.venue_name, f.city ?? existingByDate.get(date)?.city)) delete f.venue_name;
+  }
 
   let updated = 0;
   const inserts: Array<Record<string, unknown>> = [];
@@ -104,6 +111,7 @@ async function postHandler(request: Request, { params }: { params: Promise<{ id:
     const ex = existingByDate.get(date);
     if (ex) {
       const patch: Record<string, unknown> = { ...fields };
+      if (Object.keys(patch).length === 0) continue; // only a city-as-venue was sent
       if (fields.venue_name !== undefined && (ex.venue_name ?? '').trim().toLowerCase() !== fields.venue_name.toLowerCase()) {
         patch.canonical_venue_id = null;
       }
