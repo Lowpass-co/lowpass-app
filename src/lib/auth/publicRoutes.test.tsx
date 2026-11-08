@@ -95,6 +95,11 @@ describe('P0 — authed surfaces stay gated', () => {
   // B4 — /s/ is two characters, same collision class as /a/. The trailing
   // slash keeps /settings, /signup and (redundantly with its own entry)
   // /share out of its reach.
+  it('/f/ opens file share links and nothing else starting with f', () => {
+    expect(isPublicPath('/f/tok_abc', true)).toBe(true);
+    for (const p of ['/files', '/f', '/features', '/finance', '/fx']) expect(isPublicPath(p, true)).toBe(false);
+  });
+
   it('/s/ does not swallow /settings, /signup or /share', () => {
     expect(isPublicPath('/s/tok', true)).toBe(true);
     expect(isPublicPath('/settings', true)).toBe(false);

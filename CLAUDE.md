@@ -353,6 +353,26 @@ recreate a `_legacy/` tree: delete dead code instead of parking it.
 - Welcome art is live-drawn from the app's own labels (`WelcomeArt.tsx`) —
   when a rail label or template changes, update the sketch too.
 
+### File & folder share links (Nov 2026, Adam)
+
+- Tour Files → ⋯ → **Share…** makes a `/f/<token>` link to one file or one
+  folder (everything under it, incl. files added later). Anyone with the link,
+  optional password + expiry, revocable. VIEW = see + download. EDIT = also add
+  files to the folder and upload new versions — **never rename, move or delete**.
+- Tables `file_share_links` / `file_share_events` (migration 281). Rules are
+  pure in `src/lib/files/shareLinks.ts`; server in `src/server/files/shareLinks.ts`.
+  `fileInLink()` is THE scope check for every public read/write — the public
+  routes use the service-role client, so nothing else stands between a token
+  and a file. Change it only with its tests (they were mutation-checked).
+- A new version keeps the `file_references` id; the old object stays in
+  storage and is listed in `metadata.versions` + the `new_version` event.
+  Replace is optimistic (`.eq('provider_file_id', old)`) → 409 on a race.
+- Public upload cap is counted from `file_share_events` (60/link/hour), not the
+  in-memory limiter. Folder renames on the canvas call
+  `/api/file-share-links/repoint` so links follow.
+- Known limit: Vercel caps request bodies at ~4.5MB, so uploads above that fail
+  on the live site (same for /api/files). Fix = signed direct-to-storage uploads.
+
 ### Advance — board, show, templates (rebuild, Oct 2026, Adam)
 
 - **Three pages**: the board (`AdvanceBoard`, every show × question group,

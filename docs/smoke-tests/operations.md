@@ -730,3 +730,45 @@ regardless of the UI. **Unlock is admin-only** (`DELETE /api/tours/[id]/payroll/
   Pay shows Fees / Per diem / Total in the tour currency, matching their
   Payroll Summary row.
 
+
+## Files — share links (Nov 2026 — needs migration 281)
+
+Paste `database/migrations/281_file_share_links.sql` first. Test the public
+side in a private window (not signed in).
+
+- [ ] **OPS-FS-01 — Share a folder, view only.** Tour → Files → a folder's ⋯ →
+  **Share…**. View only, Create link: the link is copied. Open it signed out:
+  artist · tour, the folder name, "View only", its files and subfolders. Download
+  works. Files outside the folder (and in a folder called "Contracts 2" next to
+  "Contracts") are not listed.
+
+- [ ] **OPS-FS-02 — Edit link adds files.** Make a "Can edit" link. Signed out:
+  without a name, upload is disabled. Add a name, drop two files into a subfolder:
+  both appear in Lowpass Files in that subfolder. The Share dialog's Activity shows
+  "<name> added …".
+
+- [ ] **OPS-FS-03 — New version keeps the old one.** On the edit link, New version
+  on a file: Lowpass shows the same file (same name, same folder) with the new
+  content; the public page shows "version 2". Activity → **Get previous** downloads
+  the old file.
+
+- [ ] **OPS-FS-04 — Edit never deletes.** The public page has no rename, move or
+  delete anywhere.
+
+- [ ] **OPS-FS-05 — Single file links.** File ⋯ → Share… → Can edit. Signed out
+  you see one file, "You can upload a new version", and no drop zone.
+
+- [ ] **OPS-FS-06 — Password, expiry, turn off.** Password link asks for it and
+  refuses a wrong one. A link with yesterday's date can't be created; one set for
+  today works until the end of today. **Turn off** → the open page says "This link
+  has been turned off" on reload.
+
+- [ ] **OPS-FS-07 — Rename follows.** Rename a shared folder: its link still opens
+  and shows the same files under the new name.
+
+- [ ] **OPS-FS-08 — Deleting a file kills its file link** ("This link doesn't
+  exist").
+
+- [ ] **OPS-FS-09 — Uploads over ~4.5MB.** KNOWN LIMIT: Vercel caps request bodies
+  at about 4.5MB, so larger uploads fail with "Too large to upload through this link" on the live site —
+  same as the normal Files upload today.
