@@ -37,7 +37,10 @@ import {
   X as CloseIcon,
   Clock,
   Sparkles,
+  CornerDownRight,
 } from 'lucide-react';
+import { searchPages } from '@/lib/search/pages';
+import { useTourEditor } from '@/contexts/TourEditorContext';
 import { useAuth } from '@/hooks/useAuth';
 import { useEntityRouting } from '@/components/entity/EntityRoutingContext';
 import { useSuggestionsPreference } from '@/components/detail-panel/useSuggestionsPreference';
@@ -66,6 +69,7 @@ const KIND_LABEL: Record<SearchKind, string> = {
   'rider-pack': 'Rider packs',
   'rental-job': 'Rental jobs',
   receipt: 'Receipts',
+  page: 'Go to',
 };
 
 const KIND_ICON: Record<SearchKind, typeof UserIcon> = {
@@ -81,9 +85,12 @@ const KIND_ICON: Record<SearchKind, typeof UserIcon> = {
   'rider-pack': BookOpen,
   'rental-job': Wrench,
   receipt: Receipt,
+  page: CornerDownRight,
 };
 
 const GROUP_ORDER: SearchKind[] = [
+  // Pages first: "payroll" means the Payroll page before any record named so.
+  'page',
   'show',
   'tour',
   'person',
@@ -218,6 +225,7 @@ function PaletteInner({
   const router = useRouter();
   const pathname = usePathname();
   const entityRouting = useEntityRouting();
+  const tourEditor = useTourEditor();
 
   // Route context for the Ask scope: a tour (operations/budget/advance) or
   // an artist. Lets "ask your history" default to what you're looking at.
@@ -313,11 +321,18 @@ function PaletteInner({
     };
   }, [debounced]);
 
+  // Pages + actions — synchronous, from the sidebar's own config, so they
+  // show the moment you type, ahead of the record search.
+  const pageHits = useMemo(
+    () => (debounced.trim() ? searchPages(debounced, { tourId: ctxTourId, artistId: ctxArtistId }) : []),
+    [debounced, ctxTourId, ctxArtistId],
+  );
+
   const flatList = useMemo<Selectable[]>(() => {
     if (debounced.trim()) {
       const out: Selectable[] = [];
       const byKind = new Map<SearchKind, SearchResult[]>();
-      for (const r of results) {
+      for (const r of [...pageHits, ...results]) {
         const arr = byKind.get(r.kind) ?? [];
         arr.push(r);
         byKind.set(r.kind, arr);
@@ -330,7 +345,7 @@ function PaletteInner({
       return out;
     }
     return recent.map<Selectable>((r) => ({ kind: 'recent', recent: r }));
-  }, [debounced, results, recent]);
+  }, [debounced, results, recent, pageHits]);
 
   // Clamp the rendered selection to the current list size; the underlying
   // state is allowed to drift past the list end without resetting (avoids
@@ -363,15 +378,20 @@ function PaletteInner({
               secondary: selectable.recent.secondary,
               action: selectable.recent.action,
             };
-      pushRecent(userId, baseRecent);
       hide();
+      if (action.type === 'command') {
+        // An action, not a place — not worth remembering as "recent".
+        if (action.run === 'new-tour') tourEditor.openCreateTour();
+        return;
+      }
+      pushRecent(userId, baseRecent);
       if (action.type === 'open-entity') {
         entityRouting.open({ kind: action.kind, id: action.id });
       } else {
         router.push(action.href);
       }
     },
-    [hide, entityRouting, router, userId],
+    [hide, entityRouting, router, userId, tourEditor],
   );
 
   const handleKeyDown = useCallback(
@@ -451,7 +471,7 @@ function PaletteInner({
             type="text"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search shows, people, flights…"
+            placeholder="Go to a page, or search shows, people, flights…"
             className="min-w-0 flex-1 bg-transparent py-3 text-base outline-none"
             style={{ color: 'var(--lp-text)' }}
             spellCheck={false}
@@ -549,7 +569,7 @@ function PaletteInner({
 
           {empty && !debounced.trim() && !loading ? (
             <div className="px-4 py-12 text-center text-sm" style={{ color: 'var(--lp-text-tertiary)' }}>
-              Type to search across shows, people, flights, gear, tours…
+              Type a page (“payroll”, “hotels”, “import”) or search shows, people, flights, gear, tours…
             </div>
           ) : null}
 

@@ -20,6 +20,7 @@
 
 import Link from 'next/link';
 import { PendingSwap, PendingLive } from './PendingNav';
+import { SearchTrigger } from './SearchTrigger';
 import type { NavContext } from '@/lib/nav/ia';
 
 export interface TopBarV3Props {
@@ -84,6 +85,7 @@ export function TopBarV3({ ctx, workspaceName, switcher, right, landing = false 
       <span style={{ marginLeft: 'auto' }} />
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <SearchTrigger />
         {right}
       </div>
     </header>

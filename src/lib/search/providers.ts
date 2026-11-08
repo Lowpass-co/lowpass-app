@@ -38,11 +38,17 @@ export type SearchKind =
   | 'bug-report'
   | 'rider-pack'
   | 'rental-job'
-  | 'receipt';
+  | 'receipt'
+  // Nov 2026 — pages of the sidebar + a few actions (src/lib/search/pages.ts).
+  | 'page';
+
+/** An action the palette runs itself (not a link). */
+export type PageCommandRun = 'new-tour';
 
 export type SearchAction =
   | { type: 'open-entity'; kind: EntityKind; id: string }
-  | { type: 'navigate'; href: string };
+  | { type: 'navigate'; href: string }
+  | { type: 'command'; run: PageCommandRun };
 
 export type SearchResult = {
   id: string;
