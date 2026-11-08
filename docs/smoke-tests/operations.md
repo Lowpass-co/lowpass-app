@@ -794,3 +794,24 @@ Pro; Free caps every file at 50 MB).
   the tab half way. Next day, `SELECT count(*) FROM storage_upload_grants WHERE
   completed_at IS NULL AND created_at < now() - interval '24 hours'` is 0 (the
   daily /api/cron/upload-sweep ran).
+
+## Files — linked to shows, venues and crew (Nov 2026 — needs migration 283)
+
+- [ ] **OPS-FL-01 — Deal memo onto a show.** Tour → Files → a PDF's ⋯ → **Link to…**
+  → tick one show → Done. Open that show's advance page: the **Files** card lists it.
+  Schedule → click the show: the panel's Files lists it too. Other shows don't.
+- [ ] **OPS-FL-02 — And the other way.** On a show's advance page → Files →
+  **Upload**: the file appears on the show AND in tour Files (top level).
+  **Link a file** lists this tour's files not already there; picking one links it.
+- [ ] **OPS-FL-03 — Venue packs carry over.** On a show at a venue, choose
+  "Every show at <venue>" and upload. Open a show at the same venue on ANOTHER
+  tour: the file is there, labelled "every show at <venue> · from <first tour>".
+  Avatar menu → Venues → that venue → Files lists it.
+- [ ] **OPS-FL-04 — Crew.** Link a passport to a crew member (Link to… → Crew).
+  Their person panel → Files lists it.
+- [ ] **OPS-FL-05 — Unlink never deletes.** × on a linked file removes it from that
+  page; it's still in tour Files. Files uploaded onto the show itself have no ×.
+- [ ] **OPS-FL-06 — Deleting the file** from tour Files removes it from every page
+  it was linked to.
+- [ ] **OPS-FL-07 — Private.** A second workspace with a show at the same venue never
+  sees your venue files.

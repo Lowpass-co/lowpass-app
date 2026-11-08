@@ -48,6 +48,7 @@ import {
   FolderOpen,
   FolderPlus,
   MoreHorizontal,
+  Link2,
   Pencil,
   Share2,
   Trash2,
@@ -60,6 +61,7 @@ import { PageTitle } from '@/components/ui/PageHeader';
 import { createClient } from '@/lib/supabase-client';
 import { ShareLinkDialog, type ShareTarget } from '@/components/files/ShareLinkDialog';
 import { uploadToFiles } from '@/lib/uploads/filesUpload';
+import { LinkToDialog } from '@/components/files/LinkToDialog';
 
 const FileSlideOver = dynamic(() => import('@/components/entity/file/FileSlideOver'), { ssr: false });
 
@@ -150,6 +152,8 @@ export function FilesCanvas({ initial, uploadScope, title = 'Files', subtitle }:
   const [newFolderDraft, setNewFolderDraft] = useState<string | null>(null);
   /** Share links (Nov 2026) — tour Files only. */
   const [shareTarget, setShareTarget] = useState<ShareTarget | null>(null);
+  /** Link a file to shows / venues / crew (Nov 2026) — tour Files only. */
+  const [linkFile, setLinkFile] = useState<{ id: string; name: string } | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
 
   const canUpload = !!uploadScope;
@@ -967,6 +971,16 @@ export function FilesCanvas({ initial, uploadScope, title = 'Files', subtitle }:
                                   })}
                                   {canShare && refId
                                     ? menuItem({
+                                        label: 'Link to…',
+                                        icon: Link2,
+                                        onClick: () => {
+                                          setMenu(null);
+                                          setLinkFile({ id: refId, name: row.filename });
+                                        },
+                                      })
+                                    : null}
+                                  {canShare && refId
+                                    ? menuItem({
                                         label: 'Share…',
                                         icon: Share2,
                                         onClick: () => {
@@ -1036,6 +1050,7 @@ export function FilesCanvas({ initial, uploadScope, title = 'Files', subtitle }:
 
       {selected && <FileSlideOver file={selected} onClose={() => setSelected(null)} />}
       {canShare ? <ShareLinkDialog tourId={scopeId!} target={shareTarget} onClose={() => setShareTarget(null)} /> : null}
+      {canShare ? <LinkToDialog tourId={scopeId!} file={linkFile} onClose={() => setLinkFile(null)} /> : null}
     </div>
   );
 }

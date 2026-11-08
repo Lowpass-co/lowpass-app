@@ -17,6 +17,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { MapPin, Pencil, Users } from 'lucide-react';
 import { SlideOver } from '@/components/ui/SlideOver';
+import { LinkedFilesPanel } from '@/components/files/LinkedFilesPanel';
 import { useToast } from '@/components/ui/Toast';
 
 export interface VenueLibraryRow {
@@ -262,6 +263,11 @@ function VenueEditSlideOver({ venue, onClose }: { venue: VenueLibraryRow; onClos
           <div className="mt-2" style={{ fontSize: 'var(--lp-text-2xs)', color: 'var(--lp-text-tertiary)' }}>
             Past and frozen shows keep their saved venue snapshot and are not changed.
           </div>
+        </div>
+
+        {/* Files linked to this venue — they show on every one of your shows here. */}
+        <div style={{ borderTop: '1px solid var(--lp-border)', paddingTop: 'var(--lp-space-4)' }}>
+          <LinkedFilesPanel type="venue" id={venue.id} emptyText="Nothing linked yet. On a show here, upload under Files → “Every show at this venue”, or use tour Files → ⋯ → Link to…" />
         </div>
       </div>
     </SlideOver>

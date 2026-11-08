@@ -390,6 +390,20 @@ recreate a `_legacy/` tree: delete dead code instead of parking it.
 - `/api/cron/upload-sweep` (daily) deletes objects whose grant never completed
   in 24 h. Never add a new multipart upload route into tour-files.
 
+### Files linked to shows, venues and crew (Nov 2026, Adam)
+
+- `file_entity_links` (migration 283): a tour file "also shows here" on a show
+  (routing.id), a venue (canonical_venues.id) or a person (persons.id). The file
+  still lives in tour Files; unlinking never deletes it; deleting the file
+  removes its links.
+- A **venue** link shows on every show at that venue across the workspace's
+  tours (labelled with its source tour). `canonical_venues` is GLOBAL — every
+  query filters `workspace_id` (tested: a foreign link row pointing at your file
+  is ignored). Venues are named via `resolveVenue()`, never routing.venue_*.
+- Server: `src/server/files/entityLinks.ts`; API `/api/file-links` (+ `/targets`).
+  UI: `<LinkedFilesPanel>` (advance show page card, Schedule's show panel, venue
+  editor, person panel) and **Link to…** on a tour file's ⋯ menu.
+
 ### Advance — board, show, templates (rebuild, Oct 2026, Adam)
 
 - **Three pages**: the board (`AdvanceBoard`, every show × question group,
