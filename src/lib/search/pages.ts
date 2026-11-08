@@ -68,12 +68,48 @@ export function pageCommands(ctx: { tourId: string | null; artistId: string | nu
     add('tour', 'This tour');
     const t = ctx.tourId;
     out.push(
-      { id: 'tour:details', label: 'Tour details', where: 'Tour settings', keywords: ['edit tour', 'rename', 'tour name', 'dates', 'currency', 'region', 'delete tour'], href: `/operations/${t}/settings` },
-      { id: 'tour:routing', label: 'Dates & routing', where: 'Tour settings', keywords: ['schedule', 'routing', 'itinerary', 'days', 'calendar', 'shows'], href: `/operations/${t}/routing` },
-      { id: 'tour:money-settings', label: 'Money settings', where: 'Tour settings', keywords: ['approval', 'approve', 'overheads', 'commissions', 'exchange rates', 'fx', 'export', 'versions'], href: `/budget/${t}?tab=settings` },
-      { id: 'tour:import', label: 'Import dates', where: 'Action', keywords: ['import', 'schedule', 'routing', 'tour book', 'daysheets', 'master tour', 'pdf'], href: `/operations/${t}/routing?import=1` },
-      { id: 'tour:settlements', label: 'Settlements', where: 'This tour', keywords: ['settle', 'settlement', 'night'], href: `/budget/${t}/settlement` },
-      { id: 'tour:advance-templates', label: 'Advance templates', where: 'This tour', keywords: ['templates', 'questions', 'day types'], href: `/advance/${t}/templates` },
+      {
+        id: 'tour:details',
+        label: 'Tour details',
+        where: 'Tour settings',
+        keywords: ['edit tour', 'rename', 'tour name', 'dates', 'currency', 'region', 'delete tour'],
+        href: `/operations/${t}/settings`,
+      },
+      {
+        id: 'tour:routing',
+        label: 'Dates & routing',
+        where: 'Tour settings',
+        keywords: ['schedule', 'routing', 'itinerary', 'days', 'calendar', 'shows'],
+        href: `/operations/${t}/routing`,
+      },
+      {
+        id: 'tour:money-settings',
+        label: 'Money settings',
+        where: 'Tour settings',
+        keywords: ['approval', 'approve', 'overheads', 'commissions', 'exchange rates', 'fx', 'export', 'versions'],
+        href: `/budget/${t}?tab=settings`,
+      },
+      {
+        id: 'tour:import',
+        label: 'Import dates',
+        where: 'Action',
+        keywords: ['import', 'schedule', 'routing', 'tour book', 'daysheets', 'master tour', 'pdf'],
+        href: `/operations/${t}/routing?import=1`,
+      },
+      {
+        id: 'tour:settlements',
+        label: 'Settlements',
+        where: 'This tour',
+        keywords: ['settle', 'settlement', 'night'],
+        href: `/budget/${t}/settlement`,
+      },
+      {
+        id: 'tour:advance-templates',
+        label: 'Advance templates',
+        where: 'This tour',
+        keywords: ['templates', 'questions', 'day types'],
+        href: `/advance/${t}/templates`,
+      },
     );
   }
   if (ctx.artistId && !ctx.tourId) add('artist', 'This artist');
@@ -84,7 +120,10 @@ export function pageCommands(ctx: { tourId: string | null; artistId: string | nu
 }
 
 const fold = (s: string) => s.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase();
-const words = (s: string) => fold(s).split(/[^\p{L}\p{N}&]+/u).filter(Boolean);
+const words = (s: string) =>
+  fold(s)
+    .split(/[^\p{L}\p{N}&]+/u)
+    .filter(Boolean);
 
 /** Score a command for a query, or null. Label hits beat keyword hits;
  *  a label that starts with the query beats one that merely contains it. */
@@ -104,27 +143,29 @@ export function scorePage(cmd: PageCommand, query: string): { score: number; ran
 
 /** Matching pages and actions as palette results, best first (max 6). */
 export function searchPages(query: string, ctx: { tourId: string | null; artistId: string | null }): SearchResult[] {
-  const hits: Array<SearchResult & { key: string }> = [];
+  const hits: Array<{ key: string; result: SearchResult }> = [];
   for (const c of pageCommands(ctx)) {
     const m = scorePage(c, query);
     if (!m) continue;
     hits.push({
       key: c.href ?? c.run ?? c.id,
-      id: c.id,
-      kind: 'page',
-      label: c.label,
-      secondary: c.where,
-      score: m.score,
-      ranges: m.ranges,
-      action: c.run ? { type: 'command', run: c.run } : { type: 'navigate', href: c.href! },
+      result: {
+        id: c.id,
+        kind: 'page',
+        label: c.label,
+        secondary: c.where,
+        score: m.score,
+        ranges: m.ranges,
+        action: c.run ? { type: 'command', run: c.run } : { type: 'navigate', href: c.href! },
+      },
     });
   }
   // One row per destination — the best-scoring name for it wins (Tour
   // settings and Tour details are the same page).
   const seen = new Set<string>();
   return hits
-    .sort((a, b) => b.score - a.score)
+    .sort((a, b) => b.result.score - a.result.score)
     .filter((h) => (seen.has(h.key) ? false : (seen.add(h.key), true)))
     .slice(0, 6)
-    .map(({ key: _key, ...r }) => r);
+    .map((h) => h.result);
 }
