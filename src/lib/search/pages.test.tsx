@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { pageCommands, searchPages } from './pages';
 import { itemsFor } from '@/lib/nav/ia';
 
-const inTour = { tourId: 't1', artistId: null };
+const inTour: { tourId: string | null; artistId: string | null } = { tourId: 't1', artistId: null };
 const labels = (q: string, ctx = inTour) => searchPages(q, ctx).map((r) => r.label);
 
 describe('⌘K pages', () => {
