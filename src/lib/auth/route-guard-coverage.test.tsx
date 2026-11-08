@@ -87,6 +87,9 @@ const UNGUARDED: Record<string, string> = {
   '/public/advance-intake/[token]/tech-pack': /* POST */ 'PERMANENT — public. Same token grant as the intake submit above.',
   '/public/advance-packet/[token]': /* POST */ 'PERMANENT — public. Venue opens a packet with no account; the token is the grant.',
   '/public/rider/[token]': /* POST */ 'PERMANENT — public. Tokenised rider view for people outside the workspace.',
+  '/public/file-link/[token]': /* POST */ 'PERMANENT — public. File/folder share link (migration 281): the unguessable token (+ optional password in the body) IS the grant; contents are scoped by fileInLink().',
+  '/public/file-link/[token]/download': /* POST */ 'PERMANENT — public. Same token grant; signs a 60s forced-download URL only for a file fileInLink() places inside the link.',
+  '/public/file-link/[token]/upload': /* POST */ 'PERMANENT — public. Same token grant; EDIT links only, scope + 25MB + hourly cap enforced in uploadViaLink(); never renames, moves or deletes.',
   '/public/show-link/[token]': /* POST */ 'PERMANENT — public. Tokenised show view (migration 257 show_links); the unguessable token (+ optional password in the body) IS the grant — the viewer has no session.',
 
   /* ── S1 D-1 — gear documents (read-only) ── */

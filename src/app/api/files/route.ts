@@ -24,6 +24,8 @@
 
 import { NextResponse } from 'next/server';
 import { requireWrite } from '@/lib/auth/workspace-check';
+// One copy of the folder rule, shared with file share links.
+import { sanitizeFolder } from '@/lib/files/shareLinks';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 
 const BUCKET = 'tour-files';
@@ -42,18 +44,6 @@ async function getWorkspaceId(
   return workspaceId ? { workspaceId, userId: user.id } : null;
 }
 
-/** Normalise a metadata.folder path: '/'-joined non-empty trimmed segments,
-    bounded length. Anything else (null, empty, non-string) → null = root. */
-function sanitizeFolder(raw: unknown): string | null {
-  if (typeof raw !== 'string') return null;
-  const parts = raw
-    .split('/')
-    .map((s) => s.trim())
-    .filter(Boolean);
-  if (parts.length === 0) return null;
-  const joined = parts.join('/');
-  return joined.length > 512 ? null : joined;
-}
 
 export async function GET(request: Request) {
   const supabase = await createServerSupabaseClient();

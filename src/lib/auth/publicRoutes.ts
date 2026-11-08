@@ -52,6 +52,11 @@
  *                     trailing slash is doing the same load-bearing work as
  *                     /a/: '/s/TOKEN' opens; /settings, /signup and /share
  *                     each have a non-slash third character and stay shut.
+ *   /f/               FILE / FOLDER SHARE LINK (migration 281) — token →
+ *                     file_share_links row, service-role; /api/public/file-link
+ *                     owns the password gate, expiry, revocation and the
+ *                     per-file scope check. Same two-character rule: '/f/TOKEN'
+ *                     opens; /files, /features, /finance stay shut.
  */
 export const PUBLIC_PATH_PREFIXES: readonly string[] = [
   '/r/',
@@ -62,6 +67,7 @@ export const PUBLIC_PATH_PREFIXES: readonly string[] = [
   '/m/day/',
   '/share/advance/',
   '/s/',
+  '/f/',
 ];
 
 /** Dev-only: the Stage Plot icon catalog, browsable without a session while

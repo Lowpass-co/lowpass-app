@@ -49,6 +49,7 @@ import {
   FolderPlus,
   MoreHorizontal,
   Pencil,
+  Share2,
   Trash2,
   Upload,
 } from 'lucide-react';
@@ -57,6 +58,7 @@ import type { FileVm } from '@/lib/tour-files/types';
 import { useToast } from '@/components/ui/Toast';
 import { PageTitle } from '@/components/ui/PageHeader';
 import { createClient } from '@/lib/supabase-client';
+import { ShareLinkDialog, type ShareTarget } from '@/components/files/ShareLinkDialog';
 
 const FileSlideOver = dynamic(() => import('@/components/entity/file/FileSlideOver'), { ssr: false });
 
@@ -143,11 +145,15 @@ export function FilesCanvas({ initial, uploadScope, title = 'Files', subtitle }:
   const [menu, setMenu] = useState<MenuState>(null);
   const [renaming, setRenaming] = useState<RenamingState>(null);
   const [newFolderDraft, setNewFolderDraft] = useState<string | null>(null);
+  /** Share links (Nov 2026) — tour Files only. */
+  const [shareTarget, setShareTarget] = useState<ShareTarget | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
 
   const canUpload = !!uploadScope;
   const scopeType = uploadScope?.type;
   const scopeId = uploadScope?.id;
+  /** Links are for files stored within a tour (not the artist library). */
+  const canShare = scopeType === 'tour' && !!scopeId;
 
   /* ---- hydrate folder assignments (metadata.folder isn't on FileVm) ---- */
   useEffect(() => {
@@ -391,9 +397,22 @@ export function FilesCanvas({ initial, uploadScope, title = 'Files', subtitle }:
       setBusy(false);
       if (failures > 0) {
         showToast(`Could not move ${failures} file${failures === 1 ? '' : 's'} to “${dest}”`, 'error');
+      } else if (scopeType === 'tour' && scopeId) {
+        // Share links follow the folder. Only after a clean move — on a partial
+        // failure the old path still holds files, so its links stay put.
+        try {
+          const r = await fetch('/api/file-share-links/repoint', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ tourId: scopeId, from: full, to: dest }),
+          });
+          if (!r.ok) throw new Error(String(r.status));
+        } catch {
+          showToast(`Renamed, but share links to “${full}” still point at the old name`, 'error');
+        }
       }
     },
-    [rows, folderOf, patchFile, showToast],
+    [rows, folderOf, patchFile, showToast, scopeType, scopeId],
   );
 
   /** Folder delete — only reachable when empty (button is disabled otherwise),
@@ -770,6 +789,16 @@ export function FilesCanvas({ initial, uploadScope, title = 'Files', subtitle }:
                                     setMenu(null);
                                   },
                                 })}
+                                {canShare
+                                  ? menuItem({
+                                      label: 'Share…',
+                                      icon: Share2,
+                                      onClick: () => {
+                                        setMenu(null);
+                                        setShareTarget({ kind: 'folder', path: full });
+                                      },
+                                    })
+                                  : null}
                                 {menuItem({
                                   label: 'Delete',
                                   icon: Trash2,
@@ -932,6 +961,16 @@ export function FilesCanvas({ initial, uploadScope, title = 'Files', subtitle }:
                                       void downloadFile(row);
                                     },
                                   })}
+                                  {canShare && refId
+                                    ? menuItem({
+                                        label: 'Share…',
+                                        icon: Share2,
+                                        onClick: () => {
+                                          setMenu(null);
+                                          setShareTarget({ kind: 'file', fileId: refId, name: row.filename });
+                                        },
+                                      })
+                                    : null}
                                   <div className="my-1" style={{ borderTop: '1px solid var(--lp-border)' }} />
                                   {menuItem({
                                     label: 'Delete…',
@@ -992,6 +1031,7 @@ export function FilesCanvas({ initial, uploadScope, title = 'Files', subtitle }:
       )}
 
       {selected && <FileSlideOver file={selected} onClose={() => setSelected(null)} />}
+      {canShare ? <ShareLinkDialog tourId={scopeId!} target={shareTarget} onClose={() => setShareTarget(null)} /> : null}
     </div>
   );
 }
