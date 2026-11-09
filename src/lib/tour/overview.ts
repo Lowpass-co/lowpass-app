@@ -109,7 +109,7 @@ export function needsYou(f: OverviewFacts): NeedsYouLine[] {
   }
   const unsettled = !a.budget ? 0 : f.shows.filter((s) => isShowDay(s.dayType) && s.date < f.today && !f.settledRoutingIds.has(s.routingId)).length;
   if (unsettled) {
-    out.push({ id: 'settle', count: unsettled, text: `${plural(unsettled, 'show')} played but not settled`, href: `/budget/${t}/settlement`, cta: 'Settle' });
+    out.push({ id: 'settle', count: unsettled, text: `${plural(unsettled, 'show')} played but not settled`, href: `/budget/${t}?tab=income`, cta: 'Settle' });
   }
   if (a.receipts && f.receiptsNeedingDetails) {
     out.push({

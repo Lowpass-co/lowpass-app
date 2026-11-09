@@ -25,7 +25,9 @@ import { BudgetPhaseStripGate } from '@/components/budget/BudgetPhaseStripReveal
 import { BudgetTrackPhasesProvider } from '@/components/budget/BudgetTrackPhasesContext';
 import { BudgetContextBand } from '@/components/budget/BudgetContextBand';
 import { BudgetGridView } from '@/components/budget/BudgetGridView';
-import { BudgetIncomeGrid } from '@/components/budget/BudgetIncomeGrid';
+import { ShowMoneyClient } from '@/components/income/ShowMoneyClient';
+import { loadTourSettlementWalks } from '@/lib/settlement/loadWalk';
+import { expectedOf } from '@/lib/income/showMoney';
 import { BudgetEmptyState } from '@/components/budget/BudgetEmptyState';
 import { BudgetSettingsTab } from '@/components/budget/BudgetSettingsTab';
 import { ReceiptDropPanel } from '@/components/budget/receipts/ReceiptDropPanel';
@@ -53,7 +55,6 @@ import { DISPLAY_CURRENCIES } from '@/lib/budget/displayCurrencies';
 import { FxMissingRateBanner } from '@/components/budget/FxMissingRateBanner';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { TourSettingsTabs } from '@/components/tour-settings/TourSettingsTabs';
-import { IncomeSettlementSwitch } from '@/components/budget/IncomeSettlementSwitch';
 import { DerivedRefreshBanner } from '@/components/budget/DerivedRefreshBanner';
 import { syncPhoneExpensesToBank } from '@/server/budget/fileReceipt';
 import type { BudgetVersionVm } from '@/components/budget/versioning/versionApi';
@@ -103,7 +104,7 @@ const TAB_HEADER: Record<string, { title: string; subtitle: string }> = {
   },
   income: {
     title: 'Income & settlements',
-    subtitle: 'What each show is expected to pay. Switch to Settlements to record what was actually paid on the night.',
+    subtitle: 'Pick a show: its deal is what it should pay (Expected); settle it with what it actually paid on the night (Actual).',
   },
   receipts: {
     title: 'Receipts',
@@ -120,7 +121,7 @@ export default async function BudgetTourPage({
   searchParams,
 }: {
   params: Promise<{ tourId: string }>;
-  searchParams: Promise<{ tab?: string; version?: string }>;
+  searchParams: Promise<{ tab?: string; version?: string; show?: string }>;
 }) {
   const { tourId } = await params;
   const sp = await searchParams;
@@ -414,6 +415,18 @@ export default async function BudgetTourPage({
   // Per-tour FX map (1 currency = rate tour-ccy) for the P&L + the income
   // grid's currency picker.
   const fxRates = await loadTourFxRates(supabase, tourId, workspaceId);
+  // The night's settlements, only on the Income & settlements tab. A non-show
+  // day with income on it is settled like a show.
+  const showWalks =
+    tab === 'income' && workspaceId
+      ? await loadTourSettlementWalks(
+          supabase,
+          tourId,
+          workspaceId,
+          tourCurrency,
+          initialIncome.filter((r) => expectedOf(r).total !== 0).map((r) => r.routing_id),
+        )
+      : null;
 
   // Stage-3 parity — routing_id → day_type, for the grid's day-type pill.
   const dayTypeByRouting: Record<string, string> = {};
@@ -491,9 +504,7 @@ export default async function BudgetTourPage({
               title={TAB_HEADER[tab].title}
               subtitle={TAB_HEADER[tab].subtitle}
               actions={
-                tab === 'income' ? (
-                  <IncomeSettlementSwitch tourId={tourId} active="income" />
-                ) : tab === 'settings' ? (
+                tab === 'settings' ? (
                   <TourSettingsTabs tourId={tourId} active="money" />
                 ) : undefined
               }
@@ -584,26 +595,24 @@ export default async function BudgetTourPage({
               Migrated onto the canonical <Grid> (BUD-50). The legacy
               BudgetIncomeTab is retained, unmounted, as a fallback until the
               P&L parity is live-verified — remove it then. */}
-          {tab === 'income' ? (
-            <BudgetIncomeGrid
+          {/* Nov 2026 (Adam, "Option B") — Income & settlements is ONE page:
+              the shows, and the picked show's deal (Expected) beside the
+              night (Actual). The old Income grid + deal slide-over and the
+              separate Settlements page are gone. */}
+          {tab === 'income' && showWalks ? (
+            <ShowMoneyClient
               tourId={tourId}
               tourCurrency={tourCurrency}
-              initialRows={initialIncome}
+              initialIncome={initialIncome}
+              walks={showWalks}
+              fxRates={fxRates}
+              initialShowId={sp.show ?? null}
               versionLocked={versionLocked}
               lockedVersionId={viewed?.id ?? null}
               canApprove={canApprove}
               viewedStatus={viewedStatus}
               draftVersionId={draftVersionId}
               versions={versions}
-              fxRates={fxRates}
-              projectionDefaults={{
-                sellThru: budgetSettings?.default_sell_thru != null ? Number(budgetSettings.default_sell_thru) : null,
-                dollarsPerHead: budgetSettings?.default_dollars_per_head != null ? Number(budgetSettings.default_dollars_per_head) : null,
-                merchFeePct: budgetSettings?.default_merch_fee_pct != null ? Number(budgetSettings.default_merch_fee_pct) : null,
-                // #24 — feed the formula-overage reference the tour's real config.
-                haircut: budgetSettings?.overage_haircut != null ? Number(budgetSettings.overage_haircut) : null,
-                taxPct: budgetSettings?.overage_tax_pct != null ? Number(budgetSettings.overage_tax_pct) : null,
-              }}
             />
           ) : null}
 

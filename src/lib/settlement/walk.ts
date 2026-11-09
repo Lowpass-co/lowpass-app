@@ -19,6 +19,8 @@
    currency (the tour currency). Money math only.
    ============================================ */
 
+import { isPercentageDeal, normaliseDealType, tieredShare } from '../income/deal.ts';
+
 export interface LineAmount {
   amount: number;
 }
@@ -98,16 +100,22 @@ export function legacyNet(guarantee: number, overage: number, merch: number, ded
 }
 
 /* ============================================
-   Deal & box office (migration 262) — ADDITIVE. computeWalk above is untouched:
+   Deal & box office — the NIGHT's calculator. computeWalk above is untouched:
    guarantee-only settlements stay bit-identical. computeBoxOffice is a pure
    calculator for percentage deals whose result is APPLIED to reconciled_overage
    only by an explicit user click — never silently.
 
-   Gross box office
+   Nov 2026 (Adam) — the deal TERMS come from the show's one deal
+   (budget_income: type, %, escalator, ticket price), the same terms the
+   Expected projection uses; only the night's FACTS are the settlement's
+   (tickets sold, gross, BO fees, show expenses). The escalator is the shared
+   `tieredShare` (higher % above N tickets, marginal). The old per-ticket
+   "bonus" is gone.
+
+   Gross box office (entered, else tickets sold × ticket price)
      − BO fees (facility / ticket / CC)             → Net box office
      − Show expenses                                 → Split pool
-     × deal %                                        → Artist share
-     + bonus (v1 tier rule)
+     × deal % (escalating above N tickets)           → Artist share
      greater-of vs guarantee, expressed as overage  → Resolved overage
    ============================================ */
 
@@ -117,14 +125,19 @@ export function legacyNet(guarantee: number, overage: number, merch: number, ded
 export const BO_FEE_KINDS = ['facility_fee', 'ticket_fees', 'cc_fees'] as const;
 
 export interface DealInput {
+  /** Any vocabulary (normalised): VS / DOOR compute; FLAT / PLUS don't. */
   dealType: string | null;
+  /** Deal %, 0–100. */
   dealPct: number | null;
-  bonusThreshold: number | null;
-  bonusPct: number | null;
-  ticketPrice: number | null;
-  ticketCapacity: number | null;
-  comps: number | null;
+  /** Escalator: ticket count above which `pctAbove` applies. */
+  threshold: number | null;
+  /** Escalated %, 0–100 (null → = dealPct). */
+  pctAbove: number | null;
+  /** Ticket price (the deal's face value). */
+  faceValue: number | null;
+  /** The night: tickets sold. */
   ticketsSold: number | null;
+  /** The night: gross box office, if entered. */
   grossBO: number | null;
 }
 
@@ -139,43 +152,34 @@ export function computeBoxOffice(
   netBO: number;
   splitPool: number;
   artistShare: number;
-  bonus: number;
+  /** The escalator applied (tickets sold above the threshold). */
+  escalated: boolean;
   resolvedOverage: number;
 } | null {
-  // Only percentage deals have a waterfall. Guarantee / flat / festival / null
-  // deals return null — the legacy walk is the whole story for them.
-  if (deal.dealType !== 'guarantee_plus' && deal.dealType !== 'door_deal') return null;
+  // Only percentage deals have a waterfall. Flat / Plus / no deal return null —
+  // the walk is the whole story for them.
+  if (!isPercentageDeal(normaliseDealType(deal.dealType))) return null;
   if (deal.dealPct == null) return null;
 
   // Gross basis: an entered gross wins; else tickets × price; else nothing to compute.
   const grossBO =
     deal.grossBO ??
-    (deal.ticketsSold != null && deal.ticketPrice != null ? deal.ticketsSold * deal.ticketPrice : null);
+    (deal.ticketsSold != null && deal.faceValue != null ? deal.ticketsSold * deal.faceValue : null);
   if (grossBO == null) return null;
 
   const feesTotal = sum(boFees);
   const netBO = grossBO - feesTotal;
   const splitPool = netBO - expensesTotal;
-  const artistShare = Math.max(0, splitPool) * (deal.dealPct / 100);
-
-  // Bonus — v1 rule: a per-ticket kicker above the threshold. Fires ONLY when
-  // threshold, bonus % and ticket price are all set and tickets sold exceeds
-  // the threshold: (ticketsSold − threshold) × ticketPrice × bonusPct/100.
-  // Anything richer (tiered ladders, per-cap bonuses) is a later iteration.
-  const bonus =
-    deal.bonusThreshold != null &&
-    deal.bonusPct != null &&
-    deal.ticketsSold != null &&
-    deal.ticketsSold > deal.bonusThreshold &&
-    deal.ticketPrice != null
-      ? (deal.ticketsSold - deal.bonusThreshold) * deal.ticketPrice * (deal.bonusPct / 100)
-      : 0;
+  const pct = deal.dealPct / 100;
+  const pctAbove = deal.pctAbove != null ? deal.pctAbove / 100 : null;
+  const artistShare = tieredShare(Math.max(0, splitPool), deal.ticketsSold, pct, deal.threshold, pctAbove);
+  const escalated = deal.threshold != null && deal.ticketsSold != null && deal.ticketsSold > deal.threshold;
 
   // The greater-of rule expressed as OVERAGE ON TOP of the guarantee: the walk
-  // already pays the guarantee, so the artist earns max(guarantee, share+bonus)
-  // ⇔ guarantee + max(0, share + bonus − guarantee). A door deal with
-  // guarantee 0 therefore surfaces the full share as overage.
-  const resolvedOverage = Math.max(0, artistShare + bonus - guarantee);
+  // already pays the guarantee, so the artist earns max(guarantee, share)
+  // ⇔ guarantee + max(0, share − guarantee). A door deal with guarantee 0
+  // therefore surfaces the full share as overage.
+  const resolvedOverage = Math.max(0, artistShare - guarantee);
 
-  return { grossBO, feesTotal, netBO, splitPool, artistShare, bonus, resolvedOverage };
+  return { grossBO, feesTotal, netBO, splitPool, artistShare, escalated, resolvedOverage };
 }

@@ -83,6 +83,12 @@ jobs:
       - name: Money harness — settlement reconciliation
         run: node --experimental-strip-types src/lib/settlement/reconcile.harness.ts
 
+      # Nov 2026 — the income projection engine's harness existed but ran
+      # nowhere. The night calculator now shares its escalator (tieredShare),
+      # so it runs here too.
+      - name: Money harness — income projection
+        run: node --experimental-strip-types src/lib/budget/incomeProjection.test.ts
+
   # ── LINT IS ITS OWN JOB, AND IT RATCHETS ──────────────────────────────────
   # Separate from `verify` on purpose. Repo-wide lint has NEVER run here — every
   # check in this project's history was `npx eslint <subdir>`, which is how 50

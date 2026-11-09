@@ -68,7 +68,7 @@ describe('needs you', () => {
     expect(needsYou(f).map((n) => [n.id, n.count, n.href])).toEqual([
       ['advance-soon', 1, '/advance/t1'],
       ['advance-review', 2, '/advance/t1'],
-      ['settle', 1, '/budget/t1/settlement'],
+      ['settle', 1, '/budget/t1?tab=income'],
       ['receipts', 3, '/budget/t1?tab=receipts'],
       ['crew', 1, '/operations/t1/personnel'],
       ['over-estimate', 2, '/budget/t1?tab=budget'],

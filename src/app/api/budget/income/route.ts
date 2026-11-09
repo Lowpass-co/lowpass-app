@@ -14,6 +14,7 @@ import { loadTourIncome } from '@/lib/budget/income';
 import { resolveLockState, resolveActiveVersion } from '@/server/budget/versions';
 import { projectIncome, type DealType } from '@/lib/budget/incomeProjection';
 import { seedActualGuarantee } from '@/lib/budget/seedActualGuarantee';
+import { normaliseDealType } from '@/lib/income/deal';
 
 function postTaxFromPreTax(preTax: number, withholdingPct: number): number {
   return preTax * (1 - withholdingPct / 100);
@@ -53,7 +54,7 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: 'Tour not found' }, { status: 404 });
   }
 
-  // Shared with the server page (BudgetIncomeGrid is prop-fed) — one merge.
+  // Shared with the server page (Income & settlements is prop-fed) — one merge.
   const payload = await loadTourIncome(supabase, tourId, profile.workspace_id);
   return NextResponse.json(payload);
 }
@@ -199,10 +200,16 @@ export async function POST(request: Request) {
       : ((existing?.currency as string | null) ?? null);
 
   // ── Phase 3 — merge the projection inputs (proposed). ──
+  // Nov 2026 — ONE deal list (src/lib/income/deal.ts). Old words from either
+  // side (guarantee_plus, door_deal, festival…) are mapped; anything else is
+  // refused rather than stored as a type nothing understands.
+  if (body.deal_type !== undefined && body.deal_type && !normaliseDealType(body.deal_type)) {
+    return NextResponse.json({ error: 'Deal type must be Flat guarantee, Versus, Guarantee plus % or Door deal.' }, { status: 400 });
+  }
   const dealType =
     body.deal_type !== undefined
-      ? (body.deal_type ? String(body.deal_type).toUpperCase() : null)
-      : ((existing?.deal_type as string | null) ?? null);
+      ? normaliseDealType(body.deal_type)
+      : (normaliseDealType(existing?.deal_type) ?? null);
   const capacity = nullableMerge(body.capacity, existing?.capacity);
   const estSellThru = nullableMerge(body.est_sell_thru, existing?.est_sell_thru);
   const faceValue = nullableMerge(body.face_value, existing?.face_value);
@@ -339,8 +346,11 @@ export async function POST(request: Request) {
   // writes NULL / 'settlement' rows). Proposed-only edits — which re-merge the
   // existing actuals unchanged — and the seedActualGuarantee pre-fill do NOT
   // count: we key off the body carrying the field, not the merged value.
+  // actual_vip is NOT here (Nov 2026): the settlement never writes VIP, so the
+  // show page's Actual VIP can't conflict with it — typing it must not stop
+  // the settlement carrying the rest.
   const MANUAL_ACTUAL_FIELDS = [
-    'actual_guarantee', 'actual_overage', 'actual_merch', 'actual_vip',
+    'actual_guarantee', 'actual_overage', 'actual_merch',
     'actual_tickets_sold', 'actual_gross', 'actual_capacity',
   ];
   if (MANUAL_ACTUAL_FIELDS.some((k) => (body as Record<string, unknown>)[k] !== undefined)) {

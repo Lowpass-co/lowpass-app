@@ -23,10 +23,12 @@
    P&L stays byte-unchanged. End-to-end: max(0, share − guar) × Haircut × (1 − WH) =
    the reference number. (See the unit test's "full formula" assertions.)
 
-   DEAL TYPES (LOCKED): VS auto-projects; PLUS is MANUAL (engine writes no overage —
-   user-entered, matches the sheet's "PLUS excluded"); FLAT has no backend (no
-   auto overage). Only VS produces a projected overage. Tiering is MARGINAL — the
-   escalated % applies only to tickets ABOVE the threshold.
+   DEAL TYPES (the one list, src/lib/income/deal.ts — Nov 2026): VS and DOOR
+   auto-project (a door deal is a versus with its guarantee, usually 0); PLUS is
+   MANUAL (engine writes no overage — user-entered, matches the sheet's "PLUS
+   excluded"); FLAT has no backend (no auto overage). Tiering is MARGINAL — the
+   escalated % applies only to tickets ABOVE the threshold — and is the SAME
+   `tieredShare` the settlement's night calculator uses.
 
    UNITS: this engine works entirely in FRACTIONS (0.55, 0.80, 0.08) and native
    currency. The income route normalises the 0–100 stored percentages + applies the
@@ -34,7 +36,9 @@
    the show's native currency; the P&L converts to the tour currency (Phase 2).
    ============================================ */
 
-export type DealType = 'VS' | 'PLUS' | 'FLAT';
+import { isPercentageDeal, tieredShare, type DealType } from '../income/deal.ts';
+
+export type { DealType };
 
 export interface ProjectionInput {
   /** Venue capacity (ticket count). */
@@ -90,22 +94,22 @@ export function artistShare(input: ProjectionInput, taxPct: number): number | nu
   }
   const tickets = Math.round(input.capacity * input.sellThru);
   const perTicketNBOR = input.faceValue * (1 - taxPct);
-  const T = input.dealThreshold;
-  const p1 = input.dealPct;
-  const p2 = isNum(input.dealPctAbove) ? input.dealPctAbove : p1;
-  if (!isNum(T) || tickets <= T) {
-    return p1 * tickets * perTicketNBOR;
-  }
   // Marginal: base % up to the threshold, escalated % only on the excess.
-  return perTicketNBOR * (p1 * T + p2 * (tickets - T));
+  return tieredShare(
+    tickets * perTicketNBOR,
+    tickets,
+    input.dealPct,
+    isNum(input.dealThreshold) ? input.dealThreshold : null,
+    isNum(input.dealPctAbove) ? input.dealPctAbove : null,
+  );
 }
 
 /** The engine. Returns the values to materialise into the proposed value columns
  *  (`pre_tax_overage`, `merch_income`, `vip_income`); null = leave the column alone. */
 export function projectIncome(input: ProjectionInput, config: ProjectionConfig): ProjectionOutput {
-  // ── Overage — VS only. PLUS is manual; FLAT / no-deal have no backend. ──
+  // ── Overage — VS / DOOR. PLUS is manual; FLAT / no-deal have no backend. ──
   let preTaxOverage: number | null = null;
-  if (input.dealType === 'VS') {
+  if (isPercentageDeal(input.dealType)) {
     const share = artistShare(input, config.taxPct);
     if (share !== null) {
       const guar = isNum(input.preTaxGuarantee) ? input.preTaxGuarantee : 0;

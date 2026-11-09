@@ -368,6 +368,32 @@ recreate a `_legacy/` tree: delete dead code instead of parking it.
 - Retired system templates keep their rows (`retired_at`) — saved budgets may
   point at them; `orderTemplates` hides them.
 
+### Income & settlements — one page, one deal (Nov 2026, Adam — migration 286)
+
+- `/budget/[id]?tab=income` is ONE page (`ShowMoneyClient`,
+  `src/components/income/`): shows on the left, the picked show (`?show=`) on
+  the right — **Deal — expected** · **On the night — actual** · **Payment**.
+  `/budget/[id]/settlement` redirects there. The Income grid, its deal
+  slide-over, the Income/Settlements switch and `SettlementWalkClient` are
+  deleted.
+- **One deal per show, on `budget_income`.** One list
+  (`src/lib/income/deal.ts`): FLAT (Flat guarantee — festival too), VS, PLUS,
+  DOOR; `normaliseDealType` maps old words; the income route refuses others.
+  ONE escalator, `tieredShare` (higher % above N tickets, marginal), used by
+  BOTH the projection engine (Expected) and `computeBoxOffice` (the night).
+  The settlement's migration-262 deal columns are unread and unwritten.
+- **Actual money is typed only on the settlement** (the walk); the settlement
+  route carries it to `budget_income.actual_*`. No Manual override. VIP is the
+  one exception (no settlement figure): its actual is saved on the income row
+  and does NOT mark the row manual.
+- Settlement POST sets `status` only when the request says so (saves used to
+  reset reconciled → pending).
+- Status rules are pure in `src/lib/income/showMoney.ts` — untouched shows are
+  Upcoming / To settle, never "Settled" or a green 0.
+- Known, unchanged: the income POST still pre-fills `actual_guarantee` from the
+  deal on first save (#4), so the budget's ACTUAL income counts a show's
+  guarantee before it's played. The page ignores that for status.
+
 ### Getting started — welcome + "Get set up" (Nov 2026, Adam)
 
 - Replaces the old "App tour & tutorial" panel (deleted with its registry).
