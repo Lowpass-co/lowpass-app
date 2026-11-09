@@ -11,7 +11,7 @@
    meaning.
    ============================================ */
 
-import { Check, Command, FileText, ReceiptText, Send, Shapes, Table2, TrendingUp, Wallet, type LucideIcon } from 'lucide-react';
+import { Check, Command, FileText, LayoutDashboard, ReceiptText, Send, Shapes, Table2, TrendingUp, Wallet, type LucideIcon } from 'lucide-react';
 import type { WelcomeArt as Art } from '@/lib/onboarding/checklist';
 
 const delay = (ms: number): React.CSSProperties => ({ animationDelay: `${ms}ms` });
@@ -50,6 +50,7 @@ function RailArt() {
     <div className="lp-onb-rise absolute flex overflow-hidden" style={{ ...frame, inset: 'var(--lp-space-5) var(--lp-space-6) 0' }}>
       <div style={{ width: 160, padding: 'var(--lp-space-1) var(--lp-space-2) var(--lp-space-3)', borderRight: '1px solid var(--lp-border)', background: 'var(--lp-bg)' }}>
         {heading('Tour')}
+        {quiet(['Overview', LayoutDashboard])}
         {quiet(['Advance', Send])}
         {heading('Budget')}
         <div className="relative">

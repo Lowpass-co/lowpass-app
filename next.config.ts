@@ -200,8 +200,21 @@ const nextConfig: NextConfig = {
       },
       {
         source: '/tours/:id/edit',
-        destination: '/operations/:id/edit',
+        destination: '/operations/:id/settings',
         permanent: true,
+      },
+      // Nov 2026 — the old tour summary + edit pages are gone: the Overview
+      // and Tour settings › Details replace them. Not permanent (a 308 is
+      // cached by browsers forever; these are new destinations).
+      {
+        source: '/operations/:id/summary',
+        destination: '/operations/:id/overview',
+        permanent: false,
+      },
+      {
+        source: '/operations/:id/edit',
+        destination: '/operations/:id/settings',
+        permanent: false,
       },
       // tour-wide retired; content folds into the operations landing.
       {

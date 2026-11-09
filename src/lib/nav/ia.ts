@@ -104,7 +104,7 @@ const budgetTab = (tab: string) => (p: string, s: string) => {
  * ONE TOUR RAIL (UX simplification, Oct 2026 — Adam's call), regrouped
  * around the three things Lowpass is for (Nov 2026 nav audit, Adam):
  *
- *   Tour        Advance — where a tour opens (tourHomeHref)
+ *   Tour        Overview — where a tour opens (tourHomeHref) — and Advance
  *   Budget      the sheet, what the shows pay, payroll, receipts
  *   Production  riders, channel list, stage plot, gear
  *   Logistics   crew, hotels, travel, files
@@ -120,6 +120,9 @@ const budgetTab = (tab: string) => (p: string, s: string) => {
  */
 const TOUR_RAIL: RailEntry[] = [
   g('Tour'),
+  /* What needs you on this tour — a to-do list, not a dashboard
+     (src/lib/tour/overview.ts). Every tour opens here. */
+  { kind: 'item', id: 'overview', label: 'Overview', icon: 'LayoutDashboard', href: (c) => `/operations/${c.tourId}/overview` },
   /* Day sheets were retired in the Advance rebuild (Oct 2026, Adam): the
      show's advance is the per-day page now, and local crew calls live on it. */
   {
@@ -177,7 +180,7 @@ const TOUR_RAIL: RailEntry[] = [
 /** Where a tour opens — the same place every time, on every device. (It used
  *  to be whichever product was last used on THIS browser.) */
 export function tourHomeHref(tourId: string): string {
-  return `/advance/${tourId}`;
+  return `/operations/${tourId}/overview`;
 }
 
 /* ── ARTIST scope ─────────────────────────────────────────────────────────── */

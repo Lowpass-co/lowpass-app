@@ -132,7 +132,8 @@ destination** (Master Tour / Daysheets own the itinerary — Adam won't ask for
 it twice): the day editor is Tour settings › Dates & routing
 (`/operations/[id]/routing`), beside Details (`/operations/[id]/settings`) and
 Money (`/budget/[id]?tab=settings`), joined by `<TourSettingsTabs>`. **A tour
-opens on `tourHomeHref()`** (ia.ts) — the same place every time; never resolve
+opens on `tourHomeHref()`** (ia.ts) — the Overview, `/operations/[id]/overview`
+— the same place every time; never resolve
 it from localStorage (`lastProduct` is only for the workspace Resume button).
 Region and currency lists for tour editors live in `src/lib/tours/regions.ts`
 / `src/lib/currencies.ts` — one list each. `TourMode`
@@ -434,6 +435,20 @@ recreate a `_legacy/` tree: delete dead code instead of parking it.
 - Server: `src/server/files/entityLinks.ts`; API `/api/file-links` (+ `/targets`).
   UI: `<LinkedFilesPanel>` (advance show page card, Schedule's show panel, venue
   editor, person panel) and **Link to…** on a tour file's ⋯ menu.
+
+### Tour Overview — a to-do list, not a dashboard (Nov 2026, Adam)
+
+- `/operations/[id]/overview`, where every tour opens: next show, "Needs you"
+  (each line a count + the link that fixes it), one line each for Advance,
+  Budget, Production. Rules pure in `src/lib/tour/overview.ts`; facts in
+  `src/server/tour/overview.ts`, read from the SAME loaders the linked pages
+  use (`loadAdvanceBoard`, `countReceiptsNeedingDetails`, `loadTourPnl` with
+  `reconcile:false` — a page load writes nothing). Parts the viewer can't
+  open (P-1 visible resources) are neither read nor shown.
+- No charts, no activity feed, no stat cards: two card dashboards were built
+  and deleted before (budget Summary, the tour Summary page — deleted with
+  `OperationsSummaryClient`, the `/edit` page and `TourEditForm`). A new line
+  here must be something to DO, with a link.
 
 ### A city is not a venue (Nov 2026, Adam)
 

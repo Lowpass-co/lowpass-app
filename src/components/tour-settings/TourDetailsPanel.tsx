@@ -15,7 +15,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Pencil, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
-import { EditTourSlideOver, type EditTourInitial } from '@/components/operations/summary/EditTourSlideOver';
+import { EditTourSlideOver, type EditTourInitial } from '@/components/tour-settings/EditTourSlideOver';
 import { TourDeleteConfirmationModal } from '@/components/shell-v2/TourDeleteConfirmationModal';
 import { regionLabel } from '@/lib/tours/regions';
 
