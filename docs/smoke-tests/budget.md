@@ -2423,3 +2423,9 @@ bin, right-click or ⌘⌫, and come back with Undo for 6 seconds.
 
 - [ ] **BUD-DEL-08 — Leaving the page sends it.** Delete a row and navigate to
   Payroll within 6 s. Come back: the row is gone.
+
+#### PAY-DD-01 — Dropdown cells save on pick (Nov 2026)
+Payroll → Summary → a person's **Employment** cell: click it, click again to
+open the list, pick **Band** — it saves at once (no Enter needed) and the row
+moves to the Band group. Reload: still Band. Same for any dropdown cell in a
+spreadsheet grid.
