@@ -124,10 +124,18 @@ Where the mounts live:
   `RiderPackEditorView` wraps itself in `<ShellV3Mount>` with the
   pack's artist id; the rail lights "Riders & specs".
 
-**ONE TOUR RAIL (Oct 2026 UX simplification — Adam's call).** The tour is
-no longer split into Tour / Money / Production modes behind a top-bar pill:
-the pill is DELETED and `railFor('tour', *)` returns one `TOUR_RAIL`, grouped
-by job — The run · People & logistics · Money · Production · Tour. `TourMode`
+**ONE TOUR RAIL (Oct 2026 UX simplification — Adam's call), regrouped Nov
+2026 around what Lowpass is for:** Tour (Advance) · Budget · Production ·
+Logistics · Setup (Tour settings). The pill is DELETED and
+`railFor('tour', *)` returns one `TOUR_RAIL`. **Schedule is not a
+destination** (Master Tour / Daysheets own the itinerary — Adam won't ask for
+it twice): the day editor is Tour settings › Dates & routing
+(`/operations/[id]/routing`), beside Details (`/operations/[id]/settings`) and
+Money (`/budget/[id]?tab=settings`), joined by `<TourSettingsTabs>`. **A tour
+opens on `tourHomeHref()`** (ia.ts) — the same place every time; never resolve
+it from localStorage (`lastProduct` is only for the workspace Resume button).
+Region and currency lists for tour editors live in `src/lib/tours/regions.ts`
+/ `src/lib/currencies.ts` — one list each. `TourMode`
 / `modeForPath` survive only as URL classification (isShelledPath, tests);
 nothing renders a mode. **There are no disabled rail items** — `RailItem.href`
 is non-nullable, so an unbuilt page cannot be added to the nav; build the page

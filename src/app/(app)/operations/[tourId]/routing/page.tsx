@@ -25,6 +25,7 @@ import { RoutingEditor } from '@/components/routing/RoutingEditor';
 import { TourFingerprint, type FingerprintDay } from '@/components/tour/TourFingerprint';
 import { RoutingStatLine } from '@/components/operations/RoutingReadinessRail';
 import { PageTitle } from '@/components/ui/PageHeader';
+import { TourSettingsTabs } from '@/components/tour-settings/TourSettingsTabs';
 import {
   getOperationsReadiness,
   type OperationsReadiness,
@@ -192,7 +193,8 @@ export default async function OperationsTourRoutingPage({
             marginBottom: 'var(--lp-space-3)',
           }}
         >
-          <PageTitle style={{ margin: 0 }}>Schedule</PageTitle>
+          <PageTitle style={{ margin: 0 }}>Tour settings</PageTitle>
+          <TourSettingsTabs tourId={tourId} active="routing" />
           {/* R1 — the five KPI boxes collapse into ONE mono stat line, inline
               with the condensed title (mock header row). */}
           {canRead && readiness ? (

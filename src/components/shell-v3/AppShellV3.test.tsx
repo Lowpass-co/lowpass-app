@@ -63,9 +63,9 @@ describe('there is no mode pill (Oct 2026 — one tour sidebar)', () => {
 });
 
 describe('each scope renders its own rail', () => {
-  it('tour → Schedule; gear → Gear; artist → Overview; workspace → Artists', () => {
+  it('dates & routing → Tour settings; gear → Gear; artist → Overview; workspace → Artists', () => {
     mount(`/operations/${T}/routing`);
-    expect(screen.getByTestId('nav-item-routing').getAttribute('data-active')).toBe('true');
+    expect(screen.getByTestId('nav-item-tour-settings').getAttribute('data-active')).toBe('true');
 
     mount(`/operations/${T}/hire`);
     expect(screen.getAllByTestId('nav-item-assets').at(-1)!.getAttribute('data-active')).toBe('true');
@@ -172,7 +172,7 @@ describe('SHELL-06 — collapsed icons are identifiable', () => {
 
   it('every rail item can name itself when collapsed', () => {
     mount(`/operations/${T}/routing`, '', { denseRail: true });
-    for (const id of ['routing', 'advance', 'crew', 'rooming', 'travel', 'files']) {
+    for (const id of ['tour-settings', 'advance', 'crew', 'rooming', 'travel', 'files']) {
       fireEvent.mouseEnter(screen.getByTestId(`nav-item-${id}`));
       expect(screen.getByTestId('nav-tooltip').textContent).toBeTruthy();
     }
@@ -225,22 +225,22 @@ describe('S-3b fix — the chrome FOLLOWS soft navigation (the frozen-highlight 
   it('the hook wins over the mount prop when a router is present', () => {
     mockPathname = `/operations/${T}/routing`;
     mountLive();
-    expect(screen.getByTestId('nav-item-routing').getAttribute('data-active')).toBe('true');
+    expect(screen.getByTestId('nav-item-tour-settings').getAttribute('data-active')).toBe('true');
   });
 
   it('the active item moves across a same-layout navigation', () => {
     mockPathname = `/operations/${T}/routing`;
     const { renav } = mountLive();
-    expect(screen.getByTestId('nav-item-routing').getAttribute('data-active')).toBe('true');
+    expect(screen.getByTestId('nav-item-tour-settings').getAttribute('data-active')).toBe('true');
 
     mockPathname = `/operations/${T}/personnel`;
     renav();
     expect(screen.getByTestId('nav-item-crew').getAttribute('data-active')).toBe('true');
-    expect(screen.getByTestId('nav-item-routing').getAttribute('data-active')).toBeNull();
+    expect(screen.getByTestId('nav-item-tour-settings').getAttribute('data-active')).toBeNull();
   });
 
   it('the highlight follows a hop from /operations into /budget', () => {
-    /* Routing → Budget crosses product trees. Frozen chrome kept Schedule lit;
+    /* Routing → Budget crosses product trees. Frozen chrome kept the first item lit;
        live chrome moves the highlight within the same single rail. */
     mockPathname = `/operations/${T}/routing`;
     mockSearch = null;
@@ -252,7 +252,7 @@ describe('S-3b fix — the chrome FOLLOWS soft navigation (the frozen-highlight 
     renav();
     expect(screen.getByLabelText('Tour navigation')).toBeTruthy();
     expect(screen.getByTestId('nav-item-expenses').getAttribute('data-active')).toBe('true');
-    expect(screen.getByTestId('nav-item-routing').getAttribute('data-active')).toBeNull();
+    expect(screen.getByTestId('nav-item-tour-settings').getAttribute('data-active')).toBeNull();
   });
 
   it('a ?tab= change moves the highlight too — budget tabs are search, not path', () => {

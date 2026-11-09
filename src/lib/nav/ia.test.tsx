@@ -23,6 +23,7 @@ import {
   isUnshelledPath,
   isShelledPath,
   hasOwnRail,
+  tourHomeHref,
 } from './ia';
 
 const T = 'tour-123';
@@ -121,7 +122,8 @@ describe('activeItemFor — the deep-link contract', () => {
   });
 
   it.each([
-    [`/operations/${T}/routing`, '', 'routing'],
+    [`/operations/${T}/routing`, '', 'tour-settings'],
+    [`/operations/${T}/settings`, '', 'tour-settings'],
     [`/advance/${T}`, '', 'advance'],
     [`/advance/${T}/routing-5`, '', 'advance'],
     [`/operations/${T}/personnel`, '', 'crew'],
@@ -160,7 +162,7 @@ describe('activeItemFor — the deep-link contract', () => {
     expect(activeItemFor(`/budget/${T}`, '?tab=budget')).toBe('expenses');
     expect(activeItemFor(`/budget/${T}`, '?tab=income')).toBe('income');
     expect(activeItemFor(`/budget/${T}`, '?tab=receipts')).toBe('receipts');
-    expect(activeItemFor(`/budget/${T}`, '?tab=settings')).toBe('reports');
+    expect(activeItemFor(`/budget/${T}`, '?tab=settings')).toBe('tour-settings');
   });
 
   it('bare /budget/[id] is Expenses — the route’s own default tab', () => {
@@ -187,7 +189,7 @@ describe('railFor — the shape of each rail', () => {
 
   it('the tour rail is grouped by job, in this order', () => {
     const groups = railFor('tour', 'tour').filter((e) => e.kind === 'group').map((e) => e.label);
-    expect(groups).toEqual(['The run', 'People & logistics', 'Money', 'Production', 'Tour']);
+    expect(groups).toEqual(['Tour', 'Budget', 'Production', 'Logistics', 'Setup']);
   });
 
   it('Labor calls is NOT a top-level rail item anywhere', () => {
@@ -200,15 +202,17 @@ describe('railFor — the shape of each rail', () => {
     expect(all.some((i) => /labor|labour/i.test(i.label))).toBe(false);
   });
 
-  it('Payroll sits in the Money group, Crew in People & logistics', () => {
+  it('Payroll sits in the Budget group, Crew in Logistics, Riders in Production', () => {
     const rail = railFor('tour', null);
     const groupOf = (id: string) => {
       let g = '';
       for (const e of rail) { if (e.kind === 'group') g = e.label; else if (e.id === id) return g; }
       return null;
     };
-    expect(groupOf('payroll')).toBe('Money');
-    expect(groupOf('crew')).toBe('People & logistics');
+    expect(groupOf('payroll')).toBe('Budget');
+    expect(groupOf('crew')).toBe('Logistics');
+    expect(groupOf('riders')).toBe('Production');
+    expect(groupOf('tour-settings')).toBe('Setup');
   });
 
   it('every item id is unique within its rail', () => {
@@ -696,7 +700,7 @@ describe('P-1 — resolveRailView filters by the allow-list', () => {
        an empty list hid them, the filter would be denying by default, which is
        a different and much worse policy than the one intended. */
     const shown = ids(resolveRailView(money, `/budget/${T}`, '', {}, []));
-    expect(shown).toEqual(expect.arrayContaining(['income', 'travel', 'reports']));
+    expect(shown).toEqual(expect.arrayContaining(['income', 'travel', 'tour-settings']));
     expect(shown).not.toContain('payroll');
   });
 
@@ -726,4 +730,17 @@ describe('prefersFullWidth — the budget sheet starts with the rail folded', ()
       expect(prefersFullWidth(p)).toBe(want);
     },
   );
+});
+
+describe('where a tour opens', () => {
+  it('always the advance — not whichever product this browser used last', () => {
+    expect(tourHomeHref('t-9')).toBe('/advance/t-9');
+    expect(activeItemFor(tourHomeHref('t-9'))).toBe('advance');
+  });
+  it('the Advance is the first thing in the tour rail', () => {
+    expect(itemsFor('tour', null)[0].id).toBe('advance');
+  });
+  it('Schedule is no longer a destination — Dates & routing is a tab of Tour settings', () => {
+    expect(itemsFor('tour', null).some((i) => i.label === 'Schedule')).toBe(false);
+  });
 });

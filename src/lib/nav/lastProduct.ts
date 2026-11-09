@@ -3,10 +3,9 @@
 
    A tour has three product surfaces (Operations / Budget / Advance). When a
    user re-opens a tour we want to land on the one they last worked in rather
-   than hardwiring Budget. ProductShell records the current product on mount
-   (<RememberTourProduct>); the openTour() call site + the workspace "Resume"
-   button read it here to resolve the href, falling back to Operations for a
-   never-visited tour.
+   than hardwiring Budget. <RememberTourProduct> records the current product on
+   mount; the workspace "Resume" button reads it. (Opening a tour from a list
+   or the picker no longer does — that always goes to tourHomeHref, Nov 2026.)
 
    localStorage-backed + client-only — every accessor guards `window` so this
    module is safe to import from server components (the functions simply no-op
@@ -43,9 +42,3 @@ export function getRememberedProduct(tourId: string): TourProduct | null {
   }
 }
 
-/** Href to open a tour on its last-used product; `fallback` (default
- *  Operations) when nothing is remembered or on the server. */
-export function tourHref(tourId: string, fallback: TourProduct = 'operations'): string {
-  const product = getRememberedProduct(tourId) ?? fallback;
-  return `/${product}/${tourId}`;
-}

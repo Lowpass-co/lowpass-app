@@ -52,6 +52,7 @@ import { refreshTourFxRates } from '@/server/budget/liveFx';
 import { DISPLAY_CURRENCIES } from '@/lib/budget/displayCurrencies';
 import { FxMissingRateBanner } from '@/components/budget/FxMissingRateBanner';
 import { PageHeader } from '@/components/ui/PageHeader';
+import { TourSettingsTabs } from '@/components/tour-settings/TourSettingsTabs';
 import { IncomeSettlementSwitch } from '@/components/budget/IncomeSettlementSwitch';
 import { DerivedRefreshBanner } from '@/components/budget/DerivedRefreshBanner';
 import { syncPhoneExpensesToBank } from '@/server/budget/fileReceipt';
@@ -110,7 +111,7 @@ const TAB_HEADER: Record<string, { title: string; subtitle: string }> = {
   },
   settings: {
     title: 'Tour settings',
-    subtitle: 'Approval, commissions, overheads, exchange rates and exports.',
+    subtitle: 'Money: approval, commissions, overheads, exchange rates and exports.',
   },
 };
 
@@ -489,7 +490,13 @@ export default async function BudgetTourPage({
             <PageHeader
               title={TAB_HEADER[tab].title}
               subtitle={TAB_HEADER[tab].subtitle}
-              actions={tab === 'income' ? <IncomeSettlementSwitch tourId={tourId} active="income" /> : undefined}
+              actions={
+                tab === 'income' ? (
+                  <IncomeSettlementSwitch tourId={tourId} active="income" />
+                ) : tab === 'settings' ? (
+                  <TourSettingsTabs tourId={tourId} active="money" />
+                ) : undefined
+              }
             />
           ) : null}
           {tab === 'budget' && dataHealth ? (

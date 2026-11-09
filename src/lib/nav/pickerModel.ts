@@ -191,7 +191,7 @@ const OPS_DROP = new Set(['day']);
  *    show, an Operations day) drops to that product's landing.
  *  • On a product landing with no tour (/budget) → that product.
  *  • Anywhere else (artist page, workspace) → `fallbackHref`, which the caller
- *    resolves as the tour's last-used product (tourHref, Operations fallback).
+ *    resolves as where a tour opens (tourHomeHref).
  */
 export function pickerTourHref(pathname: string, search: string, tourId: string, fallbackHref: string): string {
   const landing = LANDING_PATH.exec(pathname);

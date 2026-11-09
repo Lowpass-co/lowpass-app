@@ -42,7 +42,7 @@ import { Check, ChevronDown, Loader2, Plus, Search } from 'lucide-react';
 import { ArtistInitialsChip } from '@/components/artists/ArtistInitialsChip';
 import { ArtistCreateSlideOver } from '@/components/shell-v2/ArtistCreateSlideOver';
 import { useTourEditor } from '@/contexts/TourEditorContext';
-import { tourHref } from '@/lib/nav/lastProduct';
+import { tourHomeHref } from '@/lib/nav/ia';
 import {
   artistStatus,
   filterArtists,
@@ -212,7 +212,7 @@ export function ArtistTourPicker({ artists, tours, currentArtistId, currentTourI
   };
 
   const pickTour = (t: PickerTour) => {
-    const href = pickerTourHref(pathname, search ? `?${search}` : '', t.id, tourHref(t.id));
+    const href = pickerTourHref(pathname, search ? `?${search}` : '', t.id, tourHomeHref(t.id));
     close(false);
     if (t.id === currentTourId && pathname.includes(t.id)) return; // already here
     setPendingTour({ artistId: t.artistId, name: t.name });
