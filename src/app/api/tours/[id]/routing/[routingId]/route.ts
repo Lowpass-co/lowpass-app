@@ -6,6 +6,7 @@
    Last-write-wins (no optimistic concurrency in v1).
    ============================================ */
 
+import { venueIsCity } from '@/lib/venues/notAVenue';
 import { NextResponse } from 'next/server';
 import { requireWrite } from '@/lib/auth/workspace-check';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
@@ -96,11 +97,30 @@ async function patchHandler(
     if (ALLOWED_FIELDS.has(k)) updates[k] = v;
   }
 
+  // A city in the venue box is not a venue (notAVenue.ts) — checked against
+  // the city in this request, else the row's saved city.
+  let cityIsVenue = false;
+  if (typeof body.venue_name === 'string' && body.venue_name.trim()) {
+    let city = typeof body.city === 'string' ? body.city : null;
+    if (city === null) {
+      const { data: cur } = await supabase.from('routing').select('city').eq('id', routingId).eq('tour_id', tourId).maybeSingle();
+      city = ((cur as { city?: string | null } | null)?.city ?? null) as string | null;
+    }
+    cityIsVenue = venueIsCity(body.venue_name, city);
+    if (cityIsVenue) {
+      updates.venue_name = null;
+      updates.canonical_venue_id = null;
+      if ('venue_phone' in updates) updates.venue_phone = null;
+      if ('venue_website' in updates) updates.venue_website = null;
+      if ('venue_capacity' in updates) updates.venue_capacity = null;
+    }
+  }
+
   // A freshly-picked Place ID (transient, not a column) resolves to a
   // canonical venue server-side and sets canonical_venue_id.
   const placeId = typeof body.place_id === 'string' ? body.place_id.trim() : '';
   const venueName = typeof body.venue_name === 'string' ? body.venue_name : '';
-  if (placeId && venueName) {
+  if (placeId && venueName && !cityIsVenue) {
     const canonicalId = await findOrCreateCanonicalVenue({
       placeId,
       name: venueName,

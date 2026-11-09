@@ -829,3 +829,15 @@ Workspace → People. A search box sits above the chips; **/** jumps to it.
   "No one matches "…" in Crew."
 - Tick two people, then type in the box: the selection clears (so "Delete N
   selected" can never include someone the search hid).
+## A city is not a venue (Nov 2026)
+
+#### OPS-CITY-01 — Day off in a city
+Paste migration 284 first. On Schedule, a day off in London:
+- type **London** in Venue (City London) → after save the venue is empty, City London;
+- pick **London** from the Venue box's Google suggestions → toast "“London” is a
+  city, so it's saved as the city — the venue stays empty"; City + map pin filled;
+  no "London" appears in Venues;
+- a show at **The O2**, London keeps its venue.
+- Days that already had "London" as a venue before the migration now show none.
+- Schedule import of a Daysheets routing PDF: days off come in with a city and
+  no venue; empty cells ("—") come in empty.

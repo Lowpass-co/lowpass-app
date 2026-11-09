@@ -11,6 +11,7 @@ import { useState, useRef, useEffect, useLayoutEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { useToast } from '@/components/ui/Toast';
 import { focusAdjacentCell } from '@/lib/keyboard/cellNav';
+import { isCityPlace } from '@/lib/venues/notAVenue';
 
 export interface VenuePlaceResult {
   /** Google Place ID — the cross-tenant canonical-venue dedupe key. */
@@ -291,6 +292,28 @@ export function VenueAutocomplete({
         hasLocation: !!d.latitude && !!d.longitude,
       });
       const venueName = d.displayName || text;
+      /* A town / region / country picked here ("London" on a day off) is the
+         day's city, not a venue: fill city + coordinates, leave the venue
+         empty, and send no place id — so no library venue called "London"
+         is made (notAVenue.ts). */
+      if (isCityPlace(d.types)) {
+        const where = d.inferredCity ?? d.locality ?? venueName;
+        showToast(`“${where}” is a city, so it’s saved as the city — the venue stays empty.`);
+        if (onPlaceSelect) {
+          onPlaceSelect({
+            venue_name: '',
+            address: typeof d.formattedAddress === 'string' ? d.formattedAddress : '',
+            city: where,
+            country: d.country,
+            latitude: d.latitude,
+            longitude: d.longitude,
+            capacity: null,
+          });
+        } else {
+          onChange('');
+        }
+        return;
+      }
       // Sprint 8.6 §3 — explicit null fallback (was empty
       // string). The receiver writes whatever is passed; if the
       // address is null, the receiver's spread leaves row.address

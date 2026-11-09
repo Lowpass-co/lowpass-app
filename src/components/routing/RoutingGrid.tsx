@@ -466,7 +466,7 @@ function RoutingRowWithMenu({
                   if (result.address && result.address.trim()) updates.address = result.address;
                   updateRow(rowIndex, updates);
                 }}
-                placeholder={compact ? 'Location' : 'Venue'}
+                placeholder="Venue"
               />
             </div>
           </div>
