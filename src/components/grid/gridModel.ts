@@ -164,3 +164,78 @@ export function stripCols(cols: Column[]): Column[] {
 export function withCalc(cols: Column[], fnById: Record<string, (row: Row) => number>): Column[] {
   return cols.map((c) => (fnById[c.id] ? { ...c, calc: fnById[c.id] } : c));
 }
+
+/* ---- grouped views (phase / status) --------------------------------- */
+
+export const PHASE_ORDER = ['pre_prod', 'rehearsals', 'show_days', 'wrap'];
+export const PHASE_LABEL: Record<string, string> = {
+  pre_prod: 'Pre-production',
+  rehearsals: 'Rehearsals',
+  show_days: 'Show days',
+  wrap: 'Wrap',
+};
+
+export interface RowBucket {
+  key: string;
+  title: string;
+  /** index in the full bucket universe (empty buckets included) — the
+   *  section-dot colour is keyed on it. */
+  ix: number;
+  rows: { row: Row; si: number; ri: number }[];
+}
+
+/** The buckets a phase / status grouped grid renders, in render order, empty
+ *  buckets dropped. The ONE place that order is decided — the renderer and
+ *  anything that resolves a selected display row (viewRows) both read it. */
+export function groupedBuckets(
+  data: Section[],
+  mode: 'phase' | 'status',
+  query: string,
+  statusFilter: Set<string>,
+  statusOrder: string[],
+): RowBucket[] {
+  let universe: Array<{ key: string; title: string; has: (row: Row) => boolean }>;
+  if (mode === 'phase') {
+    const present = new Set<string>();
+    let anyUntagged = false;
+    data.forEach((sec) =>
+      sec.rows.forEach((row) => {
+        if (isFormula(sec)) return;
+        const p = String(row.phase ?? '').trim();
+        if (p) present.add(p);
+        else anyUntagged = true;
+      }),
+    );
+    const ordered = [...PHASE_ORDER.filter((p) => present.has(p)), ...[...present].filter((p) => !PHASE_ORDER.includes(p))];
+    universe = ordered.map((p) => ({ key: p, title: PHASE_LABEL[p] ?? p, has: (row: Row) => String(row.phase ?? '').trim() === p }));
+    if (anyUntagged) universe.push({ key: '__untagged__', title: 'Untagged', has: (row: Row) => !String(row.phase ?? '').trim() });
+  } else {
+    universe = statusOrder.map((st) => ({ key: st, title: st, has: (row: Row) => row.status === st }));
+  }
+  const out: RowBucket[] = [];
+  universe.forEach((b, ix) => {
+    const rows: RowBucket['rows'] = [];
+    data.forEach((sec, si) => {
+      if (isFormula(sec)) return;
+      sec.rows.forEach((row, ri) => {
+        if (b.has(row) && rowMatches(row, query, statusFilter)) rows.push({ row, si, ri });
+      });
+    });
+    if (rows.length) out.push({ key: b.key, title: b.title, ix, rows });
+  });
+  return out;
+}
+
+/** Navigable rows in the order they are ON SCREEN for the current grouping —
+ *  the row a selection index points at. (flatRows is section order, which is
+ *  only the screen order when grouped by section.) */
+export function viewRows(
+  data: Section[],
+  mode: 'section' | 'phase' | 'status',
+  query: string,
+  statusFilter: Set<string>,
+  statusOrder: string[],
+): { row: Row; si: number; ri: number }[] {
+  if (mode === 'section') return flatRows(data, query, statusFilter);
+  return groupedBuckets(data, mode, query, statusFilter, statusOrder).flatMap((b) => b.rows);
+}

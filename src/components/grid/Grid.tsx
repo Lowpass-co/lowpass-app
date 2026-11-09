@@ -41,6 +41,8 @@ import {
   isFormula,
   navCols,
   rowMatches,
+  groupedBuckets,
+  viewRows,
   stripCols,
   template,
   variance,
@@ -100,7 +102,12 @@ export interface GridProps {
   onAddLine?: (sectionUid: string) => void;
   onAddSection?: () => void;
   onRenameSection?: (sectionUid: string, name: string) => void;
-  onDeleteRow?: (rowUid: string) => void;
+  /** Delete these rows (uids = DB ids on real surfaces). Fired by the row's
+      hover bin, right-click → Delete, ⌘⌫ / Ctrl+Backspace and More → Delete,
+      always with the rows that are highlighted on screen. The caller owns
+      the rest — which rows may go, confirmation, undo, persistence. Plain
+      Delete / Backspace still only clears cell contents. */
+  onDeleteRows?: (rowUids: string[]) => void;
   /** Reorder persistence — fired after a drag commits with the NEW full order
       of uids (= DB ids on real surfaces). Caller PATCHes sort_order. Phase 3. */
   onReorderRow?: (sectionUid: string, orderedRowUids: string[]) => void;
@@ -240,6 +247,10 @@ const AUTO_SOURCE_PAGE: Record<string, string> = {
   Travel: 'Travel',
   Gear: 'Gear',
 };
+/** The page an automatic row is edited on ("Hotels & rooming" for Rooming). */
+export function autoSourcePage(source: string): string {
+  return AUTO_SOURCE_PAGE[source] ?? source;
+}
 export function autoChipTitle(source: string): string {
   const page = AUTO_SOURCE_PAGE[source];
   return page
@@ -258,7 +269,7 @@ export const Grid = forwardRef<GridHandle, GridProps>(function Grid({
   onAddLine,
   onAddSection,
   onRenameSection,
-  onDeleteRow,
+  onDeleteRows,
   onReorderRow,
   onReorderSection,
   lineApi,
@@ -291,6 +302,8 @@ export const Grid = forwardRef<GridHandle, GridProps>(function Grid({
     groupModes && groupModes.length > 0 ? groupModes : ['section', 'status'];
   const onLockedEditRef = useRef(onLockedEdit);
   onLockedEditRef.current = onLockedEdit;
+  const onDeleteRowsRef = useRef(onDeleteRows);
+  onDeleteRowsRef.current = onDeleteRows;
   // #28 — live ref so the keydown/right-click handlers read the latest override
   // config without re-subscribing. `pendingOverrideRef` is a synchronous bridge:
   // the moment the user confirms an override we want the cell editable, before
@@ -478,6 +491,45 @@ export const Grid = forwardRef<GridHandle, GridProps>(function Grid({
   const sel = () => selRef.current;
   const NC = () => navCols(cols());
   const flat = () => flatRows(data(), queryRef.current, filterRef.current);
+  /** Rows in ON-SCREEN order for the current grouping. Row delete resolves
+   *  the selection through this, never flat(): grouped by phase / status,
+   *  flat()[i] is a different row from the one highlighted. */
+  const shownRows = () => viewRows(data(), groupRef.current, queryRef.current, filterRef.current, statusUniverse(cols(), data()));
+  /** The rows the selection covers (whole rows, any columns). */
+  const selectedRows = (): Row[] => {
+    const s = sel();
+    const r0 = Math.min(s.ar, s.fr),
+      r1 = Math.max(s.ar, s.fr);
+    return shownRows()
+      .slice(r0, r1 + 1)
+      .map((o) => o.row)
+      .filter((row) => row._uid != null);
+  };
+  const deleteRows = (rows: Row[]) => {
+    const uids = rows.map((row) => String(row._uid ?? '')).filter(Boolean);
+    if (uids.length) onDeleteRowsRef.current?.(uids);
+  };
+  /** Right-click → Delete / Open for a row. */
+  const openRowMenu = (anchorEl: HTMLElement, fi: number, extra: MenuConfig['options'] = [], onExtra?: (v: string) => void) => {
+    const rows = selectedRows();
+    const a = anchorEl.getBoundingClientRect();
+    const o = shownRows()[fi];
+    menuRef.current = {
+      anchor: { left: a.left, bottom: a.bottom },
+      options: [
+        ...extra,
+        ...(o ? [{ value: '__open__', label: 'Open' }] : []),
+        { value: '__delete__', label: rows.length > 1 ? `Delete ${rows.length} rows` : 'Delete row' },
+      ],
+      onPick: (v) => {
+        closeMenu();
+        if (v === '__delete__') deleteRows(rows);
+        else if (v === '__open__' && o) openSlide(o.si, o.ri);
+        else onExtra?.(v);
+      },
+    };
+    render();
+  };
 
   /* ---- undo / redo ---- */
   const pushUndo = useCallback(() => {
@@ -1137,6 +1189,13 @@ export const Grid = forwardRef<GridHandle, GridProps>(function Grid({
         doPaste();
         return;
       }
+      // ⌘⌫ / Ctrl+Backspace (or +Delete) removes the highlighted ROWS; plain
+      // Backspace / Delete only clears cells, as in Sheets.
+      if ((e.metaKey || e.ctrlKey) && (e.key === 'Backspace' || e.key === 'Delete') && onDeleteRowsRef.current) {
+        e.preventDefault();
+        deleteRows(selectedRows());
+        return;
+      }
       if (e.key === 'Backspace' || e.key === 'Delete') {
         e.preventDefault();
         doDelete();
@@ -1335,9 +1394,18 @@ export const Grid = forwardRef<GridHandle, GridProps>(function Grid({
     const target = e.target as HTMLElement;
     // Grid-v2 #2 — the fill-handle is a distinct hit target; grabbing it must
     // NOT start a selection / drag-select.
-    if (target.classList.contains('openbtn') || target.classList.contains('chk') || target.classList.contains('fillhandle')) return;
+    if (target.classList.contains('openbtn') || target.classList.contains('chk') || target.classList.contains('fillhandle') || target.closest('.delbtn')) return;
     e.preventDefault();
     if (editRef.current) commitEdit();
+    // Right-click: inside the highlighted rows keeps them (so the menu acts on
+    // all of them); outside selects the clicked cell. Never drags, never opens
+    // a dropdown — the context menu is what follows.
+    if (e.button === 2) {
+      const cur = sel();
+      if (r < Math.min(cur.ar, cur.fr) || r > Math.max(cur.ar, cur.fr)) selRef.current = { ar: r, ac: c, fr: r, fc: c };
+      render();
+      return;
+    }
     // Grid-v2 #3 — capture whether this cell was ALREADY the active cell BEFORE
     // we move the selection (so click-twice-to-open can require a 2nd click).
     const prev = sel();
@@ -1944,7 +2012,12 @@ export const Grid = forwardRef<GridHandle, GridProps>(function Grid({
                 e.preventDefault();
                 openOverrideMenu(e.currentTarget, row, id, fi, ci, !!overridden);
               }
-            : undefined
+            : onDeleteRowsRef.current && row._uid != null
+              ? (e) => {
+                  e.preventDefault();
+                  openRowMenu(e.currentTarget, fi);
+                }
+              : undefined
         }
       >
         {showEdit ? renderEditInput() : cellInner(row, col, sec, ri)}
@@ -1996,6 +2069,26 @@ export const Grid = forwardRef<GridHandle, GridProps>(function Grid({
             <span className="oarr">⤢</span>
             <span className="ow">Open</span>
           </span>
+        ) : null;
+      // Hover bin — manual rows only (an automatic row can't be deleted here,
+      // so it isn't offered). Deletes the highlighted rows if this row is one
+      // of them, else just this row.
+      const bin =
+        id === 'item' && onDeleteRowsRef.current && row._uid != null && row._derived !== true ? (
+          <button
+            type="button"
+            className="delbtn"
+            title="Delete row (⌘⌫)"
+            aria-label={`Delete ${String(row.item ?? '').trim() || 'row'}`}
+            onPointerDown={(e) => e.stopPropagation()}
+            onClick={(e) => {
+              e.stopPropagation();
+              const inRange = selectedRows().some((x) => x._uid === row._uid);
+              deleteRows(inRange ? selectedRows() : [row]);
+            }}
+          >
+            <Trash2 size={12} strokeWidth={2} aria-hidden />
+          </button>
         ) : null;
       // M1-A — per-row provenance chips (Auto / Manual / FX-lock), neutral (10px
       // caps, NOT orange — orange is act/selected). Rendered on the chip-anchor
@@ -2055,6 +2148,7 @@ export const Grid = forwardRef<GridHandle, GridProps>(function Grid({
           {ic}
           {String(row[id] ?? '')}
           {provenanceChips}
+          {bin}
           {op}
         </>
       );
@@ -2099,97 +2193,29 @@ export const Grid = forwardRef<GridHandle, GridProps>(function Grid({
 
   /* ---- sections ---- */
   const renderSections = () => {
-    if (groupRef.current === 'phase') {
-      // Stage-3 parity — group rows by their `phase` (budget phase_tag). Only
-      // reachable when the consumer opted phase into `groupModes` (budget).
-      const PHASE_ORDER = ['pre_prod', 'rehearsals', 'show_days', 'wrap'];
-      const PHASE_LABEL: Record<string, string> = {
-        pre_prod: 'Pre-production',
-        rehearsals: 'Rehearsals',
-        show_days: 'Show days',
-        wrap: 'Wrap',
-      };
-      const present = new Set<string>();
-      let anyUntagged = false;
-      data().forEach((sec) =>
-        sec.rows.forEach((row) => {
-          if (isFormula(sec)) return;
-          const p = String(row.phase ?? '').trim();
-          if (p) present.add(p);
-          else anyUntagged = true;
-        }),
-      );
-      const ordered = [
-        ...PHASE_ORDER.filter((p) => present.has(p)),
-        ...[...present].filter((p) => !PHASE_ORDER.includes(p)),
-      ];
-      const universe = anyUntagged ? [...ordered, '__untagged__'] : ordered;
+    if (groupRef.current === 'phase' || groupRef.current === 'status') {
+      // Stage-3 parity — group rows by their `phase` (budget phase_tag; only
+      // reachable when the consumer opted phase into `groupModes`) or status.
+      // Bucket order comes from groupedBuckets, the same source viewRows reads,
+      // so a selected display row resolves to the row on screen.
       const out: React.ReactNode[] = [];
       let f = 0;
-      universe.forEach((ph, si) => {
-        const rows: { row: Row; ri: number }[] = [];
-        data().forEach((sec) =>
-          sec.rows.forEach((row, ri) => {
-            if (isFormula(sec)) return;
-            const p = String(row.phase ?? '').trim();
-            const inBucket = ph === '__untagged__' ? !p : p === ph;
-            if (inBucket && rowMatches(row, queryRef.current, filterRef.current)) rows.push({ row, ri });
-          }),
-        );
-        if (!rows.length) return;
-        const title = ph === '__untagged__' ? 'Untagged' : PHASE_LABEL[ph] ?? ph;
+      groupedBuckets(data(), groupRef.current, queryRef.current, filterRef.current, statusUniverse(cols(), data())).forEach((b) => {
         out.push(
-          <div className="section" key={ph}>
+          <div className="section" key={b.key}>
             <div className="sec-head" style={{ cursor: 'default' }}>
               <div className="sh-name">
-                <span className="dot" style={{ color: ACCENTS[si % 5] }} />
-                <span className="sh-title">{title}</span>
-                <span className="sh-count">{rows.length}</span>
+                <span className="dot" style={{ color: ACCENTS[b.ix % 5] }} />
+                <span className="sh-title">{b.title}</span>
+                <span className="sh-count">{b.rows.length}</span>
               </div>
             </div>
-            {rows.map(({ row, ri }) => {
+            {b.rows.map(({ row, ri }) => {
               const fi = f++;
               return (
                 <div
                   className={`row${fileDragUidRef.current === row._uid ? ' file-drop-target' : ''}`}
-                  key={row._uid ?? `${ph}-${ri}`}
-                  {...fileDropProps(row._uid ? String(row._uid) : undefined)}
-                >
-                  {vis.map((c) => wrapCell(renderCell({ kind: 'normal', _si: 0, name: '', rows: [] }, row, ri, c, fi, c.id), c.id))}
-                </div>
-              );
-            })}
-          </div>,
-        );
-      });
-      return out;
-    }
-    if (groupRef.current === 'status') {
-      const out: React.ReactNode[] = [];
-      let f = 0;
-      statusUniverse(cols(), data()).forEach((st, si) => {
-        const rows: { row: Row; ri: number }[] = [];
-        data().forEach((sec) =>
-          sec.rows.forEach((row, ri) => {
-            if (!isFormula(sec) && row.status === st && rowMatches(row, queryRef.current, filterRef.current)) rows.push({ row, ri });
-          }),
-        );
-        if (!rows.length) return;
-        out.push(
-          <div className="section" key={st}>
-            <div className="sec-head" style={{ cursor: 'default' }}>
-              <div className="sh-name">
-                <span className="dot" style={{ color: ACCENTS[si % 5] }} />
-                <span className="sh-title">{st}</span>
-                <span className="sh-count">{rows.length}</span>
-              </div>
-            </div>
-            {rows.map(({ row, ri }) => {
-              const fi = f++;
-              return (
-                <div
-                  className={`row${fileDragUidRef.current === row._uid ? ' file-drop-target' : ''}`}
-                  key={row._uid ?? `${st}-${ri}`}
+                  key={row._uid ?? `${b.key}-${ri}`}
                   {...fileDropProps(row._uid ? String(row._uid) : undefined)}
                 >
                   {vis.map((c) => wrapCell(renderCell({ kind: 'normal', _si: 0, name: '', rows: [] }, row, ri, c, fi, c.id), c.id))}
@@ -2437,6 +2463,11 @@ export const Grid = forwardRef<GridHandle, GridProps>(function Grid({
         <span>
           <kbd>⌘C/V</kbd> copy/paste · <kbd>⌫</kbd> clear · <kbd>⌘Z</kbd> undo
         </span>
+        {onDeleteRows ? (
+          <span>
+            <kbd>⌘⌫</kbd> delete rows · right-click a row for more
+          </span>
+        ) : null}
         <span>
           type to edit · <kbd>Enter</kbd>/<kbd>Tab</kbd> commit
         </span>
@@ -2476,17 +2507,18 @@ export const Grid = forwardRef<GridHandle, GridProps>(function Grid({
             closePop();
           }}
           onDeleteLine={
-            onDeleteRow
+            onDeleteRows
               ? () => {
-                  const o = flat()[sel().fr];
+                  const rows = selectedRows();
                   closePop();
-                  if (o?.row._uid) onDeleteRow(o.row._uid);
+                  deleteRows(rows);
                 }
               : null
           }
           deleteLabel={(() => {
-            const o = flat()[sel().fr];
-            const name = o ? String(o.row.item ?? o.row.venue ?? '').trim() : '';
+            const rows = selectedRows();
+            if (rows.length > 1) return `Delete ${rows.length} rows`;
+            const name = rows[0] ? String(rows[0].item ?? rows[0].venue ?? '').trim() : '';
             return name ? `Delete “${name.length > 28 ? name.slice(0, 27) + '…' : name}”` : 'Delete selected line';
           })()}
           helpOn={helpRef.current}

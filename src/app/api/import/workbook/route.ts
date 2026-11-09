@@ -18,7 +18,7 @@ import { NextResponse } from 'next/server';
 import { requireWrite } from '@/lib/auth/workspace-check';
 import * as XLSX from 'xlsx';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
-import { parseWorkbook, applyMapping, type SheetRows, type ParsedProposal } from '@/lib/import/parseWorkbook';
+import { parseWorkbook, mapRows, reviewHint, skippedNote, type SheetRows, type ParsedProposal } from '@/lib/import/parseWorkbook';
 import { classifyProposals, type ExistingLine } from '@/lib/import/dedupe';
 
 export const dynamic = 'force-dynamic';
@@ -59,8 +59,10 @@ export async function POST(request: Request): Promise<NextResponse> {
     let rejected: string[];
     const map = mapRaw ? (JSON.parse(String(mapRaw)) as { sheet: string; name?: string; amount?: string; date?: string; section?: string }) : null;
     if (map?.sheet && sheets[map.sheet]) {
-      proposals = applyMapping(map.sheet, sheets[map.sheet], map, currency);
-      rejected = [];
+      const mapped = mapRows(map.sheet, sheets[map.sheet], map, currency);
+      proposals = mapped.proposals;
+      const note = skippedNote(mapped.skipped);
+      rejected = note ? [note] : [];
     } else {
       const parsed = parseWorkbook(sheets, currency);
       if (parsed.layout === 'foreign') {
@@ -118,8 +120,10 @@ export async function POST(request: Request): Promise<NextResponse> {
         section: classified[i].proposal.value.section,
         amount: classified[i].proposal.value.actual_cost || classified[i].proposal.value.proposed_cost,
         kind: classified[i].kind,
-        dupReason: classified[i].dupReason,
-        defaultAccept: classified[i].defaultAccept,
+        // A percentage or no-amount row is still offered, but unticked with
+        // the reason — the reviewer decides (see reviewHint).
+        dupReason: classified[i].dupReason ?? reviewHint(classified[i].proposal.value),
+        defaultAccept: classified[i].defaultAccept && !reviewHint(classified[i].proposal.value),
         source_ref: classified[i].proposal.source_ref,
       })),
     });

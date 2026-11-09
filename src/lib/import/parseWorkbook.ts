@@ -40,8 +40,11 @@ export interface WorkbookParse {
   layout: 'ours' | 'foreign' | 'empty';
   proposals: ParsedProposal[];
   mapping: MappingPreview | null;
-  /** Human messages for skipped/rejected sheets (settlement/payroll read-only). */
+  /** Human messages for skipped/rejected sheets (settlement/payroll read-only)
+   *  and, when rows were skipped, one line naming them. */
   rejected: string[];
+  /** Rows not offered (blank, totals, percentages). Our layout only. */
+  skipped?: SkippedRow[];
 }
 
 const READ_ONLY_SHEETS = new Set(['settlements', 'settlement', 'payroll', 'per diems', 'perdiems']);
@@ -62,10 +65,66 @@ function pick(row: Record<string, unknown>, ...names: string[]): unknown {
   return undefined;
 }
 
-/** True when a Budget row is a subtotal / grand-total roll-up (skip on import). */
-function isRollup(section: string): boolean {
-  const s = section.toLowerCase();
-  return s.includes('subtotal') || s.includes('grand total') || s === 'total';
+export type SkipReason = 'blank' | 'total';
+
+/** Why a sheet row must NOT become a budget line, or null when it may.
+ *  - total: a roll-up the budget works out itself — subtotals, "Total …",
+ *           "… total", net / gross income, profit & loss, balance. Checked
+ *           on the section too: our export writes subtotal rows with the
+ *           text in the Section column and no item.
+ *  - blank: no letter or digit in the item ("", "—", "-").
+ *  Rows that MIGHT be wrong but might be real (a percentage, no amount) are
+ *  not dropped here — see reviewHint, which offers them unticked. */
+export function skipRowReason(label: string, section = ''): SkipReason | null {
+  const l = norm(label);
+  if (isTotalText(l) || isTotalText(norm(section))) return 'total';
+  if (!/[\p{L}\p{N}]/u.test(l)) return 'blank';
+  return null;
+}
+
+const norm = (s: string) => s.trim().toLowerCase().replace(/\s+/g, ' ');
+
+function isTotalText(s: string): boolean {
+  if (!s) return false;
+  if (/sub-? ?totals?\b|grand totals?\b/.test(s)) return true;
+  if (/^totals?\b|\btotals?$/.test(s)) return true;
+  if (/^(net|gross) (income|profit|loss|revenue)\b/.test(s)) return true;
+  if (/^(profit|p) ?(&|and|\/) ?(loss|l)\b/.test(s)) return true;
+  if (/^(balance|surplus|deficit)$/.test(s)) return true;
+  return false;
+}
+
+export interface SkippedRow {
+  source_ref: string;
+  label: string;
+  reason: SkipReason;
+}
+
+/** One line for the review screen, so a skipped row is never silent. */
+export function skippedNote(skipped: SkippedRow[]): string | null {
+  if (skipped.length === 0) return null;
+  const totals = skipped.filter((s) => s.reason === 'total');
+  const blank = skipped.length - totals.length;
+  const parts: string[] = [];
+  if (totals.length) {
+    const names = totals.slice(0, 4).map((s) => `“${s.label}”`).join(', ');
+    const more = totals.length > 4 ? ` and ${totals.length - 4} more` : '';
+    parts.push(`Skipped ${totals.length} total ${totals.length === 1 ? 'row' : 'rows'} — the budget adds these up itself (${names}${more}).`);
+  }
+  if (blank) parts.push(`Skipped ${blank} blank ${blank === 1 ? 'row' : 'rows'}.`);
+  return parts.join(' ');
+}
+
+/** Rows that are offered but UNTICKED, with the reason shown under them:
+ *  - worked out from a percentage ("INSURANCE (3%)", "Commission 15%") —
+ *    overheads and commissions are typed as a % on the budget sheet, so
+ *    importing the sheet's figure would count it twice and freeze it;
+ *  - no estimate and no actual — usually a heading ("SALARY CREW").
+ *  Not dropped: "Bus deposit 50%" with a real amount is a real line. */
+export function reviewHint(v: { label: string; proposed_cost: number; actual_cost: number }): string | null {
+  if (/\d\s*%/.test(v.label)) return 'Looks worked out from a percentage — set percentages on the budget sheet instead. Unticked.';
+  if (!v.proposed_cost && !v.actual_cost) return 'No amount — looks like a heading. Unticked.';
+  return null;
 }
 
 export function parseWorkbook(sheets: SheetRows, defaultCurrency = 'GBP'): WorkbookParse {
@@ -82,10 +141,15 @@ export function parseWorkbook(sheets: SheetRows, defaultCurrency = 'GBP'): Workb
   if (budgetName) {
     const rows = sheets[budgetName] ?? [];
     const proposals: ParsedProposal[] = [];
+    const skipped: SkippedRow[] = [];
     rows.forEach((row, i) => {
       const section = str(pick(row, 'Section'));
       const label = str(pick(row, 'Item', 'Name', 'Description'));
-      if (!label || isRollup(section) || isRollup(label)) return;
+      const reason = skipRowReason(label, section);
+      if (reason) {
+        skipped.push({ source_ref: `${budgetName}!row ${i + 2}`, label: label || section, reason });
+        return;
+      }
       proposals.push({
         target: 'budget_line',
         value: {
@@ -99,7 +163,8 @@ export function parseWorkbook(sheets: SheetRows, defaultCurrency = 'GBP'): Workb
         source_ref: `${budgetName}!row ${i + 2}`,
       });
     });
-    return { layout: 'ours', proposals, mapping: null, rejected };
+    const note = skippedNote(skipped);
+    return { layout: 'ours', proposals, mapping: null, rejected: note ? [...rejected, note] : rejected, skipped };
   }
 
   // Foreign layout: build a mapping preview from the first sheet that isn't read-only.
@@ -137,10 +202,26 @@ export function applyMapping(
   map: { name?: string; amount?: string; date?: string; section?: string },
   defaultCurrency = 'GBP',
 ): ParsedProposal[] {
+  return mapRows(sheet, rows, map, defaultCurrency).proposals;
+}
+
+/** applyMapping, plus the rows it skipped (blank, totals, percentages). */
+export function mapRows(
+  sheet: string,
+  rows: Array<Record<string, unknown>>,
+  map: { name?: string; amount?: string; date?: string; section?: string },
+  defaultCurrency = 'GBP',
+): { proposals: ParsedProposal[]; skipped: SkippedRow[] } {
   const out: ParsedProposal[] = [];
+  const skipped: SkippedRow[] = [];
   rows.forEach((row, i) => {
     const label = map.name ? str(row[map.name]) : '';
-    if (!label) return;
+    const section = map.section ? str(row[map.section]) : '';
+    const reason = skipRowReason(label, section);
+    if (reason) {
+      skipped.push({ source_ref: `${sheet}!row ${i + 2}`, label: label || section, reason });
+      return;
+    }
     const amount = map.amount ? num(row[map.amount]) : 0;
     out.push({
       target: 'budget_line',
@@ -155,5 +236,5 @@ export function applyMapping(
       source_ref: `${sheet}!row ${i + 2}`,
     });
   });
-  return out;
+  return { proposals: out, skipped };
 }
