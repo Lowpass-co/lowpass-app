@@ -132,7 +132,9 @@ export async function ShellV3Mount({
              derive it from the tour row, so either way it never sits empty. */
           currentArtistId={knownArtistId}
           currentTourId={scope.tourId ?? null}
-          landing={landing}
+          /* Workspace pages show the picker too, worded as an invitation
+             ("Choose an artist and tour") like the tourless landings. */
+          landing={landing || scope.scope === 'workspace'}
         />
       }
       headerRight={

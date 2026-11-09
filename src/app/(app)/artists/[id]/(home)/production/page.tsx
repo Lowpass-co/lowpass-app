@@ -1,7 +1,8 @@
 /* ============================================================
    LOWPASS — /artists/[id]/production (Stage C · §C2)
 
-   The "Production" tab. Groups the artist-library surfaces under one entry so
+   The "Library" tab (labelled Production until Nov 2026 — "Production" now
+   means the tour's riders / plots / gear). Groups the artist-library surfaces under one entry so
    the hero tab row has a destination. Stage C replaced the empty card grid with
    a COMPACT ASSET LIST — one row per surface with a live item count + last-edited
    stamp — and killed the "Financials" card (its deal-memo/payroll defaults live
@@ -95,7 +96,7 @@ export default async function ArtistProductionPage({ params }: PageProps) {
 
   return (
     <div className="lp-view-tier">
-      {/* Slim header + the shared hero tab row (Production active). */}
+      {/* Slim header + the shared hero tab row (Library active). */}
       <div style={{ padding: 'var(--lp-space-6) var(--lp-space-6) 0' }}>
         <div className="lp-label-caps" style={{ color: 'var(--lp-text-tertiary)' }}>
           {artist.name}
@@ -110,7 +111,7 @@ export default async function ArtistProductionPage({ params }: PageProps) {
             lineHeight: 1.1,
           }}
         >
-          Production
+          Library
         </h1>
       </div>
       <div className="mt-3">

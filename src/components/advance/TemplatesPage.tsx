@@ -36,7 +36,8 @@ const QUESTION_TYPES: [string, string][] = [
   ['number', 'Number'],
 ];
 
-export function TemplatesPage({ tourId, initial }: { tourId: string; initial: { templates: Tpl[]; mapping: Record<string, string> } }) {
+/** tourId: the tour you came from (adds "← Advance"); null from the workspace menu. */
+export function TemplatesPage({ tourId, initial }: { tourId: string | null; initial: { templates: Tpl[]; mapping: Record<string, string> } }) {
   const router = useRouter();
   const { showToast } = useToast();
   const [templates, setTemplates] = useState<Tpl[]>(initial.templates);
@@ -157,10 +158,12 @@ export function TemplatesPage({ tourId, initial }: { tourId: string; initial: { 
   return (
     <div className="adv-page">
       <div>
-        <Link href={`/advance/${tourId}`} style={{ fontSize: 'var(--lp-text-xs)' }}>
-          <ArrowLeft size={13} aria-hidden /> Advance
-        </Link>
-        <h1 className="lp-page-title" style={{ margin: '6px 0 0' }}>Templates</h1>
+        {tourId ? (
+          <Link href={`/advance/${tourId}`} style={{ fontSize: 'var(--lp-text-xs)' }}>
+            <ArrowLeft size={13} aria-hidden /> Advance
+          </Link>
+        ) : null}
+        <h1 className="lp-page-title" style={{ margin: tourId ? '6px 0 0' : 0 }}>Templates</h1>
         <p className="adv-sub">Shared across all your tours. Every new day gets the template for its day type; you can still change any single day.</p>
       </div>
 
