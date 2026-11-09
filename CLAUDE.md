@@ -368,6 +368,31 @@ recreate a `_legacy/` tree: delete dead code instead of parking it.
 - Retired system templates keep their rows (`retired_at`) — saved budgets may
   point at them; `orderTemplates` hides them.
 
+### One person record (Nov 2026, Adam — migration 285)
+
+- **People (`personnel`) is the master.** `persons` is a copy the database
+  keeps (trigger `personnel_mirror_person`: name, Nickname → preferred_name,
+  pronouns, email, phone, dietary). Same id in both. Never write `persons`
+  from app code — its POST / PATCH / DELETE routes and `/api/tour-personnel`
+  are gone. Read it freely (⌘K, Crew, Rooming read names from it).
+- **One person panel:** `<PersonnelDetailSlideOver>`. The entity person panel
+  (⌘K, EntityChip), Payroll's row open and Crew's "Edit person" all open it.
+  Don't build a second person form.
+- **Where each field lands** (`src/server/people/tourPersonEdits.ts`):
+  name → `personnel.name` (renames everywhere); role → THIS tour's
+  `tour_personnel.role` (never the person — their "Usual role" only seeds new
+  tours); employment (Principal / Band / Crew, `src/lib/personnel/employment.ts`)
+  → THIS tour's card, `personnel_rates.person_type`. Payroll cells and the
+  Crew panel both go through these. `tour_personnel.employment_type` is
+  retired (left in place, unread, unwritten).
+- **A payroll card's name and role are copies** (trigger
+  `personnel_rates_follow_roster`): a linked card always shows its roster
+  role and its person's People name — a direct write is overwritten. Cards
+  off the roster keep what was typed.
+- A new tour starts from People: role = their usual role when none typed,
+  employment = `employmentFromGroups` (artist / mgmt → Principal, band → Band).
+- Known gap: deleting a People record leaves them on their tours.
+
 ### Getting started — welcome + "Get set up" (Nov 2026, Adam)
 
 - Replaces the old "App tour & tutorial" panel (deleted with its registry).

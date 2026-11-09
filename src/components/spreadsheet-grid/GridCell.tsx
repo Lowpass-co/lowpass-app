@@ -31,6 +31,10 @@ type GridCellProps<T> = {
   draft: string;
   onDraft: (s: string) => void;
   onEditorKey: (e: React.KeyboardEvent) => void;
+  /** A choice made by picking (a select option, a checkbox) — commits at
+   *  once. Without it, picking only changed the draft and nothing saved
+   *  until Enter (Nov 2026: Payroll's Employment did nothing on click). */
+  onPick?: (v: string) => void;
   onMouseDown: (e: React.MouseEvent) => void;
   onMouseEnter: () => void;
   readOnly: boolean;
@@ -47,9 +51,11 @@ function EditorBridge<T>(props: {
   draft: string;
   onDraft: (s: string) => void;
   onKey: (e: React.KeyboardEvent) => void;
+  onPick?: (v: string) => void;
   tourId?: string | null;
 }) {
-  const { col, draft, onDraft, onKey, tourId } = props;
+  const { col, draft, onDraft, onKey, onPick, tourId } = props;
+  const pick = (v: string) => (onPick ? onPick(v) : onDraft(v));
   const t = col.type;
   if (t.kind === 'text') {
     return <TextEditor value={draft} multiline={t.multiline} onChange={onDraft} onKeyDown={onKey} />;
@@ -61,13 +67,13 @@ function EditorBridge<T>(props: {
     return <DateEditor value={draft} onChange={onDraft} onKeyDown={onKey} />;
   }
   if (t.kind === 'select') {
-    return <SelectEditor options={t.options} value={draft} onChange={onDraft} onKeyDown={onKey} />;
+    return <SelectEditor options={t.options} value={draft} onChange={pick} onKeyDown={onKey} />;
   }
   if (t.kind === 'checkbox') {
     return (
       <CheckboxEditor
         checked={draft === 'true' || draft === '1'}
-        onChange={v => onDraft(v ? 'true' : 'false')}
+        onChange={v => pick(v ? 'true' : 'false')}
         onKeyDown={onKey}
       />
     );
@@ -104,6 +110,7 @@ export function GridCell<T>({
   draft,
   onDraft,
   onEditorKey,
+  onPick,
   onMouseDown,
   onMouseEnter,
   readOnly,
@@ -193,6 +200,7 @@ export function GridCell<T>({
             draft={draft}
             onDraft={onDraft}
             onKey={onEditorKey}
+            onPick={onPick}
             tourId={entitySearchTourId}
           />
           {bulkHint && (

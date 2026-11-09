@@ -9,6 +9,7 @@
 import { notFound } from 'next/navigation';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { PayrollView } from '@/components/payroll/PayrollView';
+import { employmentFromGroups, groupsOf } from '@/lib/personnel/employment';
 
 export const dynamic = 'force-dynamic';
 
@@ -98,6 +99,13 @@ export default async function OperationsTourPayrollPage({
   // still render whatever cards exist.
   const missing = roster.filter((m) => !linkedMemberIds.has(m.id));
   if (missing.length > 0) {
+    // Employment starts from their People groups (Principal / Band / Crew).
+    const missingIds = missing.map((m) => m.person_id).filter((id): id is string => Boolean(id));
+    const groupsById = new Map<string, string[]>();
+    if (missingIds.length > 0) {
+      const { data: master } = await supabase.from('personnel').select('id, extended_profile').in('id', missingIds);
+      for (const p of (master ?? []) as Array<{ id: string; extended_profile: unknown }>) groupsById.set(p.id, groupsOf(p.extended_profile));
+    }
     const toInsert = missing.map((m, i) => ({
       tour_id: tourId,
       workspace_id: tour.workspace_id,
@@ -105,7 +113,7 @@ export default async function OperationsTourPayrollPage({
       tour_personnel_id: m.id,
       person_name: (m.person_id ? nameByPersonId.get(m.person_id) : '') || m.role || 'Unknown',
       role: m.role ?? '',
-      person_type: 'crew',
+      person_type: employmentFromGroups(m.person_id ? groupsById.get(m.person_id) : null),
       order_index: maxOrder + 1 + i,
     }));
     try {

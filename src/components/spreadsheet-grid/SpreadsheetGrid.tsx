@@ -205,7 +205,10 @@ export function SpreadsheetGrid<T>(props: SpreadsheetGridProps<T>) {
   );
 
   const finishEdit = useCallback(
-    async (nav?: 'down' | 'right' | 'none') => {
+    async (nav?: 'down' | 'right' | 'none', draftOverride?: string) => {
+      // A pick (select / checkbox) commits the value it was handed — the
+      // draft state hasn't re-rendered yet when it arrives.
+      const draft = draftOverride ?? edit.draft;
       if (edit.mode !== 'edit' || !sel.focus) {
         return;
       }
@@ -231,7 +234,7 @@ export function SpreadsheetGrid<T>(props: SpreadsheetGridProps<T>) {
           sel.range.endRowId
         );
         if (rids.length > 1 && onBulkEdit) {
-          const p = parseInput(edit.draft, col.type);
+          const p = parseInput(draft, col.type);
           if (!p.ok) {
             setCellErr(m => ({ ...m, [keyCell(row.id, col.id)]: p.error }));
             return;
@@ -259,7 +262,7 @@ export function SpreadsheetGrid<T>(props: SpreadsheetGridProps<T>) {
       // round-trip. Failures still surface exactly as before (per-cell error
       // ring via commit's parse/validate, toast on server rejection); callers
       // with optimistic state (e.g. payroll rate lines) revert on failure.
-      void commit(row, col, edit.draft);
+      void commit(row, col, draft);
       edit.cancelEdit();
       if (nav === 'down') {
         const n = nextCellId(dataIdOrder, colIds, sel.focus, 1, 0);
@@ -270,6 +273,14 @@ export function SpreadsheetGrid<T>(props: SpreadsheetGridProps<T>) {
       }
     },
     [colIds, columns, commit, dataIdOrder, displayFlat, edit, isCellEditable, onBulkEdit, roCell, rows, sel]
+  );
+
+  const onPick = useCallback(
+    (v: string) => {
+      edit.setDraft(v);
+      void finishEdit('none', v);
+    },
+    [edit, finishEdit],
   );
 
   const onKeyDown = useCallback(
@@ -374,6 +385,10 @@ export function SpreadsheetGrid<T>(props: SpreadsheetGridProps<T>) {
 
   const onCellDown = (rowId: string, colId: string, e: React.MouseEvent, sh: boolean) => {
     if (e.button !== 0) return;
+    // A click INSIDE the open editor belongs to the editor. preventDefault on
+    // it stopped a <select> from ever opening with the mouse (Nov 2026:
+    // Payroll's Employment dropdown "doesn't work").
+    if (isCellEditing(rowId, colId) && (e.target as HTMLElement).closest?.('select, input, textarea')) return;
     e.preventDefault();
     gridRef.current?.focus();
     drag.current = true;
@@ -540,6 +555,7 @@ export function SpreadsheetGrid<T>(props: SpreadsheetGridProps<T>) {
                   mode={edit.mode}
                   draft={edit.draft}
                   onDraft={edit.setDraft}
+                  onPick={onPick}
                   onEditorKey={e => {
                     if (e.key === 'Enter' && e.shiftKey) e.preventDefault();
                   }}
@@ -592,6 +608,7 @@ export function SpreadsheetGrid<T>(props: SpreadsheetGridProps<T>) {
                     mode={edit.mode}
                     draft={edit.draft}
                     onDraft={edit.setDraft}
+                    onPick={onPick}
                     onEditorKey={e => {
                       if (e.key === 'Enter' && e.shiftKey) e.preventDefault();
                     }}
@@ -636,6 +653,7 @@ export function SpreadsheetGrid<T>(props: SpreadsheetGridProps<T>) {
                   mode={edit.mode}
                   draft={edit.draft}
                   onDraft={edit.setDraft}
+                  onPick={onPick}
                   onEditorKey={() => undefined}
                   onCellMouseDown={onCellDown}
                   onCellMouseEnter={onCellEnter}

@@ -46,6 +46,8 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react
 import { ExternalLink, FileText, ImageIcon, Loader2, Plus, Trash2, X } from 'lucide-react';
 import type { Personnel, PersonnelRates } from '@/types';
 import { PersonRatesByTour } from './PersonRatesByTour';
+import { PersonTours } from './PersonTours';
+import { LinkedFilesPanel } from '@/components/files/LinkedFilesPanel';
 import type {
   PersonnelDietaryType,
   PersonnelDietaryV2,
@@ -1378,8 +1380,11 @@ function PersonnelDetailForm({
             <input value={name} onChange={(e) => setName(e.target.value)} className={IC} />
           </div>
           <div>
-            <L>Position / role</L>
+            <L>Usual role</L>
             <input value={role} onChange={(e) => setRole(e.target.value)} className={IC} placeholder="e.g. Front person, FOH" />
+            {/* Nov 2026 (Adam) — role is per tour. This one only fills in
+                when they're added to a new tour; it never changes a tour. */}
+            <p className="mt-1 text-xs text-lp-text-tertiary">Fills in when you add them to a tour. Their role on each tour is set on that tour.</p>
           </div>
           <div className="grid gap-3 sm:grid-cols-2">
             <div>
@@ -1579,6 +1584,16 @@ function PersonnelDetailForm({
             className={cn(IC, 'resize-none')}
           />
         </Section>
+
+        <Section id="tours" title="On tours" defaultOpen>
+          <PersonTours personId={personnelId} />
+        </Section>
+
+        {personnelId ? (
+          <Section id="files" title="Files">
+            <LinkedFilesPanel type="person" id={personnelId} heading={null} emptyText="Nothing linked yet. In tour Files, ⋯ → Link to… → Crew." />
+          </Section>
+        ) : null}
 
         {viewerCanSeePay ? (
           <Section id="pay" title="Rates by tour">
