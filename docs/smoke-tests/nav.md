@@ -299,3 +299,18 @@ Channel list not made · Stage plot updated …". Each row opens its page.
 As a member without Budget access: no Budget row, no money lines, no settle /
 over-estimate items. Without Receipts / Crew / Riders access, those go too.
 Loading the Overview never changes anything (no budget refresh runs).
+
+## Search finds pages (Nov 2026)
+
+#### NAV-K-01 — The Search button
+Every page's top bar has **Search ⌘K** (Ctrl K on Windows; just the magnifier
+on a phone). Clicking it opens the same palette as ⌘K.
+
+#### NAV-K-02 — Pages and actions
+Inside a tour, type: "pay" → **Payroll** first; "hot" → Hotels & rooming;
+"schedule" → Dates & routing; "edit tour" → Tour details; "import" → Import
+dates (opens Dates & routing with the import open); "flights" → Travel;
+"invite" → Team & roles. They sit in a **Go to** group above records. "new
+tour" → **New tour** opens the New tour form. Outside a tour, tour pages aren't
+offered; workspace and You pages are. "pyrl" finds no page (words, not
+scattered letters).

@@ -38,7 +38,7 @@ src/
     entities/   ← canonical entity registry (UX08+)
     api/        ← server-side data access for canonical entities
     types/      ← canonical entity TS types
-    search/     ← ⌘K search providers + fuzzy matcher (UX08b)
+    search/     ← ⌘K search providers + fuzzy matcher (UX08b); pages.ts = pages + actions from ia.ts (Nov 2026)
     shell/      ← getShellData + per-archetype rail data helpers (UX04)
     entitlements.ts ← useEntitlements() / getEntitlements() — currently hardcoded all-true; Stripe seam
 database/
