@@ -135,3 +135,21 @@ export function dayHasAdvance(set: TemplateSet, dayType: string | null | undefin
   if (types.some((t) => ADVANCE_DAY_TYPES_DEFAULT.includes(t))) return true;
   return types.some((t) => !!set.mapping[t] || !!set.tourMapping?.[t]);
 }
+
+/** What the Templates page shows: the workspace's templates, how many days
+ *  use each, and which template each day type gets. Read-only. */
+export async function loadTemplatesPage(
+  client: SupabaseClient,
+  workspaceId: string,
+): Promise<{ templates: Array<{ id: string; name: string; sections: AdvTemplate['sections']; days: number }>; mapping: TemplateSet['mapping'] }> {
+  const set = await loadTemplateSet(client, workspaceId);
+  const ids = set.templates.map((t) => t.id);
+  const { data: uses } = ids.length
+    ? await client.from('advance_form_configs').select('layout_template_id, routing_id').in('layout_template_id', ids)
+    : { data: [] };
+  const count: Record<string, number> = {};
+  for (const u of (uses ?? []) as { layout_template_id: string; routing_id: string | null }[]) {
+    if (u.routing_id) count[u.layout_template_id] = (count[u.layout_template_id] ?? 0) + 1;
+  }
+  return { templates: set.templates.map((t) => ({ id: t.id, name: t.name, sections: t.sections, days: count[t.id] ?? 0 })), mapping: set.mapping };
+}

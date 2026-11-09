@@ -267,3 +267,22 @@ describe('S-3b fix — the chrome FOLLOWS soft navigation (the frozen-highlight 
     expect(screen.getByTestId('nav-item-income').getAttribute('data-active')).toBeNull();
   });
 });
+
+describe('the picker is in the top bar where you start (Nov 2026)', () => {
+  const sw = { switcher: <span data-testid="picker-stub" /> };
+  it('on workspace, artist and tour pages', () => {
+    for (const p of ['/artists', '/personnel', '/artists/a-1', '/operations/t-1/overview']) {
+      const v = mount(p, '', sw);
+      expect(screen.queryByTestId('picker-stub'), p).not.toBeNull();
+      v.unmount();
+    }
+  });
+  it('not on the You pages', () => {
+    mount('/settings', '', sw);
+    expect(screen.queryByTestId('picker-stub')).toBeNull();
+  });
+  it('every page has the Search button', () => {
+    mount('/settings');
+    expect(screen.getByTestId('top-bar-search')).toBeTruthy();
+  });
+});

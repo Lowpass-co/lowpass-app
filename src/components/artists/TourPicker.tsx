@@ -12,7 +12,7 @@
 
    - On-the-road / upcoming tours: full rows (name, status pill,
      date range, <TourFingerprint size="row">, one status line,
-     visible Operations · Budget · Advance quick links), sorted
+     visible Overview · Advance · Budget quick links), sorted
      start-date ascending.
    - Past tours: compact "PAST · N" group, most-recent first.
    - If ArtistTourContext.selectedTourId matches a row, that row gets
@@ -150,9 +150,10 @@ function cmpEndDesc(a: HomeTourSummary, b: HomeTourSummary): number {
 
 /** Per-row product quick links — visible, not hover-only. */
 const QUICK_LINKS: Array<{ label: string; href: (id: string) => string }> = [
-  { label: 'Operations', href: (id) => `/operations/${id}/routing` },
-  { label: 'Budget', href: (id) => `/budget/${id}` },
+  // Nov 2026: named as the tour menu names them ("Operations" is gone).
+  { label: 'Overview', href: (id) => tourHomeHref(id) },
   { label: 'Advance', href: (id) => `/advance/${id}` },
+  { label: 'Budget', href: (id) => `/budget/${id}` },
 ];
 
 export function TourPicker({ tours }: { tours: HomeTourSummary[] }) {
@@ -196,7 +197,7 @@ export function TourPicker({ tours }: { tours: HomeTourSummary[] }) {
           className="mt-1.5"
           style={{ fontSize: 14, color: 'var(--lp-text-secondary)' }}
         >
-          Create a tour to open Operations, Budget, and Advance for it.
+          Create a tour to start its advance and budget.
         </p>
         <button
           type="button"
@@ -350,7 +351,7 @@ function RowMenu({ tourName, onDelete }: { tourName: string; onDelete: () => voi
   );
 }
 
-/* Visible per-row product quick links (Operations · Budget · Advance) —
+/* Visible per-row quick links (Overview · Advance · Budget) —
    small-uppercase-link style, dot-separated. Sits ABOVE the row's
    absolute-fill click target so each link navigates directly without
    triggering the row's openTour. */

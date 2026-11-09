@@ -43,7 +43,10 @@ export interface TopBarV3Props {
 }
 
 export function TopBarV3({ ctx, workspaceName, switcher, right, landing = false }: TopBarV3Props) {
-  const showPicker = ctx.scope === 'tour' || ctx.scope === 'artist' || landing;
+  // Nov 2026: on the workspace pages too — the home page is where you start,
+  // and the fastest way into a tour was hidden exactly there. (Not on the You
+  // pages: settings aren't about a tour.)
+  const showPicker = ctx.scope === 'tour' || ctx.scope === 'artist' || ctx.scope === 'workspace' || landing;
 
   return (
     <header

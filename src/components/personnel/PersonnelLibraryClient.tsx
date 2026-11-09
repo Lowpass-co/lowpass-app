@@ -9,7 +9,7 @@
    Surface composition:
      - Header strip: count + active issues + passport-expiring
        count.
-     - 3-action row: [+ Add new] / [Import] / [Assign to tour].
+     - 3-action row: [+ Add new] / [Import] / [Assign to tour] (the ticked person).
      - Filter chips (Phase 13.A.10): All / Conflicts / Issues /
        Recently updated / Untouched. Each chip carries a count
        computed from `initial`. Filter applied client-side over
@@ -417,25 +417,24 @@ function PersonnelLibraryClientBody({
             <Upload size={14} strokeWidth={2} />
             Import
           </button>
-          {/* Assign to tour: shown disabled when nothing selected;
-              the simplest flow is to require the user to click a
-              row first. For v1 we let them pick from the row's
-              kebab. Until that lands, this button opens the
-              slide-over with the first selected row OR — if no
-              selection — disabled. We keep it visible per Adam's
-              spec but disable it when no person is "active". */}
+          {/* Assign to tour (Nov 2026): works on the ticked person. It used
+              to be a placeholder that only showed a toast. Tick exactly one
+              person (or use a row's ⋯ menu); with none or several ticked it
+              is disabled and its tooltip says why. */}
+          {(() => {
+            const one = selectedIds.length === 1 ? initial.find((r) => r.id === selectedIds[0]) : undefined;
+            const why =
+              selectedIds.length === 0
+                ? 'Tick a person in the list (or use a row’s ⋯ menu)'
+                : selectedIds.length > 1
+                  ? 'One person at a time — tick just one'
+                  : `Assign ${one ? toTitleCase(one.preferredName ?? one.fullName) : 'this person'} to a tour`;
+            return (
           <button
             type="button"
+            disabled={!one}
             onClick={() => {
-              if (initial.length === 0) return;
-              // Placeholder: no row-selection state yet, so for
-              // v1 we open assignment for whichever person the
-              // user opens via the detail slide-over. The button
-              // is visible for affordance; clicking does nothing
-              // unless a row is selected via the slide-over.
-              showToast(
-                'Open a person from the list, then use Assign to tour from their detail panel.',
-              );
+              if (one) setAssignOpen({ personId: one.id, personName: toTitleCase(one.preferredName ?? one.fullName) });
             }}
             className="btn-transition inline-flex items-center"
             style={{
@@ -447,13 +446,17 @@ function PersonnelLibraryClientBody({
               background: 'transparent',
               border: '1px solid var(--lp-border-strong)',
               borderRadius: 'var(--lp-radius-md)',
-              cursor: 'pointer',
+              cursor: one ? 'pointer' : 'not-allowed',
+              opacity: one ? 1 : 0.55,
             }}
-            title="Open a person, then Assign to tour from their detail panel"
+            title={why}
+            aria-label={why}
           >
             <UserPlus size={14} strokeWidth={2} />
             Assign to tour
           </button>
+            );
+          })()}
         </div>
       </div>
 

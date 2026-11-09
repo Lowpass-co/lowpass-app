@@ -90,8 +90,9 @@ Tier 1 — Workspace (no tour context)
   /personnel    ← workspace dashboard, Personnel tab
   /equipment    ← workspace dashboard, Equipment tab
   /settings     ← gear icon + avatar dropdown
-  /venues       ← avatar dropdown
-  /bugs         ← avatar dropdown (admin)
+  /venues       ← workspace sidebar (left the avatar menu Nov 2026)
+  /templates    ← workspace sidebar — advance templates (Nov 2026)
+  /bugs         ← You sidebar, "Report a bug" (left the avatar menu Nov 2026)
 
 Tier 2 — Artist (one artist, multiple tours)
   /artists/[id]                       ← artist home
@@ -511,8 +512,8 @@ The four-product split (Home / Operations / Budget / Advance) is the app's archi
 
 Nav / IA as it now stands:
 
-- `/artists/[id]` — Home (artist-scoped overview; the artist's touring surfaces are branded **Production**, route group `(home)/production` — not "Library").
-- `/operations/[tourId]/*` — Operations. **Routing is the tour landing** (`next.config.ts` redirects `/operations/[id]` → `/operations/[id]/routing`).
+- `/artists/[id]` — Home (artist-scoped overview). The artist's riders / channel lists / stage plots / files are the **Library** tab (route group `(home)/production` keeps its old URL name). "Production" means the TOUR's riders / plots / gear (tour menu group) — one word, one thing (Nov 2026).
+- `/operations/[tourId]/*` — Operations. **The Overview is the tour landing** (`/operations/[id]` → `tourHomeHref()`); the old Schedule is Tour settings › Dates & routing.
 - `/budget/[tourId]/*` — Budget (live).
 - `/advance/[tourId]` (board) · `/advance/[tourId]/[routingId]` (show) · `/advance/[tourId]/templates` — Advance (rebuilt Oct 2026, see §"Advance — board, show, templates"). Day sheets are retired.
 

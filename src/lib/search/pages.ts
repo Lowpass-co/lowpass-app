@@ -54,6 +54,7 @@ const KEYWORDS: Record<string, string[]> = {
   preferences: ['settings', 'theme', 'currency'],
   team: ['members', 'invite', 'roles', 'permissions', 'users'],
   bugs: ['bug', 'feedback', 'problem', 'issue'],
+  templates: ['advance templates', 'questions', 'day types'],
 };
 
 export function pageCommands(ctx: { tourId: string | null; artistId: string | null }): PageCommand[] {
@@ -108,7 +109,7 @@ export function pageCommands(ctx: { tourId: string | null; artistId: string | nu
         label: 'Advance templates',
         where: 'This tour',
         keywords: ['templates', 'questions', 'day types'],
-        href: `/advance/${t}/templates`,
+        href: `/templates?from=${t}`,
       },
     );
   }

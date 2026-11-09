@@ -314,3 +314,23 @@ dates (opens Dates & routing with the import open); "flights" → Travel;
 tour" → **New tour** opens the New tour form. Outside a tour, tour pages aren't
 offered; workspace and You pages are. "pyrl" finds no page (words, not
 scattered letters).
+
+## One word, one place (Nov 2026)
+
+#### NAV-REN-01 — Words
+- Artist page tabs: **Tours · Library** (no "Business" tab). The Library page is titled Library.
+- Artist sidebar: Overview · Riders & specs · **Files** (was Documents).
+- Workspace sidebar: Artists · People · **Gear & rentals** (page titled the same) · Venues · **Templates**.
+- An artist's tour rows: quick links **Overview · Advance · Budget** (no "Operations").
+
+#### NAV-REN-02 — One way in
+- Avatar menu: Settings, Theme, Getting started, Sign out — no Venues, no Bug reports.
+- Workspace pages (Artists, People, …) show the artist/tour picker in the top bar, reading "Choose an artist and tour". Settings pages don't.
+
+#### NAV-REN-03 — Templates
+- Workspace → **Templates**: the advance templates and the day-type mapping, no "← Advance" link.
+- From the Advance board's Templates button (or a show's template tag): the same page, with "← Advance" back to that tour.
+
+#### NAV-REN-04 — People → Assign to tour
+- Nothing ticked: the button is greyed, its tooltip says to tick a person.
+- One person ticked: opens Assign to tour for them. Two ticked: greyed, "One person at a time".

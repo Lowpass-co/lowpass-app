@@ -17,8 +17,6 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 import {
-  Building2,
-  Bug,
   Compass,
   LogOut,
   Settings,
@@ -176,26 +174,10 @@ export function ProductHeaderAvatarMenu({
             </div>
           </div>
 
-          {/* IA Cleanup §I3 — Personnel entry retired here.
-              Personnel is now a workspace dashboard tab
-              (/personnel under the (workspace) route group),
-              reachable from /artists. Keeping it in the avatar
-              dropdown too would create duplicate-entry-point
-              confusion.
-              §I1.2 — Templates entry already removed; the
-              /templates route doesn't exist. */}
-          <MenuLink
-            href="/venues"
-            label="Venues"
-            Icon={Building2}
-            onClose={close}
-          />
-          {/* IA Cleanup §I4 — Rental entry retired.
-              /account/rental is a permanent redirect to
-              /equipment, which is now a workspace dashboard
-              tab. Keeping the entry would duplicate the
-              tab nav. */}
-
+          {/* The avatar menu holds only what is about YOU (Settings, theme,
+              getting started, sign out). Venues and the admin "Bug reports"
+              left it in Nov 2026: Venues is in the workspace sidebar and
+              /bugs is "Report a bug" in the You sidebar — one way in each. */}
           <div
             className="my-1"
             style={{ borderTop: '1px solid var(--lp-border)' }}
@@ -207,14 +189,6 @@ export function ProductHeaderAvatarMenu({
             Icon={Settings}
             onClose={close}
           />
-          {isSiteAdmin ? (
-            <MenuLink
-              href="/bugs"
-              label="Bug reports"
-              Icon={Bug}
-              onClose={close}
-            />
-          ) : null}
 
           {/* Theme toggle */}
           <div

@@ -221,7 +221,8 @@ const ARTIST_RAIL: RailEntry[] = [
       /^\/artists\/[^/]+\/(riders|channel-lists|stage-plots)(\/|$)/.test(p) ||
       /^\/rider-packs(\/|$)/.test(p),
   },
-  { kind: 'item', id: 'documents', label: 'Documents', icon: 'FolderOpen', href: (c) => `/artists/${c.artistId}/files` },
+  /* "Files", as in the tour menu and on the Library tab (was "Documents"). */
+  { kind: 'item', id: 'documents', label: 'Files', icon: 'FolderOpen', href: (c) => `/artists/${c.artistId}/files` },
 ];
 
 /* ── WORKSPACE scope ──────────────────────────────────────────────────────── */
@@ -231,12 +232,16 @@ const WORKSPACE_RAIL: RailEntry[] = [
   { kind: 'item', id: 'artists', label: 'Artists', icon: 'Music2', badge: 'artists', href: () => '/artists' },
   { kind: 'item', id: 'personnel', label: 'People', icon: 'Users', href: () => '/personnel' },
   {
-    kind: 'item', id: 'equipment', label: 'Equipment & rentals', icon: 'Package',
+    /* "Gear", as the tour menu says it (was "Equipment & rentals"). */
+    kind: 'item', id: 'equipment', label: 'Gear & rentals', icon: 'Package',
     href: () => '/assets',
     // /equipment survives until S-3 picks a winner; both light this item.
     match: (p) => p.startsWith('/assets') || p.startsWith('/equipment'),
   },
   { kind: 'item', id: 'venues', label: 'Venues', icon: 'MapPin', href: () => '/venues' },
+  /* Nov 2026 — advance templates are the workspace's, shared by every tour;
+     they were only reachable from inside a tour. */
+  { kind: 'item', id: 'templates', label: 'Templates', icon: 'LayoutTemplate', href: () => '/templates' },
 ];
 
 /* ── YOU scope ────────────────────────────────────────────────────────────── */
