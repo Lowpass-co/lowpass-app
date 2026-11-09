@@ -23,6 +23,7 @@ type GridDataRowProps<T> = {
   draft: string;
   onDraft: (s: string) => void;
   onEditorKey: (e: React.KeyboardEvent) => void;
+  onPick?: (v: string) => void;
   onCellMouseDown: (rowId: string, colId: string, e: React.MouseEvent, extend: boolean) => void;
   onCellMouseEnter: (rowId: string, colId: string) => void;
   readOnly: (row: GridRow<T>, col: GridColumn<T>) => boolean;
@@ -50,6 +51,7 @@ export function GridDataRow<T>(props: GridDataRowProps<T>) {
     draft,
     onDraft,
     onEditorKey,
+    onPick,
     onCellMouseDown,
     onCellMouseEnter,
     readOnly,
@@ -90,6 +92,7 @@ export function GridDataRow<T>(props: GridDataRowProps<T>) {
             draft={draft}
             onDraft={onDraft}
             onEditorKey={onEditorKey}
+            onPick={onPick}
             onMouseDown={e => onCellMouseDown(row.id, col.id, e, e.shiftKey)}
             onMouseEnter={() => onCellMouseEnter(row.id, col.id)}
             readOnly={readOnly(row, col)}
