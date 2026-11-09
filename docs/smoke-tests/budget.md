@@ -2429,3 +2429,5 @@ Payroll → Summary → a person's **Employment** cell: click it, click again to
 open the list, pick **Band** — it saves at once (no Enter needed) and the row
 moves to the Band group. Reload: still Band. Same for any dropdown cell in a
 spreadsheet grid.
+Name, Role and Employment here are the same data Crew and People show — see
+PPL-02…04 in operations.md.

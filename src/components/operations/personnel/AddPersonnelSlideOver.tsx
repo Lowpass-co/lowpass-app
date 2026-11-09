@@ -382,7 +382,11 @@ export function AddPersonnelSlideOver({
                     <li key={h.id}>
                       <button
                         type="button"
-                        onClick={() => setPicked(h)}
+                        onClick={() => {
+                          setPicked(h);
+                          // Their usual role (People) — this tour only; edit freely.
+                          setRole(h.default_role?.trim() || 'Crew');
+                        }}
                         className="btn-transition flex w-full items-center"
                         style={{
                           gap: 'var(--lp-space-2)',

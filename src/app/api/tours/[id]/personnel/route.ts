@@ -24,6 +24,7 @@ import {
 // rates are only ever typed in Payroll → Summary.
 import { lastTourSeed, insertSeedLines } from '@/server/payroll/seedRateCard';
 import { tourFromParams, withDerivedRefresh } from '@/server/budget/withDerivedRefresh';
+import { employmentFromGroups, groupsOf, isEmployment, type Employment } from '@/lib/personnel/employment';
 
 export const dynamic = 'force-dynamic';
 
@@ -53,7 +54,7 @@ interface PersonnelListItem {
   /** Sprint 12 §9c.0 — structured role discriminator. Mirrors
    *  the shape in src/lib/personnel/types.ts. */
   role_tag: 'tm' | 'tm2' | 'pm' | 'foh' | 'mons' | 'ld' | 'backline' | 'management' | 'other';
-  employment_type: string | null;
+  employment: Employment | null;
   rate_currency: string | null;
   rate_period: string | null;
   starts_on: string | null;
@@ -98,7 +99,7 @@ export async function GET(
     .select(
       /* Sprint 12 §9c.0 — role_tag added to the select so the
          PersonnelListItem shape (and downstream UI) sees it. */
-      'id, workspace_id, person_id, role, role_tag, employment_type, rate_currency, rate_period, starts_on, ends_on, status',
+      'id, workspace_id, person_id, role, role_tag, rate_currency, rate_period, starts_on, ends_on, status',
     )
     .eq('tour_id', tourId)
     .order('role', { ascending: true });
@@ -139,13 +140,23 @@ export async function GET(
     );
   }
 
+  // Employment (Principal / Band / Crew) is on each member's payroll card.
+  const { data: cards } = await supabase
+    .from('personnel_rates')
+    .select('tour_personnel_id, person_type')
+    .eq('tour_id', tourId)
+    .not('tour_personnel_id', 'is', null);
+  const employmentByMember = new Map<string, Employment>();
+  for (const c of (cards ?? []) as Array<{ tour_personnel_id: string | null; person_type: string | null }>) {
+    if (c.tour_personnel_id && isEmployment(c.person_type)) employmentByMember.set(c.tour_personnel_id, c.person_type);
+  }
+
   const list: PersonnelListItem[] = ((rows ?? []) as Array<{
     id: string;
     workspace_id: string;
     person_id: string;
     role: string;
     role_tag: PersonnelListItem['role_tag'] | null;
-    employment_type: string | null;
     rate_currency: string | null;
     rate_period: string | null;
     starts_on: string | null;
@@ -166,7 +177,7 @@ export async function GET(
          happen — DEFAULT 'other' on the column — but
          resilient). */
       role_tag: r.role_tag ?? 'other',
-      employment_type: r.employment_type,
+      employment: employmentByMember.get(r.id) ?? null,
       rate_currency: r.rate_currency,
       rate_period: r.rate_period,
       starts_on: r.starts_on,
@@ -175,7 +186,7 @@ export async function GET(
       canonical_person_id: p?.canonical_person_id ?? null,
       // tags: per-personnel-record tagging is a future sprint;
       // for now read 'crew', 'sound', 'lights', 'content' off
-      // employment_type / role inference. v1: empty array.
+      // role inference. v1: empty array.
       tags: [],
     };
   });
@@ -213,7 +224,6 @@ async function postHandler(
        to 'other' when omitted so existing API callers continue
        working. */
     role_tag?: unknown;
-    employment_type?: unknown;
     rate_currency?: unknown;
     rate_period?: unknown;
     starts_on?: unknown;
@@ -230,9 +240,7 @@ async function postHandler(
   if (!personId) {
     return NextResponse.json({ error: 'person_id required' }, { status: 400 });
   }
-  const role = typeof body.role === 'string' && body.role.trim().length > 0
-    ? body.role.trim()
-    : 'Crew';
+  const typedRole = typeof body.role === 'string' ? body.role.trim() : '';
 
   /* Sprint 12 §9c.0 — role_tag validation. Falls back to
      'other' when the field is missing or doesn't match the
@@ -273,13 +281,24 @@ async function postHandler(
     );
   }
 
+  // Nov 2026 (Adam) — a new tour starts from the People record: their usual
+  // role when none is typed, and Principal / Band / Crew from their groups.
+  // Changing either on this tour never changes the person.
+  const { data: master } = await supabase
+    .from('personnel')
+    .select('role, extended_profile')
+    .eq('id', personId)
+    .maybeSingle();
+  const m = master as { role?: string | null; extended_profile?: unknown } | null;
+  const role = typedRole || m?.role?.trim() || 'Crew';
+  const employment: Employment = employmentFromGroups(groupsOf(m?.extended_profile));
+
   const insertRow = {
     workspace_id: tourWorkspaceId,
     tour_id: tourId,
     person_id: personId,
     role,
     role_tag: roleTag,
-    employment_type: typeof body.employment_type === 'string' ? body.employment_type : null,
     // Rates SSOT — the daily-rate column is retired (my-schedule reads personnel_rate_lines;
     // migration 231 drops the column). Currency/period stay as assignment metadata.
     rate_currency: typeof body.rate_currency === 'string' ? body.rate_currency : 'GBP',
@@ -353,7 +372,7 @@ async function postHandler(
           workspace_id: tourWorkspaceId,
           person_name: personName,
           role,
-          person_type: 'crew',
+          person_type: employment,
           person_id: personId,
           tour_personnel_id: inserted.id,
           // The amounts live in personnel_rate_lines (seeded below); per_diem is

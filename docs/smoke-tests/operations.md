@@ -841,3 +841,51 @@ Paste migration 284 first. On Schedule, a day off in London:
 - Days that already had "London" as a venue before the migration now show none.
 - Schedule import of a Daysheets routing PDF: days off come in with a city and
   no venue; empty cells ("—") come in empty.
+
+## One person record (Nov 2026 — needs migration 285)
+
+Paste migration 285 **before** deploying this: new People records get their
+`persons` copy from its trigger, and Add to tour needs that copy.
+
+#### PPL-02 — Rename in Payroll, see it everywhere
+Payroll → Summary → click a person's **Name**, type a new spelling, Enter.
+Toast "Renamed — People, Crew and Rooming show it too." Reload Payroll: still
+the new name. Crew, Hotels & rooming, People and ⌘K show it. Their salary
+line on the Budget reads "New name — Role". A blank name is refused and the
+cell goes back.
+
+#### PPL-03 — Role is per tour
+Payroll → change someone's **Role** to "Monitors". Crew shows Monitors for this
+tour. Their People record's **Usual role** is unchanged, and on another tour
+they keep their role there. Same the other way: change the role on the Crew
+panel → Payroll shows it. Give them a role they already hold on this tour →
+"They're already on this tour as …", nothing changes.
+
+#### PPL-04 — Employment is per tour, one field
+Crew → Manage → **Employment on tour** → Band. Payroll shows them in the Band
+group. Change it back in Payroll's Employment column → the Crew panel shows
+Crew. People groups don't change.
+
+#### PPL-05 — A new tour starts from People
+On People, set someone's Usual role "Bass" and group **Band**. Add them to a
+tour (Crew → Add) without touching the role field: role reads Bass, Payroll puts
+them in Band. Typing another role there changes this tour only.
+
+#### PPL-06 — One person panel everywhere
+Payroll → open a person (row open button) → the People panel opens (same as
+People page), with **On tours** (role + employment per tour) and **Files**.
+Crew → Manage → **Edit person** → the Manage panel closes and the People panel
+opens; edit their phone → Crew list shows it. ⌘K → a person → same panel.
+There is no other person form.
+
+#### PPL-07 — After pasting 285
+- Anyone who was on a tour but missing from People now appears on People
+  (next LP number), with what was typed in the old panel (phone, passport,
+  pronouns, preferred name → Nickname).
+- Where Payroll and Crew showed different roles, both now show the more
+  recently edited one.
+- The migration's last query lists People who now share a name — merge those
+  by hand.
+
+Known gap: deleting a person on People still leaves them on tours they were on
+(Crew / Rooming / Payroll keep them; their panel can't open). Unchanged here.

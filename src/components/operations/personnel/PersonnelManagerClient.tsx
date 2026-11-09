@@ -26,6 +26,7 @@ import { toTitleCase } from '@/lib/text/toTitleCase';
 import { ConflictBanner } from './ConflictBanner';
 import { PersonnelManageSlideOver } from './PersonnelManageSlideOver';
 import { AddPersonnelSlideOver } from './AddPersonnelSlideOver';
+import { PersonnelDetailSlideOver } from '@/components/personnel/PersonnelDetailSlideOver';
 import type {
   ConflictsResponse,
   ConflictRow,
@@ -121,6 +122,8 @@ export function PersonnelManagerClient({
   const [search, setSearch] = useState('');
   const [manageId, setManageId] = useState<string | null>(null);
   const [addOpen, setAddOpen] = useState(false);
+  // The person's People record, opened from the Manage panel's "Edit person".
+  const [personId, setPersonId] = useState<string | null>(null);
 
   const fetchList = useCallback(async () => {
     try {
@@ -524,6 +527,16 @@ export function PersonnelManagerClient({
           showToast('Personnel removed.');
           void fetchList();
         }}
+        onEditPerson={(id) => {
+          setManageId(null);
+          setPersonId(id);
+        }}
+      />
+
+      <PersonnelDetailSlideOver
+        panel={personId ? { mode: 'edit', id: personId } : null}
+        onClose={() => setPersonId(null)}
+        onSaved={() => void fetchList()}
       />
 
       <AddPersonnelSlideOver
