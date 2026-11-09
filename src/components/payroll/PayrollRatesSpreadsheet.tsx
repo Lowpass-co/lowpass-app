@@ -20,11 +20,12 @@
    Zero amounts render blank (not $0.00 noise); cells stay editable.
    ============================================ */
 
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { SpreadsheetGrid } from '@/components/spreadsheet-grid/SpreadsheetGrid';
 import type { GridColumn, GridRow, SectionHeader } from '@/components/spreadsheet-grid/types';
-import PersonSlideOver from '@/components/entity/person/PersonSlideOver';
+import { PersonnelDetailSlideOver } from '@/components/personnel/PersonnelDetailSlideOver';
+import { EMPLOYMENT_OPTIONS } from '@/lib/personnel/employment';
 import { useToast } from '@/components/ui/Toast';
 import type { PersonnelRate } from '@/types';
 import { cn } from '@/lib/utils';
@@ -32,11 +33,11 @@ import type { DayCounts } from '@/lib/payroll/fees';
 import { hasStackingConflict, type RateTypeMeta } from '@/lib/payroll/rateLines';
 import { amountOf, personTotals, type LineAmountMap } from './rateLinesClient';
 
-const PT_OPTIONS = [
-  { value: 'principal', label: 'Principal / Mgmt' },
-  { value: 'band', label: 'Band' },
-  { value: 'crew', label: 'Crew' },
-];
+// Nov 2026 (Adam) — Name, Role and Employment are the SAME data Crew and
+// People show: Name writes the person's People record (renames them
+// everywhere), Role writes this tour's roster row, Employment this card. The
+// server routes each edit (/api/budget/personnel-rates PATCH).
+const PT_OPTIONS = EMPLOYMENT_OPTIONS.map((o) => ({ value: o.value, label: o.label }));
 
 const SECTION_ORDER = ['principal', 'band', 'crew', 'other'] as const;
 type GroupKey = (typeof SECTION_ORDER)[number];
@@ -163,6 +164,10 @@ export function PayrollRatesSpreadsheet({
 }) {
   const { showToast } = useToast();
   const [rates, setRates] = useState<PersonnelRate[]>(initialRates);
+  const ratesRef = useRef(rates);
+  useEffect(() => {
+    ratesRef.current = rates;
+  }, [rates]);
   const [personOpen, setPersonOpen] = useState<string | null>(null);
   const ccy = currency.trim().toUpperCase() || 'GBP';
 
@@ -268,6 +273,12 @@ export function PayrollRatesSpreadsheet({
         case 'base_rate_note': patch.base_rate_note = raw === null || raw === '' ? null : asString(raw); break;
         default: return;
       }
+      const before = ratesRef.current.find((r) => r.id === rowId);
+      if (!before) return;
+      if (columnId === 'person_name' && !patch.person_name) {
+        showToast('Name can’t be blank.', 'error');
+        return;
+      }
       setRates((prev) => prev.map((r) => (r.id === rowId ? ({ ...r, ...(patch as Partial<PersonnelRate>), updated_at: new Date().toISOString() } as PersonnelRate) : r)));
       try {
         const res = await fetch('/api/budget/personnel-rates', {
@@ -275,21 +286,33 @@ export function PayrollRatesSpreadsheet({
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ id: rowId, ...patch }),
         });
-        if (!res.ok) {
-          const j = await res.json().catch(() => ({}));
-          throw new Error(typeof j.error === 'string' ? j.error : 'Save failed');
-        }
+        const j = (await res.json().catch(() => ({}))) as Partial<PersonnelRate> & { error?: string };
+        if (!res.ok) throw new Error(typeof j.error === 'string' ? j.error : 'Save failed');
+        // The saved card (name / role as the database now has them).
+        setRates((prev) =>
+          prev.map((r) => {
+            if (r.id === rowId) return { ...r, person_name: j.person_name ?? r.person_name, role: j.role ?? r.role, person_type: j.person_type ?? r.person_type };
+            // A rename reaches the person's other rows too (same person, another role).
+            if (columnId === 'person_name' && before.person_id && r.person_id === before.person_id && j.person_name) return { ...r, person_name: j.person_name };
+            return r;
+          }),
+        );
+        if (columnId === 'person_name' && before.person_id) showToast('Renamed — People, Crew and Rooming show it too.');
       } catch (e) {
+        // Put the cell back: nothing changed.
+        setRates((prev) => prev.map((r) => (r.id === rowId ? before : r)));
         showToast(e instanceof Error ? e.message : 'Save failed', 'error');
       }
     },
     [showToast, canSeeCommission, onRateLineCommit],
   );
 
+  // The card's person (persons.id == personnel.id).
   const onRowOpen = useCallback(
     (row: PersonnelRate) => {
-      if (row.roster_personnel_id) setPersonOpen(row.roster_personnel_id);
-      else showToast('Link this row to a roster person to open their profile.', 'error');
+      const id = row.person_id ?? row.roster_personnel_id ?? null;
+      if (id) setPersonOpen(id);
+      else showToast('This row isn’t linked to anyone in People.', 'error');
     },
     [showToast],
   );
@@ -324,7 +347,14 @@ export function PayrollRatesSpreadsheet({
         columnWidthsKey="lp-cols-payroll-v3" /* v3 — Oct 2026 summary layout; old saved widths no longer apply */
         highlightRowId={highlightRowId}
       />
-      {personOpen ? <PersonSlideOver id={personOpen} onClose={() => setPersonOpen(null)} /> : null}
+      <PersonnelDetailSlideOver
+        panel={personOpen ? { mode: 'edit', id: personOpen } : null}
+        onClose={() => setPersonOpen(null)}
+        onSaved={(p) => {
+          // Their People record is the name every row shows.
+          setRates((prev) => prev.map((r) => (r.person_id === p.id || (!r.person_id && r.roster_personnel_id === p.id) ? { ...r, person_name: p.name } : r)));
+        }}
+      />
     </div>
   );
 }

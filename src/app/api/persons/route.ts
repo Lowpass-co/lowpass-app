@@ -1,5 +1,6 @@
+/* GET people (⌘K / entity search). Read-only since Nov 2026: a person is made
+   on People (/api/personnel); `persons` is the database's copy (migration 285). */
 import { NextResponse } from 'next/server';
-import { requireWrite } from '@/lib/auth/workspace-check';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 
 export async function GET(request: Request) {
@@ -52,55 +53,4 @@ export async function GET(request: Request) {
   });
 
   return NextResponse.json({ persons });
-}
-
-export async function POST(request: Request) {
-  const supabase = await createServerSupabaseClient();
-  const auth = await requireWrite(supabase);
-  if ('error' in auth) return auth.error;
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('workspace_id')
-    .eq('id', user.id)
-    .single();
-  if (!profile?.workspace_id) return NextResponse.json({ error: 'No workspace' }, { status: 403 });
-
-  let body: Record<string, unknown>;
-  try {
-    body = await request.json();
-  } catch {
-    return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
-  }
-
-  const fullName = String(body.full_name ?? '').trim();
-  if (!fullName) return NextResponse.json({ error: 'full_name is required' }, { status: 400 });
-
-  const { data, error } = await supabase
-    .from('persons')
-    .insert({
-      workspace_id: profile.workspace_id,
-      full_name: fullName,
-      preferred_name: body.preferred_name ?? null,
-      pronouns: body.pronouns ?? null,
-      email: body.email ?? null,
-      phone: body.phone ?? null,
-      emergency_contact: body.emergency_contact ?? null,
-      passport_full_name: body.passport_full_name ?? null,
-      passport_number: body.passport_number ?? null,
-      passport_expiry: body.passport_expiry ?? null,
-      passport_country: body.passport_country ?? null,
-      date_of_birth: body.date_of_birth ?? null,
-      dietary: body.dietary ?? null,
-      notes: body.notes ?? null,
-      created_by: user.id,
-      updated_by: user.id,
-    })
-    .select('*')
-    .single();
-
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json(data);
 }

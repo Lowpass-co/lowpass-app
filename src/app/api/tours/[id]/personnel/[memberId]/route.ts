@@ -1,8 +1,9 @@
 /* ============================================
    LOWPASS — /api/tours/[id]/personnel/[memberId] (Sprint 9 §6)
 
-   PATCH  — update role / employment_type / rate / window dates
-            / status / notes for one tour_personnel row. Admin/
+   PATCH  — update role / role tag / window dates / status for one
+            tour_personnel row, and employment (Principal / Band / Crew —
+            stored on the payroll card, Nov 2026). Admin/
             manager OR readonly with operations.personnel.write.
             On status change, fire an audit_log row tagged for
             the Sprint 10 notification dispatcher to pick up.
@@ -20,6 +21,8 @@ import {
   canAccess,
 } from '@/lib/permissions/server';
 import { tourFromParams, withDerivedRefresh } from '@/server/budget/withDerivedRefresh';
+import { setTourEmployment } from '@/server/people/tourPersonEdits';
+import { isEmployment } from '@/lib/personnel/employment';
 
 export const dynamic = 'force-dynamic';
 
@@ -42,7 +45,6 @@ interface PatchPayload {
   role?: string;
   /** Sprint 12 §9c.0 — structured role discriminator. */
   role_tag?: RoleTag;
-  employment_type?: string | null;
   rate_currency?: string | null;
   rate_period?: string | null;
   starts_on?: string | null;
@@ -98,9 +100,13 @@ async function patchHandler(
     }
     patch.role_tag = body.role_tag;
   }
-  if (body.employment_type === null || typeof body.employment_type === 'string') {
-    patch.employment_type = (body.employment_type as string | null) ?? null;
+  // Nov 2026 — employment is the payroll card's person_type (Principal / Band /
+  // Crew), the same field Payroll edits. The old 5-value employment_type on
+  // this row is retired and no longer written.
+  if ('person_type' in body && !isEmployment(body.person_type)) {
+    return NextResponse.json({ error: 'Employment must be principal, band or crew.' }, { status: 400 });
   }
+  const employment = isEmployment(body.person_type) ? body.person_type : null;
   // Stage 1 — the tour_personnel daily-rate column is retired (my-schedule reads the SSOT
   // via personnel_rate_lines; migration 231 drops the column). No longer written
   // here — rate entry's single home is the Payroll grid → writeRates.
@@ -126,7 +132,7 @@ async function patchHandler(
     patch.status = body.status as Status;
   }
 
-  if (Object.keys(patch).length === 0) {
+  if (Object.keys(patch).length === 0 && !employment) {
     return NextResponse.json({ error: 'no fields to update' }, { status: 400 });
   }
 
@@ -158,12 +164,22 @@ async function patchHandler(
     );
   }
 
-  const { error: updErr } = await supabase
-    .from('tour_personnel')
-    .update(patch)
-    .eq('id', memberId);
-  if (updErr) {
-    return NextResponse.json({ error: updErr.message }, { status: 500 });
+  if (Object.keys(patch).length > 0) {
+    const { error: updErr } = await supabase
+      .from('tour_personnel')
+      .update(patch)
+      .eq('id', memberId);
+    if (updErr) {
+      // UNIQUE (tour_id, person_id, role): the same person can't hold one role twice.
+      if (updErr.code === '23505') {
+        return NextResponse.json({ error: `They’re already on this tour as ${patch.role ?? ex.role}.` }, { status: 409 });
+      }
+      return NextResponse.json({ error: updErr.message }, { status: 500 });
+    }
+  }
+  if (employment) {
+    const r = await setTourEmployment(supabase, memberId, employment);
+    if (!r.ok) return NextResponse.json({ error: r.error }, { status: r.status });
   }
 
   // Status-change audit row tagged for Sprint 10's notification
@@ -211,7 +227,7 @@ async function patchHandler(
       action: 'updated',
       entity_type: 'tour_personnel',
       entity_id: memberId,
-      field_changes: patch,
+      field_changes: employment ? { ...patch, person_type: employment } : patch,
     });
   }
 

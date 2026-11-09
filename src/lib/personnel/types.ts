@@ -27,7 +27,9 @@ export interface PersonnelListItem {
    *  in migration 101). Filter target for the §9c1 variable
    *  resolver. Existing rows default to 'other'. */
   role_tag: 'tm' | 'tm2' | 'pm' | 'foh' | 'mons' | 'ld' | 'backline' | 'management' | 'other';
-  employment_type: string | null;
+  /** Principal / Band / Crew on this tour — the payroll card's person_type
+   *  (the same field Payroll edits). Null when the card hasn't been made yet. */
+  employment: import('./employment').Employment | null;
   rate_amount: number | null;
   rate_currency: string | null;
   rate_period: string | null;
@@ -47,6 +49,8 @@ export interface PersonnelSearchHit {
   display_name: string;
   email: string | null;
   phone: string | null;
+  /** Their usual role (People record) — pre-fills the role on this tour. */
+  default_role?: string | null;
 }
 
 export interface PersonnelSearchResponse {
@@ -103,4 +107,18 @@ export interface MyScheduleResponse {
     days_in_window: number;
   };
   shows: MyScheduleShow[];
+}
+
+/** One tour a person is on — GET /api/persons/[id]/tours. */
+export interface PersonTourRow {
+  /** tour_personnel.id */
+  memberId: string;
+  tourId: string;
+  tourName: string;
+  startDate: string | null;
+  /** Role on THIS tour. */
+  role: string;
+  /** Principal / Band / Crew on THIS tour (the payroll card). */
+  employment: import('./employment').Employment | null;
+  status: string;
 }

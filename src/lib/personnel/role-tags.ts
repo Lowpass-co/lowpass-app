@@ -6,7 +6,7 @@
      - AddPersonnelSlideOver / PersonnelManageSlideOver
        (the Role tag select)
      - /api/tours/[id]/personnel  POST  (insert validation)
-     - /api/tour-personnel/[id]   PATCH (update validation)
+     - /api/tours/[id]/personnel/[memberId]  PATCH (update validation)
      - Sprint 12 §9c1 variable resolver (filter target for
        {contact.<tag>.*})
 
