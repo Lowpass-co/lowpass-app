@@ -79,6 +79,9 @@ const nextConfig: NextConfig = {
       "style-src 'self' 'unsafe-inline'",
       "img-src 'self' data: blob: https:",
       "font-src 'self' data:",
+      // The parking map's 3D engine (CesiumJS, served from /cesium) starts its
+      // geometry workers from blob: URLs.
+      "worker-src 'self' blob:",
       "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://*.googleapis.com https://places.googleapis.com https://maps.googleapis.com",
       "frame-ancestors 'self'",
       "base-uri 'self'",

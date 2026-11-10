@@ -34,9 +34,12 @@ import {
 import { areaLabel, markerSpec, vehicleSpec } from '@/lib/parking/catalogue';
 import { pathLength, type ParkingItem } from '@/lib/parking/model';
 import { ParkingScene } from './ParkingScene';
+import { loadCesium } from './loadCesium';
+import { applyCamera, createViewer, creditsText, lookAt, populate, settle } from './scene3d';
+import { defaultCamera3d } from '@/lib/parking/blocks3d';
 import { PRINT_FRAME_MM, type PrintFrame } from '@/lib/parking/print';
 import { areaColour, resolvePalette, roleColour, type Palette } from './palette';
-import { tileUrl, type TileSession } from './googleTiles';
+import { tilesKey, tileUrl, type TileSession } from './googleTiles';
 
 // A4 landscape, millimetres.
 const PAGE = { w: 297, h: 210 };
@@ -64,6 +67,37 @@ export interface ExportResult {
   blob: Blob;
   fileName: string;
   scale: number;
+  /** Set when page 2 (3D) couldn't be made; page 1 is still complete. */
+  warning: string | null;
+}
+
+const PX_PER_MM_3D = 5; // a WebGL canvas of ~980 × 870 — enough for print, kind to laptops
+
+/** Page 2: the 3D view, rendered off-screen from the same scene builder as the live 3D page. */
+async function render3dImage(input: ExportInput, palette: Palette): Promise<{ jpeg: string; credits: string }> {
+  const key = tilesKey();
+  if (!key) throw new Error('no Google Map Tiles key');
+  const W = Math.round(FRAME.w * PX_PER_MM_3D);
+  const H = Math.round(FRAME.h * PX_PER_MM_3D);
+  const host = document.createElement('div');
+  Object.assign(host.style, { position: 'fixed', left: '-20000px', top: '0', width: `${W}px`, height: `${H}px` });
+  document.body.appendChild(host);
+  let viewer: ReturnType<typeof createViewer> | null = null;
+  try {
+    const Cesium = await loadCesium();
+    viewer = createViewer(Cesium, host, { withTiles: true, blank: palette.blank, sky: palette.sky });
+    const def = defaultCamera3d({ x: input.frame.cx, y: input.frame.cy }, Math.max(input.frame.wM, input.frame.hM) * 0.7, input.view.rotation);
+    lookAt(Cesium, viewer, input.anchor, def.target, 0, def.heading, def.pitch, def.range);
+    const scene = await populate(Cesium, viewer, { anchor: input.anchor, items: input.items, palette, tilesKey: key });
+    if (input.view.cam3d) applyCamera(Cesium, viewer, input.anchor, input.view.cam3d);
+    else lookAt(Cesium, viewer, input.anchor, def.target, scene.ground0, def.heading, def.pitch, def.range);
+    await settle(viewer, scene.tileset, 30_000);
+    viewer.render();
+    return { jpeg: viewer.canvas.toDataURL('image/jpeg', 0.9), credits: creditsText(viewer) };
+  } finally {
+    if (viewer && !viewer.isDestroyed()) viewer.destroy();
+    host.remove();
+  }
 }
 
 const hexToRgb = (hex: string): [number, number, number] => {
@@ -326,16 +360,60 @@ export async function exportParkingPdf(input: ExportInput): Promise<ExportResult
     doc.text(lines.slice(0, room), SIDE.x, y);
   }
 
-  // Footer
-  doc.setFontSize(6.5);
-  doc.setTextColor(...grey);
-  doc.text(
-    `Drawn to scale in Lowpass · exported ${new Date().toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short' })}${input.session ? ' · Imagery: Google Maps' : ''}`,
-    MARGIN,
-    PAGE.h - 4,
-  );
+  const stamp = new Date().toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short' });
+  const footer = (extra: string) => {
+    doc.setFontSize(6.5);
+    doc.setTextColor(...grey);
+    doc.text(`Drawn to scale in Lowpass · exported ${stamp}${extra}`, MARGIN, PAGE.h - 4);
+  };
+  footer(input.session ? ' · Imagery: Google Maps' : '');
+
+  // Page 2 — the same drawing in 3D, true-size vehicles on Google's 3D city.
+  let warning: string | null = null;
+  if (input.session) {
+    try {
+      const shot = await render3dImage(input, palette);
+      doc.addPage('a4', 'landscape');
+      doc.setTextColor(...ink);
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(16);
+      doc.text(`${input.title} · 3D`, MARGIN, 15);
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(9);
+      doc.setTextColor(...grey);
+      doc.text(input.subtitle, MARGIN, 21);
+      doc.addImage(shot.jpeg, 'JPEG', FRAME.x, FRAME.y, FRAME.w, FRAME.h);
+      doc.setDrawColor(...ink);
+      doc.setLineWidth(0.3);
+      doc.rect(FRAME.x, FRAME.y, FRAME.w, FRAME.h);
+      const att = `Google${shot.credits ? ` · ${shot.credits}` : ''}`;
+      doc.setFontSize(6);
+      const tw = Math.min(doc.getTextWidth(att) + 3, FRAME.w - 20);
+      doc.setFillColor(255, 255, 255);
+      doc.rect(FRAME.x + FRAME.w - tw, FRAME.y + FRAME.h - 4, tw, 4, 'F');
+      doc.setTextColor(...ink);
+      doc.text(att, FRAME.x + FRAME.w - 1.5, FRAME.y + FRAME.h - 1.2, { align: 'right', maxWidth: tw - 2 });
+      // How to read it.
+      doc.setFontSize(9);
+      doc.setFont('helvetica', 'bold');
+      doc.text('Reading this view', SIDE.x, FRAME.y + 3);
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(8);
+      doc.text(
+        doc.splitTextToSize(
+          'Every vehicle is drawn at its true length, width and height, where it parks, beside the real buildings. A perspective view has no single scale, so there is no scale bar here: each vehicle is labelled with its length. Measure on page 1.',
+          SIDE.w,
+        ) as string[],
+        SIDE.x,
+        FRAME.y + 8,
+      );
+      footer(' · 3D imagery: Google');
+    } catch (e) {
+      warning = `The PDF has no 3D page: ${e instanceof Error ? e.message : 'the 3D view failed'}.`;
+    }
+  }
 
   const blob = doc.output('blob');
   const safe = (s: string) => s.replace(/[\\/:*?"<>|]+/g, '-').trim();
-  return { blob, fileName: `${safe(`Parking — ${input.title.replace(/^Parking — /, '')}`)}.pdf`, scale };
+  return { blob, fileName: `${safe(`Parking — ${input.title.replace(/^Parking — /, '')}`)}.pdf`, scale, warning };
 }

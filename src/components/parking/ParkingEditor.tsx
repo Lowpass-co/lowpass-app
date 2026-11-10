@@ -50,6 +50,7 @@ import { ParkingScene, MARKER_ICON, type Draft, type SceneTile } from './Parking
 import { LIVE_PALETTE, roleColour, areaColour } from './palette';
 import { getTileSession, tileUrl, tilesKey, viewportInfo, type TileSession } from './googleTiles';
 import { exportParkingPdf } from './exportPdf';
+import { Parking3D } from './Parking3D';
 import { freeSpot, printFrame, type PrintScaleChoice } from '@/lib/parking/print';
 import '@/components/advance/advance.css';
 import './parking.css';
@@ -89,6 +90,7 @@ export function ParkingEditor({ show, tourName, initial, canEdit }: ParkingEdito
   const [pdf, setPdf] = useState(initial?.pdf ?? null);
   const [exporting, setExporting] = useState(false);
   const [printScale, setPrintScale] = useState<PrintScaleChoice>('auto');
+  const [mode, setMode] = useState<'plan' | '3d'>('plan');
 
   // Imagery
   const [session, setSession] = useState<TileSession | null>(null);
@@ -397,9 +399,10 @@ export function ParkingEditor({ show, tourName, initial, canEdit }: ParkingEdito
       touched.current = true;
       setView((v) => zoomAt(v, r.width, r.height, { x: e.clientX - r.left, y: e.clientY - r.top }, factor));
     };
+    if (mode !== 'plan') return; // the 3D engine has the wheel
     el.addEventListener('wheel', onWheel, { passive: false });
     return () => el.removeEventListener('wheel', onWheel);
-  }, [anchor]);
+  }, [anchor, mode]);
 
   /* ── Drawing ──────────────────────────────────────────── */
   const startDraw = (shape: 'route' | 'area' | 'measure') => {
@@ -521,6 +524,9 @@ export function ParkingEditor({ show, tourName, initial, canEdit }: ParkingEdito
   const doExport = async () => {
     if (!anchor || exporting) return;
     setExporting(true);
+    // Open the tab NOW, while the click still counts as a click: the 3D page
+    // can take a while, and a window opened after that is blocked as a popup.
+    const tab = window.open('about:blank', '_blank');
     try {
       if (saveTimer.current) {
         clearTimeout(saveTimer.current);
@@ -540,8 +546,15 @@ export function ParkingEditor({ show, tourName, initial, canEdit }: ParkingEdito
         attribution,
       });
       const url = URL.createObjectURL(out.blob);
-      window.open(url, '_blank', 'noopener');
-      setTimeout(() => URL.revokeObjectURL(url), 60_000);
+      if (tab && !tab.closed) tab.location.href = url;
+      else {
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = out.fileName;
+        a.click();
+      }
+      setTimeout(() => URL.revokeObjectURL(url), 120_000);
+      if (out.warning) showToast(out.warning, 'error');
       if (canEdit) {
         try {
           const file = await uploadToFiles({ scope: 'tour', scopeId: show.tourId, folder: 'Parking maps', file: new File([out.blob], out.fileName, { type: 'application/pdf' }) });
@@ -560,6 +573,7 @@ export function ParkingEditor({ show, tourName, initial, canEdit }: ParkingEdito
         }
       }
     } catch (e) {
+      if (tab && !tab.closed) tab.close();
       showToast(e instanceof Error ? e.message : 'Couldn’t make the PDF', 'error');
     } finally {
       setExporting(false);
@@ -729,15 +743,30 @@ export function ParkingEditor({ show, tourName, initial, canEdit }: ParkingEdito
         className="pk-map"
         data-tool={tool.kind}
         data-dragging={dragging}
-        onPointerDown={onMapDown}
-        onPointerMove={onMapMove}
-        onPointerUp={onMapUp}
-        onPointerCancel={onMapUp}
-        onDoubleClick={() => tool.kind === 'draw' && finishDraw()}
+        data-mode={mode}
+        onPointerDown={mode === 'plan' ? onMapDown : undefined}
+        onPointerMove={mode === 'plan' ? onMapMove : undefined}
+        onPointerUp={mode === 'plan' ? onMapUp : undefined}
+        onPointerCancel={mode === 'plan' ? onMapUp : undefined}
+        onDoubleClick={() => mode === 'plan' && tool.kind === 'draw' && finishDraw()}
         role="application"
         aria-label={`Parking map for ${venueName}`}
       >
-        {size.w ? (
+        {mode === '3d' && size.w ? (
+          <Parking3D
+            anchor={anchor}
+            items={items}
+            fallback={{ centre: { x: frame.cx, y: frame.cy }, extent: Math.max(frame.wM, frame.hM) * 0.7, rotation: view.rotation }}
+            cam3d={view.cam3d}
+            canEdit={canEdit}
+            onUseView={(cam) => {
+              changeView({ ...viewRef.current, cam3d: cam });
+              showToast('Saved — the PDF’s page 2 will show this view');
+            }}
+          />
+        ) : null}
+
+        {mode === 'plan' && size.w ? (
           <ParkingScene
             view={view}
             width={size.w}
@@ -755,7 +784,7 @@ export function ParkingEditor({ show, tourName, initial, canEdit }: ParkingEdito
           </ParkingScene>
         ) : null}
 
-        {tool.kind === 'draw' ? (
+        {mode === 'plan' && tool.kind === 'draw' ? (
           <div className="pk-hint" onPointerDown={(e) => e.stopPropagation()}>
             {tool.shape === 'measure' ? 'Click two points' : `Click to add points${draft && draft.points.length > 1 && tool.shape === 'route' ? ` · ${fmtMetres(pathLength(draft.points))}` : ''} · double-click or Enter to finish`}
             {tool.shape !== 'measure' ? (
@@ -798,14 +827,31 @@ export function ParkingEditor({ show, tourName, initial, canEdit }: ParkingEdito
           </div>
         ) : null}
 
-        {imageryError ? (
-          <div className="pk-badge" style={{ top: 'var(--lp-space-3)', left: 'var(--lp-space-3)', maxWidth: 360, pointerEvents: 'auto' }}>
+        <div className="pk-modes" role="group" aria-label="View" onPointerDown={(e) => e.stopPropagation()}>
+          <button type="button" aria-pressed={mode === 'plan'} onClick={() => setMode('plan')}>
+            Plan
+          </button>
+          <button
+            type="button"
+            aria-pressed={mode === '3d'}
+            onClick={() => {
+              cancelDraw();
+              setMode('3d');
+            }}
+          >
+            3D
+          </button>
+        </div>
+
+        {mode === 'plan' && imageryError ? (
+          <div className="pk-badge" style={{ top: 'calc(var(--lp-space-3) + 44px)', left: 'var(--lp-space-3)', maxWidth: 360, pointerEvents: 'auto' }}>
             {imageryError === 'not-configured'
               ? 'No satellite imagery yet: the Google Map Tiles key isn’t set up. Sizes and the grid are still true.'
               : `Satellite imagery didn’t load: ${imageryError}`}
           </div>
         ) : null}
 
+        {mode === 'plan' ? (
         <div className="pk-ctrls" onPointerDown={(e) => e.stopPropagation()}>
           <div className="pk-ctrl-group">
             <button type="button" className="pk-ctrl" aria-label="Zoom in" onClick={() => changeView(zoomAt(view, size.w, size.h, { x: size.w / 2, y: size.h / 2 }, 1.5))}>
@@ -850,8 +896,9 @@ export function ParkingEditor({ show, tourName, initial, canEdit }: ParkingEdito
             </div>
           ) : null}
         </div>
+        ) : null}
 
-        {size.w ? (
+        {mode === 'plan' && size.w ? (
           <div
             aria-hidden
             style={{
@@ -871,11 +918,13 @@ export function ParkingEditor({ show, tourName, initial, canEdit }: ParkingEdito
           </div>
         ) : null}
 
-        <div className="pk-badge pk-scale" aria-label={`Scale bar: ${fmtMetres(scaleM)}`}>
-          <span>{fmtMetres(scaleM)}</span>
-          <span className="pk-scale-bar" style={{ width: scaleM * view.ppm }} />
-        </div>
-        {session ? <div className="pk-badge pk-attrib">Google Maps{attribution ? ` · ${attribution}` : ''}</div> : null}
+        {mode === 'plan' ? (
+          <div className="pk-badge pk-scale" aria-label={`Scale bar: ${fmtMetres(scaleM)}`}>
+            <span>{fmtMetres(scaleM)}</span>
+            <span className="pk-scale-bar" style={{ width: scaleM * view.ppm }} />
+          </div>
+        ) : null}
+        {mode === 'plan' && session ? <div className="pk-badge pk-attrib">Google Maps{attribution ? ` · ${attribution}` : ''}</div> : null}
       </div>
     </div>
   );

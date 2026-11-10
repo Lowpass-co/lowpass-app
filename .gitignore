@@ -51,3 +51,6 @@ tsconfig.tsbuildinfo
 *.docx
 # local Supabase CLI state (never commit)
 supabase/
+
+# CesiumJS runtime, copied from node_modules by scripts/copy-cesium.mjs
+public/cesium/

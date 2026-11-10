@@ -65,6 +65,19 @@ export interface View {
   ppm: number;
   /** Compass bearing that points up the screen. 0 = north up. */
   rotation: number;
+  /** The 3D page's saved camera (phase 2), if chosen. */
+  cam3d?: Camera3d;
+}
+
+/** A 3D camera: position in the ground frame + ellipsoid height (m), and
+ *  heading (compass °), pitch (° — negative looks down) and roll (°). */
+export interface Camera3d {
+  x: number;
+  y: number;
+  alt: number;
+  heading: number;
+  pitch: number;
+  roll: number;
 }
 
 export const PPM_MIN = 0.05; // ~whole city district on screen

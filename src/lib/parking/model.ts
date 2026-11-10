@@ -13,7 +13,7 @@
    ============================================ */
 
 import { MARKERS, VEHICLES, AREAS, type AreaType, type MarkerType, type VehicleType } from './catalogue';
-import { normDeg, type LatLng, type Pt, type View } from './geo';
+import { normDeg, type Camera3d, type LatLng, type Pt, type View } from './geo';
 
 export interface VehicleItem {
   id: string;
@@ -177,6 +177,20 @@ export function parseView(raw: unknown): View {
     cy: num(o.cy, 'View centre y', -LIMITS.reach, LIMITS.reach),
     ppm: num(o.ppm, 'Zoom', 0.01, 100),
     rotation: normDeg(num(o.rotation, 'Rotation', -3600, 3600)),
+    ...(o.cam3d == null ? {} : { cam3d: parseCamera3d(o.cam3d) }),
+  };
+}
+
+export function parseCamera3d(raw: unknown): Camera3d {
+  if (!isObj(raw)) fail('cam3d must be an object');
+  const o = raw as Record<string, unknown>;
+  return {
+    x: num(o.x, '3D camera x', -LIMITS.reach, LIMITS.reach),
+    y: num(o.y, '3D camera y', -LIMITS.reach, LIMITS.reach),
+    alt: num(o.alt, '3D camera height', -500, 10000),
+    heading: normDeg(num(o.heading, '3D camera heading', -3600, 3600)),
+    pitch: num(o.pitch, '3D camera pitch', -90, 90),
+    roll: num(o.roll, '3D camera roll', -180, 180),
   };
 }
 

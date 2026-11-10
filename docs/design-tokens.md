@@ -324,6 +324,7 @@ Drawn on satellite imagery, so they do **not** switch with the theme: the backgr
 | `--lp-map-chip` | Marker chip background |
 | `--lp-map-select` | Selection outline |
 | `--lp-map-blank` / `--lp-map-grid` | Background when no imagery is configured |
+| `--lp-map-sky` | The 3D page's sky (above the Google mesh) |
 
 The PDF export resolves these to literal colours with `getComputedStyle` (an SVG drawn into a canvas cannot read CSS variables) — `src/components/parking/palette.ts`.
 
