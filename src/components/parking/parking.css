@@ -248,3 +248,11 @@ span.pk-pagescale { display: inline-flex; align-items: center; padding: 0; }
 .pk-iconbtn:hover { background: var(--lp-surface-hover); }
 .pk-iconbtn:disabled { opacity: 0.4; cursor: default; }
 .pk-iconbtn:focus-visible { outline: 2px solid var(--lp-orange); outline-offset: 2px; }
+
+/* Shift-drag selection box (on a photo, so the fixed map tokens). */
+.pk-box {
+  fill: color-mix(in srgb, var(--lp-map-select) 14%, transparent);
+  stroke: var(--lp-map-select);
+  stroke-width: 1.5;
+  stroke-dasharray: 5 3;
+}

@@ -495,6 +495,12 @@ recreate a `_legacy/` tree: delete dead code instead of parking it.
   the same component, so the editor and paper can't disagree.
 - Saves are optimistic on `version` (409 → "Load theirs / Keep mine"); opening
   writes nothing.
+- **Selection is a list of ids** (Nov 2026, Adam): ⌘/Ctrl- or Shift-click
+  toggles, Shift-drag boxes (`itemsInBox`), ⌘A takes all. Several move, nudge,
+  delete, duplicate and colour together; they TURN AS ONE BLOCK (`turnItems`,
+  about `groupCentre` — the mean of item centres, so repeated turns don't
+  creep). One vehicle still turns about itself; the knob shows for one only.
+  Rules are pure in `edit.ts`.
 - **The anchor is degrees — keep it to 1e-7 (`deg()` in model.ts), never
   `num()`** (0.001 = a millimetre in metres, ~111 m in degrees). The anchor was
   saved rounded to 3 dp, so every drawing jumped up to ~55 m on reload (fixed
