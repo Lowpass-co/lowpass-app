@@ -188,3 +188,28 @@
   .pk-panel { order: 2; border-right: 0; border-top: 1px solid var(--lp-border); }
   .pk-map { order: 1; }
 }
+
+/* Vehicle colour picker (PAINTS). The first swatch is "the type's colour". */
+.pk-swatches { display: flex; flex-wrap: wrap; gap: var(--lp-space-1); }
+.pk-paint {
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border-radius: var(--lp-radius-full);
+  border: 1px solid var(--lp-border-strong);
+  cursor: pointer;
+}
+.pk-paint[aria-checked='true'] { outline: 2px solid var(--lp-orange); outline-offset: 2px; }
+.pk-paint:focus-visible { outline: 2px solid var(--lp-orange); outline-offset: 2px; }
+.pk-paint:disabled { cursor: default; }
+.pk-paint-default { position: relative; }
+.pk-paint-default::after {
+  content: 'A';
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-size: var(--lp-text-xs);
+  font-weight: var(--lp-weight-semibold);
+  color: var(--lp-map-ink);
+}

@@ -135,6 +135,14 @@ browser key restricted to the Map Tiles API and the app's domains).**
 
 **Last verified**:
 
+#### PRK-20 — Colour a vehicle
+
+**Do**: Select a bus; in Colour pick Teal; pick "A" (default); press ⌘Z.
+
+**Expect**: The bus turns teal on the plan, in 3D and in the PDF key; "A" puts back its type's colour; one ⌘Z undoes one colour change. Duplicating a coloured bus keeps its colour.
+
+**Last verified**:
+
 ## 3D
 
 #### PRK-16 — The 3D view, to scale

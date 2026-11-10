@@ -38,7 +38,7 @@ import { loadCesium } from './loadCesium';
 import { applyCamera, createViewer, creditsText, lookAt, populate, settle } from './scene3d';
 import { defaultCamera3d } from '@/lib/parking/blocks3d';
 import { PRINT_FRAME_MM, type PrintFrame } from '@/lib/parking/print';
-import { areaColour, resolvePalette, roleColour, type Palette } from './palette';
+import { areaColour, resolvePalette, vehicleColour, type Palette } from './palette';
 import { tilesKey, tileUrl, type TileSession } from './googleTiles';
 
 // A4 landscape, millimetres.
@@ -314,7 +314,7 @@ export async function exportParkingPdf(input: ExportInput): Promise<ExportResult
     for (const v of vehicles) {
       if (v.kind !== 'vehicle') continue;
       const s = vehicleSpec(v.type);
-      row(roleColour(palette, s?.role ?? 'bus'), v.label || s?.short || 'Vehicle', `${s?.label ?? ''} · ${v.length} × ${v.width} m`);
+      row(vehicleColour(palette, v), v.label || s?.short || 'Vehicle', `${s?.label ?? ''} · ${v.length} × ${v.width} m`);
     }
     line(2);
   }

@@ -325,6 +325,7 @@ Drawn on satellite imagery, so they do **not** switch with the theme: the backgr
 | `--lp-map-select` | Selection outline |
 | `--lp-map-blank` / `--lp-map-grid` | Background when no imagery is configured |
 | `--lp-map-sky` | The 3D page's sky (above the Google mesh) |
+| `--lp-map-paint-*` (orange, red, yellow, green, teal, blue, purple, pink, white, black) | A vehicle's chosen colour (`PAINTS`); unset → its role colour |
 
 The PDF export resolves these to literal colours with `getComputedStyle` (an SVG drawn into a canvas cannot read CSS variables) — `src/components/parking/palette.ts`.
 

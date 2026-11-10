@@ -106,3 +106,21 @@ describe('vehicle silhouettes', () => {
     expect(m.items.map((i) => i.kind === 'vehicle' && i.length)).toEqual([18.75, 19]);
   });
 });
+
+describe('vehicle colours', () => {
+  const body = (colour: unknown) => ({
+    anchor: { lat: 53.8, lng: -1.5 },
+    view: { cx: 0, cy: 0, ppm: 2, rotation: 0 },
+    notes: '',
+    items: [{ id: 'b', kind: 'vehicle', type: 'bus_eu', label: 'Bus 1', x: 0, y: 0, heading: 0, length: 13.5, width: 2.55, height: 4, colour }],
+  });
+  it('a known paint is kept; none or blank means the type colour', () => {
+    expect((parseMapBody(body('teal')).items[0] as { colour?: string }).colour).toBe('teal');
+    expect('colour' in parseMapBody(body(undefined)).items[0]).toBe(false);
+    expect('colour' in parseMapBody(body('')).items[0]).toBe(false);
+  });
+  it('anything else is refused', () => {
+    expect(() => parseMapBody(body('#ff0000'))).toThrow();
+    expect(() => parseMapBody(body('chartreuse'))).toThrow();
+  });
+});
