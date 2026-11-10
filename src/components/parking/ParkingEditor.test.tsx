@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import { ToastProvider } from '@/components/ui/Toast';
 import { ParkingEditor } from './ParkingEditor';
-import { parseMapBody } from '@/lib/parking/model';
+import { parseMapBody, parseView } from '@/lib/parking/model';
 import type { ParkingShow, SavedParkingMap } from '@/server/parking/maps';
 
 const show: ParkingShow = {
@@ -127,5 +127,32 @@ describe('ParkingEditor', () => {
     });
     expect(screen.getByRole('heading', { name: 'Parking' })).toBeTruthy();
     expect(calls.some((c) => c.method === 'GET')).toBe(false); // pasted numbers: no geocode call
+  });
+});
+
+describe('PDF pages', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+  it('starts with Plan + 3D; adding a plan view, renaming and reordering are saved on the view', async () => {
+    mount();
+    const names = () => screen.getAllByRole('textbox', { name: /Page \d name/ }).map((i) => (i as HTMLInputElement).value);
+    expect(names()).toEqual(['Plan', '3D']);
+    fireEvent.click(screen.getByRole('button', { name: /This plan view/ }));
+    expect(names()).toEqual(['Plan', '3D', 'Plan 2']);
+    fireEvent.change(screen.getByRole('textbox', { name: 'Page 3 name' }), { target: { value: 'Approach' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Move page 3 up' }));
+    expect(names()).toEqual(['Plan', 'Approach', '3D']);
+    fireEvent.click(screen.getByRole('button', { name: 'Remove page 3' }));
+    await act(async () => vi.advanceTimersByTime(1000));
+    const body = calls.filter((c) => c.method === 'PUT').at(-1)!.body as { map: { view: unknown } };
+    const v = parseView(body.map.view);
+    expect(v.pages!.map((p) => [p.kind, p.title])).toEqual([['plan', 'Plan'], ['plan', 'Approach']]);
+  });
+
+  it('the last page can’t be removed', () => {
+    mount();
+    fireEvent.click(screen.getByRole('button', { name: 'Remove page 2' }));
+    expect((screen.getByRole('button', { name: 'Remove page 1' }) as HTMLButtonElement).disabled).toBe(true);
   });
 });

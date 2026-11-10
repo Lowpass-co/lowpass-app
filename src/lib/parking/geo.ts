@@ -67,6 +67,8 @@ export interface View {
   rotation: number;
   /** The 3D page's saved camera (phase 2), if chosen. */
   cam3d?: Camera3d;
+  /** The PDF's pages, in order (pages.ts). Absent = the default plan + 3D. */
+  pages?: import('./pages').PdfPage[];
 }
 
 /** A 3D camera: position in the ground frame + ellipsoid height (m), and

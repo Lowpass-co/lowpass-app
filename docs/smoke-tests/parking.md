@@ -115,7 +115,7 @@ browser key restricted to the Map Tiles API and the app's domains).**
 
 **Do**: Draw one bus and two markers; zoom the editor right out on a wide screen; Export PDF.
 
-**Expect**: The dashed "Prints at 1:N · A4" outline on the map shows exactly what prints; with "Fit the drawing" it hugs the drawing (a lone bus prints at 1:500 or closer, not 1:1,500). Picking a scale in Print scale resizes the outline and the PDF matches it.
+**Expect**: The dashed "Page 1 · Plan · 1:N" outline on the map shows exactly what prints; at Fit it hugs the parking (a lone bus prints at 1:500 or closer, not 1:1,500; a long approach route doesn't zoom it out). Picking a 1:N for the page under PDF pages resizes the outline and the PDF matches it.
 
 **Last verified**:
 
@@ -143,6 +143,14 @@ browser key restricted to the Map Tiles API and the app's domains).**
 
 **Last verified**:
 
+#### PRK-21 — More than two pages
+
+**Do**: Zoom out to show the approach; under PDF pages press **This plan view**, rename it "Approach", move it up; switch to 3D, turn the camera, press **Add this view as a page**; Export PDF.
+
+**Expect**: The list shows Plan · Approach · 3D · 3D 2, and the map outlines each plan page's area ("Page 2 · Approach · 1:5,000"). The PDF has those four pages in that order, each titled, "Page n of 4" in the footer; plan pages have the key, notes and scale bar at their own scale; the first plan page frames the buses (not the whole approach route). **Show** on a page takes the editor to it; in 3D opened from a page, **Update "…"** re-aims that page. The last page can't be removed; there are at most 12.
+
+**Last verified**:
+
 ## 3D
 
 #### PRK-16 — The 3D view, to scale
@@ -161,11 +169,11 @@ browser key restricted to the Map Tiles API and the app's domains).**
 
 **Last verified**:
 
-#### PRK-17 — Use this view for the PDF
+#### PRK-17 — A 3D view on the PDF
 
-**Do**: In 3D, frame the approach; press **Use this view for the PDF**; Export PDF.
+**Do**: Under PDF pages press **Show** on the 3D page; frame the approach; press **Update "3D"**; Export PDF.
 
-**Expect**: "Saved" toast; the PDF has a page 2 — the same view, titled "… · 3D", Google credit bottom right, a note that perspective has no scale bar. Reloading and exporting again keeps the view. Without a saved view, page 2 looks at the drawing from the south-west-ish default.
+**Expect**: The 3D page in the PDF is that view, titled "… · 3D", Google credit bottom right, a note that perspective has no scale bar. Reloading and exporting again keeps the view. A 3D page never aimed looks at the drawing from the south-west-ish default (a view saved before pages existed is kept).
 
 **Last verified**:
 

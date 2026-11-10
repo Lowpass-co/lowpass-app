@@ -5,8 +5,9 @@
 
    The same drawing as the overhead plan, on Google's photorealistic 3D city,
    vehicles as true-size blocks. Looking only: things are placed and moved on
-   the overhead plan. "Use this view for the PDF" saves the camera (in the
-   map's `view.cam3d`), and the PDF's page 2 is drawn from it.
+   the overhead plan. Each 3D PDF page keeps a camera (pages.ts): "Add this
+   view as a page" adds one; opened from a page ("Show"), "Update ‘…’"
+   re-aims that page.
    ============================================ */
 
 import { useEffect, useRef, useState } from 'react';
@@ -27,10 +28,15 @@ export interface Parking3DProps {
   fallback: { centre: Pt; extent: number; rotation: number };
   cam3d: Camera3d | undefined;
   canEdit: boolean;
-  onUseView: (cam: Camera3d) => void;
+  /** The PDF page this view was opened from ("Show"), if any. */
+  pageTitle: string | null;
+  /** The PDF is at its page limit. */
+  atLimit: boolean;
+  onAddPage: (cam: Camera3d) => void;
+  onSaveToPage: (cam: Camera3d) => void;
 }
 
-export function Parking3D({ anchor, items, fallback, cam3d, canEdit, onUseView }: Parking3DProps) {
+export function Parking3D({ anchor, items, fallback, cam3d, canEdit, pageTitle, atLimit, onAddPage, onSaveToPage }: Parking3DProps) {
   const host = useRef<HTMLDivElement>(null);
   const viewerRef = useRef<CesiumNS.Viewer | null>(null);
   const cesiumRef = useRef<CesiumModule | null>(null);
@@ -172,14 +178,20 @@ export function Parking3D({ anchor, items, fallback, cam3d, canEdit, onUseView }
         <button type="button" className="adv-btn adv-btn-sm" onClick={reset} disabled={state !== 'ready'}>
           <RotateCcw size={13} aria-hidden /> Reset view
         </button>
+        {canEdit && pageTitle ? (
+          <button type="button" className="adv-btn adv-btn-sm" disabled={state !== 'ready'} onClick={() => viewerRef.current && onSaveToPage(readCamera(viewerRef.current, anchor))}>
+            <Camera size={13} aria-hidden /> Update “{pageTitle}”
+          </button>
+        ) : null}
         {canEdit ? (
           <button
             type="button"
             className="adv-btn adv-btn-sm adv-btn-primary"
-            disabled={state !== 'ready'}
-            onClick={() => viewerRef.current && onUseView(readCamera(viewerRef.current, anchor))}
+            disabled={state !== 'ready' || atLimit}
+            title={atLimit ? 'The PDF is at its page limit' : undefined}
+            onClick={() => viewerRef.current && onAddPage(readCamera(viewerRef.current, anchor))}
           >
-            <Camera size={13} aria-hidden /> Use this view for the PDF
+            <Camera size={13} aria-hidden /> Add this view as a page
           </button>
         ) : null}
       </div>

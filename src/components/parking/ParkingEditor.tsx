@@ -19,7 +19,7 @@
 
 import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
-import { ArrowLeft, Compass, Copy, Download, Minus, Navigation, Plus, Redo2, RotateCcw, RotateCw, Route as RouteIcon, Ruler, Pentagon, Trash2, Undo2 } from 'lucide-react';
+import { ArrowLeft, ChevronDown, ChevronUp, Compass, Copy, Download, Minus, Navigation, Plus, Redo2, RotateCcw, RotateCw, Route as RouteIcon, Ruler, Pentagon, Trash2, Undo2, X } from 'lucide-react';
 import { useToast } from '@/components/ui/Toast';
 import { SaveStatus } from '@/components/forms/SaveStatus';
 import type { SaveStatus as SaveStatusKind } from '@/lib/forms/useAutoSave';
@@ -38,6 +38,7 @@ import {
   viewBounds,
   visibleTiles,
   zoomAt,
+  type Camera3d,
   type LatLng,
   type Pt,
   type View,
@@ -51,7 +52,8 @@ import { LIVE_PALETTE, roleColour, areaColour } from './palette';
 import { getTileSession, tileUrl, tilesKey, viewportInfo, type TileSession } from './googleTiles';
 import { exportParkingPdf } from './exportPdf';
 import { Parking3D } from './Parking3D';
-import { freeSpot, printFrame, type PrintScaleChoice } from '@/lib/parking/print';
+import { freeSpot, printFrame } from '@/lib/parking/print';
+import { MAX_PAGES, add3dPage, addPlanPage, movePage, pagesOf, planFrame, removePage, updatePage, type Page3d, type PdfPage, type PrintScale } from '@/lib/parking/pages';
 import '@/components/advance/advance.css';
 import './parking.css';
 
@@ -89,7 +91,6 @@ export function ParkingEditor({ show, tourName, initial, canEdit }: ParkingEdito
   const [dragging, setDragging] = useState(false);
   const [pdf, setPdf] = useState(initial?.pdf ?? null);
   const [exporting, setExporting] = useState(false);
-  const [printScale, setPrintScale] = useState<PrintScaleChoice>('auto');
   const [mode, setMode] = useState<'plan' | '3d'>('plan');
 
   // Imagery
@@ -178,8 +179,16 @@ export function ParkingEditor({ show, tourName, initial, canEdit }: ParkingEdito
     return () => clearTimeout(t);
   }, [session, anchor, view, size.w, size.h, dpr]);
 
-  const frame = useMemo(() => printFrame(items, view, size, printScale), [items, view, size, printScale]);
+  // The PDF's pages (pages.ts) live on the view; plan pages are outlined on the map.
+  const pages = useMemo(() => pagesOf(view), [view]);
+  const planFrames = useMemo(
+    () => pages.flatMap((page, i) => (page.kind === 'plan' ? [{ page, n: i + 1, ...planFrame(page, items, view, size) }] : [])),
+    [pages, items, view, size],
+  );
+  const frame = useMemo(() => planFrames.find((f) => f.page.fit)?.frame ?? printFrame(items, view, size, 'auto'), [planFrames, items, view, size]);
   const autoScale = useMemo(() => printFrame(items, view, size, 'auto').scale, [items, view, size]);
+  // Which 3D view the 3D page opens on (a page's camera after "Show").
+  const [shown3d, setShown3d] = useState<{ pageId: string | null; cam: Camera3d | undefined; key: number }>({ pageId: null, cam: undefined, key: 0 });
 
   /* ── Saving ───────────────────────────────────────────── */
   const save = useCallback(
@@ -538,8 +547,16 @@ export function ParkingEditor({ show, tourName, initial, canEdit }: ParkingEdito
         title: `Parking — ${venueName}`,
         subtitle: [dateLabel, show.venue.city, tourName].filter(Boolean).join(' · '),
         anchor,
-        view,
-        frame,
+        pages: pages.map((p) =>
+          p.kind === 'plan'
+            ? { kind: 'plan' as const, title: p.title, ...planFrame(p, items, view, size) }
+            : {
+                kind: '3d' as const,
+                title: p.title,
+                cam: p.cam,
+                fallback: { centre: { x: frame.cx, y: frame.cy }, extent: Math.max(frame.wM, frame.hM) * 0.7, rotation: view.rotation },
+              },
+        ),
         items,
         notes,
         session,
@@ -565,7 +582,7 @@ export function ParkingEditor({ show, tourName, initial, canEdit }: ParkingEdito
           if (j.map?.pdf) setPdf(j.map.pdf);
           showToast(
             link.ok
-              ? `PDF saved to Files › Parking maps at 1:${out.scale.toLocaleString('en-GB')}, linked to this show`
+              ? `PDF (${out.pageCount} ${out.pageCount === 1 ? 'page' : 'pages'}) saved to Files › Parking maps, linked to this show`
               : 'PDF saved to Files › Parking maps, but it couldn’t be linked to this show',
             link.ok ? undefined : 'error',
           );
@@ -590,10 +607,20 @@ export function ParkingEditor({ show, tourName, initial, canEdit }: ParkingEdito
   }
 
   const scaleM = niceLength(110 / view.ppm);
-  // The print area, outlined on the map: exactly what the PDF will show.
-  const fc = project(view, size.w, size.h, { x: frame.cx, y: frame.cy });
-  const fw = frame.wM * view.ppm;
-  const fh = frame.hM * view.ppm;
+
+  const setPages = (next: PdfPage[]) => changeView({ ...viewRef.current, pages: next });
+  const showPage = (page: PdfPage) => {
+    if (page.kind === '3d') {
+      setShown3d((s) => ({ pageId: page.id, cam: page.cam ?? undefined, key: s.key + 1 }));
+      setMode('3d');
+      return;
+    }
+    setMode('plan');
+    const { frame: f, rotation } = planFrame(page, items, view, size);
+    // Fit the page's area on screen with a little room around it.
+    const ppm = Math.min(size.w / f.wM, size.h / f.hM) * 0.9;
+    changeView({ ...viewRef.current, cx: f.cx, cy: f.cy, rotation, ppm });
+  };
   const counts = { vehicles: items.filter((i) => i.kind === 'vehicle').length };
 
   return (
@@ -618,21 +645,15 @@ export function ParkingEditor({ show, tourName, initial, canEdit }: ParkingEdito
               <Download size={14} aria-hidden /> {exporting ? 'Making PDF…' : 'Export PDF'}
             </button>
           </div>
-          <label className="pk-field" style={{ flexDirection: 'row', alignItems: 'center', gap: 'var(--lp-space-2)' }}>
-            Print scale
-            <select
-              className="adv-field"
-              style={{ height: 30, width: 'auto', flex: 1 }}
-              value={String(printScale)}
-              onChange={(e) => setPrintScale(e.target.value === 'auto' ? 'auto' : (Number(e.target.value) as PrintScaleChoice))}
-              aria-label="Print scale"
-            >
-              <option value="auto">Fit the drawing ({`1:${autoScale.toLocaleString('en-GB')}`})</option>
-              {[200, 250, 500, 750, 1000, 1500, 2000].map((n) => (
-                <option key={n} value={n}>1:{n.toLocaleString('en-GB')}</option>
-              ))}
-            </select>
-          </label>
+          <PagesPanel
+            pages={pages}
+            autoScale={autoScale}
+            canEdit={canEdit}
+            mode={mode}
+            onChange={setPages}
+            onShow={showPage}
+            onAddPlan={() => setPages(addPlanPage(pages, viewRef.current, sizeRef.current))}
+          />
           {pdf ? <span className="pk-muted">Last PDF {pdf.exportedAt ? new Date(pdf.exportedAt).toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short' }) : ''} · in Files › Parking maps</span> : null}
         </div>
 
@@ -759,11 +780,21 @@ export function ParkingEditor({ show, tourName, initial, canEdit }: ParkingEdito
             anchor={anchor}
             items={items}
             fallback={{ centre: { x: frame.cx, y: frame.cy }, extent: Math.max(frame.wM, frame.hM) * 0.7, rotation: view.rotation }}
-            cam3d={view.cam3d}
+            key={shown3d.key}
+            cam3d={shown3d.cam ?? pages.find((p): p is Page3d => p.kind === '3d' && !!p.cam)?.cam ?? undefined}
             canEdit={canEdit}
-            onUseView={(cam) => {
-              changeView({ ...viewRef.current, cam3d: cam });
-              showToast('Saved — the PDF’s page 2 will show this view');
+            pageTitle={shown3d.pageId ? pages.find((p) => p.id === shown3d.pageId)?.title ?? null : null}
+            atLimit={pages.length >= MAX_PAGES}
+            onAddPage={(cam) => {
+              const next = add3dPage(pages, cam);
+              setPages(next);
+              setShown3d((st) => ({ ...st, pageId: next[next.length - 1].id }));
+              showToast(`Added “${next[next.length - 1].title}” — page ${next.length} of the PDF`);
+            }}
+            onSaveToPage={(cam) => {
+              if (!shown3d.pageId) return;
+              setPages(updatePage(pages, shown3d.pageId, { cam } as Partial<PdfPage>));
+              showToast('Page updated to this view');
             }}
           />
         ) : null}
@@ -838,6 +869,8 @@ export function ParkingEditor({ show, tourName, initial, canEdit }: ParkingEdito
             aria-pressed={mode === '3d'}
             onClick={() => {
               cancelDraw();
+              // Opened from the switch, not from a page: no page to update.
+              setShown3d((st) => (st.pageId ? { pageId: null, cam: undefined, key: st.key + 1 } : st));
               setMode('3d');
             }}
           >
@@ -900,25 +933,34 @@ export function ParkingEditor({ show, tourName, initial, canEdit }: ParkingEdito
         </div>
         ) : null}
 
-        {mode === 'plan' && size.w ? (
-          <div
-            aria-hidden
-            style={{
-              position: 'absolute',
-              left: fc.x - fw / 2,
-              top: fc.y - fh / 2,
-              width: fw,
-              height: fh,
-              border: '1.5px dashed var(--lp-map-select)',
-              boxShadow: '0 0 0 1px var(--lp-map-halo)',
-              pointerEvents: 'none',
-            }}
-          >
-            <span className="pk-badge" style={{ left: 0, top: 0, transform: 'translateY(-100%)', borderRadius: 'var(--lp-radius-sm) var(--lp-radius-sm) 0 0' }}>
-              Prints at 1:{frame.scale.toLocaleString('en-GB')} · A4
-            </span>
-          </div>
-        ) : null}
+        {mode === 'plan' && size.w
+          ? planFrames.map(({ page, n, frame: f, rotation }) => {
+              const c = project(view, size.w, size.h, { x: f.cx, y: f.cy });
+              const w = f.wM * view.ppm;
+              const h = f.hM * view.ppm;
+              return (
+                <div
+                  key={page.id}
+                  aria-hidden
+                  style={{
+                    position: 'absolute',
+                    left: c.x - w / 2,
+                    top: c.y - h / 2,
+                    width: w,
+                    height: h,
+                    transform: `rotate(${rotation - view.rotation}deg)`,
+                    border: '1.5px dashed var(--lp-map-select)',
+                    boxShadow: '0 0 0 1px var(--lp-map-halo)',
+                    pointerEvents: 'none',
+                  }}
+                >
+                  <span className="pk-badge" style={{ left: 0, top: 0, transform: 'translateY(-100%)', borderRadius: 'var(--lp-radius-sm) var(--lp-radius-sm) 0 0', whiteSpace: 'nowrap' }}>
+                    Page {n} · {page.title} · 1:{f.scale.toLocaleString('en-GB')}
+                  </span>
+                </div>
+              );
+            })
+          : null}
 
         {mode === 'plan' ? (
           <div className="pk-badge pk-scale" aria-label={`Scale bar: ${fmtMetres(scaleM)}`}>
@@ -1224,5 +1266,103 @@ function AnchorPicker({ show, backHref, canEdit, onPick }: { show: ParkingShow; 
         )}
       </div>
     </div>
+  );
+}
+
+const PLAN_SCALES: PrintScale[] = [200, 250, 500, 750, 1000, 1500, 2000, 2500, 5000];
+
+/** The PDF's pages: what prints, in order (pages.ts). */
+function PagesPanel({
+  pages,
+  autoScale,
+  canEdit,
+  mode,
+  onChange,
+  onShow,
+  onAddPlan,
+}: {
+  pages: PdfPage[];
+  autoScale: number;
+  canEdit: boolean;
+  mode: 'plan' | '3d';
+  onChange: (next: PdfPage[]) => void;
+  onShow: (page: PdfPage) => void;
+  onAddPlan: () => void;
+}) {
+  return (
+    <section className="pk-sec" aria-label="PDF pages">
+      <h3>PDF pages</h3>
+      <ol className="pk-pages">
+        {pages.map((p, i) => (
+          <li key={p.id} className="pk-pagerow">
+            <span className="pk-pagenum" aria-hidden>
+              {i + 1}
+            </span>
+            <span className="pk-pagekind">{p.kind === '3d' ? '3D' : 'Plan'}</span>
+            <input
+              className="adv-field pk-pagetitle"
+              value={p.title}
+              maxLength={60}
+              readOnly={!canEdit}
+              aria-label={`Page ${i + 1} name`}
+              onChange={(e) => onChange(updatePage(pages, p.id, { title: e.target.value }))}
+            />
+            {p.kind === 'plan' ? (
+              <select
+                className="adv-field pk-pagescale"
+                aria-label={`Page ${i + 1} scale`}
+                disabled={!canEdit}
+                value={p.fit ? String(p.scale) : String(p.scale)}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  onChange(updatePage(pages, p.id, { scale: v === 'auto' ? 'auto' : (Number(v) as PrintScale) } as Partial<PdfPage>));
+                }}
+              >
+                {p.fit ? <option value="auto">Fit (1:{autoScale.toLocaleString('en-GB')})</option> : null}
+                {PLAN_SCALES.map((n) => (
+                  <option key={n} value={n}>
+                    1:{n.toLocaleString('en-GB')}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <span className="pk-muted pk-pagescale">{p.cam ? 'Your view' : 'Default view'}</span>
+            )}
+            <span className="pk-pageacts">
+              <button type="button" className="adv-link" onClick={() => onShow(p)}>
+                Show
+              </button>
+              {canEdit ? (
+                <>
+                  <button type="button" className="pk-iconbtn" aria-label={`Move page ${i + 1} up`} disabled={i === 0} onClick={() => onChange(movePage(pages, p.id, -1))}>
+                    <ChevronUp size={13} />
+                  </button>
+                  <button
+                    type="button"
+                    className="pk-iconbtn"
+                    aria-label={`Move page ${i + 1} down`}
+                    disabled={i === pages.length - 1}
+                    onClick={() => onChange(movePage(pages, p.id, 1))}
+                  >
+                    <ChevronDown size={13} />
+                  </button>
+                  <button type="button" className="pk-iconbtn" aria-label={`Remove page ${i + 1}`} disabled={pages.length === 1} onClick={() => onChange(removePage(pages, p.id))}>
+                    <X size={13} />
+                  </button>
+                </>
+              ) : null}
+            </span>
+          </li>
+        ))}
+      </ol>
+      {canEdit ? (
+        <div className="adv-row-flex" style={{ gap: 'var(--lp-space-2)', flexWrap: 'wrap' }}>
+          <button type="button" className="adv-btn adv-btn-sm" onClick={onAddPlan} disabled={mode !== 'plan' || pages.length >= MAX_PAGES}>
+            <Plus size={13} aria-hidden /> This plan view
+          </button>
+          <span className="pk-muted">{mode === 'plan' ? 'For a 3D page, switch to 3D and add the view there.' : 'In 3D: “Add this view as a page”.'}</span>
+        </div>
+      ) : null}
+    </section>
   );
 }

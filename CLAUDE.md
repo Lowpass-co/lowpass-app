@@ -509,9 +509,18 @@ recreate a `_legacy/` tree: delete dead code instead of parking it.
   import Cesium as a value in app code — `import type` only. Vehicles are
   `vehicleBlocks()` (`src/lib/parking/blocks3d.ts`): the plan's silhouette
   parts lifted to true heights, standing at the LOWEST mesh height under the
-  vehicle (so a tree doesn't lift a bus). Camera: right-drag / Ctrl-drag turn + tilt (Cesium's default had right-drag zoom), plus ↺ ↻ ⌃ ⌄ and a north compass that `orbit()` around the screen-centre ground point. 3D is look-only; "Use this view for
-  the PDF" saves `view.cam3d` (validated by `parseCamera3d`). No sky
+  vehicle (so a tree doesn't lift a bus). Camera: right-drag / Ctrl-drag turn + tilt (Cesium's default had right-drag zoom), plus ↺ ↻ ⌃ ⌄ and a north compass that `orbit()` around the screen-centre ground point. 3D is look-only; a 3D PDF page
+  keeps its camera (validated by `parseCamera3d`; see PDF pages below). No sky
   atmosphere — with the globe off it painted over the vehicles.
+- **PDF pages** (`src/lib/parking/pages.ts`, on `view.pages`, checked by
+  `parsePages`): any number (≤ 12) of plan and 3D pages, named and ordered in
+  the editor's "PDF pages" list. Plan *fit* pages frame the PARKING (routes
+  are left out unless they're all there is) at Fit or a chosen 1:N; plan
+  *fixed* pages keep their own centre / rotation / 1:N ("This plan view");
+  3D pages keep a camera ("Add this view as a page"). Every plan page carries
+  the key + notes; the editor outlines each plan page's area. No pages saved =
+  `defaultPages()` (Plan + 3D). One off-screen Cesium viewer renders all 3D
+  pages; a 3D failure drops only the 3D pages, with a warning.
 - Known: each export is a new file (share the Parking maps folder for a link
   that stays current).
 
