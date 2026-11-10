@@ -85,6 +85,14 @@ browser key restricted to the Map Tiles API and the app's domains).**
 
 **Last verified**:
 
+#### PRK-22 — A reload keeps everything where it was
+
+**Do**: On a venue's map, place a marker exactly on a gate in the imagery and park a bus along a kerb; wait for Saved; reload (twice).
+
+**Expect**: The marker is still on the gate and the bus still on the kerb, to within a few centimetres. Before the fix (migration 288 + the anchor precision change) the whole drawing jumped tens of metres on reload.
+
+**Last verified**:
+
 #### PRK-10 — Two tabs never overwrite each other silently
 
 **Do**: Open the same map in two tabs. Change something in tab A, wait for Saved. Change something in tab B.

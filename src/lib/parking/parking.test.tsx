@@ -234,3 +234,22 @@ describe('vehicle helpers', () => {
     expect(pathLength([{ x: 0, y: 0 }, { x: 3, y: 4 }, { x: 3, y: 10 }])).toBe(11);
   });
 });
+
+describe('the anchor survives a save (Adam, Nov 2026: icons moved on reload)', () => {
+  // Positive assertion: the pin that comes back is the pin that was sent, to
+  // a centimetre. The old parse rounded degrees to 0.001 (~111 m N–S), so the
+  // whole drawing jumped against the imagery on every reload.
+  const send = (lat: number, lng: number) =>
+    parseMapBody({ anchor: { lat, lng }, view: { cx: 0, cy: 0, ppm: 2, rotation: 0 }, notes: '', items: [] }).anchor;
+  it('round-trips First Direct Arena-ish coordinates to under 1 cm', () => {
+    for (const [lat, lng] of [[53.8027123, -1.5446789], [36.1593456, -86.7785123], [-33.8567844, 151.2152967], [0.0004999, -0.0004999]]) {
+      const back = send(lat, lng);
+      const off = toLocal({ lat, lng }, back);
+      expect(Math.hypot(off.x, off.y)).toBeLessThan(0.01);
+    }
+  });
+  it('still refuses nonsense', () => {
+    expect(() => send(91, 0)).toThrow();
+    expect(() => send(Number.NaN, 0)).toThrow();
+  });
+});
