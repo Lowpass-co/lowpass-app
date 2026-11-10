@@ -2,7 +2,8 @@
 
 import { beforeEach, describe, expect, it } from 'vitest';
 import { FakeDb } from '@/test-utils/fakeSupabase';
-import { ParkingConflict, ParkingNotFound, loadParkingIndex, loadParkingMap, loadParkingShow, recordPdf, saveParkingMap } from './maps';
+import { ParkingConflict, ParkingNotFound, drawableKind, loadDrawingFiles, loadParkingIndex, loadParkingMap, loadParkingShow, loadVenueReuse, recordPdf, saveParkingMap, withDrawings } from './maps';
+import type { ParkingDrawing } from '@/lib/parking/model';
 import type { ParkingMapData } from '@/lib/parking/model';
 
 const WS = 'ws-1';
@@ -12,6 +13,7 @@ const data = (n: number): ParkingMapData => ({
   anchor: { lat: 53.8027, lng: -1.5446 },
   view: { cx: 0, cy: 0, ppm: 2, rotation: 0 },
   notes: `edit ${n}`,
+  drawings: [],
   items: [{ id: `b${n}`, kind: 'vehicle', type: 'bus_eu', label: `Bus ${n}`, x: n, y: 0, heading: 0, length: 13.5, width: 2.55, height: 4 }],
 });
 
@@ -119,5 +121,66 @@ describe('loadParkingIndex — Production › Parking', () => {
     expect(rows[1]).toMatchObject({ hasMap: false, summary: null });
     expect(rows[2]).toMatchObject({ hasMap: true, summary: null });
     expect(db.writes()).toBe(1); // only the save above — the index reads
+  });
+});
+
+describe('venue drawings', () => {
+  const FID = '0b6c1c9e-1d2f-4a8b-9c3d-5e6f7a8b9c0d';
+  const drawing: ParkingDrawing = {
+    id: 'd1', fileId: FID, name: 'Dock.pdf', kind: 'pdf', page: 1, srcW: 1191, srcH: 842, crop: { u0: 0, v0: 0, u1: 1191, v1: 842 },
+    scale: 0.0847, calib: null, x: 10, y: -5, rotation: 12, pinned: true, pinCheck: 0.8, opacity: 0.85, hidden: false, inside: true, floor: -5, clearHeight: 4.2,
+  };
+
+  it('a map saves and loads its drawings', async () => {
+    const show = (await loadParkingShow(db.client(), 't1', 'show-1'))!;
+    await saveParkingMap(db.client(), { show, userId: 'u1', data: { ...data(1), drawings: [drawing] }, version: null });
+    expect((await loadParkingMap(db.client(), 'show-1'))?.drawings).toEqual([drawing]);
+  });
+
+  it('before migration 288 (no drawings column) a query runs again without it; drawings need the SQL', async () => {
+    const calls: string[] = [];
+    const r = await withDrawings(async (cols, withCol) => {
+      calls.push(withCol ? 'with' : 'without');
+      return withCol ? { data: null, error: { code: '42703', message: 'column parking_maps.drawings does not exist' } } : { data: 'ok', error: null };
+    });
+    expect(calls).toEqual(['with', 'without']);
+    expect(r.data).toBe('ok');
+    // Any other error is not swallowed.
+    const other = await withDrawings(async () => ({ data: null, error: { code: '23505', message: 'duplicate' } }));
+    expect(other.error?.code).toBe('23505');
+  });
+
+  it('lists the tour’s PDFs and images (not other files, not other workspaces), plus files the map already uses', async () => {
+    db.seed('file_references', [
+      { id: '11111111-1111-4111-8111-111111111111', workspace_id: WS, linked_to_type: 'tour', linked_to_id: 't1', file_name: 'S2 Truck Parking.pdf', file_type: 'application/pdf', storage_provider: 'tour-files', provider_file_id: 'ws-1/t1/s2.pdf' },
+      { id: '22222222-2222-4222-8222-222222222222', workspace_id: WS, linked_to_type: 'tour', linked_to_id: 't1', file_name: 'dock.JPG', file_type: null, storage_provider: 'tour-files', provider_file_id: 'ws-1/t1/dock.jpg' },
+      { id: '33333333-3333-4333-8333-333333333333', workspace_id: WS, linked_to_type: 'tour', linked_to_id: 't1', file_name: 'Rider.docx', file_type: 'application/msword', storage_provider: 'tour-files', provider_file_id: 'x' },
+      { id: FID, workspace_id: WS, linked_to_type: 'tour', linked_to_id: 't-old', file_name: 'Velodrom.pdf', file_type: 'application/pdf', storage_provider: 'tour-files', provider_file_id: 'ws-1/t-old/v.pdf' },
+      { id: '44444444-4444-4444-8444-444444444444', workspace_id: 'ws-2', linked_to_type: 'tour', linked_to_id: 't1', file_name: 'Not yours.pdf', file_type: 'application/pdf', storage_provider: 'tour-files', provider_file_id: 'ws-2/x.pdf' },
+    ]);
+    const show = (await loadParkingShow(db.client(), 't1', 'show-1'))!;
+    const files = await loadDrawingFiles(db.client(), show, [FID, '44444444-4444-4444-8444-444444444444']);
+    expect(files.map((f) => [f.name, f.kind])).toEqual([
+      ['dock.JPG', 'image'],
+      ['S2 Truck Parking.pdf', 'pdf'],
+      ['Velodrom.pdf', 'pdf'],
+    ]);
+    expect(files.find((f) => f.name === 'Velodrom.pdf')?.path).toBe('ws-1/t-old/v.pdf');
+    expect(drawableKind('plan.png', null)).toBe('image');
+    expect(drawableKind('notes.txt', 'text/plain')).toBeNull();
+  });
+
+  it('offers the latest other map at the same venue that has drawings; none at a typed venue', async () => {
+    db.seed('parking_maps', [
+      { id: 'pm-a', workspace_id: WS, tour_id: 't0', routing_id: 'old-1', canonical_venue_id: 'cv-leeds', anchor_lat: 53.8027, anchor_lng: -1.5446, drawings: [drawing], updated_at: '2026-03-01T00:00:00Z' },
+      { id: 'pm-b', workspace_id: WS, tour_id: 't0', routing_id: 'old-2', canonical_venue_id: 'cv-leeds', anchor_lat: 53.8027, anchor_lng: -1.5446, drawings: [], updated_at: '2026-06-01T00:00:00Z' },
+      { id: 'pm-c', workspace_id: 'ws-2', tour_id: 'tx', routing_id: 'theirs', canonical_venue_id: 'cv-leeds', anchor_lat: 53.8, anchor_lng: -1.5, drawings: [drawing], updated_at: '2026-09-01T00:00:00Z' },
+    ]);
+    const show = (await loadParkingShow(db.client(), 't1', 'show-1'))!;
+    const r = await loadVenueReuse(db.client(), show);
+    expect(r?.routingId).toBe('old-1');
+    expect(r?.drawings).toHaveLength(1);
+    const typed = (await loadParkingShow(db.client(), 't1', 'show-2'))!;
+    expect(await loadVenueReuse(db.client(), typed)).toBeNull();
   });
 });

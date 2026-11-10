@@ -26,7 +26,7 @@ class RO {
   unobserve() {}
 }
 
-let calls: { method: string; body: unknown }[] = [];
+let calls: { method: string; body: unknown; url: string }[] = [];
 let reply: (body: { map: unknown; version: number | null }) => Response;
 
 beforeEach(() => {
@@ -38,7 +38,7 @@ beforeEach(() => {
     'fetch',
     vi.fn(async (_url: string, init?: RequestInit) => {
       const body = init?.body ? JSON.parse(String(init.body)) : null;
-      calls.push({ method: init?.method ?? 'GET', body });
+      calls.push({ method: init?.method ?? 'GET', body, url: String(_url) });
       return init?.method === 'PUT' ? reply(body) : new Response('{}', { status: 200 });
     }),
   );
@@ -126,7 +126,7 @@ describe('ParkingEditor', () => {
       fireEvent.click(screen.getByRole('button', { name: 'Find' }));
     });
     expect(screen.getByRole('heading', { name: 'Parking' })).toBeTruthy();
-    expect(calls.some((c) => c.method === 'GET')).toBe(false); // pasted numbers: no geocode call
+    expect(calls.some((c) => c.url.includes('geocode'))).toBe(false); // pasted numbers: no geocode call
   });
 });
 
@@ -170,6 +170,7 @@ describe('several at once (Cmd/Ctrl-click, ⌘A)', () => {
     view: { cx: 0, cy: 0, ppm: 3, rotation: 0 },
     notes: '',
     pdf: null,
+    drawings: [],
     items: [
       { id: 'a', kind: 'vehicle', type: 'bus_eu', label: 'Bus 1', x: -5, y: 0, heading: 0, length: 13.5, width: 2.55, height: 4 },
       { id: 'b', kind: 'vehicle', type: 'bus_eu', label: 'Bus 2', x: 5, y: 0, heading: 0, length: 13.5, width: 2.55, height: 4 },
@@ -226,5 +227,52 @@ describe('several at once (Cmd/Ctrl-click, ⌘A)', () => {
     const out = lastItems();
     expect(out.map((i) => (i.kind === 'vehicle' || i.kind === 'marker' ? i.x : null))).toEqual([-4, 6, 41]);
     expect(out.map((i) => (i.kind === 'vehicle' ? i.colour : 'n/a'))).toEqual(['teal', 'teal', 'n/a']);
+  });
+});
+
+describe('venue drawings: levels and last time at this venue', () => {
+  const dock = {
+    id: 'dock', fileId: '7e3f2a10-4b5c-4d6e-8f70-112233445566', name: 'Basement dock.pdf', kind: 'pdf' as const, page: 1, srcW: 1000, srcH: 600,
+    crop: { u0: 0, v0: 0, u1: 1000, v1: 600 }, scale: 0.1, calib: null, x: -50, y: 30, rotation: 0, pinned: true, pinCheck: 0.4,
+    opacity: 0.85, hidden: false, inside: true, floor: -5, clearHeight: null,
+  };
+  const withDock = (): SavedParkingMap => ({
+    id: 'm', version: 2, updatedAt: new Date().toISOString(), anchor: { lat: 52.4547, lng: -1.7206 },
+    view: { cx: 0, cy: 0, ppm: 3, rotation: 0 }, notes: '', pdf: null, items: [], drawings: [dock],
+  });
+  const lastMap = () => (calls.filter((c) => c.method === 'PUT').at(-1)!.body as { map: unknown }).map;
+
+  it('a basement drawing makes two levels; picking one puts new things on it', async () => {
+    mount(withDock());
+    expect(screen.getByRole('button', { name: 'All levels' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Basement dock (−5 m)' }));
+    fireEvent.click(screen.getByRole('button', { name: /Truck, EU/ }));
+    await act(async () => vi.advanceTimersByTime(1000));
+    const m = parseMapBody(lastMap());
+    expect(m.view.level).toBe(-5);
+    expect(m.items[0]).toMatchObject({ kind: 'vehicle', floor: -5 });
+    expect(m.drawings).toHaveLength(1);
+  });
+
+  it('offers last time’s drawings at this venue, moved into this map’s frame', async () => {
+    const reuse = { routingId: 'old', updatedAt: '2026-03-01T00:00:00Z', anchor: { lat: 52.4547, lng: -1.7206 }, drawings: [dock] };
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string, init?: RequestInit) => {
+        const body = init?.body ? JSON.parse(String(init.body)) : null;
+        calls.push({ method: init?.method ?? 'GET', body, url: String(url) });
+        if (String(url).includes('/drawings')) return new Response(JSON.stringify({ files: [], reuse }), { status: 200 });
+        return init?.method === 'PUT' ? reply(body) : new Response('{}', { status: 200 });
+      }),
+    );
+    mount({ ...withDock(), drawings: [], anchor: { lat: 52.4548, lng: -1.7206 } });
+    // Let the drawings fetch resolve (fake timers: flush microtasks by hand).
+    for (let i = 0; i < 5; i++) await act(async () => { await Promise.resolve(); });
+    fireEvent.click(screen.getByRole('button', { name: 'Use it' }));
+    await act(async () => vi.advanceTimersByTime(1000));
+    const [d] = parseMapBody(lastMap()).drawings;
+    // This map's pin is ~11 m north of last time's: the drawing moves 11 m south in this frame.
+    expect(d.x).toBeCloseTo(-50, 1);
+    expect(d.y).toBeCloseTo(30 - 11.1, 0);
   });
 });

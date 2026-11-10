@@ -259,6 +259,7 @@
   --lp-map-blank: #1C1C1F;
   --lp-map-grid: #2E2E33;
   --lp-map-sky: #CFDCE8;
+  --lp-map-paper: #FFFFFF;
   /* Vehicle paints (PAINTS in src/lib/parking/catalogue.ts). */
   --lp-map-paint-orange: #FF4500;
   --lp-map-paint-red: #E11D48;

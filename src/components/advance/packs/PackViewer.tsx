@@ -13,6 +13,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { normaliseForMatch } from '@/lib/advance/packs';
+import { loadPdfJs as loadPdfJsShared } from '@/lib/pdf/loadPdfJs';
 
 type PdfDoc = { numPages: number; getPage: (n: number) => Promise<PdfPage>; destroy: () => Promise<void> };
 type PdfPage = {
@@ -26,19 +27,8 @@ type PdfJs = {
   Util: { transform: (a: number[], b: number[]) => number[] };
 };
 
-let pdfjsPromise: Promise<PdfJs> | null = null;
-function loadPdfJs(): Promise<PdfJs> {
-  if (!pdfjsPromise) {
-    // The prebuilt minified bundle: webpack re-processing pdf.mjs breaks it
-    // ("Object.defineProperty called on non-object").
-    pdfjsPromise = import(/* webpackIgnore: false */ 'pdfjs-dist/build/pdf.min.mjs').then((m) => {
-      const pdfjs = m as unknown as PdfJs;
-      pdfjs.GlobalWorkerOptions.workerSrc = new URL('pdfjs-dist/build/pdf.worker.min.mjs', import.meta.url).toString();
-      return pdfjs;
-    });
-  }
-  return pdfjsPromise;
-}
+// One loader for the app (src/lib/pdf/loadPdfJs.ts), narrowed to what this viewer calls.
+const loadPdfJs = () => loadPdfJsShared<PdfJs>();
 
 interface Box { left: number; top: number; width: number; height: number }
 

@@ -14,7 +14,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Camera, ChevronDown, ChevronUp, Compass, RotateCcw, RotateCw } from 'lucide-react';
 import type * as CesiumNS from 'cesium';
 import type { Camera3d, LatLng, Pt } from '@/lib/parking/geo';
-import type { ParkingItem } from '@/lib/parking/model';
+import type { ParkingDrawing, ParkingItem } from '@/lib/parking/model';
 import { defaultCamera3d } from '@/lib/parking/blocks3d';
 import { loadCesium, type CesiumModule } from './loadCesium';
 import { applyCamera, createViewer, lookAt, orbit, pivot, populate, readCamera } from './scene3d';
@@ -24,6 +24,11 @@ import { tilesKey } from './googleTiles';
 export interface Parking3DProps {
   anchor: LatLng;
   items: ParkingItem[];
+  /** Venue drawings: inside ones clip the roof and become floors (all of them, with no satellite). */
+  drawings: ParkingDrawing[];
+  floors: ReadonlyMap<string, HTMLCanvasElement>;
+  /** false = no Google city: the drawings on a plain ground. */
+  satellite: boolean;
   /** Where to look when no camera is saved: the print frame's centre / size and the plan's rotation. */
   fallback: { centre: Pt; extent: number; rotation: number };
   cam3d: Camera3d | undefined;
@@ -36,21 +41,21 @@ export interface Parking3DProps {
   onSaveToPage: (cam: Camera3d) => void;
 }
 
-export function Parking3D({ anchor, items, fallback, cam3d, canEdit, pageTitle, atLimit, onAddPage, onSaveToPage }: Parking3DProps) {
+export function Parking3D({ anchor, items, drawings, floors, satellite, fallback, cam3d, canEdit, pageTitle, atLimit, onAddPage, onSaveToPage }: Parking3DProps) {
   const host = useRef<HTMLDivElement>(null);
   const viewerRef = useRef<CesiumNS.Viewer | null>(null);
   const cesiumRef = useRef<CesiumModule | null>(null);
   const groundRef = useRef(0);
   const [state, setState] = useState<'loading' | 'ready' | 'error'>('loading');
   const [error, setError] = useState<string | null>(null);
-  const key = tilesKey();
+  const key = satellite ? tilesKey() : null;
 
   // Built once per mount: the 3D page is entered from the overhead plan and
   // remounts each time, so it always shows the drawing as it now stands.
-  const initial = useRef({ anchor, items, fallback, cam3d });
+  const initial = useRef({ anchor, items, fallback, cam3d, drawings, floors });
   useEffect(() => {
     let dead = false;
-    const { anchor: a, items: its, fallback: fb, cam3d: cam } = initial.current;
+    const { anchor: a, items: its, fallback: fb, cam3d: cam, drawings: dws, floors: fls } = initial.current;
     loadCesium()
       .then(async (Cesium) => {
         if (dead || !host.current) return;
@@ -61,7 +66,7 @@ export function Parking3D({ anchor, items, fallback, cam3d, canEdit, pageTitle, 
         // Point the camera first, so the tiles that load are the ones we need.
         const def = defaultCamera3d(fb.centre, fb.extent, fb.rotation);
         lookAt(Cesium, viewer, a, def.target, 0, def.heading, def.pitch, def.range);
-        const scene = await populate(Cesium, viewer, { anchor: a, items: its, palette, tilesKey: key });
+        const scene = await populate(Cesium, viewer, { anchor: a, items: its, palette, tilesKey: key, drawings: dws, floors: fls });
         if (dead) return;
         groundRef.current = scene.ground0;
         if (cam) applyCamera(Cesium, viewer, a, cam);
@@ -147,7 +152,9 @@ export function Parking3D({ anchor, items, fallback, cam3d, canEdit, pageTitle, 
       ) : null}
       {state === 'ready' && !key ? (
         <div className="pk-badge" style={{ top: 'calc(var(--lp-space-3) + 44px)', left: 'var(--lp-space-3)', maxWidth: 380 }}>
-          No Google Map Tiles key — vehicles are true size, but there are no buildings around them.
+          {satellite
+            ? 'No Google Map Tiles key — vehicles are true size, but there are no buildings around them.'
+            : 'Satellite off — the venue drawings and vehicles, true size, without the city around them.'}
         </div>
       ) : null}
       {state === 'ready' ? (

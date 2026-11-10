@@ -14,6 +14,7 @@ A4 PDF into tour Files.
 | `view` | `{ cx, cy, ppm, rotation, cam3d?, pages? }` — where the editor was left: centre (metres), pixels per metre, compass bearing pointing up the screen; `cam3d` = the 3D camera chosen before pages existed (seeds the default 3D page); `pages` = the PDF's pages in order (`pages.ts`): `{ id, kind: 'plan', title, fit: true, scale: 'auto' \| 1:N }`, `{ id, kind: 'plan', title, fit: false, cx, cy, rotation, scale }` or `{ id, kind: '3d', title, cam }` — ≤ 12, checked by `parsePages`. |
 | `items` | The drawing (jsonb array) — see below. Written ONLY through `parseMapBody()`. |
 | `notes` | Free text printed on the PDF. ≤ 4,000 chars. |
+| `drawings` | Migration 288. Venue drawings (jsonb array, ≤ 8, `parseDrawings`): `{ id, fileId (file_references.id), name, kind: pdf\|image, page, srcW, srcH, crop {u0,v0,u1,v1}, scale (m per source unit, full precision), calib {a,b,metres, check?}, x, y (ground position of the source origin, m), rotation (compass °), pinned, pinCheck (%), opacity, hidden, inside, floor (m from the street), clearHeight }`. Source units are PDF points / image pixels, v down. |
 | `version` | Optimistic lock. `PUT` names the version it edited; stale → 409 with the current row. |
 | `pdf_file_id`, `pdf_exported_at` | The last exported PDF (a `file_references` row in tour Files, folder "Parking maps", linked to the show). |
 
@@ -29,7 +30,9 @@ faces north, 90 = east.
 | `kind` | Fields |
 | --- | --- |
 | `vehicle` | `type` (`VEHICLES` in `src/lib/parking/catalogue.ts`), `label`, `x`, `y`, `heading`, `length`, `width`, `height` (m), optional `colour` (a `PAINTS` id; absent = the type's colour) |
-| `marker` | `type` (`MARKERS`), `label`, `detail`, `x`, `y` |
+| `marker` | `type` (`MARKERS`), `label`, `detail`, `x`, `y`; a `height_limit` marker may carry `clear` (m) |
+
+Every item may carry `floor` (m from the street) — its level when drawings stack; absent = the inside drawing it's on, else 0. The view may carry `satellite: false` (no imagery) and `level` (the level shown); a plan page may carry `level`.
 | `route` | `label`, `points[]` (≥ 2) |
 | `area` | `type` (`crew` / `guest` / `no_go` / `other`), `label`, `points[]` (≥ 3) |
 | `measure` | `a`, `b` |

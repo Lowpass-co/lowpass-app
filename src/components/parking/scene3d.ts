@@ -13,6 +13,14 @@
        bus doesn't lift it onto the canopy
      · routes, areas, measurements — draped on the ground
      · markers and vehicle names — labels that stay readable through roofs
+     · venue drawings (Nov 2026): an INSIDE drawing cuts its footprint out of
+       the Google mesh (ClippingPolygonCollection — the roof comes off) and
+       lies there as the floor, at the street height around it + its floor
+       (−5 m = a basement); vehicles and markers on it stand on it. Google's
+       mesh is a shell, so the hole shows the plan, not columns or a ceiling.
+       With no satellite (or no key), every drawing is a floor on a plain
+       ground. Outside drawings over the satellite stay off 3D: the mesh is
+       the real thing there.
 
    Google's terms (tile/policies): attribution shown on screen
    (showCreditsOnScreen), nothing cached by us, our objects are our own — not
@@ -23,7 +31,8 @@ import type * as CesiumNS from 'cesium';
 import { dist, fmtMetres, toLatLng, toLocal, type Camera3d, type LatLng, type Pt } from '@/lib/parking/geo';
 import { areaLabel, markerSpec, vehicleSpec } from '@/lib/parking/catalogue';
 import { vehicleBlocks, type Block } from '@/lib/parking/blocks3d';
-import { vehicleCorners, type ParkingItem, type VehicleItem } from '@/lib/parking/model';
+import { vehicleCorners, type ParkingDrawing, type ParkingItem, type VehicleItem } from '@/lib/parking/model';
+import { drawingUnder, footprint, insideAt, itemFloor, itemPoint, pointInPolygon, svgMatrix } from '@/lib/parking/drawings';
 import type { PartKind } from '@/lib/parking/silhouettes';
 import { areaColour, vehicleColour, type Palette } from './palette';
 import type { CesiumModule } from './loadCesium';
@@ -102,8 +111,17 @@ function blockColour(Cesium: C, p: Palette, base: string, kind: PartKind): Cesiu
 export async function populate(
   Cesium: C,
   viewer: CesiumNS.Viewer,
-  o: { anchor: LatLng; items: ParkingItem[]; palette: Palette; tilesKey: string | null },
+  o: {
+    anchor: LatLng;
+    items: ParkingItem[];
+    palette: Palette;
+    tilesKey: string | null;
+    /** The map's drawings (levels + floors) and the rasters to lay as floors (the dark look). */
+    drawings?: ParkingDrawing[];
+    floors?: ReadonlyMap<string, HTMLCanvasElement>;
+  },
 ): Promise<Scene3d> {
+  const drawings = o.drawings ?? [];
   let tileset: CesiumNS.Cesium3DTileset | null = null;
   if (o.tilesKey) {
     tileset = await Cesium.createGooglePhotorealistic3DTileset({ key: o.tilesKey, onlyUsingWithGoogleGeocoder: true });
@@ -118,6 +136,17 @@ export async function populate(
   const probes: { key: string; at: Pt }[] = [{ key: 'anchor', at: { x: 0, y: 0 } }];
   for (const v of vehicles) [{ x: v.x, y: v.y }, ...vehicleCorners(v)].forEach((at, i) => probes.push({ key: `${v.id}:${i}`, at }));
   for (const i of o.items) if (i.kind === 'marker') probes.push({ key: i.id, at: { x: i.x, y: i.y } });
+  // The street around each inside drawing: its corners and edge middles, 4 m out.
+  const inside = tileset ? drawings.filter((d) => d.inside) : [];
+  for (const d of inside) {
+    const f = footprint(d);
+    const c = { x: f.reduce((a, q) => a + q.x, 0) / 4, y: f.reduce((a, q) => a + q.y, 0) / 4 };
+    const ring = f.flatMap((q, i) => [q, { x: (q.x + f[(i + 1) % 4].x) / 2, y: (q.y + f[(i + 1) % 4].y) / 2 }]);
+    ring.forEach((q, i) => {
+      const l = Math.hypot(q.x - c.x, q.y - c.y) || 1;
+      probes.push({ key: `street:${d.id}:${i}`, at: { x: q.x + ((q.x - c.x) / l) * 4, y: q.y + ((q.y - c.y) / l) * 4 } });
+    });
+  }
   const heights = new Map<string, number>();
   if (tileset) {
     const carto = probes.map((pr) => {
@@ -134,6 +163,40 @@ export async function populate(
     }
   }
   const ground0 = heights.get('anchor') ?? 0;
+  // A drawing's street height: the lowest ground just outside it (the roof is not the street).
+  const street = new Map<string, number>();
+  for (const d of drawings) {
+    const hs = Array.from({ length: 8 }, (_, i) => heights.get(`street:${d.id}:${i}`)).filter((h): h is number => h != null);
+    street.set(d.id, hs.length ? Math.min(...hs) : ground0);
+  }
+  // Inside drawings take the roof off: the mesh is clipped to their footprints.
+  if (tileset && inside.length) {
+    tileset.clippingPolygons = new Cesium.ClippingPolygonCollection({
+      polygons: inside.map(
+        (d) => new Cesium.ClippingPolygon({ positions: Cesium.Cartesian3.fromDegreesArray(footprint(d).flatMap((q) => [ll(q).lng, ll(q).lat])) }),
+      ),
+    });
+  }
+  // The floors: every inside drawing; with no city mesh, every drawing.
+  for (const d of drawings) {
+    if (d.hidden || (tileset && !d.inside)) continue;
+    const img = o.floors?.get(d.id);
+    if (!img) continue;
+    addFloor(Cesium, viewer, o.anchor, d, img, (d.inside ? street.get(d.id) ?? ground0 : ground0) + (d.inside ? d.floor : 0) + 0.03);
+  }
+  /** Where an item stands: on the inside drawing under it (its street + the item's level), else `fallback`. */
+  const baseFor = (it: ParkingItem, fallback: number) => {
+    const under = insideAt(drawings, itemPoint(it));
+    if (!under.length) return fallback;
+    const d = drawingUnder(it, drawings) ?? under[0];
+    return (street.get(d.id) ?? ground0) + itemFloor(it, drawings);
+  };
+  /** A route / area / measure lying wholly on one inside drawing is drawn on its floor, not draped on a mesh that isn't there. */
+  const floorOfShape = (it: ParkingItem, pts: Pt[]): number | null => {
+    const d = drawingUnder(it, drawings);
+    if (!d) return null;
+    return pts.every((q) => pointInPolygon(q, footprint(d))) ? (street.get(d.id) ?? ground0) + itemFloor(it, drawings) + 0.08 : null;
+  };
   const groundOf = (id: string, n: number) => {
     const hs = Array.from({ length: n }, (_, i) => heights.get(`${id}:${i}`)).filter((h): h is number => h != null);
     return hs.length ? Math.min(...hs) : ground0;
@@ -156,7 +219,7 @@ export async function populate(
   const onGround = tileset ? Cesium.ClassificationType.CESIUM_3D_TILE : Cesium.ClassificationType.TERRAIN;
 
   for (const v of vehicles) {
-    const g = groundOf(v.id, 5);
+    const g = baseFor(v, groundOf(v.id, 5));
     const base = vehicleColour(o.palette, v);
     for (const b of vehicleBlocks(v)) addBlock(Cesium, viewer, o.anchor, b, g, blockColour(Cesium, o.palette, base, b.kind), halo);
     const top = ll({ x: v.x, y: v.y });
@@ -168,11 +231,15 @@ export async function populate(
 
   for (const i of o.items) {
     if (i.kind === 'route' && i.points.length > 1) {
+      const fh = floorOfShape(i, i.points);
       viewer.entities.add({
         polyline: {
-          positions: Cesium.Cartesian3.fromDegreesArray(i.points.flatMap((p) => [ll(p).lng, ll(p).lat])),
-          clampToGround: true,
-          classificationType: onGround,
+          positions:
+            fh == null
+              ? Cesium.Cartesian3.fromDegreesArray(i.points.flatMap((p) => [ll(p).lng, ll(p).lat]))
+              : Cesium.Cartesian3.fromDegreesArrayHeights(i.points.flatMap((p) => [ll(p).lng, ll(p).lat, fh])),
+          clampToGround: fh == null,
+          ...(fh == null ? { classificationType: onGround } : {}),
           width: 9,
           material: new Cesium.PolylineArrowMaterialProperty(Cesium.Color.fromCssColorString(o.palette.route)),
         },
@@ -180,14 +247,15 @@ export async function populate(
     } else if (i.kind === 'area' && i.points.length > 2) {
       const c = Cesium.Color.fromCssColorString(areaColour(o.palette, i.type));
       const mid = ll({ x: i.points.reduce((s, p) => s + p.x, 0) / i.points.length, y: i.points.reduce((s, p) => s + p.y, 0) / i.points.length });
+      const fh = floorOfShape(i, i.points);
       viewer.entities.add({
         polygon: {
           hierarchy: new Cesium.PolygonHierarchy(Cesium.Cartesian3.fromDegreesArray(i.points.flatMap((p) => [ll(p).lng, ll(p).lat]))),
           material: c.withAlpha(0.4),
-          classificationType: onGround,
+          ...(fh == null ? { classificationType: onGround } : { height: fh }),
         },
       });
-      viewer.entities.add({ position: Cesium.Cartesian3.fromDegrees(mid.lng, mid.lat, ground0 + 2), label: label(i.label || areaLabel(i.type), 13) });
+      viewer.entities.add({ position: Cesium.Cartesian3.fromDegrees(mid.lng, mid.lat, (fh ?? ground0) + 2), label: label(i.label || areaLabel(i.type), 13) });
     } else if (i.kind === 'measure') {
       const a = ll(i.a);
       const b = ll(i.b);
@@ -204,7 +272,7 @@ export async function populate(
       viewer.entities.add({ position: Cesium.Cartesian3.fromDegrees(m.lng, m.lat, ground0 + 2), label: label(fmtMetres(dist(i.a, i.b)), 13) });
     } else if (i.kind === 'marker') {
       const at = ll(i);
-      const h = heights.get(i.id) ?? ground0;
+      const h = baseFor(i, heights.get(i.id) ?? ground0);
       viewer.entities.add({
         position: Cesium.Cartesian3.fromDegrees(at.lng, at.lat, h + 1),
         point: {
@@ -220,6 +288,36 @@ export async function populate(
   }
   viewer.scene.requestRender();
   return { tileset, ground0 };
+}
+
+/** A drawing laid flat at `height`: baked north-up into a canvas (so the
+ *  rectangle's texture needs no rotation), transparent outside the drawing. */
+function addFloor(Cesium: C, viewer: CesiumNS.Viewer, anchor: LatLng, d: ParkingDrawing, img: HTMLCanvasElement, height: number) {
+  const f = footprint(d);
+  const x0 = Math.min(...f.map((q) => q.x));
+  const x1 = Math.max(...f.map((q) => q.x));
+  const y0 = Math.min(...f.map((q) => q.y));
+  const y1 = Math.max(...f.map((q) => q.y));
+  const k = Math.min(2048 / Math.max(x1 - x0, y1 - y0), 12); // ≤ 2048 px, ≤ 12 px per metre
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.max(2, Math.round((x1 - x0) * k));
+  canvas.height = Math.max(2, Math.round((y1 - y0) * k));
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return;
+  // Ground → canvas: x right from the west edge, y down from the north edge; then the drawing's own matrix.
+  ctx.setTransform(k, 0, 0, k, -x0 * k, y1 * k);
+  ctx.transform(...svgMatrix(d));
+  ctx.globalAlpha = d.inside ? 1 : d.opacity;
+  ctx.drawImage(img, d.crop.u0, d.crop.v0, d.crop.u1 - d.crop.u0, d.crop.v1 - d.crop.v0);
+  const sw = toLatLng(anchor, { x: x0, y: y0 });
+  const ne = toLatLng(anchor, { x: x1, y: y1 });
+  viewer.entities.add({
+    rectangle: {
+      coordinates: Cesium.Rectangle.fromDegrees(sw.lng, sw.lat, ne.lng, ne.lat),
+      height,
+      material: new Cesium.ImageMaterialProperty({ image: canvas, transparent: true }),
+    },
+  });
 }
 
 function addBlock(Cesium: C, viewer: CesiumNS.Viewer, anchor: LatLng, b: Block, ground: number, colour: CesiumNS.Color, outline: CesiumNS.Color) {
