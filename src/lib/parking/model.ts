@@ -241,10 +241,19 @@ export function parseCamera3d(raw: unknown): Camera3d {
   };
 }
 
+/** Degrees, kept to 1e-7 (≈ 1 cm). NEVER num(): its 0.001 is a millimetre in
+ *  metres but ~111 m in degrees — the anchor used to be saved that coarse, so
+ *  every drawing jumped up to ~55 m against the imagery on reload (Nov 2026). */
+function deg(v: unknown, what: string, lo: number, hi: number): number {
+  if (typeof v !== 'number' || !Number.isFinite(v)) fail(`${what} must be a number`);
+  if ((v as number) < lo || (v as number) > hi) fail(`${what} is out of range`);
+  return Math.round((v as number) * 1e7) / 1e7;
+}
+
 export function parseAnchor(raw: unknown): LatLng {
   if (!isObj(raw)) fail('anchor must be { lat, lng }');
   const o = raw as Record<string, unknown>;
-  return { lat: num(o.lat, 'Latitude', -85, 85), lng: num(o.lng, 'Longitude', -180, 180) };
+  return { lat: deg(o.lat, 'Latitude', -85, 85), lng: deg(o.lng, 'Longitude', -180, 180) };
 }
 
 /** The whole map a client sends. Throws ParkingInputError with a readable message. */

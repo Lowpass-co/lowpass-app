@@ -495,6 +495,11 @@ recreate a `_legacy/` tree: delete dead code instead of parking it.
   the same component, so the editor and paper can't disagree.
 - Saves are optimistic on `version` (409 → "Load theirs / Keep mine"); opening
   writes nothing.
+- **The anchor is degrees — keep it to 1e-7 (`deg()` in model.ts), never
+  `num()`** (0.001 = a millimetre in metres, ~111 m in degrees). The anchor was
+  saved rounded to 3 dp, so every drawing jumped up to ~55 m on reload (fixed
+  Nov 2026). Maps saved before the fix keep their rounded pin — Adam chose
+  to re-place by hand rather than run a repair.
 - Imagery: `NEXT_PUBLIC_GOOGLE_MAP_TILES_KEY`, a BROWSER key restricted to the
   Map Tiles API + the app's domains — never the server key. Tiles are fetched
   for the view and never stored (Google's terms); "Google Maps · <credit>" stays
