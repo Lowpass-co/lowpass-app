@@ -42,13 +42,35 @@ const KIND_BADGE: Record<MicLibraryEntry['type'], { label: string; tone: string 
 
 /* Discriminated combo items so the Add row and Clear row are
    arrow-navigable alongside real mics. */
-type ComboItem =
+export type ComboItem =
   | { kind: 'mic'; entry: MicLibraryEntry }
   | { kind: 'clear' }
   | { kind: 'add'; name: string };
 
 const MENU_MIN_WIDTH = 260;
 const MENU_MAX_HEIGHT = 320;
+
+/** The menu rows for what's typed: Clear (when a mic is set), the matching
+ *  mics, and "+ Add «typed»" when nothing matches exactly. */
+export function micComboItems(input: string, value: string, mics: readonly MicLibraryEntry[]): ComboItem[] {
+  const typed = input.trim();
+  const needle = typed.toLowerCase();
+  const out: ComboItem[] = [];
+  if (value) out.push({ kind: 'clear' });
+  for (const entry of mics) if (!needle || entry.name.toLowerCase().includes(needle)) out.push({ kind: 'mic', entry });
+  const exact = typed !== '' && mics.some((m) => m.name.toLowerCase() === needle);
+  if (typed !== '' && !exact) out.push({ kind: 'add', name: typed });
+  return out;
+}
+
+/** What typing highlights: the first matching mic; with no match, the
+ *  "+ Add" row; nothing typed → nothing. Never the Clear row. */
+export function firstMatchIndex(items: readonly ComboItem[], typed: string): number {
+  if (!typed.trim()) return -1;
+  const mic = items.findIndex((i) => i.kind === 'mic');
+  if (mic >= 0) return mic;
+  return items.findIndex((i) => i.kind === 'add');
+}
 
 interface MicDiSelectCellProps {
   value: string;
@@ -86,20 +108,7 @@ export function MicDiSelectCell({
   }, [value]);
 
   const trimmed = inputValue.trim();
-  const filtered = useMemo(() => {
-    const needle = trimmed.toLowerCase();
-    if (!needle) return mics;
-    return mics.filter((m) => m.name.toLowerCase().includes(needle));
-  }, [mics, trimmed]);
-
-  const items = useMemo<ComboItem[]>(() => {
-    const out: ComboItem[] = [];
-    if (value) out.push({ kind: 'clear' });
-    for (const entry of filtered) out.push({ kind: 'mic', entry });
-    const exact = trimmed !== '' && mics.some((m) => m.name.toLowerCase() === trimmed.toLowerCase());
-    if (trimmed !== '' && !exact) out.push({ kind: 'add', name: trimmed });
-    return out;
-  }, [filtered, mics, trimmed, value]);
+  const items = useMemo(() => micComboItems(inputValue, value, mics), [inputValue, value, mics]);
 
   const {
     isOpen,
@@ -115,6 +124,15 @@ export function MicDiSelectCell({
     selectedItem: null,
     itemToString: (item) =>
       item?.kind === 'mic' ? item.entry.name : item?.kind === 'add' ? item.name : '',
+    /* Nov 2026 (Adam) — typing highlights the FIRST match, so Enter takes
+       it without an arrow-down. Only on typing: a cell you merely Tab or
+       Enter through must not pick a mic by itself. */
+    stateReducer: (_state, { type, changes }) => {
+      if (type === useCombobox.stateChangeTypes.InputChange) {
+        return { ...changes, highlightedIndex: firstMatchIndex(micComboItems(changes.inputValue ?? '', value, mics), changes.inputValue ?? '') };
+      }
+      return changes;
+    },
     onInputValueChange: ({ inputValue: v, type }) => {
       // Only follow user keystrokes; ignore the library-driven
       // resets downshift emits on open/close/select.

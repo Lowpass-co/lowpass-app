@@ -102,6 +102,7 @@ export function BrandedSelect({
   >(null);
   const wrapRef = useRef<HTMLDivElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
 
   const current = options.find((o) => o.value === value);
 
@@ -171,7 +172,15 @@ export function BrandedSelect({
       : (menuRef.current.querySelector('[data-active="true"]') as HTMLButtonElement | null) ||
         (menuRef.current.querySelector('button:not(:disabled)') as HTMLButtonElement | null);
     active?.focus();
-  }, [open, filter]);
+    /* `rect` is a dependency on purpose (Nov 2026). The menu only mounts
+       once its position is measured, a render AFTER `open` flips — so on
+       that first run menuRef was still null, nothing was focused, focus
+       stayed on the trigger, and every key after the first went nowhere:
+       a filterable cell took ONE character and nothing could be picked
+       without the mouse. Re-running when the menu appears focuses the
+       selected / first match, so typing keeps filtering and Enter takes
+       the first match. */
+  }, [open, filter, rect]);
 
   const onMenuKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
     if (!menuRef.current) return;
@@ -246,6 +255,7 @@ export function BrandedSelect({
   return (
     <div className={cn('relative inline-block', className)} ref={wrapRef}>
       <button
+        ref={triggerRef}
         type="button"
         disabled={disabled}
         onClick={() => !disabled && setOpen((o) => !o)}
@@ -366,10 +376,14 @@ export function BrandedSelect({
                   onClick={() => {
                     onChange(opt.value);
                     close();
+                    // Keep the keyboard where it was (a grid cell moves it on
+                    // with onEnterCommit right after this).
+                    triggerRef.current?.focus();
                   }}
                   className={cn(
                     'flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition-colors',
-                    'text-[var(--lp-text)] hover:bg-[var(--lp-surface-hover)]',
+                    // The keyboard's place in the list must be visible.
+                    'text-[var(--lp-text)] hover:bg-[var(--lp-surface-hover)] focus:bg-[var(--lp-surface-hover)] focus:outline-none',
                     selected && 'bg-[var(--lp-surface-hover)]'
                   )}
                 >

@@ -581,3 +581,19 @@ mics and stands split by who supplies them. **Needs-live**.
 available but off until ticked. Custom input columns: "Same as the editor" on by
 default; untick it to choose columns for the printout only — the editor's own
 columns don't change.
+
+## Pickers — type, Enter (Nov 2026)
+
+#### CHL-36 — Pos and Stand keep typing
+**Do**: Tab to an empty **Pos** cell, type `DSR`, Enter. Then a **Stand** cell:
+type `tall`, Enter.
+**Expect**: each letter narrows the list (it used to stop after one letter and
+force a mouse pick); Enter takes the top match (DSR, Tall Boom) with no arrow
+key; focus moves on to the next cell. Typing `DS` + Enter takes DSC (first).
+
+#### CHL-37 — Mic: the first match is highlighted as you type
+**Do**: In **Mic / DI** type `AE`, Enter.
+**Expect**: the first AE mic is highlighted as soon as you type and Enter picks
+it. Type something nothing matches → "+ Add … to library" is highlighted
+instead. Tabbing through a mic cell and pressing Enter WITHOUT typing changes
+nothing.

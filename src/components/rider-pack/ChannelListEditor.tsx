@@ -32,7 +32,6 @@ import { OutputBlock, OUTPUT_GRID, OUTPUT_COL_COUNT } from './channel-list-cells
 import { InventoryAggregates } from './channel-list-cells/InventoryAggregates';
 import { AddManyChannelsModal } from './channel-list-cells/AddManyChannelsModal';
 import { ChannelListSectionBand } from './channel-list-cells/ChannelListSectionBand';
-import { GearDetailSlideOver } from '@/components/gear/GearDetailSlideOver';
 import { PatchMatrix, type SocketPatch } from './PatchMatrix';
 import { CellNavProvider, NavCell, useCellNav } from '@/lib/hooks/useCellNav';
 import { useRowSave } from './channel-list-cells/useRowSave';
@@ -93,10 +92,6 @@ type Props = {
   onMoveUp: () => void;
   onMoveDown: () => void;
   onStructureChange: () => void | Promise<void>;
-  /* Gear-chip seam — when provided, the per-row "Gear linked" chip
-     becomes a button reporting the linked gear id (e.g. to open a
-     gear slide-over). Absent → the chip renders passively as before. */
-  onGearChipClick?: (gearId: string) => void;
 };
 
 export default function ChannelListEditor({
@@ -110,13 +105,8 @@ export default function ChannelListEditor({
   onMoveUp,
   onMoveDown,
   onStructureChange,
-  onGearChipClick,
 }: Props) {
   const { showToast } = useToast();
-  /* Gear-chip default target (2026-08-06) — when the parent supplies no
-     onGearChipClick, the chip opens this internal slide-over. Explicit prop
-     still wins (see the ChannelBlock wiring below). */
-  const [gearDetailId, setGearDetailId] = useState<string | null>(null);
   const [titleDraft, setTitleDraft] = useState(section.title);
   const [rows, setRows] = useState<ChannelListRow[]>(section.rows ?? []);
   /* §CL-NORELOAD — structure (sub-snakes / stage boxes / enabled columns) is
@@ -861,7 +851,6 @@ export default function ChannelListEditor({
                       }
                       autoFocusName={row.id === newlyAddedRowId}
                       onAutoFocused={() => setNewlyAddedRowId(null)}
-                      onGearChipClick={onGearChipClick ?? setGearDetailId}
                     />
                   ))}
                 </SortableContext>
@@ -1033,7 +1022,6 @@ export default function ChannelListEditor({
         sectionId={section.id}
         onChanged={notifyStructureChange}
       />
-      <GearDetailSlideOver gearId={gearDetailId} onClose={() => setGearDetailId(null)} />
       <AddManyChannelsModal
         key={multiAddOpen ? 'multi-open' : 'multi-closed'}
         open={multiAddOpen}
@@ -1067,7 +1055,6 @@ function ChannelBlock({
   onMicCreated,
   autoFocusName,
   onAutoFocused,
-  onGearChipClick,
 }: {
   row: ChannelListRow;
   rows: ChannelListRow[];
@@ -1103,8 +1090,6 @@ function ChannelBlock({
      parent's onAutoFocused fires to clear the trigger. */
   autoFocusName?: boolean;
   onAutoFocused?: () => void;
-  /* Gear-chip seam (see Props on ChannelListEditor). */
-  onGearChipClick?: (gearId: string) => void;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: row.id });
   const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.85 : 1 };
@@ -1237,21 +1222,11 @@ function ChannelBlock({
     void flush();
   };
 
-  /* Gear chip — rendered INLINE with the Mic/DI input (same row,
-     right of the input) instead of the old mt-1 block below it, so
-     linked rows no longer grow taller. Ownership colour logic is
-     unchanged. `gearId` is hoisted so the narrowed string survives
-     into the click closure (TS doesn't carry property narrowing
-     across function boundaries). */
-  const gearId = local.gear_id;
-  const gearOwnershipClass = (() => {
-    const ownership = gearByName.get(local.mic.trim().toLowerCase())?.ownership ?? 'owned';
-    if (ownership === 'hired_to_client') return 'text-lp-orange';
-    if (ownership === 'sub_hired') return 'text-blue-400';
-    return 'text-emerald-500';
-  })();
-  const gearChipClass =
-    'inline-flex shrink-0 items-center whitespace-nowrap rounded border border-lp-border bg-lp-bg px-1.5 py-0.5 text-[10px] text-lp-text-secondary';
+  /* Nov 2026 (Adam) — the "Gear linked" chip is retired: nothing read the
+     link, and the chip (owned / sub-hired / hired-to-client by colour, no
+     key) only took space on every row. Picking a mic still records the
+     matching inventory item in gear_id, quietly, for a future
+     "owned vs to hire" on the pulls. */
   return (
     <div ref={setNodeRef} style={style} className="group w-full border-b border-lp-border-light bg-lp-surface">
       <div
@@ -1410,25 +1385,6 @@ function ChannelBlock({
                 onMicCreated={onMicCreated}
               />
             </div>
-            {gearId ? (
-              onGearChipClick ? (
-                /* Interactive seam: mouse furniture only (tabIndex -1),
-                   not part of the cell tab path. */
-                <button
-                  type="button"
-                  tabIndex={-1}
-                  title="Open this gear item"
-                  onClick={() => onGearChipClick(gearId)}
-                  className={`${gearChipClass} hover:border-lp-orange/40`}
-                >
-                  <span className={gearOwnershipClass}>Gear linked</span>
-                </button>
-              ) : (
-                <div className={gearChipClass}>
-                  <span className={gearOwnershipClass}>Gear linked</span>
-                </div>
-              )
-            ) : null}
           </div>
         </NavCell>
         )}
