@@ -475,6 +475,7 @@ export function ParkingEditor({ show, tourName, initial, canEdit }: ParkingEdito
   useEffect(() => {
     if (!canEdit) return;
     const onKey = (e: KeyboardEvent) => {
+      if (mode !== 'plan') return; // keys edit the plan; 3D is for looking
       const t = e.target as HTMLElement | null;
       if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable)) return;
       const mod = e.metaKey || e.ctrlKey;
@@ -515,7 +516,7 @@ export function ParkingEditor({ show, tourName, initial, canEdit }: ParkingEdito
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [canEdit, tool, draft, sel, doUndo, doRedo, finishDraw, deleteSelected, commit]);
+  }, [canEdit, mode, tool, draft, sel, doUndo, doRedo, finishDraw, deleteSelected, commit]);
 
   /* ── Export ───────────────────────────────────────────── */
   const venueName = show.venue.name ?? show.venue.city ?? 'Show';

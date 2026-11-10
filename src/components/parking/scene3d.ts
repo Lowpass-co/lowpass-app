@@ -58,6 +58,16 @@ export function createViewer(Cesium: C, container: HTMLElement, opts: { withTile
   if (scene.moon) scene.moon.show = false;
   scene.backgroundColor = Cesium.Color.fromCssColorString(opts.sky);
   if (scene.globe) scene.globe.baseColor = Cesium.Color.fromCssColorString(opts.blank);
+  // Mouse, as in Apple / Google Maps: left-drag moves, RIGHT-drag (or
+  // Ctrl / middle-drag) turns and tilts, wheel / pinch zooms. Cesium's
+  // default had right-drag zooming, so there was no obvious way to turn.
+  const ctl = scene.screenSpaceCameraController;
+  ctl.tiltEventTypes = [
+    Cesium.CameraEventType.RIGHT_DRAG,
+    Cesium.CameraEventType.MIDDLE_DRAG,
+    { eventType: Cesium.CameraEventType.LEFT_DRAG, modifier: Cesium.KeyboardEventModifier.CTRL },
+  ];
+  ctl.zoomEventTypes = [Cesium.CameraEventType.WHEEL, Cesium.CameraEventType.PINCH];
   return viewer;
 }
 
@@ -245,6 +255,50 @@ export function lookAt(Cesium: C, viewer: CesiumNS.Viewer, anchor: LatLng, targe
   const g = toLatLng(anchor, target);
   viewer.camera.lookAt(Cesium.Cartesian3.fromDegrees(g.lng, g.lat, height), new Cesium.HeadingPitchRange(rad(heading), rad(pitch), range));
   viewer.camera.lookAtTransform(Cesium.Matrix4.IDENTITY);
+}
+
+/** The point on the ground the camera is looking at (centre of the screen),
+ *  falling back to a point `fallbackRange` ahead when the centre is sky. */
+export function pivot(Cesium: C, viewer: CesiumNS.Viewer, fallbackRange = 150): CesiumNS.Cartesian3 {
+  const scene = viewer.scene;
+  const centre = new Cesium.Cartesian2(scene.canvas.clientWidth / 2, scene.canvas.clientHeight / 2);
+  const hit = scene.pickPositionSupported ? scene.pickPosition(centre) : undefined;
+  if (hit && Number.isFinite(hit.x)) return hit;
+  const ray = viewer.camera.getPickRay(centre);
+  if (ray) {
+    if (scene.globe) {
+      const onGlobe = scene.globe.pick(ray, scene);
+      if (onGlobe) return onGlobe;
+    } else {
+      const hitEllipsoid = Cesium.IntersectionTests.rayEllipsoid(ray, Cesium.Ellipsoid.WGS84);
+      if (hitEllipsoid) return Cesium.Ray.getPoint(ray, hitEllipsoid.start);
+    }
+  }
+  return Cesium.Cartesian3.add(
+    viewer.camera.position,
+    Cesium.Cartesian3.multiplyByScalar(viewer.camera.direction, fallbackRange, new Cesium.Cartesian3()),
+    new Cesium.Cartesian3(),
+  );
+}
+
+/** Orbit the camera around what it's looking at: turn by `dHeading`, tilt by
+ *  `dPitch` (degrees), or set the heading outright (north up = 0). */
+export function orbit(
+  Cesium: C,
+  viewer: CesiumNS.Viewer,
+  o: { dHeading?: number; dPitch?: number; heading?: number },
+  /** Reuse a pivot across a held turn — picking it renders a depth pass. */
+  around?: CesiumNS.Cartesian3,
+) {
+  const cam = viewer.camera;
+  const target = around ?? pivot(Cesium, viewer);
+  const range = Cesium.Cartesian3.distance(cam.position, target);
+  const heading = o.heading != null ? rad(o.heading) : cam.heading + rad(o.dHeading ?? 0);
+  // Never flat on the ground, never past straight down.
+  const pitch = Math.max(rad(-89), Math.min(rad(-5), cam.pitch + rad(o.dPitch ?? 0)));
+  cam.lookAt(target, new Cesium.HeadingPitchRange(heading, pitch, range));
+  cam.lookAtTransform(Cesium.Matrix4.IDENTITY);
+  viewer.scene.requestRender();
 }
 
 export function readCamera(viewer: CesiumNS.Viewer, anchor: LatLng): Camera3d {
