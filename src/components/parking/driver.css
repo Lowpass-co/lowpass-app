@@ -1,0 +1,26 @@
+/* Driver link page (/p/[token]) — phone first. */
+.pd-page { min-height: 100dvh; display: flex; flex-direction: column; gap: var(--lp-space-3); padding: var(--lp-space-3); background: var(--lp-bg); color: var(--lp-text); font-family: var(--font-sans); max-width: 960px; margin: 0 auto; box-sizing: border-box; }
+.pd-centre { justify-content: center; align-items: center; text-align: center; }
+.pd-head { display: flex; flex-direction: column; gap: 2px; }
+.pd-title { margin: 0; font-size: var(--lp-text-xl); font-weight: var(--lp-weight-semibold); }
+.pd-muted { color: var(--lp-text-secondary); font-size: var(--lp-text-xs); }
+.pd-modes { display: flex; gap: var(--lp-space-2); }
+.pd-modes button { flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: var(--lp-space-1); min-height: 44px; border: 1px solid var(--lp-border); border-radius: var(--lp-radius-md); background: var(--lp-surface); color: var(--lp-text); font: inherit; font-size: var(--lp-text-sm); font-weight: var(--lp-weight-semibold); cursor: pointer; }
+.pd-modes button[aria-pressed='true'] { background: var(--lp-orange); border-color: var(--lp-orange); color: var(--lp-text-inverse); }
+.pd-modes button:disabled { opacity: 0.55; cursor: default; }
+.pd-modes button:focus-visible, .pd-nav:focus-visible { outline: 2px solid var(--lp-orange); outline-offset: 2px; }
+.pd-note { margin: 0; font-size: var(--lp-text-sm); color: var(--color-lp-warning); }
+.pd-stage { position: relative; height: min(62dvh, 640px); min-height: 320px; border-radius: var(--lp-radius-lg); overflow: hidden; border: 1px solid var(--lp-border); }
+.pd-map { position: absolute; inset: 0; touch-action: none; }
+.pd-sec { display: flex; flex-direction: column; gap: var(--lp-space-2); }
+.pd-sec > h2 { display: flex; align-items: center; gap: var(--lp-space-1); margin: 0; font-size: var(--lp-text-xs); font-weight: var(--lp-weight-semibold); color: var(--lp-text-secondary); text-transform: uppercase; letter-spacing: 0.04em; }
+.pd-warn { padding: var(--lp-space-2) var(--lp-space-3); border: 1px solid var(--color-lp-warning); border-radius: var(--lp-radius-md); background: color-mix(in srgb, var(--color-lp-warning) 10%, transparent); font-size: var(--lp-text-sm); }
+.pd-warn ul { margin: 0; padding-left: var(--lp-space-4); }
+.pd-target { display: flex; flex-wrap: wrap; align-items: center; gap: var(--lp-space-2); justify-content: space-between; padding: var(--lp-space-2) 0; border-bottom: 1px solid var(--lp-border); font-size: var(--lp-text-sm); }
+.pd-links { display: flex; flex-wrap: wrap; gap: var(--lp-space-2); }
+.pd-nav { display: inline-flex; align-items: center; gap: var(--lp-space-1); min-height: 40px; padding: 0 var(--lp-space-3); border: 1px solid var(--lp-border); border-radius: var(--lp-radius-md); background: var(--lp-surface); color: var(--lp-text); font-size: var(--lp-text-sm); text-decoration: none; }
+.pd-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--lp-space-2); font-size: var(--lp-text-sm); }
+.pd-list li { display: flex; flex-wrap: wrap; align-items: center; gap: var(--lp-space-2); }
+.pd-swatch { width: 10px; height: 18px; border-radius: var(--lp-radius-xs); flex: none; }
+.pd-notes { margin: 0; white-space: pre-wrap; font-size: var(--lp-text-sm); line-height: var(--lp-leading-normal); }
+.pd-foot { padding-bottom: var(--lp-space-4); }

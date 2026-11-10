@@ -23,6 +23,8 @@ export interface DrawingFileRef {
   kind: 'pdf' | 'image';
   bucket: string | null;
   path: string | null;
+  /** Already signed (a driver link — no session to sign with). */
+  url?: string;
 }
 
 type PdfViewport = { width: number; height: number };
@@ -38,17 +40,21 @@ export type DrawingSource = { kind: 'pdf'; doc: PdfDoc } | { kind: 'image'; img:
 const sources = new Map<string, Promise<DrawingSource>>();
 
 async function fetchBytes(f: DrawingFileRef): Promise<Blob> {
-  if (!f.bucket || !f.path) throw new Error(`${f.name} has no stored file.`);
-  const { data, error } = await createClient().storage.from(f.bucket).createSignedUrl(f.path, 600);
-  if (error || !data?.signedUrl) throw new Error(`${f.name} couldn’t be opened (${error?.message ?? 'no link'}).`);
-  const r = await fetch(data.signedUrl);
+  let url = f.url;
+  if (!url) {
+    if (!f.bucket || !f.path) throw new Error(`${f.name} has no stored file.`);
+    const { data, error } = await createClient().storage.from(f.bucket).createSignedUrl(f.path, 600);
+    if (error || !data?.signedUrl) throw new Error(`${f.name} couldn’t be opened (${error?.message ?? 'no link'}).`);
+    url = data.signedUrl;
+  }
+  const r = await fetch(url);
   if (!r.ok) throw new Error(`${f.name} couldn’t be downloaded (${r.status}).`);
   return r.blob();
 }
 
 /** Open a drawing's file once per session (keyed by file + stored path, so a new version reopens). */
 export function openDrawing(f: DrawingFileRef): Promise<DrawingSource> {
-  const key = `${f.id}:${f.path ?? ''}`;
+  const key = `${f.id}:${f.path ?? f.url?.split('?')[0] ?? ''}`;
   let p = sources.get(key);
   if (!p) {
     p = (async (): Promise<DrawingSource> => {

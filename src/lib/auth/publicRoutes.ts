@@ -57,6 +57,10 @@
  *                     owns the password gate, expiry, revocation and the
  *                     per-file scope check. Same two-character rule: '/f/TOKEN'
  *                     opens; /files, /features, /finance stay shut.
+ *   /p/               DRIVER LINK to one parking map (migration 289) — token →
+ *                     parking_share_links (sha-256), service-role; expiry,
+ *                     revocation and the 3D-open cap in parking_share_touch().
+ *                     '/p/TOKEN' opens; /profile, /personnel, /parking stay shut.
  */
 export const PUBLIC_PATH_PREFIXES: readonly string[] = [
   '/r/',
@@ -68,6 +72,7 @@ export const PUBLIC_PATH_PREFIXES: readonly string[] = [
   '/share/advance/',
   '/s/',
   '/f/',
+  '/p/',
 ];
 
 /** Dev-only: the Stage Plot icon catalog, browsable without a session while

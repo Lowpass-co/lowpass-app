@@ -92,6 +92,8 @@ const UNGUARDED: Record<string, string> = {
   '/public/file-link/[token]/download': /* POST */ 'PERMANENT — public. Same token grant; signs a 60s forced-download URL only for a file fileInLink() places inside the link.',
   '/public/file-link/[token]/upload-url': /* POST */ 'PERMANENT — public. Same token grant; EDIT links only. prepareLinkUpload() checks access, scope, 100MB and the hourly cap (counted from issued grants) before issuing a one-time signed upload for a server-chosen path.',
   '/public/file-link/[token]/complete': /* POST */ 'PERMANENT — public. Same token grant; completeLinkUpload() accepts only a path granted to THIS link, reads size/type from Storage, records the file or new version. Never renames, moves or deletes.',
+  '/public/parking/[token]': /* POST */ 'PERMANENT — public. Driver link to one parking map (migration 289): the unguessable token (only its sha-256 is stored) IS the grant; parking_share_touch() refuses expired / revoked links, driverMapPayload() returns only that map and the drawing files it uses.',
+  '/public/parking/[token]/3d': /* POST */ 'PERMANENT — public. Same token grant; takes one of the link\'s capped 3D opens atomically (each is a billed Google session) or refuses with 429.',
   '/public/show-link/[token]': /* POST */ 'PERMANENT — public. Tokenised show view (migration 257 show_links); the unguessable token (+ optional password in the body) IS the grant — the viewer has no session.',
 
   /* ── S1 D-1 — gear documents (read-only) ── */

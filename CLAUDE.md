@@ -563,6 +563,18 @@ recreate a `_legacy/` tree: delete dead code instead of parking it.
   unparsed). It only PROPOSES: it fills crop / dimensions / north and stops on
   the Scale step, where the two dimensions must agree and are drawn on the
   page; pinning stays two human clicks. ~3 calls, ~5 ¢ a drawing.
+- **Driver links** (Nov 2026, Adam — migration 289, `parking_share_links`):
+  editor "Send to drivers" → `/p/<token>` (public via publicRoutes `/p/`), one
+  show's map for a driver, phone first. The token is shown ONCE; only its
+  sha-256 is stored. Every link expires (48 h default, ≤ 14 days) and can be
+  turned off. The page opens on the PLAN (2D tiles, free at tour scale); "Look
+  around in 3D" first POSTs `/api/public/parking/[token]/3d`, which TAKES one
+  of the link's capped 3D opens (each = a billed Google 3D session, ~0.6 ¢ after
+  the free 1,000 / month) through `parking_share_touch()` — atomic, service
+  role only. `driverMapPayload` returns only that map, venue and the drawing
+  files it uses (signed 10 min). "Get there" hands gates to Google Maps / Waze
+  / Apple Maps (`navigateUrls`). Read-only viewer: `<ParkingViewer>`; tiles via
+  the shared `useMapTiles`. The map's notes go with it — the editor says so.
 - Known: each export is a new file (share the Parking maps folder for a link
   that stays current).
 

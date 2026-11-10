@@ -100,6 +100,11 @@ describe('P0 — authed surfaces stay gated', () => {
     for (const p of ['/files', '/f', '/features', '/finance', '/fx']) expect(isPublicPath(p, true)).toBe(false);
   });
 
+  it('/p/ opens driver links and nothing else starting with p', () => {
+    expect(isPublicPath('/p/AbC123_-xyzXYZ0987654321', true)).toBe(true);
+    for (const p of ['/p', '/profile', '/personnel', '/parking', '/operations/t/parking', '/pricing']) expect(isPublicPath(p, true)).toBe(false);
+  });
+
   it('/s/ does not swallow /settings, /signup or /share', () => {
     expect(isPublicPath('/s/tok', true)).toBe(true);
     expect(isPublicPath('/settings', true)).toBe(false);

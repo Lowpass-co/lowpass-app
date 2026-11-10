@@ -49,6 +49,8 @@ export function Parking3D({ anchor, items, drawings, floors, satellite, fallback
   const [state, setState] = useState<'loading' | 'ready' | 'error'>('loading');
   const [error, setError] = useState<string | null>(null);
   const key = satellite ? tilesKey() : null;
+  // Phones (driver links): Cesium's touch gestures, not the mouse ones.
+  const [touch] = useState(() => typeof window !== 'undefined' && window.matchMedia?.('(pointer: coarse)').matches === true);
 
   // Built once per mount: the 3D page is entered from the overhead plan and
   // remounts each time, so it always shows the drawing as it now stands.
@@ -181,7 +183,9 @@ export function Parking3D({ anchor, items, drawings, floors, satellite, fallback
         </div>
       ) : null}
       <div className="pk-hint" style={{ top: 'auto', bottom: 'calc(var(--lp-space-6) * 2)' }} onPointerDown={(e) => e.stopPropagation()}>
-        <span className="pk-muted" style={{ color: 'var(--lp-text-secondary)' }}>Drag to move · right-drag or Ctrl-drag to turn and tilt · scroll to zoom</span>
+        <span className="pk-muted" style={{ color: 'var(--lp-text-secondary)' }}>
+          {touch ? 'Drag to move · pinch to zoom · two fingers to turn and tilt' : 'Drag to move · right-drag or Ctrl-drag to turn and tilt · scroll to zoom'}
+        </span>
         <button type="button" className="adv-btn adv-btn-sm" onClick={reset} disabled={state !== 'ready'}>
           <RotateCcw size={13} aria-hidden /> Reset view
         </button>

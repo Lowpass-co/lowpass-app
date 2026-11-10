@@ -253,6 +253,34 @@ browser key restricted to the Map Tiles API and the app's domains).**
 
 **Last verified**:
 
+## Driver links
+
+**Prereq: migration 289 pasted.**
+
+#### PRK-30 — Send a map to a driver
+
+**Do**: On a drawn map: Send to a driver → "Bus 2 – Dave", 2 days, 20 3D views → Make the link. Copy; open it on a phone (not signed in).
+
+**Expect**: The link shows once (Copy / Text it / Email); the list shows it live with its end time. The phone opens the plan (satellite, drawings, vehicles, routes) framed on what's drawn — drag, pinch, turn; Headroom warnings; Get there → Google Maps / Waze / Apple Maps directions to each gate; vehicles with sizes; notes. No app chrome, no sign-in.
+
+**Last verified**:
+
+#### PRK-31 — 3D on a driver link is capped
+
+**Do**: Make a link with 2 3D views; on the phone tap Look around in 3D, back to Plan, again, back, again.
+
+**Expect**: "Look around in 3D (2 left)" → 3D opens (touch hint: pinch / two fingers); then "(1 left)"; the third time "3D used up" — the plan still works. The owner's list shows 3D 2/2.
+
+**Last verified**:
+
+#### PRK-32 — Links end
+
+**Do**: Turn a link off in the list; open it. Make a 12-hour link and open it after it ends.
+
+**Expect**: "This link has been turned off." / "This link has expired — ask for a new one." — nothing of the map shows.
+
+**Last verified**:
+
 ## Known broken
 
 #### PRK-90 — Re-exporting makes a new file

@@ -380,3 +380,9 @@ span.pk-pagescale { display: inline-flex; align-items: center; padding: 0; }
   .pk-hint-right { right: var(--lp-space-3); top: var(--lp-space-3); max-width: none; left: var(--lp-space-3); }
 }
 .pk-pagelevel { grid-column: 1 / -1; height: 28px; }
+
+/* Send to drivers */
+.pk-made { display: flex; flex-direction: column; gap: var(--lp-space-2); padding: var(--lp-space-3); border: 1px solid var(--lp-orange); border-radius: var(--lp-radius-lg); background: color-mix(in srgb, var(--lp-orange) 6%, transparent); font-size: var(--lp-text-sm); }
+.pk-linklist { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--lp-space-1); font-size: var(--lp-text-xs); }
+.pk-linklist li { display: flex; align-items: baseline; gap: var(--lp-space-2); padding: var(--lp-space-1) 0; border-bottom: 1px solid var(--lp-border); }
+.pk-linklist li[data-state='expired'], .pk-linklist li[data-state='revoked'] { opacity: 0.6; }
