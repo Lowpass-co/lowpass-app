@@ -69,6 +69,10 @@ export interface View {
   cam3d?: Camera3d;
   /** The PDF's pages, in order (pages.ts). Absent = the default plan + 3D. */
   pages?: import('./pages').PdfPage[];
+  /** false = no Google imagery (a venue drawing, or the grid, is the base). Absent = on. */
+  satellite?: boolean;
+  /** The level shown on the plan (a floor height, m); absent = every level. */
+  level?: number;
 }
 
 /** A 3D camera: position in the ground frame + ellipsoid height (m), and

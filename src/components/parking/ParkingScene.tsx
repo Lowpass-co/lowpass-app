@@ -29,6 +29,21 @@ export interface SceneTile {
   h: number;
 }
 
+/** A venue drawing's raster, placed: `matrix` maps its source units to scene
+ *  coordinates (drawings.ts svgMatrix); x / y / w / h is its crop. */
+export interface SceneDrawing {
+  id: string;
+  href: string;
+  matrix: [number, number, number, number, number, number];
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  opacity: number;
+  /** Lines on the satellite (white paper multiplied away), or the dark copy as is. */
+  blend: 'multiply' | 'normal';
+}
+
 export interface Draft {
   kind: 'route' | 'area' | 'measure';
   points: Pt[];
@@ -54,6 +69,9 @@ export function ParkingScene({
   tiles,
   palette: p,
   selectedIds = [],
+  drawings = [],
+  fadedIds,
+  warnIds,
   draft = null,
   grid = false,
   labelScale = 1,
@@ -71,6 +89,12 @@ export function ParkingScene({
   palette: Palette;
   /** Highlighted items; the turn knob shows only when exactly one is picked. */
   selectedIds?: readonly string[];
+  /** Venue drawings, under everything drawn (live only: the PDF paints them on its canvas). */
+  drawings?: SceneDrawing[];
+  /** Items on another level: shown faint, can't be picked. */
+  fadedIds?: ReadonlySet<string>;
+  /** Vehicles that fail a headroom check: outlined in the no-go colour. */
+  warnIds?: ReadonlySet<string>;
   draft?: Draft | null;
   grid?: boolean;
   labelScale?: number;
@@ -89,14 +113,140 @@ export function ParkingScene({
   const interactive = !!onItemDown;
   const halo = { paintOrder: 'stroke' as const, stroke: p.halo, strokeWidth: 3 * ls, strokeLinejoin: 'round' as const };
 
-  const areas = items.filter((i) => i.kind === 'area');
-  const routes = items.filter((i) => i.kind === 'route');
-  const vehicles = items.filter((i): i is VehicleItem => i.kind === 'vehicle');
-  const markers = items.filter((i) => i.kind === 'marker');
-  const measures = items.filter((i) => i.kind === 'measure');
-
   const down = (item: ParkingItem) => (interactive ? (e: ReactPointerEvent) => onItemDown!(e, item) : undefined);
   const cursor = interactive ? 'move' : undefined;
+  const ghosts = fadedIds?.size ? items.filter((i) => fadedIds.has(i.id)) : [];
+  const live = ghosts.length ? items.filter((i) => !fadedIds!.has(i.id)) : items;
+
+  const layer = (list: ParkingItem[], live: boolean) => {
+    const dn = live ? down : () => undefined;
+  const areas = list.filter((i) => i.kind === 'area');
+  const routes = list.filter((i) => i.kind === 'route');
+  const vehicles = list.filter((i): i is VehicleItem => i.kind === 'vehicle');
+  const markers = list.filter((i) => i.kind === 'marker');
+  const measures = list.filter((i) => i.kind === 'measure');
+
+
+    return (
+      <>
+        {areas.map((a) => {
+          if (a.kind !== 'area') return null;
+          const c = areaColour(p, a.type);
+          const centre = P({ x: a.points.reduce((s, q) => s + q.x, 0) / a.points.length, y: a.points.reduce((s, q) => s + q.y, 0) / a.points.length });
+          return (
+            <g key={a.id}>
+              <polygon
+                points={pts(a.points)}
+                fill={c}
+                fillOpacity={0.28}
+                stroke={c}
+                strokeWidth={2 * ls}
+                strokeDasharray={a.type === 'no_go' ? `${6 * ls} ${4 * ls}` : undefined}
+                onPointerDown={dn(a)}
+                style={{ cursor: live ? cursor : undefined }}
+              />
+              {isSel(a.id) ? <polygon points={pts(a.points)} fill="none" stroke={p.select} strokeWidth={2} strokeDasharray="4 3" pointerEvents="none" /> : null}
+              <Label x={centre.x} y={centre.y} ls={ls} p={p} halo={halo} text={a.label || areaLabel(a.type)} />
+            </g>
+          );
+        })}
+
+        {routes.map((r) => (r.kind === 'route' ? <RoutePath key={r.id} points={r.points.map(P)} p={p} ls={ls} selected={isSel(r.id)} label={r.label} onDown={dn(r)} cursor={live ? cursor : undefined} halo={halo} /> : null))}
+
+        {vehicles.map((v) => {
+          const spec = vehicleSpec(v.type);
+          const fill = vehicleColour(p, v);
+          const body = vehicleCorners(v).map(P);
+          const c = P(v);
+          const sel = isSel(v.id);
+          const h = (v.heading * Math.PI) / 180;
+          const fwd = { x: Math.sin(h), y: Math.cos(h) };
+          const nose = { x: v.x + fwd.x * (v.length / 2), y: v.y + fwd.y * (v.length / 2) };
+          const front = P(nose);
+          const knob = P({ x: nose.x + fwd.x * 3, y: nose.y + fwd.y * 3 });
+          // Vehicle frame → screen: x across (right +), y back from the nose, metres.
+          const right = P({ x: nose.x + fwd.y, y: nose.y - fwd.x });
+          const back = P({ x: nose.x - fwd.x, y: nose.y - fwd.y });
+          const matrix = `matrix(${right.x - front.x} ${right.y - front.y} ${back.x - front.x} ${back.y - front.y} ${front.x} ${front.y})`;
+          return (
+            <g key={v.id}>
+              <g transform={matrix} pointerEvents="none">
+                {vehicleParts(v.type, v.length, v.width).map((part, i) => (
+                  <VehiclePart key={i} part={part} fill={fill} p={p} ls={ls} />
+                ))}
+              </g>
+              {/* The whole footprint is the handle, trailer and all. */}
+              <polygon points={body.map((q) => `${q.x},${q.y}`).join(' ')} fill="transparent" stroke="none" onPointerDown={dn(v)} style={{ cursor: live ? cursor : undefined }} />
+              {sel ? (
+                <>
+                  <polygon points={body.map((q) => `${q.x},${q.y}`).join(' ')} fill="none" stroke={p.select} strokeWidth={2.5} strokeDasharray="5 3" pointerEvents="none" />
+                  {live && onHandleDown && single ? (
+                    <>
+                      <line x1={front.x} y1={front.y} x2={knob.x} y2={knob.y} stroke={p.select} strokeWidth={1.5} pointerEvents="none" />
+                      <circle cx={knob.x} cy={knob.y} r={7} fill={p.select} stroke={p.halo} strokeWidth={1.5} style={{ cursor: 'grab' }} onPointerDown={(e) => onHandleDown(e, v, 'rotate')} aria-label="Turn" />
+                    </>
+                  ) : null}
+                </>
+              ) : null}
+              {warnIds?.has(v.id) ? (
+                <polygon points={body.map((q) => `${q.x},${q.y}`).join(' ')} fill="none" stroke={p['area-no-go']} strokeWidth={3} pointerEvents="none" />
+              ) : null}
+              <VehicleLabel c={c} front={front} widthPx={v.width * Math.hypot(right.x - front.x, right.y - front.y)} ls={ls} p={p} halo={halo} name={v.label || spec?.short || 'Vehicle'} length={fmtMetres(v.length)} />
+            </g>
+          );
+        })}
+
+        {measures.map((m) => {
+          if (m.kind !== 'measure') return null;
+          const a = P(m.a);
+          const b = P(m.b);
+          return (
+            <g key={m.id}>
+              <line x1={a.x} y1={a.y} x2={b.x} y2={b.y} stroke={p.halo} strokeWidth={4 * ls} strokeLinecap="round" pointerEvents="none" />
+              <line x1={a.x} y1={a.y} x2={b.x} y2={b.y} stroke={p.measure} strokeWidth={2 * ls} strokeDasharray={`${6 * ls} ${4 * ls}`} onPointerDown={dn(m)} style={{ cursor: live ? cursor : undefined }} />
+              <line x1={a.x} y1={a.y} x2={b.x} y2={b.y} stroke="transparent" strokeWidth={14} onPointerDown={dn(m)} style={{ cursor: live ? cursor : undefined }} />
+              {[a, b].map((s, i) => (
+                <circle key={i} cx={s.x} cy={s.y} r={3.5 * ls} fill={p.measure} stroke={p.halo} strokeWidth={1.5} onPointerDown={live && onHandleDown ? (e) => onHandleDown(e, m, i ? 'b' : 'a') : undefined} style={{ cursor: live && onHandleDown ? 'grab' : undefined }} />
+              ))}
+              {isSel(m.id) ? <line x1={a.x} y1={a.y} x2={b.x} y2={b.y} stroke={p.select} strokeOpacity={0.5} strokeWidth={8} pointerEvents="none" /> : null}
+              <Label x={(a.x + b.x) / 2} y={(a.y + b.y) / 2 - 12 * ls} ls={ls} p={p} halo={halo} text={fmtMetres(dist(m.a, m.b))} />
+            </g>
+          );
+        })}
+
+        {markers.map((m, idx) => {
+          if (m.kind !== 'marker') return null;
+          const s = P(m);
+          const Icon = MARKER_ICON[m.type];
+          const r = 13 * ls;
+          const name = m.label || markerSpec(m.type)?.label || '';
+          // Label on the right unless another marker sits there — then on the left.
+          const reach = r * 2 + Math.max(name.length, m.detail.length) * 6.5 * ls;
+          const crowded = markers.some((o, j) => {
+            if (j === idx || o.kind !== 'marker') return false;
+            const q = P(o);
+            return q.x > s.x && q.x - s.x < reach && Math.abs(q.y - s.y) < r * 2.2;
+          });
+          const tx = crowded ? s.x - r - 5 * ls : s.x + r + 5 * ls;
+          const anchor = crowded ? 'end' : 'start';
+          return (
+            <g key={m.id} onPointerDown={dn(m)} style={{ cursor: live ? cursor : undefined }}>
+              <circle cx={s.x} cy={s.y} r={r} fill={p.chip} stroke={isSel(m.id) ? p.select : p.ink} strokeWidth={(isSel(m.id) ? 2.5 : 1.5) * ls} />
+              <Icon x={s.x - r * 0.62} y={s.y - r * 0.62} width={r * 1.24} height={r * 1.24} color={p.ink} strokeWidth={2} />
+              <text x={tx} textAnchor={anchor} y={s.y + (m.detail ? -1 * ls : 4 * ls)} fontSize={12 * ls} fontWeight={600} fill={p.ink} style={halo}>
+                {name}
+              </text>
+              {m.detail ? (
+                <text x={tx} textAnchor={anchor} y={s.y + 12 * ls} fontSize={10.5 * ls} fill={p.ink} style={halo}>
+                  {m.detail}
+                </text>
+              ) : null}
+            </g>
+          );
+        })}
+      </>
+    );
+  };
 
   return (
     <svg
@@ -113,121 +263,20 @@ export function ParkingScene({
           // A hair of overlap hides antialiasing seams between tiles.
           <image key={t.id} href={t.href} x={t.x} y={t.y} width={t.w * 1.002} height={t.h * 1.002} preserveAspectRatio="none" />
         ))}
+        {drawings.map((d) => (
+          <g key={d.id} transform={`matrix(${d.matrix.join(' ')})`}>
+            <image href={d.href} x={d.x} y={d.y} width={d.w} height={d.h} preserveAspectRatio="none" opacity={d.opacity} style={{ mixBlendMode: d.blend }} />
+          </g>
+        ))}
       </g>
       {grid ? <Grid view={view} width={width} height={height} colour={p.grid} /> : null}
 
-      {areas.map((a) => {
-        if (a.kind !== 'area') return null;
-        const c = areaColour(p, a.type);
-        const centre = P({ x: a.points.reduce((s, q) => s + q.x, 0) / a.points.length, y: a.points.reduce((s, q) => s + q.y, 0) / a.points.length });
-        return (
-          <g key={a.id}>
-            <polygon
-              points={pts(a.points)}
-              fill={c}
-              fillOpacity={0.28}
-              stroke={c}
-              strokeWidth={2 * ls}
-              strokeDasharray={a.type === 'no_go' ? `${6 * ls} ${4 * ls}` : undefined}
-              onPointerDown={down(a)}
-              style={{ cursor }}
-            />
-            {isSel(a.id) ? <polygon points={pts(a.points)} fill="none" stroke={p.select} strokeWidth={2} strokeDasharray="4 3" pointerEvents="none" /> : null}
-            <Label x={centre.x} y={centre.y} ls={ls} p={p} halo={halo} text={a.label || areaLabel(a.type)} />
-          </g>
-        );
-      })}
-
-      {routes.map((r) => (r.kind === 'route' ? <RoutePath key={r.id} points={r.points.map(P)} p={p} ls={ls} selected={isSel(r.id)} label={r.label} onDown={down(r)} cursor={cursor} halo={halo} /> : null))}
-
-      {vehicles.map((v) => {
-        const spec = vehicleSpec(v.type);
-        const fill = vehicleColour(p, v);
-        const body = vehicleCorners(v).map(P);
-        const c = P(v);
-        const sel = isSel(v.id);
-        const h = (v.heading * Math.PI) / 180;
-        const fwd = { x: Math.sin(h), y: Math.cos(h) };
-        const nose = { x: v.x + fwd.x * (v.length / 2), y: v.y + fwd.y * (v.length / 2) };
-        const front = P(nose);
-        const knob = P({ x: nose.x + fwd.x * 3, y: nose.y + fwd.y * 3 });
-        // Vehicle frame → screen: x across (right +), y back from the nose, metres.
-        const right = P({ x: nose.x + fwd.y, y: nose.y - fwd.x });
-        const back = P({ x: nose.x - fwd.x, y: nose.y - fwd.y });
-        const matrix = `matrix(${right.x - front.x} ${right.y - front.y} ${back.x - front.x} ${back.y - front.y} ${front.x} ${front.y})`;
-        return (
-          <g key={v.id}>
-            <g transform={matrix} pointerEvents="none">
-              {vehicleParts(v.type, v.length, v.width).map((part, i) => (
-                <VehiclePart key={i} part={part} fill={fill} p={p} ls={ls} />
-              ))}
-            </g>
-            {/* The whole footprint is the handle, trailer and all. */}
-            <polygon points={body.map((q) => `${q.x},${q.y}`).join(' ')} fill="transparent" stroke="none" onPointerDown={down(v)} style={{ cursor }} />
-            {sel ? (
-              <>
-                <polygon points={body.map((q) => `${q.x},${q.y}`).join(' ')} fill="none" stroke={p.select} strokeWidth={2.5} strokeDasharray="5 3" pointerEvents="none" />
-                {onHandleDown && single ? (
-                  <>
-                    <line x1={front.x} y1={front.y} x2={knob.x} y2={knob.y} stroke={p.select} strokeWidth={1.5} pointerEvents="none" />
-                    <circle cx={knob.x} cy={knob.y} r={7} fill={p.select} stroke={p.halo} strokeWidth={1.5} style={{ cursor: 'grab' }} onPointerDown={(e) => onHandleDown(e, v, 'rotate')} aria-label="Turn" />
-                  </>
-                ) : null}
-              </>
-            ) : null}
-            <VehicleLabel c={c} front={front} widthPx={v.width * Math.hypot(right.x - front.x, right.y - front.y)} ls={ls} p={p} halo={halo} name={v.label || spec?.short || 'Vehicle'} length={fmtMetres(v.length)} />
-          </g>
-        );
-      })}
-
-      {measures.map((m) => {
-        if (m.kind !== 'measure') return null;
-        const a = P(m.a);
-        const b = P(m.b);
-        return (
-          <g key={m.id}>
-            <line x1={a.x} y1={a.y} x2={b.x} y2={b.y} stroke={p.halo} strokeWidth={4 * ls} strokeLinecap="round" pointerEvents="none" />
-            <line x1={a.x} y1={a.y} x2={b.x} y2={b.y} stroke={p.measure} strokeWidth={2 * ls} strokeDasharray={`${6 * ls} ${4 * ls}`} onPointerDown={down(m)} style={{ cursor }} />
-            <line x1={a.x} y1={a.y} x2={b.x} y2={b.y} stroke="transparent" strokeWidth={14} onPointerDown={down(m)} style={{ cursor }} />
-            {[a, b].map((s, i) => (
-              <circle key={i} cx={s.x} cy={s.y} r={3.5 * ls} fill={p.measure} stroke={p.halo} strokeWidth={1.5} onPointerDown={onHandleDown ? (e) => onHandleDown(e, m, i ? 'b' : 'a') : undefined} style={{ cursor: onHandleDown ? 'grab' : undefined }} />
-            ))}
-            {isSel(m.id) ? <line x1={a.x} y1={a.y} x2={b.x} y2={b.y} stroke={p.select} strokeOpacity={0.5} strokeWidth={8} pointerEvents="none" /> : null}
-            <Label x={(a.x + b.x) / 2} y={(a.y + b.y) / 2 - 12 * ls} ls={ls} p={p} halo={halo} text={fmtMetres(dist(m.a, m.b))} />
-          </g>
-        );
-      })}
-
-      {markers.map((m, idx) => {
-        if (m.kind !== 'marker') return null;
-        const s = P(m);
-        const Icon = MARKER_ICON[m.type];
-        const r = 13 * ls;
-        const name = m.label || markerSpec(m.type)?.label || '';
-        // Label on the right unless another marker sits there — then on the left.
-        const reach = r * 2 + Math.max(name.length, m.detail.length) * 6.5 * ls;
-        const crowded = markers.some((o, j) => {
-          if (j === idx || o.kind !== 'marker') return false;
-          const q = P(o);
-          return q.x > s.x && q.x - s.x < reach && Math.abs(q.y - s.y) < r * 2.2;
-        });
-        const tx = crowded ? s.x - r - 5 * ls : s.x + r + 5 * ls;
-        const anchor = crowded ? 'end' : 'start';
-        return (
-          <g key={m.id} onPointerDown={down(m)} style={{ cursor }}>
-            <circle cx={s.x} cy={s.y} r={r} fill={p.chip} stroke={isSel(m.id) ? p.select : p.ink} strokeWidth={(isSel(m.id) ? 2.5 : 1.5) * ls} />
-            <Icon x={s.x - r * 0.62} y={s.y - r * 0.62} width={r * 1.24} height={r * 1.24} color={p.ink} strokeWidth={2} />
-            <text x={tx} textAnchor={anchor} y={s.y + (m.detail ? -1 * ls : 4 * ls)} fontSize={12 * ls} fontWeight={600} fill={p.ink} style={halo}>
-              {name}
-            </text>
-            {m.detail ? (
-              <text x={tx} textAnchor={anchor} y={s.y + 12 * ls} fontSize={10.5 * ls} fill={p.ink} style={halo}>
-                {m.detail}
-              </text>
-            ) : null}
-          </g>
-        );
-      })}
+      {ghosts.length ? (
+        <g opacity={0.28} pointerEvents="none">
+          {layer(ghosts, false)}
+        </g>
+      ) : null}
+      {layer(live, true)}
 
       {draft ? <DraftShape draft={draft} P={P} p={p} /> : null}
       {children}

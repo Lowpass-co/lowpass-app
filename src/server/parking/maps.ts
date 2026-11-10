@@ -17,9 +17,11 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { resolveVenue, type RoutingVenueSource } from '@/lib/venues/resolveVenue';
 import { ROUTING_VENUE_SELECT } from '@/server/advance/board';
-import type { ParkingMapData, ParkingItem } from '@/lib/parking/model';
+import { ParkingInputError, type ParkingDrawing, type ParkingMapData, type ParkingItem } from '@/lib/parking/model';
 import type { LatLng, View } from '@/lib/parking/geo';
 import { summariseMap } from '@/lib/parking/summary';
+import { drawableKind } from '@/lib/parking/drawings';
+import { linkedFiles } from '@/server/files/entityLinks';
 
 export interface ParkingShow {
   tourId: string;
@@ -52,10 +54,27 @@ interface MapRow {
   pdf_file_id: string | null;
   pdf_exported_at: string | null;
   updated_at: string;
+  /** Migration 288; absent on a database that hasn't had it pasted yet. */
+  drawings?: ParkingDrawing[] | null;
 }
 
-const MAP_COLS =
+const BASE_COLS =
   'id, workspace_id, tour_id, routing_id, canonical_venue_id, anchor_lat, anchor_lng, view, items, notes, version, pdf_file_id, pdf_exported_at, updated_at';
+const MAP_COLS = `${BASE_COLS}, drawings`;
+
+type PgErr = { code?: string; message?: string } | null;
+/** The drawings column isn't there yet (migration 288 not pasted). */
+const noDrawingsColumn = (e: PgErr) => !!e && (e.code === '42703' || e.code === 'PGRST204') && /drawings/.test(e.message ?? '');
+
+/** Run a query with the drawings column; on a database without it (the code
+ *  deployed before migration 288 was pasted), run it again without — so
+ *  parking keeps working, minus drawings. */
+export async function withDrawings<T>(q: (cols: string, drawings: boolean) => PromiseLike<{ data: T; error: PgErr }>): Promise<{ data: T; error: PgErr }> {
+  const first = await q(MAP_COLS, true);
+  if (!noDrawingsColumn(first.error)) return first;
+  return q(BASE_COLS, false);
+}
+const NEEDS_288 = 'Venue drawings need migration 288 — paste it in the Supabase SQL editor, then try again.';
 
 export class ParkingConflict extends Error {
   constructor(public current: SavedParkingMap) {
@@ -74,6 +93,7 @@ function toSaved(row: MapRow, pdfName: string | null): SavedParkingMap {
     view: row.view,
     items: Array.isArray(row.items) ? row.items : [],
     notes: row.notes ?? '',
+    drawings: Array.isArray(row.drawings) ? row.drawings : [],
     pdf: row.pdf_file_id ? { fileId: row.pdf_file_id, name: pdfName, exportedAt: row.pdf_exported_at } : null,
   };
 }
@@ -114,7 +134,7 @@ export async function loadParkingShow(client: SupabaseClient, tourId: string, ro
 }
 
 export async function loadParkingMap(client: SupabaseClient, routingId: string): Promise<SavedParkingMap | null> {
-  const { data } = await client.from('parking_maps').select(MAP_COLS).eq('routing_id', routingId).maybeSingle<MapRow>();
+  const { data } = await withDrawings((cols) => client.from('parking_maps').select(cols).eq('routing_id', routingId).maybeSingle<MapRow>());
   if (!data) return null;
   return toSaved(data, await pdfName(client, data.pdf_file_id));
 }
@@ -133,22 +153,29 @@ export async function saveParkingMap(
     updated_by: userId,
     updated_at: new Date().toISOString(),
   };
+  // Without migration 288 a map still saves — unless it has drawings to keep.
+  const write = (withCol: boolean) => {
+    if (!withCol && data.drawings.length) throw new ParkingInputError(NEEDS_288);
+    return withCol ? { ...fields, drawings: data.drawings } : fields;
+  };
 
   if (version == null) {
     // First save. A concurrent first save loses on the unique key → conflict.
-    const { data: row, error } = await client
-      .from('parking_maps')
-      .insert({
-        ...fields,
-        workspace_id: show.workspaceId,
-        tour_id: show.tourId,
-        routing_id: show.routingId,
-        canonical_venue_id: show.venue.canonicalId,
-        version: 1,
-        created_by: userId,
-      })
-      .select(MAP_COLS)
-      .single<MapRow>();
+    const { data: row, error } = await withDrawings((cols, withCol) =>
+      client
+        .from('parking_maps')
+        .insert({
+          ...write(withCol),
+          workspace_id: show.workspaceId,
+          tour_id: show.tourId,
+          routing_id: show.routingId,
+          canonical_venue_id: show.venue.canonicalId,
+          version: 1,
+          created_by: userId,
+        })
+        .select(cols)
+        .single<MapRow>(),
+    );
     if (error) {
       if (error.code === '23505') {
         const current = await loadParkingMap(client, show.routingId);
@@ -156,15 +183,18 @@ export async function saveParkingMap(
       }
       throw new Error(error.message);
     }
+    if (!row) throw new Error('The map was not saved.');
     return toSaved(row, null);
   }
 
-  const { data: rows, error } = await client
-    .from('parking_maps')
-    .update({ ...fields, version: version + 1 })
-    .eq('routing_id', show.routingId)
-    .eq('version', version)
-    .select(MAP_COLS);
+  const { data: rows, error } = await withDrawings((cols, withCol) =>
+    client
+      .from('parking_maps')
+      .update({ ...write(withCol), version: version + 1 })
+      .eq('routing_id', show.routingId)
+      .eq('version', version)
+      .select(cols),
+  );
   if (error) throw new Error(error.message);
   const row = (rows as MapRow[] | null)?.[0];
   if (!row) {
@@ -187,11 +217,13 @@ export async function recordPdf(
     .eq('workspace_id', args.show.workspaceId)
     .maybeSingle<{ id: string; file_name: string | null }>();
   if (!file) throw new ParkingNotFound('That file isn’t in this workspace.');
-  const { data: rows, error } = await client
-    .from('parking_maps')
-    .update({ pdf_file_id: file.id, pdf_exported_at: new Date().toISOString() })
-    .eq('routing_id', args.show.routingId)
-    .select(MAP_COLS);
+  const { data: rows, error } = await withDrawings((cols) =>
+    client
+      .from('parking_maps')
+      .update({ pdf_file_id: file.id, pdf_exported_at: new Date().toISOString() })
+      .eq('routing_id', args.show.routingId)
+      .select(cols),
+  );
   if (error) throw new Error(error.message);
   const row = (rows as MapRow[] | null)?.[0];
   if (!row) throw new ParkingNotFound('Save the map before exporting it.');
@@ -240,4 +272,87 @@ export async function loadParkingIndex(client: SupabaseClient, tourId: string): 
         pdfExportedAt: m?.pdf_exported_at ?? null,
       };
     });
+}
+
+/* ── Venue drawings: which files can be one, and last time's at this venue ── */
+
+export interface DrawingFile {
+  id: string;
+  name: string;
+  mime: string | null;
+  kind: 'pdf' | 'image';
+  /** Where the browser signs it from (Storage RLS still applies). */
+  bucket: string | null;
+  path: string | null;
+  /** "Tour files" or where it was linked from. */
+  from: string;
+}
+
+export { drawableKind };
+
+type FileRefRow = { id: string; file_name: string | null; file_type: string | null; storage_provider: string | null; provider_file_id: string | null };
+const FILE_REF_COLS = 'id, file_name, file_type, storage_provider, provider_file_id';
+
+/** The tour's own PDFs / images, files linked to this show or its venue, and
+ *  any files the map's drawings already use (a drawing reused from another
+ *  tour at this venue). Workspace-scoped, and RLS on top. */
+export async function loadDrawingFiles(client: SupabaseClient, show: ParkingShow, ids: string[]): Promise<DrawingFile[]> {
+  const out = new Map<string, DrawingFile>();
+  const put = (r: FileRefRow, from: string) => {
+    const kind = drawableKind(r.file_name, r.file_type);
+    if (!kind || out.has(r.id)) return;
+    out.set(r.id, { id: r.id, name: r.file_name ?? 'Drawing', mime: r.file_type, kind, bucket: r.storage_provider, path: r.provider_file_id, from });
+  };
+  const { data: tourFiles } = await client
+    .from('file_references')
+    .select(FILE_REF_COLS)
+    .eq('workspace_id', show.workspaceId)
+    .eq('linked_to_type', 'tour')
+    .eq('linked_to_id', show.tourId);
+  for (const r of (tourFiles ?? []) as FileRefRow[]) put(r, 'Tour files');
+  try {
+    const linked = await linkedFiles(client, { workspaceId: show.workspaceId, type: 'show', id: show.routingId });
+    for (const f of linked) {
+      put(
+        { id: f.id, file_name: f.name, file_type: f.type, storage_provider: f.bucket, provider_file_id: f.path },
+        f.via === 'venue' ? `Linked to the venue${f.tourName ? ` · ${f.tourName}` : ''}` : 'Linked to this show',
+      );
+    }
+  } catch {
+    /* links are a convenience here; the tour's own files still list */
+  }
+  const missing = [...new Set(ids)].filter((id) => /^[0-9a-f-]{36}$/i.test(id) && !out.has(id));
+  if (missing.length) {
+    const { data } = await client.from('file_references').select(FILE_REF_COLS).eq('workspace_id', show.workspaceId).in('id', missing);
+    for (const r of (data ?? []) as FileRefRow[]) put(r, 'Used on this map');
+  }
+  return [...out.values()].sort((a, b) => a.name.localeCompare(b.name));
+}
+
+export interface VenueReuse {
+  routingId: string;
+  updatedAt: string;
+  anchor: LatLng;
+  drawings: ParkingDrawing[];
+}
+
+/** The latest OTHER map at this venue in this workspace that has drawings —
+ *  so a venue gets calibrated once, not once a tour. Null without a library
+ *  venue, or before migration 288. */
+export async function loadVenueReuse(client: SupabaseClient, show: ParkingShow): Promise<VenueReuse | null> {
+  if (!show.venue.canonicalId) return null;
+  const { data, error } = await client
+    .from('parking_maps')
+    .select('routing_id, anchor_lat, anchor_lng, drawings, updated_at')
+    .eq('workspace_id', show.workspaceId)
+    .eq('canonical_venue_id', show.venue.canonicalId)
+    .neq('routing_id', show.routingId)
+    .order('updated_at', { ascending: false })
+    .limit(10);
+  if (error) return null;
+  const hit = ((data ?? []) as { routing_id: string; anchor_lat: number; anchor_lng: number; drawings: ParkingDrawing[] | null; updated_at: string }[]).find(
+    (r) => Array.isArray(r.drawings) && r.drawings.length,
+  );
+  if (!hit) return null;
+  return { routingId: hit.routing_id, updatedAt: hit.updated_at, anchor: { lat: Number(hit.anchor_lat), lng: Number(hit.anchor_lng) }, drawings: hit.drawings! };
 }

@@ -532,6 +532,28 @@ recreate a `_legacy/` tree: delete dead code instead of parking it.
   the key + notes; the editor outlines each plan page's area. No pages saved =
   `defaultPages()` (Plan + 3D). One off-screen Cesium viewer renders all 3D
   pages; a 3D failure drops only the 3D pages, with a warning.
+- **Venue drawings** (Nov 2026, Adam — migration 288, `parking_maps.drawings`):
+  a venue's PDF / JPG from tour Files (or linked to the venue), laid on the map
+  at true scale — for parking the satellite can't see (trucks inside the
+  Velodrom, a basement dock). Rules pure in `src/lib/parking/drawings.ts`;
+  `parseDrawings` is the gate. Source units = PDF points / image px (u right,
+  v DOWN); `toGround`/`svgMatrix` place them; only numbers are stored.
+  Setup (`DrawingSetup`): crop → scale from a PRINTED dimension + a second one
+  checked against it → pin by two points (the drawing keeps ITS scale; the
+  satellite's disagreement is `pinCheck`, > 3 % = maybe out of date) or place
+  by hand. Look: over the satellite the paper is multiplied away (lines on
+  the photo); inside / satellite off = the dark copy (`darkCopy`, lightness
+  inverted, hues kept) so white selection lines stay visible. 3D: an INSIDE
+  drawing clips the Google mesh (`ClippingPolygonCollection` — the roof comes
+  off) and is the floor at the street height around it + `floor`; vehicles on
+  it stand there. Levels: an item's `floor` ?? the inside drawing it's on ??
+  0 (`itemFloor`); picking a level fades the rest and new items go on it; a
+  plan PDF page can print one level. Headroom (`headroomWarnings`): a
+  drawing's clear height, height-limit markers (`clear`, or read from the
+  detail) at a door / over a vehicle / on a route. `/drawings` lists drawable
+  files and offers the latest other map's drawings at this venue (shifted by
+  the anchor difference). `view.satellite === false` = no imagery. The code
+  reads/saves without the column until 288 is pasted (`withDrawings`).
 - Known: each export is a new file (share the Parking maps folder for a link
   that stays current).
 

@@ -44,7 +44,13 @@ import {
   type View,
 } from '@/lib/parking/geo';
 import { AREAS, MARKERS, PAINTS, VEHICLES, areaLabel, markerSpec, vehicleSpec, type AreaType, type MarkerType, type PaintId, type VehicleType } from '@/lib/parking/catalogue';
-import { pathLength, type ParkingItem } from '@/lib/parking/model';
+import { pathLength, type ParkingDrawing, type ParkingItem } from '@/lib/parking/model';
+import { drawableKind, footprint, headroomWarnings, itemFloor, levelLabel, levelsOf, shiftDrawings, svgMatrix } from '@/lib/parking/drawings';
+import type { DrawingFile, VenueReuse } from '@/server/parking/maps';
+import { DrawingsPanel } from './DrawingsPanel';
+import { DrawingSetup } from './DrawingSetup';
+import { sceneDrawings, useDrawingRasters } from './drawingLayers';
+import type { DrawingFileRef } from './drawingRaster';
 import { addMarker, addVehicle, duplicateItem, duplicateItems, finishDraft, itemsInBox, moveItems, record, redo, removeItems, replaceItem, toggleSelection, turnItems, undo, type History } from '@/lib/parking/edit';
 import type { ParkingShow, SavedParkingMap } from '@/server/parking/maps';
 import { ParkingScene, MARKER_ICON, type Draft, type SceneTile } from './ParkingScene';
@@ -57,7 +63,11 @@ import { MAX_PAGES, add3dPage, addPlanPage, movePage, pagesOf, planFrame, remove
 import '@/components/advance/advance.css';
 import './parking.css';
 
-type Tool = { kind: 'select' } | { kind: 'draw'; shape: 'route' | 'area' | 'measure' };
+type Tool =
+  | { kind: 'select' }
+  | { kind: 'draw'; shape: 'route' | 'area' | 'measure' }
+  /** Setting up a drawing: the next click on the map is a pin point. */
+  | { kind: 'pick'; prompt: string };
 
 type Drag =
   | { kind: 'pan'; start: Pt; view0: View; moved: boolean }
@@ -72,6 +82,10 @@ type Drag =
   | { kind: 'pinch'; d0: number; view0: View; mid: Pt };
 
 const DEFAULT_VIEW: View = { cx: 0, cy: 0, ppm: 3, rotation: 0 };
+
+/** A page for one level frames (and prints) that level's items only. */
+const itemsOnLevel = (items: ParkingItem[], drawings: ParkingDrawing[], level: number | undefined) =>
+  level == null ? items : items.filter((i) => itemFloor(i, drawings) === level);
 const SAVE_DELAY = 900;
 
 export interface ParkingEditorProps {
@@ -87,6 +101,7 @@ export function ParkingEditor({ show, tourName, initial, canEdit }: ParkingEdito
   const [view, setView] = useState<View>(initial?.view ?? DEFAULT_VIEW);
   const [items, setItems] = useState<ParkingItem[]>(initial?.items ?? []);
   const [notes, setNotes] = useState(initial?.notes ?? '');
+  const [drawings, setDrawings] = useState<ParkingDrawing[]>(initial?.drawings ?? []);
   const [hist, setHist] = useState<History<ParkingItem[]>>({ past: [], future: [] });
   // Selected ids (Cmd/Ctrl/Shift-click adds, Shift-drag boxes, ⌘A = all).
   const [selected, setSelected] = useState<string[]>([]);
@@ -120,7 +135,7 @@ export function ParkingEditor({ show, tourName, initial, canEdit }: ParkingEdito
   const drag = useRef<Drag | null>(null);
   const pointers = useRef(new Map<number, Pt>());
   const versionRef = useRef<number | null>(initial?.version ?? null);
-  const dataRef = useRef({ anchor, view, items, notes });
+  const dataRef = useRef({ anchor, view, items, notes, drawings });
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const saving = useRef(false);
   const again = useRef(false);
@@ -130,7 +145,7 @@ export function ParkingEditor({ show, tourName, initial, canEdit }: ParkingEdito
   itemsRef.current = items;
   selectedRef.current = selected;
   sizeRef.current = size;
-  dataRef.current = { anchor, view, items, notes };
+  dataRef.current = { anchor, view, items, notes, drawings };
 
   const base = `/api/tours/${show.tourId}/parking/${show.routingId}`;
 
@@ -164,15 +179,25 @@ export function ParkingEditor({ show, tourName, initial, canEdit }: ParkingEdito
   }, [anchor]);
 
   const dpr = typeof window === 'undefined' ? 1 : Math.min(window.devicePixelRatio || 1, 2);
+  // Satellite off (view.satellite === false): a venue drawing or the grid is the base.
+  const satelliteOn = view.satellite !== false;
+  // Levels: the street plus each inside drawing's floor. Picking one fades the rest.
+  const levels = useMemo(() => levelsOf(drawings), [drawings]);
+  const level = levels.length > 1 && view.level != null && levels.includes(view.level) ? view.level : undefined;
+  const levelRef = useRef(level);
+  levelRef.current = level;
+  /** A new item goes on the level being shown. */
+  const atLevel = (list: ParkingItem[], id: string): ParkingItem[] =>
+    levelRef.current == null ? list : list.map((i) => (i.id === id ? ({ ...i, floor: levelRef.current } as ParkingItem) : i));
   const tiles: SceneTile[] = useMemo(() => {
-    if (!session || !anchor || !size.w) return [];
+    if (!satelliteOn || !session || !anchor || !size.w) return [];
     const z = tileZoomFor(anchor.lat, view.ppm, dpr, session.tileScale, maxZoom);
     const layer = (zz: number) =>
       visibleTiles(anchor, view, size.w, size.h, zz, 64).map((k) => ({ id: `${k.z}/${k.x}/${k.y}`, href: tileUrl(session, k), ...tileRect(anchor, k) }));
     // A coarse layer underneath, so zooming never flashes blank.
     const under = z - 3 >= 1 ? layer(z - 3) : [];
     return [...under, ...layer(z)];
-  }, [session, anchor, view, size.w, size.h, dpr, maxZoom]);
+  }, [satelliteOn, session, anchor, view, size.w, size.h, dpr, maxZoom]);
 
   useEffect(() => {
     if (!session || !anchor || !size.w) return;
@@ -191,8 +216,8 @@ export function ParkingEditor({ show, tourName, initial, canEdit }: ParkingEdito
   // The PDF's pages (pages.ts) live on the view; plan pages are outlined on the map.
   const pages = useMemo(() => pagesOf(view), [view]);
   const planFrames = useMemo(
-    () => pages.flatMap((page, i) => (page.kind === 'plan' ? [{ page, n: i + 1, ...planFrame(page, items, view, size) }] : [])),
-    [pages, items, view, size],
+    () => pages.flatMap((page, i) => (page.kind === 'plan' ? [{ page, n: i + 1, ...planFrame(page, itemsOnLevel(items, drawings, page.level), view, size) }] : [])),
+    [pages, items, drawings, view, size],
   );
   const frame = useMemo(() => planFrames.find((f) => f.page.fit)?.frame ?? printFrame(items, view, size, 'auto'), [planFrames, items, view, size]);
   const autoScale = useMemo(() => printFrame(items, view, size, 'auto').scale, [items, view, size]);
@@ -251,7 +276,7 @@ export function ParkingEditor({ show, tourName, initial, canEdit }: ParkingEdito
       saveTimer.current = null;
       void save();
     }, SAVE_DELAY);
-  }, [anchor, view, items, notes, save, conflict]);
+  }, [anchor, view, items, notes, drawings, save, conflict]);
 
   // Leaving with a save pending: send it anyway.
   useEffect(() => {
@@ -437,7 +462,12 @@ export function ParkingEditor({ show, tourName, initial, canEdit }: ParkingEdito
     }
     if (d.kind === 'pan' && !d.moved) {
       if (tool.kind === 'draw') addPoint(ground(e));
-      else setSelected([]);
+      else if (tool.kind === 'pick') {
+        const resolve = pickRef.current;
+        pickRef.current = null;
+        setTool({ kind: 'select' });
+        resolve?.(ground(e));
+      } else setSelected([]);
       return;
     }
     if ((d.kind === 'move' || d.kind === 'rotate' || d.kind === 'end') && d.moved) setHist((hh) => record(hh, d.items0));
@@ -466,15 +496,31 @@ export function ParkingEditor({ show, tourName, initial, canEdit }: ParkingEdito
     setDraft({ kind: shape, points: [], cursor: null });
   };
   const cancelDraw = () => {
+    if (pickRef.current) {
+      pickRef.current(null);
+      pickRef.current = null;
+    }
     setTool({ kind: 'select' });
     setDraft(null);
   };
+  /** The drawing setup asks for a point on the map: resolved by the next click (null if cancelled). */
+  const pickRef = useRef<((p: Pt | null) => void) | null>(null);
+  const requestMapPoint = useCallback(
+    (prompt: string) =>
+      new Promise<Pt | null>((resolve) => {
+        pickRef.current?.(null);
+        pickRef.current = resolve;
+        setDraft(null);
+        setTool({ kind: 'pick', prompt });
+      }),
+    [],
+  );
   const finishDraw = useCallback(
     (points?: Pt[]) => {
       if (tool.kind !== 'draw' || !draft) return;
       const r = finishDraft(itemsRef.current, tool.shape, points ?? draft.points, areaType);
       if (r) {
-        commit(r.items);
+        commit(atLevel(r.items, r.id));
         setSelected([r.id]);
       } else if ((points ?? draft.points).length) {
         showToast(tool.shape === 'area' ? 'An area needs at least three points' : 'Needs at least two points', 'error');
@@ -495,13 +541,13 @@ export function ParkingEditor({ show, tourName, initial, canEdit }: ParkingEdito
   const centre = (): Pt => ({ x: viewRef.current.cx, y: viewRef.current.cy });
   const placeVehicle = (t: VehicleType) => {
     const r = addVehicle(itemsRef.current, t, freeSpot(itemsRef.current, centre(), viewRef.current, 5), viewRef.current.rotation);
-    commit(r.items);
+    commit(atLevel(r.items, r.id));
     setSelected([r.id]);
     cancelDraw();
   };
   const placeMarker = (t: MarkerType) => {
     const r = addMarker(itemsRef.current, t, freeSpot(itemsRef.current, centre(), viewRef.current));
-    commit(r.items);
+    commit(atLevel(r.items, r.id));
     setSelected([r.id]);
     cancelDraw();
   };
@@ -510,6 +556,90 @@ export function ParkingEditor({ show, tourName, initial, canEdit }: ParkingEdito
   const selIds = useMemo(() => selected.filter((id) => items.some((i) => i.id === id)), [selected, items]);
   const sel = selIds.length === 1 ? (items.find((i) => i.id === selIds[0]) ?? null) : null;
   const group = useMemo(() => (selIds.length > 1 ? items.filter((i) => selIds.includes(i.id)) : []), [selIds, items]);
+
+  /* ── Venue drawings ───────────────────────────────────── */
+  const [drawingFiles, setDrawingFiles] = useState<DrawingFile[] | null>(null);
+  const [reuse, setReuse] = useState<VenueReuse | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const [setup, setSetup] = useState<{ file: DrawingFileRef; initial?: ParkingDrawing } | null>(null);
+  const [previewDrawing, setPreviewDrawing] = useState<ParkingDrawing | null>(null);
+  const [pinMarks, setPinMarks] = useState<Pt[]>([]);
+  const fileRefs = useMemo(() => new Map((drawingFiles ?? []).map((f) => [f.id, f])), [drawingFiles]);
+  const shownDrawings = useMemo(
+    () => (previewDrawing ? [...drawings.filter((d) => d.id !== previewDrawing.id), previewDrawing] : drawings),
+    [drawings, previewDrawing],
+  );
+  const { rasters, errors: drawingErrors } = useDrawingRasters(shownDrawings, fileRefs);
+
+  const loadDrawingFiles = useCallback(async () => {
+    const ids = dataRef.current.drawings.map((d) => d.fileId).join(',');
+    try {
+      const r = await fetch(`${base}/drawings${ids ? `?ids=${encodeURIComponent(ids)}` : ''}`);
+      const j = (await r.json().catch(() => ({}))) as { files?: DrawingFile[]; reuse?: VenueReuse | null };
+      if (!r.ok) throw new Error();
+      setDrawingFiles((old) => {
+        // Keep files uploaded this session that the list may not have caught up with.
+        const got = j.files ?? [];
+        const extra = (old ?? []).filter((f) => !got.some((g) => g.id === f.id));
+        return [...got, ...extra];
+      });
+      setReuse(j.reuse ?? null);
+    } catch {
+      setDrawingFiles((old) => old ?? []);
+    }
+  }, [base]);
+  // Once the map has its pin: the drawings' files (to draw them) and "last time at this venue".
+  const hasAnchor = !!anchor;
+  useEffect(() => {
+    if (hasAnchor) void loadDrawingFiles();
+  }, [loadDrawingFiles, hasAnchor]);
+
+  const changeDrawings = useCallback((next: ParkingDrawing[]) => {
+    touched.current = true;
+    setDrawings(next);
+  }, []);
+  const linkToVenue = (fileId: string) => {
+    if (!show.venue.canonicalId) return;
+    // So the drawing turns up at this venue on other tours (best effort).
+    void fetch('/api/file-links', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ fileId, type: 'venue', entityId: show.venue.canonicalId }) }).catch(() => {});
+  };
+  const uploadDrawing = async (file: File) => {
+    const kind = drawableKind(file.name, file.type);
+    if (!kind) return showToast('Venue drawings are PDFs or JPG / PNG images', 'error');
+    setUploading(true);
+    try {
+      const vm = await uploadToFiles({ scope: 'tour', scopeId: show.tourId, folder: 'Parking maps', file });
+      const df: DrawingFile = { id: vm.id.replace(/^ref:/, ''), name: vm.filename, mime: vm.mimeType, kind, bucket: vm.storageBucket, path: vm.storagePath, from: 'Tour files' };
+      setDrawingFiles((l) => [...(l ?? []).filter((x) => x.id !== df.id), df]);
+      setSetup({ file: df });
+    } catch (e) {
+      showToast(e instanceof Error ? e.message : 'The upload failed', 'error');
+    } finally {
+      setUploading(false);
+    }
+  };
+  const finishSetup = (d: ParkingDrawing) => {
+    const exists = dataRef.current.drawings.some((x) => x.id === d.id);
+    changeDrawings(exists ? dataRef.current.drawings.map((x) => (x.id === d.id ? d : x)) : [...dataRef.current.drawings, d]);
+    if (!exists) linkToVenue(d.fileId);
+    setSetup(null);
+    setPreviewDrawing(null);
+    showToast(`${d.name} is on the map${d.pinned ? '' : ' — placed by hand'}`);
+  };
+  const onPreviewDrawing = useCallback((d: ParkingDrawing | null) => setPreviewDrawing(d), []);
+  const onPinMarks = useCallback((pts: Pt[]) => setPinMarks(pts), []);
+
+  // Headroom: vehicles taller than an inside drawing's clear height or a height limit.
+  const warnings = useMemo(() => headroomWarnings(items, drawings), [items, drawings]);
+  const warnIds = useMemo(() => new Set(warnings.flatMap((w) => w.vehicleIds)), [warnings]);
+  // Items on another level than the one shown: faint, not pickable.
+  const fadedIds = useMemo(
+    () => (level == null ? undefined : new Set(items.filter((i) => itemFloor(i, drawings) !== level).map((i) => i.id))),
+    [items, drawings, level],
+  );
+  const levelOptions = useMemo(() => levels.map((l) => ({ value: l, label: levelLabel(l, drawings) })), [levels, drawings]);
+  /** The dark look of each drawing: 3D lays these as floors. */
+  const floorCanvases = useMemo(() => new Map([...rasters].map(([id, r]) => [id, r.dark])), [rasters]);
 
   const patchSelected = (patch: Partial<ParkingItem>) => {
     if (!sel) return;
@@ -568,6 +698,10 @@ export function ParkingEditor({ show, tourName, initial, canEdit }: ParkingEdito
         else doUndo();
         return;
       }
+      if (tool.kind === 'pick') {
+        if (e.key === 'Escape') cancelDraw();
+        return;
+      }
       if (tool.kind === 'draw') {
         if (e.key === 'Escape') cancelDraw();
         else if (e.key === 'Enter') finishDraw();
@@ -620,7 +754,12 @@ export function ParkingEditor({ show, tourName, initial, canEdit }: ParkingEdito
         anchor,
         pages: pages.map((p) =>
           p.kind === 'plan'
-            ? { kind: 'plan' as const, title: p.title, ...planFrame(p, items, view, size) }
+            ? {
+                kind: 'plan' as const,
+                title: p.title,
+                ...planFrame(p, itemsOnLevel(items, drawings, p.level), view, size),
+                ...(p.level != null && levels.length > 1 ? { level: p.level, levelLabel: levelLabel(p.level, drawings) } : {}),
+              }
             : {
                 kind: '3d' as const,
                 title: p.title,
@@ -630,9 +769,20 @@ export function ParkingEditor({ show, tourName, initial, canEdit }: ParkingEdito
         ),
         items,
         notes,
-        session,
+        session: satelliteOn ? session : null,
         maxZoom,
         attribution,
+        drawings: drawings
+          .filter((d) => !d.hidden && rasters.has(d.id))
+          .map((d) => {
+            const r = rasters.get(d.id)!;
+            const lines = !d.inside && satelliteOn && !!session;
+            return { id: d.id, name: d.name, matrix: svgMatrix(d), crop: d.crop, canvas: lines ? r.light : r.dark, opacity: d.opacity, blend: lines ? ('multiply' as const) : ('normal' as const), inside: d.inside, floor: d.floor };
+          }),
+        allDrawings: drawings,
+        floors: floorCanvases,
+        satellite: satelliteOn,
+        warnings: warnings.map((w) => w.text),
       });
       const url = URL.createObjectURL(out.blob);
       if (tab && !tab.closed) tab.location.href = url;
@@ -692,6 +842,18 @@ export function ParkingEditor({ show, tourName, initial, canEdit }: ParkingEdito
     const ppm = Math.min(size.w / f.wM, size.h / f.hM) * 0.9;
     changeView({ ...viewRef.current, cx: f.cx, cy: f.cy, rotation, ppm });
   };
+  const showDrawing = (d: ParkingDrawing) => {
+    setMode('plan');
+    const r = (view.rotation * Math.PI) / 180;
+    const f = footprint(d);
+    const us = f.map((q) => q.x * Math.cos(r) - q.y * Math.sin(r));
+    const vs = f.map((q) => q.x * Math.sin(r) + q.y * Math.cos(r));
+    const cx = f.reduce((a, q) => a + q.x, 0) / 4;
+    const cy = f.reduce((a, q) => a + q.y, 0) / 4;
+    const ppm = Math.min(size.w / (Math.max(...us) - Math.min(...us)), size.h / (Math.max(...vs) - Math.min(...vs))) * 0.9;
+    const onOther = levels.length > 1 && view.level != null && (d.inside ? d.floor : 0) !== view.level;
+    changeView({ ...view, cx, cy, ppm, ...(onOther ? { level: d.inside ? d.floor : 0 } : {}) });
+  };
   const counts = { vehicles: items.filter((i) => i.kind === 'vehicle').length };
 
   return (
@@ -724,6 +886,7 @@ export function ParkingEditor({ show, tourName, initial, canEdit }: ParkingEdito
             onChange={setPages}
             onShow={showPage}
             onAddPlan={() => setPages(addPlanPage(pages, viewRef.current, sizeRef.current))}
+            levels={levelOptions}
           />
           {pdf ? <span className="pk-muted">Last PDF {pdf.exportedAt ? new Date(pdf.exportedAt).toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short' }) : ''} · in Files › Parking maps</span> : null}
         </div>
@@ -734,6 +897,8 @@ export function ParkingEditor({ show, tourName, initial, canEdit }: ParkingEdito
               <Inspector
                 item={sel}
                 anchor={anchor}
+                levels={levelOptions}
+                floor={itemFloor(sel, drawings)}
                 onPatch={patchSelected}
                 onChangeNow={(patch) => sel && commit(replaceItem(itemsRef.current, { ...sel, ...patch } as ParkingItem))}
                 onFocus={onFieldFocus}
@@ -820,6 +985,37 @@ export function ParkingEditor({ show, tourName, initial, canEdit }: ParkingEdito
           <Inspector item={sel} anchor={anchor} readOnly onPatch={() => {}} onFocus={() => {}} onBlur={() => {}} onDelete={() => {}} onDuplicate={() => {}} />
         ) : null}
 
+        <DrawingsPanel
+          drawings={drawings}
+          canEdit={canEdit}
+          satellite={{ available: !!tilesKey(), on: satelliteOn }}
+          errors={drawingErrors}
+          files={drawingFiles}
+          reuse={reuse ? { ...reuse, when: new Date(reuse.updatedAt).toLocaleDateString('en-GB', { month: 'short', year: 'numeric' }) } : null}
+          uploading={uploading}
+          warnings={warnings}
+          onSatellite={(on) => {
+            const { satellite: _drop, ...rest } = viewRef.current;
+            void _drop;
+            changeView(on ? rest : { ...rest, satellite: false });
+          }}
+          onChange={changeDrawings}
+          onPick={(f) => setSetup({ file: f })}
+          onUpload={(f) => void uploadDrawing(f)}
+          onUseReuse={() => {
+            if (!reuse || !anchor) return;
+            changeDrawings(shiftDrawings(reuse.drawings, reuse.anchor, anchor));
+            showToast(`${reuse.drawings.length === 1 ? 'The drawing' : `${reuse.drawings.length} drawings`} from last time placed — check ${reuse.drawings.length === 1 ? 'it' : 'them'} against the map`);
+          }}
+          onSetup={(d) => {
+            const f = fileRefs.get(d.fileId);
+            if (!f) return showToast(`${d.name}’s file isn’t available — was it deleted from Files?`, 'error');
+            setSetup({ file: f, initial: d });
+          }}
+          onShow={showDrawing}
+          onOpenFiles={() => void loadDrawingFiles()}
+        />
+
         <section className="pk-sec">
           <h3>Notes on the PDF</h3>
           <textarea
@@ -859,6 +1055,9 @@ export function ParkingEditor({ show, tourName, initial, canEdit }: ParkingEdito
           <Parking3D
             anchor={anchor}
             items={items}
+            drawings={drawings}
+            floors={floorCanvases}
+            satellite={satelliteOn}
             fallback={{ centre: { x: frame.cx, y: frame.cy }, extent: Math.max(frame.wM, frame.hM) * 0.7, rotation: view.rotation }}
             key={shown3d.key}
             cam3d={shown3d.cam ?? pages.find((p): p is Page3d => p.kind === '3d' && !!p.cam)?.cam ?? undefined}
@@ -888,12 +1087,24 @@ export function ParkingEditor({ show, tourName, initial, canEdit }: ParkingEdito
             tiles={tiles}
             palette={LIVE_PALETTE}
             selectedIds={selIds}
+            drawings={sceneDrawings(shownDrawings, rasters, satelliteOn && !!session, level)}
+            fadedIds={fadedIds}
+            warnIds={warnIds}
             draft={draft}
-            grid={!session}
+            grid={!session || !satelliteOn}
             onItemDown={canEdit && tool.kind === 'select' ? onItemDown : undefined}
             onHandleDown={canEdit && tool.kind === 'select' ? onHandleDown : undefined}
           >
             <VenuePin at={project(view, size.w, size.h, { x: 0, y: 0 })} />
+            {pinMarks.map((g, i) => {
+              const q = project(view, size.w, size.h, g);
+              return (
+                <g key={i} className="pk-setup-pin" pointerEvents="none">
+                  <circle cx={q.x} cy={q.y} r={11} />
+                  <text x={q.x} y={q.y + 4} textAnchor="middle">{i + 1}</text>
+                </g>
+              );
+            })}
             {box ? (
               <rect
                 className="pk-box"
@@ -917,6 +1128,45 @@ export function ParkingEditor({ show, tourName, initial, canEdit }: ParkingEdito
           </div>
         ) : null}
 
+        {mode === 'plan' && tool.kind === 'pick' ? (
+          <div className="pk-hint pk-hint-right" onPointerDown={(e) => e.stopPropagation()}>
+            {tool.prompt} · drag to move the map
+            <button type="button" className="adv-btn adv-btn-sm" onClick={cancelDraw}>Cancel</button>
+          </div>
+        ) : null}
+
+        {mode === 'plan' && setup && canEdit ? (
+          <DrawingSetup
+            key={`${setup.file.id}:${setup.initial?.id ?? 'new'}`}
+            file={setup.file}
+            initial={setup.initial}
+            satelliteOn={satelliteOn && !!session}
+            view={view}
+            requestMapPoint={requestMapPoint}
+            onMarks={onPinMarks}
+            onPreview={onPreviewDrawing}
+            onDone={finishSetup}
+            onCancel={() => {
+              cancelDraw();
+              setSetup(null);
+              setPreviewDrawing(null);
+            }}
+          />
+        ) : null}
+
+        {mode === 'plan' && levels.length > 1 ? (
+          <div className="pk-levels" role="group" aria-label="Level" onPointerDown={(e) => e.stopPropagation()}>
+            <button type="button" aria-pressed={level == null} onClick={() => { const { level: _l, ...rest } = viewRef.current; void _l; changeView(rest); }}>
+              All levels
+            </button>
+            {levelOptions.map((l) => (
+              <button key={l.value} type="button" aria-pressed={level === l.value} onClick={() => changeView({ ...viewRef.current, level: l.value })}>
+                {l.label}
+              </button>
+            ))}
+          </div>
+        ) : null}
+
         {conflict ? (
           <div className="pk-banner" onPointerDown={(e) => e.stopPropagation()}>
             <span className="adv-grow">This map was changed somewhere else since you opened it. Nothing has been overwritten.</span>
@@ -928,6 +1178,7 @@ export function ParkingEditor({ show, tourName, initial, canEdit }: ParkingEdito
                 setItems(conflict.items);
                 setNotes(conflict.notes);
                 setView(conflict.view);
+                setDrawings(conflict.drawings ?? []);
                 setHist({ past: [], future: [] });
                 setConflict(null);
                 setStatus('saved');
@@ -1175,10 +1426,16 @@ function Inspector({
   onDelete,
   onDuplicate,
   onChangeNow = () => {},
+  levels = [],
+  floor = 0,
 }: {
   item: ParkingItem;
   anchor: LatLng;
   readOnly?: boolean;
+  /** The map's levels (drawings.ts levelsOf), when there's more than one. */
+  levels?: { value: number; label: string }[];
+  /** The item's level as it stands (its own, or the drawing it's on). */
+  floor?: number;
   /** One-click changes (colour, standard size): applied as one undo step. */
   onChangeNow?: (p: Partial<ParkingItem>) => void;
   onPatch: (p: Partial<ParkingItem>) => void;
@@ -1208,6 +1465,17 @@ function Inspector({
           </>
         ) : null}
       </div>
+
+      {levels.length > 1 ? (
+        <label className="pk-field">
+          Level
+          <select className="adv-field" value={floor} onChange={(e) => onChangeNow({ floor: Number(e.target.value) })} {...f}>
+            {levels.map((l) => (
+              <option key={l.value} value={l.value}>{l.label}</option>
+            ))}
+          </select>
+        </label>
+      ) : null}
 
       {item.kind === 'vehicle' ? (
         <>
@@ -1324,6 +1592,28 @@ function Inspector({
             Detail
             <input className="adv-field" value={item.detail} placeholder={markerSpec(item.type)?.detailHint} maxLength={300} onChange={(e) => onPatch({ detail: e.target.value })} {...f} />
           </label>
+          {item.type === 'height_limit' ? (
+            <label className="pk-field">
+              Clear height (m) — checked against every vehicle’s height
+              <input
+                className="adv-field adv-mono"
+                inputMode="decimal"
+                defaultValue={item.clear ?? ''}
+                key={`${item.id}-clear-${item.clear ?? ''}`}
+                placeholder="e.g. 4.2"
+                onBlur={(e) => {
+                  const v = e.target.value.trim();
+                  const n = v ? num(v) : null;
+                  if (!v) onPatch({ clear: undefined } as Partial<ParkingItem>);
+                  else if (n != null && n >= 0.5 && n <= 20) onPatch({ clear: n } as Partial<ParkingItem>);
+                  else e.target.value = item.clear != null ? String(item.clear) : '';
+                  onBlur();
+                }}
+                onFocus={onFocus}
+                readOnly={readOnly}
+              />
+            </label>
+          ) : null}
           <GpsLine at={toLatLng(anchor, item)} />
         </>
       ) : null}
@@ -1457,11 +1747,14 @@ function PagesPanel({
   onChange,
   onShow,
   onAddPlan,
+  levels = [],
 }: {
   pages: PdfPage[];
   autoScale: number;
   canEdit: boolean;
   mode: 'plan' | '3d';
+  /** The map's levels, when it has more than one: a plan page can print one. */
+  levels?: { value: number; label: string }[];
   onChange: (next: PdfPage[]) => void;
   onShow: (page: PdfPage) => void;
   onAddPlan: () => void;
@@ -1505,6 +1798,25 @@ function PagesPanel({
             ) : (
               <span className="pk-muted pk-pagescale">{p.cam ? 'Your view' : 'Default view'}</span>
             )}
+            {p.kind === 'plan' && levels.length > 1 ? (
+              <select
+                className="adv-field pk-pagelevel"
+                aria-label={`Page ${i + 1} level`}
+                disabled={!canEdit}
+                value={p.level == null ? 'all' : String(p.level)}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  const { level: _drop, ...rest } = p;
+                  void _drop;
+                  onChange(pages.map((x) => (x.id === p.id ? (v === 'all' ? rest : { ...rest, level: Number(v) }) : x)) as PdfPage[]);
+                }}
+              >
+                <option value="all">All levels</option>
+                {levels.map((l) => (
+                  <option key={l.value} value={l.value}>{l.label}</option>
+                ))}
+              </select>
+            ) : null}
             <span className="pk-pageacts">
               <button type="button" className="adv-link" onClick={() => onShow(p)}>
                 Show

@@ -29,6 +29,8 @@ export interface VehicleItem {
   height: number;
   /** A paint instead of the type's colour; absent = the type's colour. */
   colour?: PaintId;
+  /** Level (floor height, m, relative to the street); absent = the level it's drawn on (drawings.ts). */
+  floor?: number;
 }
 
 export interface MarkerItem {
@@ -39,6 +41,9 @@ export interface MarkerItem {
   detail: string;
   x: number;
   y: number;
+  /** Height limit markers: the clear height, m (headroom checks). */
+  clear?: number;
+  floor?: number;
 }
 
 export interface RouteItem {
@@ -46,6 +51,7 @@ export interface RouteItem {
   kind: 'route';
   label: string;
   points: Pt[];
+  floor?: number;
 }
 
 export interface AreaItem {
@@ -54,6 +60,7 @@ export interface AreaItem {
   type: AreaType;
   label: string;
   points: Pt[];
+  floor?: number;
 }
 
 export interface MeasureItem {
@@ -61,15 +68,74 @@ export interface MeasureItem {
   kind: 'measure';
   a: Pt;
   b: Pt;
+  floor?: number;
 }
 
 export type ParkingItem = VehicleItem | MarkerItem | RouteItem | AreaItem | MeasureItem;
+
+/* ── Venue drawings (Nov 2026, Adam) ─────────────────────────
+   A venue's PDF / JPG plan laid on the map at true scale. Source units are
+   PDF points (the page as shown, /Rotate applied) or image pixels: u right,
+   v DOWN from the page's top-left. drawings.ts maps them to the ground:
+     ground = (x, y) + R(rotation) · (u·scale, −v·scale)
+   R turns clockwise (compass sense). Only metres reach the ground frame —
+   the drawing is placed by numbers, never by pixels on someone's screen. */
+
+export interface SrcPt {
+  u: number;
+  v: number;
+}
+
+export interface DrawingCalibration {
+  /** The dimension clicked on the drawing and what it says, metres. */
+  a: SrcPt;
+  b: SrcPt;
+  metres: number;
+  /** A second dimension, checked against the first. */
+  check?: { a: SrcPt; b: SrcPt; metres: number };
+}
+
+export interface ParkingDrawing {
+  id: string;
+  /** The file in tour Files (file_references.id). */
+  fileId: string;
+  name: string;
+  kind: 'pdf' | 'image';
+  /** PDF page, 1-based (1 for an image). */
+  page: number;
+  /** The page size, source units. */
+  srcW: number;
+  srcH: number;
+  /** The part that shows, source units. */
+  crop: { u0: number; v0: number; u1: number; v1: number };
+  /** Metres per source unit. */
+  scale: number;
+  calib: DrawingCalibration | null;
+  /** Ground position of the source origin, metres. */
+  x: number;
+  y: number;
+  /** Compass degrees, clockwise: how far the drawing's "up" is turned from north. */
+  rotation: number;
+  /** Matched to the satellite by two points (vs placed by hand). */
+  pinned: boolean;
+  /** How far the satellite disagreed with the drawing's own scale when pinned, %. */
+  pinCheck: number | null;
+  opacity: number;
+  hidden: boolean;
+  /** Inside a building: 3D cuts the roof away and shows this as the floor. */
+  inside: boolean;
+  /** Floor height relative to the street, metres (−5 = a basement dock). */
+  floor: number;
+  /** Clear height inside, metres (headroom checks). */
+  clearHeight: number | null;
+}
 
 export interface ParkingMapData {
   anchor: LatLng;
   view: View;
   items: ParkingItem[];
   notes: string;
+  drawings: ParkingDrawing[];
 }
 
 export const LIMITS = {
@@ -88,6 +154,13 @@ export const LIMITS = {
   /** PDF pages (pages.ts). */
   pages: 12,
   pageTitle: 60,
+  /** Venue drawings per map; their units (PDF points / image px) and scale. */
+  drawings: 8,
+  drawingName: 120,
+  srcMax: 40000,
+  /** Floor heights relative to the street, m. */
+  floorMin: -30,
+  floorMax: 30,
 } as const;
 
 const VEHICLE_TYPES = new Set<string>(VEHICLES.map((v) => v.type));
@@ -139,6 +212,10 @@ function pts(v: unknown, what: string, min: number): Pt[] {
   return a.map((p, i) => pt(p, `${what} point ${i + 1}`));
 }
 
+function floorOf(o: Record<string, unknown>): { floor?: number } {
+  return o.floor == null || o.floor === '' ? {} : { floor: num(o.floor, 'Level', LIMITS.floorMin, LIMITS.floorMax) };
+}
+
 export function parseItem(raw: unknown): ParkingItem {
   if (!isObj(raw)) fail('Each item must be an object');
   const o = raw as Record<string, unknown>;
@@ -156,6 +233,7 @@ export function parseItem(raw: unknown): ParkingItem {
         width: num(o.width, 'Width', LIMITS.minSize, LIMITS.maxWidth),
         height: num(o.height, 'Height', LIMITS.minSize, LIMITS.maxHeight),
         ...(o.colour == null || o.colour === '' ? {} : { colour: paint(o.colour) }),
+        ...floorOf(o),
       };
     }
     case 'marker': {
@@ -167,16 +245,18 @@ export function parseItem(raw: unknown): ParkingItem {
         label: text(o.label, LIMITS.label),
         detail: text(o.detail, LIMITS.detail),
         ...pt(o, 'Marker'),
+        ...(o.clear == null || o.clear === '' ? {} : { clear: num(o.clear, 'Clear height', 0.5, 20) }),
+        ...floorOf(o),
       };
     }
     case 'route':
-      return { id: id(o.id), kind: 'route', label: text(o.label, LIMITS.label), points: pts(o.points, 'Route', 2) };
+      return { id: id(o.id), kind: 'route', label: text(o.label, LIMITS.label), points: pts(o.points, 'Route', 2), ...floorOf(o) };
     case 'area': {
       if (typeof o.type !== 'string' || !AREA_TYPES.has(o.type)) fail('Unknown area type');
-      return { id: id(o.id), kind: 'area', type: o.type as AreaType, label: text(o.label, LIMITS.label), points: pts(o.points, 'Area', 3) };
+      return { id: id(o.id), kind: 'area', type: o.type as AreaType, label: text(o.label, LIMITS.label), points: pts(o.points, 'Area', 3), ...floorOf(o) };
     }
     case 'measure':
-      return { id: id(o.id), kind: 'measure', a: pt(o.a, 'Measure start'), b: pt(o.b, 'Measure end') };
+      return { id: id(o.id), kind: 'measure', a: pt(o.a, 'Measure start'), b: pt(o.b, 'Measure end'), ...floorOf(o) };
     default:
       return fail('Unknown item kind');
   }
@@ -192,7 +272,83 @@ export function parseView(raw: unknown): View {
     rotation: normDeg(num(o.rotation, 'Rotation', -3600, 3600)),
     ...(o.cam3d == null ? {} : { cam3d: parseCamera3d(o.cam3d) }),
     ...(o.pages == null ? {} : { pages: parsePages(o.pages) }),
+    ...(o.satellite === false ? { satellite: false } : {}),
+    ...(o.level == null || o.level === '' ? {} : { level: num(o.level, 'Level', LIMITS.floorMin, LIMITS.floorMax) }),
   };
+}
+
+function srcPt(v: unknown, what: string): SrcPt {
+  if (!isObj(v)) fail(`${what} must be a point on the drawing`);
+  const o = v as Record<string, unknown>;
+  return { u: num(o.u, `${what} across`, -LIMITS.srcMax, LIMITS.srcMax), v: num(o.v, `${what} down`, -LIMITS.srcMax, LIMITS.srcMax) };
+}
+
+/** Full precision for numbers that get multiplied up (a scale in m per PDF
+ *  point is ~0.1; rounding it to 0.001 would be a 1 % error). */
+function fine(v: unknown, what: string, lo: number, hi: number): number {
+  if (typeof v !== 'number' || !Number.isFinite(v)) fail(`${what} must be a number`);
+  if ((v as number) < lo || (v as number) > hi) fail(`${what} is out of range`);
+  return v as number;
+}
+
+/** The map's venue drawings. Every field checked; at most LIMITS.drawings. */
+export function parseDrawings(raw: unknown): ParkingDrawing[] {
+  if (raw == null) return [];
+  if (!Array.isArray(raw)) fail('drawings must be a list');
+  const list = raw as unknown[];
+  if (list.length > LIMITS.drawings) fail(`A map holds at most ${LIMITS.drawings} drawings`);
+  const out = list.map((r): ParkingDrawing => {
+    if (!isObj(r)) fail('Each drawing must be an object');
+    const o = r as Record<string, unknown>;
+    if (typeof o.fileId !== 'string' || !/^[0-9a-f-]{36}$/i.test(o.fileId)) fail('A drawing needs its file');
+    if (o.kind !== 'pdf' && o.kind !== 'image') fail('A drawing is a PDF or an image');
+    const srcW = num(o.srcW, 'Drawing width', 1, LIMITS.srcMax);
+    const srcH = num(o.srcH, 'Drawing height', 1, LIMITS.srcMax);
+    if (!isObj(o.crop)) fail('A drawing needs its crop');
+    const c = o.crop as Record<string, unknown>;
+    const crop = {
+      u0: num(c.u0, 'Crop left', 0, srcW),
+      v0: num(c.v0, 'Crop top', 0, srcH),
+      u1: num(c.u1, 'Crop right', 0, srcW),
+      v1: num(c.v1, 'Crop bottom', 0, srcH),
+    };
+    if (crop.u1 - crop.u0 < 1 || crop.v1 - crop.v0 < 1) fail('The crop is empty');
+    let calib: DrawingCalibration | null = null;
+    if (o.calib != null) {
+      if (!isObj(o.calib)) fail('Calibration must be an object');
+      const k = o.calib as Record<string, unknown>;
+      calib = { a: srcPt(k.a, 'Dimension start'), b: srcPt(k.b, 'Dimension end'), metres: num(k.metres, 'Dimension', 0.01, 10000) };
+      if (k.check != null) {
+        if (!isObj(k.check)) fail('Check must be an object');
+        const q = k.check as Record<string, unknown>;
+        calib.check = { a: srcPt(q.a, 'Check start'), b: srcPt(q.b, 'Check end'), metres: num(q.metres, 'Check dimension', 0.01, 10000) };
+      }
+    }
+    return {
+      id: id(o.id),
+      fileId: (o.fileId as string).toLowerCase(),
+      name: text(o.name, LIMITS.drawingName) || 'Drawing',
+      kind: o.kind as 'pdf' | 'image',
+      page: Math.round(num(o.page, 'Page', 1, 500)),
+      srcW,
+      srcH,
+      crop,
+      scale: fine(o.scale, 'Drawing scale', 1e-5, 100),
+      calib,
+      x: num(o.x, 'Drawing position x', -LIMITS.reach * 4, LIMITS.reach * 4),
+      y: num(o.y, 'Drawing position y', -LIMITS.reach * 4, LIMITS.reach * 4),
+      rotation: normDeg(fine(o.rotation, 'Drawing rotation', -3600, 3600)),
+      pinned: o.pinned === true,
+      pinCheck: o.pinCheck == null ? null : num(o.pinCheck, 'Pin check', -1000, 1000),
+      opacity: num(o.opacity ?? 0.85, 'Opacity', 0.1, 1),
+      hidden: o.hidden === true,
+      inside: o.inside === true,
+      floor: num(o.floor ?? 0, 'Floor', LIMITS.floorMin, LIMITS.floorMax),
+      clearHeight: o.clearHeight == null || o.clearHeight === '' ? null : num(o.clearHeight, 'Clear height', 0.5, 30),
+    };
+  });
+  if (new Set(out.map((d) => d.id)).size !== out.length) fail('Two drawings share an id');
+  return out;
 }
 
 const PRINT_SCALE_SET = new Set<number>(PRINT_SCALES);
@@ -213,9 +369,11 @@ export function parsePages(raw: unknown): PdfPage[] {
     const base = { id: id(o.id), title: text(o.title, LIMITS.pageTitle) || 'Page' };
     if (o.kind === '3d') return { ...base, kind: '3d', cam: o.cam == null ? null : parseCamera3d(o.cam) };
     if (o.kind !== 'plan') fail('Unknown page kind');
-    if (o.fit === true) return { ...base, kind: 'plan', fit: true, scale: o.scale === 'auto' || o.scale == null ? 'auto' : printScale(o.scale) };
+    const lv = o.level == null || o.level === '' ? {} : { level: num(o.level, 'Page level', LIMITS.floorMin, LIMITS.floorMax) };
+    if (o.fit === true) return { ...base, kind: 'plan', fit: true, scale: o.scale === 'auto' || o.scale == null ? 'auto' : printScale(o.scale), ...lv };
     return {
       ...base,
+      ...lv,
       kind: 'plan',
       fit: false,
       cx: num(o.cx, 'Page centre x', -LIMITS.reach, LIMITS.reach),
@@ -265,7 +423,7 @@ export function parseMapBody(raw: unknown): ParkingMapData {
   if (list.length > LIMITS.items) fail(`A map holds at most ${LIMITS.items} items`);
   const items = list.map(parseItem);
   if (new Set(items.map((i) => i.id)).size !== items.length) fail('Two items share an id');
-  return { anchor: parseAnchor(o.anchor), view: parseView(o.view), items, notes: text(o.notes, LIMITS.notes) };
+  return { anchor: parseAnchor(o.anchor), view: parseView(o.view), items, notes: text(o.notes, LIMITS.notes), drawings: parseDrawings(o.drawings) };
 }
 
 /* ── Helpers the editor and PDF share ─────────────────────── */

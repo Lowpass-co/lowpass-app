@@ -21,8 +21,9 @@ import { LIMITS, type ParkingItem } from './model';
 
 export type PrintScale = (typeof PRINT_SCALES)[number];
 
-export type PlanFitPage = { id: string; kind: 'plan'; title: string; fit: true; scale: 'auto' | PrintScale };
-export type PlanFixedPage = { id: string; kind: 'plan'; title: string; fit: false; cx: number; cy: number; rotation: number; scale: PrintScale };
+/** `level`: a page for one level of a stacked venue (drawings.ts levelsOf); absent = every level. */
+export type PlanFitPage = { id: string; kind: 'plan'; title: string; fit: true; scale: 'auto' | PrintScale; level?: number };
+export type PlanFixedPage = { id: string; kind: 'plan'; title: string; fit: false; cx: number; cy: number; rotation: number; scale: PrintScale; level?: number };
 export type Page3d = { id: string; kind: '3d'; title: string; cam: Camera3d | null };
 export type PdfPage = PlanFitPage | PlanFixedPage | Page3d;
 
@@ -63,6 +64,7 @@ export function addPlanPage(pages: PdfPage[], view: View, viewport: { w: number;
     cy: Math.round(view.cy * 100) / 100,
     rotation: Math.round(view.rotation * 10) / 10,
     scale: screenScale(view, viewport),
+    ...(view.level != null ? { level: view.level } : {}),
   };
   return [...pages, page];
 }

@@ -35,7 +35,9 @@ import {
   type View,
 } from '@/lib/parking/geo';
 import { areaLabel, markerSpec, vehicleSpec } from '@/lib/parking/catalogue';
-import { pathLength, type ParkingItem } from '@/lib/parking/model';
+import { pathLength, type ParkingDrawing, type ParkingItem } from '@/lib/parking/model';
+import { itemFloor } from '@/lib/parking/drawings';
+import { onLevel } from './drawingLayers';
 import { ParkingScene } from './ParkingScene';
 import { loadCesium } from './loadCesium';
 import { applyCamera, createViewer, creditsText, lookAt, populate, settle } from './scene3d';
@@ -53,7 +55,15 @@ const PX_PER_MM = 8; // ≈ 203 dpi
 const LABEL_SCALE = 2.2; // 12 px labels → ~9 pt on paper
 
 export type ResolvedPage =
-  | { kind: 'plan'; title: string; frame: PrintFrame; rotation: number }
+  | {
+      kind: 'plan';
+      title: string;
+      frame: PrintFrame;
+      rotation: number;
+      /** Only this level's items and drawings (stacked levels); absent = all. */
+      level?: number;
+      levelLabel?: string;
+    }
   | { kind: '3d'; title: string; cam: Camera3d | null; fallback: { centre: Pt; extent: number; rotation: number } };
 
 export interface ExportInput {
@@ -67,6 +77,28 @@ export interface ExportInput {
   session: TileSession | null;
   maxZoom: number;
   attribution: string;
+  /** Venue drawings, rendered: painted under the items on plan pages, in the look the plan shows. */
+  drawings: ExportDrawing[];
+  /** Every drawing on the map (levels, and 3D floors). */
+  allDrawings: ParkingDrawing[];
+  /** 3D floors: each drawing's dark look. */
+  floors: ReadonlyMap<string, HTMLCanvasElement>;
+  /** Satellite on (3D builds the Google city). */
+  satellite: boolean;
+  /** Headroom warnings (drawings.ts), printed in the key. */
+  warnings: string[];
+}
+
+export interface ExportDrawing {
+  id: string;
+  name: string;
+  matrix: [number, number, number, number, number, number];
+  crop: ParkingDrawing['crop'];
+  canvas: HTMLCanvasElement;
+  opacity: number;
+  blend: 'multiply' | 'normal';
+  inside: boolean;
+  floor: number;
 }
 
 export interface ExportResult {
@@ -87,8 +119,8 @@ async function render3dImages(
   pages: Extract<ResolvedPage, { kind: '3d' }>[],
   palette: Palette,
 ): Promise<{ jpeg: string; credits: string }[]> {
-  const key = tilesKey();
-  if (!key) throw new Error('no Google Map Tiles key');
+  const key = input.satellite ? tilesKey() : null;
+  if (!key && !input.allDrawings.length) throw new Error('no Google Map Tiles key');
   const W = Math.round(FRAME.w * PX_PER_MM_3D);
   const H = Math.round(FRAME.h * PX_PER_MM_3D);
   const host = document.createElement('div');
@@ -97,11 +129,11 @@ async function render3dImages(
   let viewer: ReturnType<typeof createViewer> | null = null;
   try {
     const Cesium = await loadCesium();
-    viewer = createViewer(Cesium, host, { withTiles: true, blank: palette.blank, sky: palette.sky });
+    viewer = createViewer(Cesium, host, { withTiles: !!key, blank: palette.blank, sky: palette.sky });
     const first = pages[0];
     const d0 = defaultCamera3d(first.fallback.centre, first.fallback.extent, first.fallback.rotation);
     lookAt(Cesium, viewer, input.anchor, d0.target, 0, d0.heading, d0.pitch, d0.range);
-    const scene = await populate(Cesium, viewer, { anchor: input.anchor, items: input.items, palette, tilesKey: key });
+    const scene = await populate(Cesium, viewer, { anchor: input.anchor, items: input.items, palette, tilesKey: key, drawings: input.allDrawings, floors: input.floors });
     const shots: { jpeg: string; credits: string }[] = [];
     for (const page of pages) {
       if (page.cam) applyCamera(Cesium, viewer, input.anchor, page.cam);
@@ -201,6 +233,21 @@ export async function renderMapImage(
     ctx.restore();
   }
 
+  // Venue drawings, under the items (the plan's look: lines multiplied onto
+  // the photo, or the dark copy as the floor).
+  for (const d of input.drawings) {
+    ctx.save();
+    ctx.translate(W / 2, H / 2);
+    ctx.rotate((-view.rotation * Math.PI) / 180);
+    ctx.scale(view.ppm, view.ppm);
+    ctx.translate(-view.cx, view.cy);
+    ctx.transform(...d.matrix);
+    ctx.globalAlpha = d.opacity;
+    ctx.globalCompositeOperation = d.blend === 'multiply' ? 'multiply' : 'source-over';
+    ctx.drawImage(d.canvas, d.crop.u0, d.crop.v0, d.crop.u1 - d.crop.u0, d.crop.v1 - d.crop.v0);
+    ctx.restore();
+  }
+
   const svg = sceneSvg({
     view,
     width: W,
@@ -231,7 +278,7 @@ export async function exportParkingPdf(input: ExportInput): Promise<ExportResult
   let shots: { jpeg: string; credits: string }[] | null = null;
   let warning: string | null = null;
   if (pages3d.length) {
-    if (!input.session) warning = 'The PDF has no 3D pages: map imagery isn’t set up.';
+    if (!input.session && !input.allDrawings.length) warning = 'The PDF has no 3D pages: map imagery isn’t set up.';
     else {
       try {
         shots = await render3dImages(input, pages3d, palette);
@@ -311,9 +358,15 @@ export async function exportParkingPdf(input: ExportInput): Promise<ExportResult
       continue;
     }
 
-    const { jpeg, scale, view } = await renderMapImage(input, page, palette, fontFamily);
+    // A page for one level shows that level's items and drawings only.
+    const lv = page.level;
+    const pin: ExportInput =
+      lv == null
+        ? input
+        : { ...input, items: input.items.filter((i) => itemFloor(i, input.allDrawings) === lv), drawings: input.drawings.filter((d) => onLevel(d, lv)) };
+    const { jpeg, scale, view } = await renderMapImage(pin, page, palette, fontFamily);
     firstScale ??= scale;
-    header(page.title, `${input.subtitle}   ·   Scale 1:${scale.toLocaleString('en-GB')} at A4`);
+    header(page.title, `${input.subtitle}${page.levelLabel ? `   ·   ${page.levelLabel}` : ''}   ·   Scale 1:${scale.toLocaleString('en-GB')} at A4`);
     doc.addImage(jpeg, 'JPEG', FRAME.x, FRAME.y, FRAME.w, FRAME.h);
     frameBox();
 
@@ -353,10 +406,15 @@ export async function exportParkingPdf(input: ExportInput): Promise<ExportResult
     doc.text('N', nx + dir.x * 5.2, ny + dir.y * 5.2 + 1.2, { align: 'center' });
     doc.setFont('helvetica', 'normal');
 
-    if (input.session) credit(`Google Maps${input.attribution ? ` · ${input.attribution}` : ''}`);
+    const drawn = [...new Set(pin.drawings.map((d) => d.name))];
+    const credits = [
+      input.session ? `Google Maps${input.attribution ? ` · ${input.attribution}` : ''}` : null,
+      drawn.length ? `Drawing${drawn.length > 1 ? 's' : ''}: ${drawn.join(', ')} (venue)` : null,
+    ].filter(Boolean);
+    if (credits.length) credit(credits.join(' · '));
 
-    drawKey(doc, input, palette, { ink, grey, link });
-    footer(n + 1, input.session ? ' · Imagery: Google Maps' : '');
+    drawKey(doc, pin, palette, { ink, grey, link });
+    footer(n + 1, `${input.session ? ' · Imagery: Google Maps' : ''}${drawn.length ? ' · Drawings: the venue’s' : ''}`);
   }
 
   const blob = doc.output('blob');
@@ -433,6 +491,12 @@ function drawKey(
     for (const a of areas) if (a.kind === 'area') row(areaColour(palette, a.type), a.label || areaLabel(a.type));
     for (const rt of routes) if (rt.kind === 'route') row(palette.route, rt.label || 'Route', fmtMetres(pathLength(rt.points)));
     for (const m of measures) if (m.kind === 'measure') row(null, `Measured: ${fmtMetres(dist(m.a, m.b))}`);
+    line(2);
+  }
+
+  if (input.warnings.length) {
+    heading('Headroom — check before they go in');
+    for (const w of input.warnings) row(palette['area-no-go'], w);
     line(2);
   }
 

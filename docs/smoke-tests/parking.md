@@ -167,6 +167,50 @@ browser key restricted to the Map Tiles API and the app's domains).**
 
 **Last verified**:
 
+## Venue drawings
+
+**Prereq: migration 288 pasted.**
+
+#### PRK-24 — Put a venue's drawing on the map
+
+**Do**: Venue drawings → Add a venue drawing → pick (or upload) the venue's PDF. Crop round the car park; Next. Click both ends of a printed dimension (a 16 m bay), type 16; Check with a second dimension (the 24.08 m to the gate), type it; Next. Click a corner on the drawing, the same corner on the satellite; again for a second point far away; Done.
+
+**Expect**: "The two agree within 0.6 %" (the bp pulse LIVE S2 drawing does); "The satellite agrees with the drawing within N %" (over 3 % says it may be out of date). The drawing's lines lie on the satellite at true size — a 13.5 m bus fits a 16 m bay with room to spare, an 18.75 m bus + trailer does not. Reload: it's exactly where it was. The panel says how it was set ("Scale from 16 m, checked 0.6 % · pinned · satellite 0.4 % agrees").
+
+**Last verified**:
+
+#### PRK-25 — Indoor parking: the roof comes off
+
+**Do**: On a venue whose trucks park inside (the Velodrom, a basement dock), set up its drawing and tick **Inside a building**; floor −5 for a basement. Park a truck on it. Open 3D.
+
+**Expect**: The plan shows the drawing dark (white lines). In 3D the building's roof is cut away over the drawing and the drawing is the floor, at street height + the floor you typed; the truck stands on it at true size. The street outside is the normal Google city. The PDF's 3D pages show the same.
+
+**Last verified**:
+
+#### PRK-26 — Headroom
+
+**Do**: Give the inside drawing a clear height of 3.8 m; park a 4.1 m truck on it. Separately, drop a Height limit marker with clear height 4.2 over a 4.4 m bus, and one on a route.
+
+**Expect**: A Headroom box lists each ("Taller than the 3.8 m clear height inside …: Truck 1 (4.1 m)"); those vehicles are outlined red on the plan; the PDF key prints "Headroom — check before they go in". A Height limit marker drawn before this with "4.2 m" in its detail counts too.
+
+**Last verified**:
+
+#### PRK-27 — Levels
+
+**Do**: With a basement drawing (floor −5), pick its level in the switcher under Plan | 3D; add a truck; pick Street; add a bus. Under PDF pages, set a plan page to the basement level; Export.
+
+**Expect**: Things on the other level fade and can't be picked; the truck is saved on −5, the bus on the street (inspector → Level). The basement page prints only the basement's drawing and vehicles, its level named in the header.
+
+**Last verified**:
+
+#### PRK-28 — Next time at the same venue
+
+**Do**: Open the parking map for another show at a venue that already has a map with drawings.
+
+**Expect**: "Last time here (Mar 2026): S2 Truck Parking.pdf — already scaled and placed. Use it" — one click and it lands in the same real place (even if this map's pin differs). Satellite off (the checkbox) shows the drawings on a plain ground, and 3D shows them without the city.
+
+**Last verified**:
+
 ## 3D
 
 #### PRK-16 — The 3D view, to scale
