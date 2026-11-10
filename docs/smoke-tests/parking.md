@@ -89,7 +89,7 @@ browser key restricted to the Map Tiles API and the app's domains).**
 
 **Do**: On a venue's map, place a marker exactly on a gate in the imagery and park a bus along a kerb; wait for Saved; reload (twice).
 
-**Expect**: The marker is still on the gate and the bus still on the kerb, to within a few centimetres. Before the fix (migration 288 + the anchor precision change) the whole drawing jumped tens of metres on reload.
+**Expect**: The marker is still on the gate and the bus still on the kerb, to within a few centimetres. Before the anchor-precision fix the whole drawing jumped tens of metres on reload.
 
 **Last verified**:
 
