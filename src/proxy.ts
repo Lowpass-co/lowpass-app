@@ -101,7 +101,12 @@ export const config = {
      * they must never redirect to /login. An unauthenticated /sw.js redirect
      * silently blocked service-worker updates for logged-out browsers, which is
      * how the stale v1 SW survived deploys.
+     *
+     * cesium/ is the open-source CesiumJS runtime the parking map's 3D page
+     * loads (Cesium.js + dozens of worker / asset files, copied from
+     * node_modules by scripts/copy-cesium.mjs). Nothing private; running each
+     * file through a session refresh would only slow the 3D page down.
      */
-    '/((?!_next/static|_next/image|favicon.ico|sw\\.js|manifest\\.webmanifest|icons/|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico|woff2?)$).*)',
+    '/((?!_next/static|_next/image|favicon.ico|sw\\.js|manifest\\.webmanifest|icons/|cesium/|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico|woff2?)$).*)',
   ],
 };

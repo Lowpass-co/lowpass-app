@@ -500,6 +500,18 @@ recreate a `_legacy/` tree: delete dead code instead of parking it.
   for the view and never stored (Google's terms); "Google Maps · <credit>" stays
   visible on screen and on the PDF. No key → a true-scale grid, no imagery.
 - Overlay colours are `--lp-map-*` (fixed, not themed — they sit on a photo).
+- **3D (phase 2):** the editor's Plan | 3D switch → `<Parking3D>`; the PDF's
+  page 2. ONE builder, `scene3d.ts` (`populate`), for both: Google
+  Photorealistic 3D Tiles (same browser key) rendered by **CesiumJS loaded at
+  runtime from `/cesium`** — copied from `node_modules` by
+  `scripts/copy-cesium.mjs` (postinstall + prebuild; `public/cesium` is
+  gitignored, excluded from the auth proxy matcher and from lint). Never
+  import Cesium as a value in app code — `import type` only. Vehicles are
+  `vehicleBlocks()` (`src/lib/parking/blocks3d.ts`): the plan's silhouette
+  parts lifted to true heights, standing at the LOWEST mesh height under the
+  vehicle (so a tree doesn't lift a bus). 3D is look-only; "Use this view for
+  the PDF" saves `view.cam3d` (validated by `parseCamera3d`). No sky
+  atmosphere — with the globe off it painted over the vehicles.
 - Known: each export is a new file (share the Parking maps folder for a link
   that stays current).
 

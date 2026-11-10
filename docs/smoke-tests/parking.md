@@ -135,6 +135,32 @@ browser key restricted to the Map Tiles API and the app's domains).**
 
 **Last verified**:
 
+## 3D
+
+#### PRK-16 — The 3D view, to scale
+
+**Do**: On a map, switch **Plan | 3D**.
+
+**Expect**: Google's 3D city loads around the venue with every vehicle as a true-size block model (buses with roof units and trailer, artic cab + box, US hood + sleeper…), standing on the road, labelled with its length; routes and areas lie on the ground; markers show through roofs. Drag moves, right-drag / Ctrl-drag tilts and turns, scroll zooms. Google's credit line shows bottom left. A 4 m bus is visibly the height of a single-storey building beside it.
+
+**Last verified**:
+
+#### PRK-17 — Use this view for the PDF
+
+**Do**: In 3D, frame the approach; press **Use this view for the PDF**; Export PDF.
+
+**Expect**: "Saved" toast; the PDF has a page 2 — the same view, titled "… · 3D", Google credit bottom right, a note that perspective has no scale bar. Reloading and exporting again keeps the view. Without a saved view, page 2 looks at the drawing from the south-west-ish default.
+
+**Last verified**:
+
+#### PRK-18 — Trees and overhangs
+
+**Do**: Park a bus under a tree or a canopy on the overhead plan; open 3D.
+
+**Expect**: The bus stands on the road, not on top of the tree.
+
+**Last verified**:
+
 ## Known broken
 
 #### PRK-90 — Re-exporting makes a new file

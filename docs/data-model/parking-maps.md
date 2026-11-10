@@ -11,7 +11,7 @@ A4 PDF into tour Files.
 | `workspace_id`, `tour_id`, `routing_id` | Owner. `routing_id` is UNIQUE (one map per show). RLS checks the routing row belongs to the tour, and the tour to the caller's workspace. |
 | `canonical_venue_id` | The venue at save time; lets a later map at the same venue start from this one (phase 3). |
 | `anchor_lat`, `anchor_lng` | The fixed point every item is measured from. Set from `canonical_venues.lat/lng`, else found by geocode / pasted coordinates on first open. Never moves once saved. |
-| `view` | `{ cx, cy, ppm, rotation }` — where the editor was left: centre (metres), pixels per metre, compass bearing pointing up the screen. |
+| `view` | `{ cx, cy, ppm, rotation, cam3d? }` — where the editor was left: centre (metres), pixels per metre, compass bearing pointing up the screen; `cam3d` = the 3D page's chosen camera `{ x, y, alt, heading, pitch, roll }` (ground-frame position, ellipsoid height in m, degrees) used for PDF page 2. |
 | `items` | The drawing (jsonb array) — see below. Written ONLY through `parseMapBody()`. |
 | `notes` | Free text printed on the PDF. ≤ 4,000 chars. |
 | `version` | Optimistic lock. `PUT` names the version it edited; stale → 409 with the current row. |
@@ -39,7 +39,7 @@ Bounds enforced by `parseMapBody()` (`src/lib/parking/model.ts`): ≤ 300 items,
 0.5–40 m long / ≤ 6 m wide / ≤ 8 m high, ids `[A-Za-z0-9_-]{1,40}`, unknown
 fields dropped, text trimmed and capped.
 
-Heights are stored now for the 3D page (phase 2); the overhead plan ignores them.
+Heights drive the 3D page (`vehicleBlocks`, `src/lib/parking/blocks3d.ts`); the overhead plan ignores them.
 
 ## Code
 

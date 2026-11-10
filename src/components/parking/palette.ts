@@ -21,6 +21,7 @@ export const PALETTE_KEYS = [
   'select',
   'blank',
   'grid',
+  'sky',
 ] as const;
 
 export type PaletteKey = (typeof PALETTE_KEYS)[number];
