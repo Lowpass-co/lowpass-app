@@ -13,7 +13,8 @@
    ============================================ */
 
 import { MARKERS, VEHICLES, AREAS, PAINTS, type AreaType, type MarkerType, type PaintId, type VehicleType } from './catalogue';
-import { normDeg, type Camera3d, type LatLng, type Pt, type View } from './geo';
+import { PRINT_SCALES, normDeg, type Camera3d, type LatLng, type Pt, type View } from './geo';
+import type { PdfPage, PrintScale } from './pages';
 
 export interface VehicleItem {
   id: string;
@@ -84,6 +85,9 @@ export const LIMITS = {
   maxLength: 40,
   maxWidth: 6,
   maxHeight: 8,
+  /** PDF pages (pages.ts). */
+  pages: 12,
+  pageTitle: 60,
 } as const;
 
 const VEHICLE_TYPES = new Set<string>(VEHICLES.map((v) => v.type));
@@ -187,7 +191,41 @@ export function parseView(raw: unknown): View {
     ppm: num(o.ppm, 'Zoom', 0.01, 100),
     rotation: normDeg(num(o.rotation, 'Rotation', -3600, 3600)),
     ...(o.cam3d == null ? {} : { cam3d: parseCamera3d(o.cam3d) }),
+    ...(o.pages == null ? {} : { pages: parsePages(o.pages) }),
   };
+}
+
+const PRINT_SCALE_SET = new Set<number>(PRINT_SCALES);
+
+function printScale(v: unknown): PrintScale {
+  if (typeof v !== 'number' || !PRINT_SCALE_SET.has(v)) fail('Unknown print scale');
+  return v as PrintScale;
+}
+
+/** The PDF's page list (pages.ts). Every field checked; at most LIMITS.pages. */
+export function parsePages(raw: unknown): PdfPage[] {
+  if (!Array.isArray(raw)) fail('pages must be a list');
+  const list = raw as unknown[];
+  if (list.length > LIMITS.pages) fail(`A PDF holds at most ${LIMITS.pages} pages`);
+  const pages = list.map((r): PdfPage => {
+    if (!isObj(r)) fail('Each page must be an object');
+    const o = r as Record<string, unknown>;
+    const base = { id: id(o.id), title: text(o.title, LIMITS.pageTitle) || 'Page' };
+    if (o.kind === '3d') return { ...base, kind: '3d', cam: o.cam == null ? null : parseCamera3d(o.cam) };
+    if (o.kind !== 'plan') fail('Unknown page kind');
+    if (o.fit === true) return { ...base, kind: 'plan', fit: true, scale: o.scale === 'auto' || o.scale == null ? 'auto' : printScale(o.scale) };
+    return {
+      ...base,
+      kind: 'plan',
+      fit: false,
+      cx: num(o.cx, 'Page centre x', -LIMITS.reach, LIMITS.reach),
+      cy: num(o.cy, 'Page centre y', -LIMITS.reach, LIMITS.reach),
+      rotation: normDeg(num(o.rotation, 'Page rotation', -3600, 3600)),
+      scale: printScale(o.scale),
+    };
+  });
+  if (new Set(pages.map((p) => p.id)).size !== pages.length) fail('Two pages share an id');
+  return pages;
 }
 
 export function parseCamera3d(raw: unknown): Camera3d {

@@ -213,3 +213,38 @@
   font-weight: var(--lp-weight-semibold);
   color: var(--lp-map-ink);
 }
+
+/* PDF pages list. */
+.pk-pages { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--lp-space-1); }
+.pk-pagerow {
+  display: grid;
+  grid-template-columns: 18px 34px minmax(0, 1fr) auto;
+  grid-template-areas: 'num kind title title' 'num scale scale acts';
+  align-items: center;
+  gap: var(--lp-space-1) var(--lp-space-2);
+  padding: var(--lp-space-2);
+  border: 1px solid var(--lp-border);
+  border-radius: var(--lp-radius-md);
+  background: var(--lp-surface);
+}
+.pk-pagenum { grid-area: num; align-self: start; font-family: var(--lp-mono-font); font-size: var(--lp-text-xs); color: var(--lp-text-tertiary); padding-top: 6px; }
+.pk-pagekind { grid-area: kind; font-size: var(--lp-text-xs); font-weight: var(--lp-weight-semibold); color: var(--lp-text-secondary); }
+.pk-pagetitle { grid-area: title; height: 28px; padding: 0 var(--lp-space-2); }
+.pk-pagescale { grid-area: scale; height: 28px; width: 100%; min-width: 0; padding: 0 var(--lp-space-2); font-size: var(--lp-text-xs); }
+span.pk-pagescale { display: inline-flex; align-items: center; padding: 0; }
+.pk-pageacts { grid-area: acts; display: inline-flex; align-items: center; gap: var(--lp-space-1); }
+.pk-iconbtn {
+  width: 24px;
+  height: 24px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--lp-border);
+  border-radius: var(--lp-radius-sm);
+  background: var(--lp-surface);
+  color: var(--lp-text-secondary);
+  cursor: pointer;
+}
+.pk-iconbtn:hover { background: var(--lp-surface-hover); }
+.pk-iconbtn:disabled { opacity: 0.4; cursor: default; }
+.pk-iconbtn:focus-visible { outline: 2px solid var(--lp-orange); outline-offset: 2px; }

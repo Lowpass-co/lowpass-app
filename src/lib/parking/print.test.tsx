@@ -23,8 +23,16 @@ describe('printFrame — the PDF frames the drawing, not the screen', () => {
     expect(Math.hypot(f.cx - 5, f.cy - 1)).toBeLessThan(12);
   });
 
-  it('everything drawn is inside the printed area, at any rotation', () => {
-    const items = [bus(0, 0, 30), bus(80, 40, 120), { id: 'r', kind: 'route', label: '', points: [{ x: -60, y: -30 }, { x: 120, y: 90 }] }] as ParkingItem[];
+  it('a long approach route doesn’t zoom the close-up out (that’s the overview page’s job)', () => {
+    const items = [bus(0, 0, 90), { id: 'r', kind: 'route', label: '', points: [{ x: 400, y: -300 }, { x: 0, y: 5 }] }] as ParkingItem[];
+    expect(printFrame(items, v(), wideScreen).scale).toBeLessThanOrEqual(500);
+    // A drawing that is only a route still frames the route.
+    const onlyRoute = printFrame([items[1]], v(), wideScreen);
+    expect(onlyRoute.wM).toBeGreaterThan(400);
+  });
+
+  it('every parked thing is inside the printed area, at any rotation', () => {
+    const items = [bus(0, 0, 30), bus(80, 40, 120), { id: 'm', kind: 'marker', type: 'gate', label: '', detail: '', x: -60, y: -30 }, { id: 'a', kind: 'area', type: 'crew', label: '', points: [{ x: 100, y: 60 }, { x: 120, y: 60 }, { x: 120, y: 90 }] }] as ParkingItem[];
     for (const rot of [0, 33, 90, 271]) {
       const f = printFrame(items, v(rot), wideScreen);
       const r = (rot * Math.PI) / 180;

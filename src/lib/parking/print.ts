@@ -46,7 +46,11 @@ export interface PrintFrame {
 
 export function printFrame(items: ParkingItem[], view: View, viewport: { w: number; h: number }, choice: PrintScaleChoice = 'auto'): PrintFrame {
   const r = (view.rotation * Math.PI) / 180;
-  const pts = itemPoints(items);
+  // Frame the PARKING: a long approach route would zoom the close-up out to
+  // nothing (seen in testing: 1:2,000 with the buses a few mm long) — that
+  // is what an overview page is for. Routes count only when they're all there is.
+  const parked = items.filter((i) => i.kind !== 'route');
+  const pts = itemPoints(parked.length ? parked : items);
   let cx = view.cx;
   let cy = view.cy;
   let needW = viewport.w / view.ppm;
