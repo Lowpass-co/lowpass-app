@@ -93,3 +93,10 @@ D2-1 (the 404 the labels point at) → D2-2 (the writer the reader is waiting fo
 Floor green · **money harnesses — the counts moved, do not use the old ones.** As of the 2026-08-09 handoff they are `src/lib/payroll/reconcile.harness.ts` **72**, `src/lib/payroll/fees.test.ts` **27**, `src/lib/settlement/reconcile.harness.ts` **40** (was 64/21/15 before the canonical flat-seven rates model and the settlement waterfall landed). Vitest is **538 tests / 30 files**, with a known flake in the RoutingEditor + pdfProbe suites — rerun once before reporting. Run all three harnesses either side of this bank and report both numbers: `syncDerivedBudgetRowForTour` is on the move path, so this is money-adjacent even though it looks like inventory · every new mutating route calls `requireWrite` or the ratchet fails · **an authenticated smoke before you claim any of this works.** Two production incidents this week (`getClaims` for `getUser`, and a `profiles.full_name` that does not exist) both passed tsc, eslint, a green build and 533 tests, because none of those run with a session or against the real schema. "Returns 200" would have passed both — the outage was a 200 with an empty body. Assert on content.
 
 Smokes: SPD-04 scan → move writes a movement with correct from/to · SPD-04b **a gear-native item (no `rental_inventory_id`) can be scanned and moved** — the case the schema refused before 255, so it is the one that proves it landed · SPD-05 unknown token handled · SPD-06 the item's location reflects the move everywhere it is shown, including the slide-over.
+
+> **Nov 2026 update (Adam):** the channel-list "Gear linked" chip was retired,
+> and with it its only caller — `GearDetailSlideOver.tsx` and
+> `/api/gear/[id]/detail` were deleted as dead code (PR #73). A scan surface
+> that needs a gear detail panel builds it fresh in the gear UI; the old one is
+> in git history (`git log --diff-filter=D -- src/components/gear/GearDetailSlideOver.tsx`).
+
