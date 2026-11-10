@@ -2423,3 +2423,56 @@ bin, right-click or ⌘⌫, and come back with Undo for 6 seconds.
 
 - [ ] **BUD-DEL-08 — Leaving the page sends it.** Delete a row and navigate to
   Payroll within 6 s. Come back: the row is gone.
+
+## Income & settlements — one page (Nov 2026 — needs migration 286)
+
+Replaces the Income grid + deal slide-over and the separate Settlements page
+(older INC-* / settlement tests that name the grid, the Projected/Actual
+toggle, "Manual override" or the Income/Settlements switch are superseded).
+Paste migration 286 first.
+
+#### SHOW-01 — One page
+Budget → **Income & settlements**: every show on the left (date, venue, a
+figure, a status), the picked show on the right. No switch top-right. The old
+`/budget/<id>/settlement` link (and the Overview's **Settle**) opens the same
+page on that show; reload keeps the picked show (`?show=`).
+
+#### SHOW-02 — Status is honest
+A show nobody has touched reads **Upcoming** (future) or **To settle** (past),
+its Actual and Still owed read **—** (not a green $0). Type anything on the
+night → **In progress**. Mark full & final → **Settled**, or **Awaiting
+payment** while something is still owed. Reopen → back to In progress.
+
+#### SHOW-03 — The deal is typed once
+**Deal — expected**: the list is Flat guarantee · Versus · Guarantee plus % ·
+Door deal (no Festival — it's flat). Set Versus 85%, higher % above 1,000
+tickets at 90%, capacity + ticket price: the expected overage works itself out.
+Guarantee plus %: type the overage; changing the guarantee doesn't wipe it.
+The night card has no deal fields of its own.
+
+#### SHOW-04 — The night is the only place for actual money
+**On the night — actual**: Expected (muted) beside Actual (green-ruled input)
+for guarantee, overage, merch; deductions and show expenses as lines.
+**Fill from the deal** types the deal's guarantee / overage / merch into the
+blank actual boxes only. Short of expected shows "… short of expected" in red.
+There is no "Manual override" anywhere.
+
+#### SHOW-05 — Box office works the overage out from the same deal
+On a Versus / Door deal, enter tickets sold (or the gross): split pool, artist
+share (with "90% above 1000 tickets" when the escalator applies) and "Works out
+at … overage" appear; **Use as overage** fills Overage. Flat / Plus: the box
+office is optional, for the record.
+
+#### SHOW-06 — Saves don't undo "settled"
+On a full & final show, log a payment: it stays Settled (it used to drop back to
+pending, and the tour Overview counted it unsettled).
+
+#### SHOW-07 — VIP actual
+Type the actual VIP: it saves, and later settlement edits still reach the
+budget (VIP no longer marks the show "Manual").
+
+#### SHOW-08 — After pasting 286
+Shows that had a Manual override show those figures on the settlement (where
+the settlement already had a figure, the settlement's stands). The migration's
+three read-only lists: shows that had a per-ticket bonus (re-enter as the
+escalator), unknown deal types, settlement deals with no income row.

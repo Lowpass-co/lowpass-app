@@ -45,14 +45,9 @@ export interface SettlementWalkData {
   merch: number;
   depositReceived: number;
   fullAndFinal: boolean;
-  /** Deal & box office grain (migration 262) — all null on a legacy
-   *  flat-guarantee settlement, which keeps today's walk bit-identical. */
-  dealType: string | null;
-  dealPct: number | null;
-  bonusThreshold: number | null;
-  bonusPct: number | null;
-  ticketPrice: number | null;
-  ticketCapacity: number | null;
+  /** The night's comps. (Nov 2026 — the deal TERMS are not here any more:
+   *  a show has ONE deal, on budget_income; the page passes it to
+   *  computeBoxOffice. The migration-262 settlement deal columns are unread.) */
   comps: number | null;
   /** reconciled_tickets_sold ?? day_of_tickets_sold. */
   ticketsSold: number | null;
@@ -83,7 +78,7 @@ export async function loadSettlementWalk(
   const { data: settlement } = await supabase
     .from('settlement')
     .select(
-      'id, routing_id, day_of_guarantee, reconciled_guarantee, day_of_overage, reconciled_overage, day_of_merch, reconciled_merch, day_of_deductions, reconciled_deductions, deposit_received, full_and_final, deal_type, deal_pct, bonus_threshold, bonus_pct, ticket_price, ticket_capacity, comps, reconciled_tickets_sold, day_of_tickets_sold, reconciled_gross, day_of_gross',
+      'id, routing_id, day_of_guarantee, reconciled_guarantee, day_of_overage, reconciled_overage, day_of_merch, reconciled_merch, day_of_deductions, reconciled_deductions, deposit_received, full_and_final, comps, reconciled_tickets_sold, day_of_tickets_sold, reconciled_gross, day_of_gross',
     )
     .eq('routing_id', routingId)
     .eq('workspace_id', workspaceId)
@@ -119,12 +114,6 @@ export async function loadSettlementWalk(
   const merch = num(settlement?.reconciled_merch ?? settlement?.day_of_merch);
   const depositReceived = num(settlement?.deposit_received);
   const fullAndFinal = Boolean(settlement?.full_and_final);
-  const dealType = (settlement?.deal_type as string | null) ?? null;
-  const dealPct = numOrNull(settlement?.deal_pct);
-  const bonusThreshold = numOrNull(settlement?.bonus_threshold);
-  const bonusPct = numOrNull(settlement?.bonus_pct);
-  const ticketPrice = numOrNull(settlement?.ticket_price);
-  const ticketCapacity = numOrNull(settlement?.ticket_capacity);
   const comps = numOrNull(settlement?.comps);
   const ticketsSold = numOrNull(settlement?.reconciled_tickets_sold ?? settlement?.day_of_tickets_sold);
   const grossBO = numOrNull(settlement?.reconciled_gross ?? settlement?.day_of_gross);
@@ -153,12 +142,6 @@ export async function loadSettlementWalk(
     merch,
     depositReceived,
     fullAndFinal,
-    dealType,
-    dealPct,
-    bonusThreshold,
-    bonusPct,
-    ticketPrice,
-    ticketCapacity,
     comps,
     ticketsSold,
     grossBO,
@@ -192,29 +175,37 @@ export async function loadTourSettlementWalks(
   tourId: string,
   workspaceId: string,
   tourCurrency: string,
+  /** Other days to walk too (Nov 2026 — a non-show day that has income on it
+   *  can be settled like a show). */
+  extraRoutingIds: readonly string[] = [],
 ): Promise<ShowWalk[]> {
   const ccy = (tourCurrency || 'GBP').trim().toUpperCase();
 
+  type Day = { id: string; date: string | null; city: string | null; venue_name: string | null; day_type: string | null };
   const { data: routingRows } = await supabase
     .from('routing')
     .select('id, date, city, venue_name, day_type')
     .eq('tour_id', tourId)
     .in('day_type', ['show', 'festival'])
     .order('date', { ascending: true });
-  const shows = (routingRows ?? []) as Array<{
-    id: string;
-    date: string | null;
-    city: string | null;
-    venue_name: string | null;
-    day_type: string | null;
-  }>;
+  const shows = (routingRows ?? []) as Day[];
+  const missing = extraRoutingIds.filter((id) => !shows.some((s) => s.id === id));
+  if (missing.length > 0) {
+    const { data: extra } = await supabase
+      .from('routing')
+      .select('id, date, city, venue_name, day_type')
+      .eq('tour_id', tourId)
+      .in('id', missing);
+    shows.push(...((extra ?? []) as Day[]));
+    shows.sort((a, b) => (a.date ?? '').localeCompare(b.date ?? ''));
+  }
   if (shows.length === 0) return [];
   const routingIds = shows.map((s) => s.id);
 
   const { data: settlementRows } = await supabase
     .from('settlement')
     .select(
-      'id, routing_id, day_of_guarantee, reconciled_guarantee, day_of_overage, reconciled_overage, day_of_merch, reconciled_merch, day_of_deductions, reconciled_deductions, deposit_received, full_and_final, deal_type, deal_pct, bonus_threshold, bonus_pct, ticket_price, ticket_capacity, comps, reconciled_tickets_sold, day_of_tickets_sold, reconciled_gross, day_of_gross',
+      'id, routing_id, day_of_guarantee, reconciled_guarantee, day_of_overage, reconciled_overage, day_of_merch, reconciled_merch, day_of_deductions, reconciled_deductions, deposit_received, full_and_final, comps, reconciled_tickets_sold, day_of_tickets_sold, reconciled_gross, day_of_gross',
     )
     .eq('workspace_id', workspaceId)
     .in('routing_id', routingIds);
@@ -270,12 +261,6 @@ export async function loadTourSettlementWalks(
     const merch = num(s?.reconciled_merch ?? s?.day_of_merch);
     const depositReceived = num(s?.deposit_received);
     const fullAndFinal = Boolean(s?.full_and_final);
-    const dealType = (s?.deal_type as string | null) ?? null;
-    const dealPct = numOrNull(s?.deal_pct);
-    const bonusThreshold = numOrNull(s?.bonus_threshold);
-    const bonusPct = numOrNull(s?.bonus_pct);
-    const ticketPrice = numOrNull(s?.ticket_price);
-    const ticketCapacity = numOrNull(s?.ticket_capacity);
     const comps = numOrNull(s?.comps);
     const ticketsSold = numOrNull(s?.reconciled_tickets_sold ?? s?.day_of_tickets_sold);
     const grossBO = numOrNull(s?.reconciled_gross ?? s?.day_of_gross);
@@ -295,7 +280,7 @@ export async function loadTourSettlementWalks(
       day_type: show.day_type,
       currency: ccy,
       guarantee, overage, merch, depositReceived, fullAndFinal,
-      dealType, dealPct, bonusThreshold, bonusPct, ticketPrice, ticketCapacity, comps,
+      comps,
       ticketsSold, grossBO, contractedGuarantee,
       deductionsAreLegacy, deductions, expenses, payments, walk,
     };

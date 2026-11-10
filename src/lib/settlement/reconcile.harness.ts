@@ -108,22 +108,23 @@ console.log(
 );
 console.log('-'.repeat(74));
 
-console.log('\nBox office (migration 262) — computeBoxOffice pins; guarantee-only stays bit-identical\n');
+console.log('\nBox office — computeBoxOffice pins (one deal, Nov 2026); guarantee-only stays bit-identical\n');
 
 // (d) computeBoxOffice pins — the deal-grain calculator (walk.ts, additive).
 const deal = (over: Partial<DealInput>): DealInput => ({
-  dealType: null, dealPct: null, bonusThreshold: null, bonusPct: null,
-  ticketPrice: null, ticketCapacity: null, comps: null, ticketsSold: null, grossBO: null,
+  dealType: null, dealPct: null, threshold: null, pctAbove: null,
+  faceValue: null, ticketsSold: null, grossBO: null,
   ...over,
 });
 
 // (d1) Guarantee-only deal → NO waterfall (null) and computeWalk output UNCHANGED
 //      from the exact fixture in (c) — the bit-identical hard gate.
 assert.equal(
-  computeBoxOffice(deal({ dealType: 'guarantee', dealPct: 85, grossBO: 50000, ticketsSold: 1000, ticketPrice: 50 }), [{ amount: 999 }], 2000, 25000),
+  computeBoxOffice(deal({ dealType: 'FLAT', dealPct: 85, grossBO: 50000, ticketsSold: 1000, faceValue: 50 }), [{ amount: 999 }], 2000, 25000),
   null,
-  'guarantee deal: computeBoxOffice is null even with full BO data',
+  'flat guarantee: computeBoxOffice is null even with full BO data',
 );
+assert.equal(computeBoxOffice(deal({ dealType: 'PLUS', dealPct: 85, grossBO: 50000 }), [], 0, 0), null, 'plus: overage is typed → null');
 assert.equal(computeBoxOffice(deal({ dealType: null, grossBO: 50000 }), [], 0, 0), null, 'null deal type → null');
 assert.equal(computeBoxOffice(deal({ dealType: 'door_deal', grossBO: 50000 }), [], 0, 0), null, 'dealPct null → null');
 assert.equal(computeBoxOffice(deal({ dealType: 'door_deal', dealPct: 80 }), [], 0, 0), null, 'no gross basis → null');
@@ -137,13 +138,13 @@ const fullAgain = computeWalk({
   payments: [{ amount: 10000 }],
 });
 assert.deepEqual(fullAgain, full, 'guarantee-only computeWalk output unchanged (bit-identical)');
-checks += 5;
-console.log('guarantee-only: computeBoxOffice → null · computeWalk unchanged  ✓');
+checks += 6;
+console.log('flat / plus: computeBoxOffice → null · computeWalk unchanged  ✓');
 
 // (d2) Door deal 80% on a 10,000 split pool, guarantee 0 → the FULL share
 //      surfaces as overage: 13,000 gross − 1,000 fees − 2,000 exp = 10,000 pool;
 //      80% = 8,000.
-const door = computeBoxOffice(deal({ dealType: 'door_deal', dealPct: 80, grossBO: 13000 }), [{ amount: 1000 }], 2000, 0);
+const door = computeBoxOffice(deal({ dealType: 'DOOR', dealPct: 80, grossBO: 13000 }), [{ amount: 1000 }], 2000, 0);
 assert.ok(door, 'door deal computes');
 assert.equal(door!.netBO, 12000, 'net BO = 13000 − 1000 fees');
 assert.equal(door!.splitPool, 10000, 'split pool = 12000 − 2000 expenses');
@@ -154,33 +155,42 @@ console.log('door_deal 80% · pool 10000 · gtd 0        → overage  8000.00  �
 
 // (d3) Guarantee + 85% of a 20,000 pool vs gtd 15,000 → greater-of as overage:
 //      17,000 share − 15,000 gtd = 2,000.
-const gplus = computeBoxOffice(deal({ dealType: 'guarantee_plus', dealPct: 85, grossBO: 21000 }), [], 1000, 15000);
-assert.ok(gplus, 'guarantee_plus computes');
+const gplus = computeBoxOffice(deal({ dealType: 'VS', dealPct: 85, grossBO: 21000 }), [], 1000, 15000);
+assert.ok(gplus, 'versus computes');
+// Old stored words still compute the same (normalised): guarantee_plus → VS, door_deal → DOOR.
+assert.deepEqual(computeBoxOffice(deal({ dealType: 'guarantee_plus', dealPct: 85, grossBO: 21000 }), [], 1000, 15000), gplus, 'old guarantee_plus = VS');
+assert.deepEqual(computeBoxOffice(deal({ dealType: 'door_deal', dealPct: 80, grossBO: 13000 }), [{ amount: 1000 }], 2000, 0), door, 'old door_deal = DOOR');
 assert.equal(gplus!.splitPool, 20000, 'split pool = 21000 − 1000 expenses');
 assert.equal(gplus!.artistShare, 17000, 'artist share = 85% of 20000');
 assert.equal(gplus!.resolvedOverage, 2000, 'overage = 17000 − 15000 gtd');
-checks += 4;
-console.log('guarantee_plus 85% · pool 20000 · gtd 15000 → overage  2000.00  ✓');
+checks += 6;
+console.log('versus 85% · pool 20000 · gtd 15000      → overage  2000.00  ✓');
 
-// (d4) Bonus tier fires ONLY above the threshold (v1 rule: (sold − threshold)
-//      × price × bonusPct/100). At/below threshold → 0.
-const bonusDeal = (sold: number) =>
-  computeBoxOffice(
-    deal({ dealType: 'guarantee_plus', dealPct: 85, bonusThreshold: 500, bonusPct: 10, ticketPrice: 50, ticketsSold: sold }),
-    [], 0, 100000, // huge guarantee so overage stays 0 and we read the bonus alone
-  );
-assert.equal(bonusDeal(400)!.bonus, 0, 'below threshold → no bonus');
-assert.equal(bonusDeal(500)!.bonus, 0, 'AT threshold → no bonus (strictly above)');
-assert.equal(bonusDeal(600)!.bonus, 500, 'above: (600−500) × 50 × 10% = 500');
-// And the bonus participates in the greater-of: share 25,500 + bonus 500 vs gtd 25,000 → 1,000 overage.
-const bonusOver = computeBoxOffice(
-  deal({ dealType: 'guarantee_plus', dealPct: 85, bonusThreshold: 500, bonusPct: 10, ticketPrice: 50, ticketsSold: 600 }),
-  [], 0, 25000,
+// (d4) Escalator — higher % above N tickets, MARGINAL, the same rule the
+//      Expected projection uses (tieredShare). 600 sold × £50, no fees/expenses
+//      → pool 30,000 = £50/ticket. 85% on the first 500 (21,250) + 90% on the
+//      100 above (4,500) = 25,750. At/below the threshold it is plain 85%.
+const esc = (sold: number) =>
+  computeBoxOffice(deal({ dealType: 'VS', dealPct: 85, threshold: 500, pctAbove: 90, faceValue: 50, ticketsSold: sold }), [], 0, 0)!;
+assert.equal(esc(400).artistShare, 17000, 'below threshold: 85% of 20000');
+assert.equal(esc(500).artistShare, 21250, 'AT threshold: plain 85% (strictly above)');
+assert.equal(esc(500).escalated, false, 'at threshold → not escalated');
+assert.equal(esc(600).artistShare, 25750, 'above: 85%×500×50 + 90%×100×50');
+assert.equal(esc(600).escalated, true, 'above threshold → escalated');
+// pctAbove blank → the base % throughout.
+assert.equal(
+  computeBoxOffice(deal({ dealType: 'VS', dealPct: 85, threshold: 500, faceValue: 50, ticketsSold: 600 }), [], 0, 0)!.artistShare,
+  25500,
+  'no escalated % → 85% of 30000',
 );
-assert.equal(bonusOver!.artistShare, 25500, 'share = 85% of 600×50');
-assert.equal(bonusOver!.resolvedOverage, 1000, 'overage = 25500 + 500 bonus − 25000 gtd');
-checks += 5;
-console.log('bonus tier: 400→0 · 500→0 · 600→500 · share+bonus−gtd → 1000.00  ✓');
+// Greater-of with the escalator: 25,750 vs gtd 25,000 → 750 overage.
+assert.equal(
+  computeBoxOffice(deal({ dealType: 'VS', dealPct: 85, threshold: 500, pctAbove: 90, faceValue: 50, ticketsSold: 600 }), [], 0, 25000)!.resolvedOverage,
+  750,
+  'overage = 25750 − 25000 gtd',
+);
+checks += 7;
+console.log('escalator 85%→90% above 500: 400→17000 · 500→21250 · 600→25750 · −gtd → 750.00  ✓');
 console.log('-'.repeat(74));
 
 console.log(`\nsettlement reconcile: ${checks} checks passed — itemized Walk reproduces legacy net EXACTLY.\n`);

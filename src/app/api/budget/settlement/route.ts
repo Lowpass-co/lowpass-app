@@ -163,16 +163,9 @@ export async function POST(request: Request) {
     // deductions so the existing income cascade carries it unchanged.
     deposit_received?: number | null;
     full_and_final?: boolean;
-    // Migration 262 — deal & box office grain (additive; informational to this
-    // route — the BO waterfall is computed client-side in walk.ts and applied
-    // to reconciled_overage only by an explicit click). Guarantee-only
-    // settlements never send these; nothing about the cascade changes.
-    deal_type?: string | null;
-    deal_pct?: number | null;
-    bonus_threshold?: number | null;
-    bonus_pct?: number | null;
-    ticket_price?: number | null;
-    ticket_capacity?: number | null;
+    // The night's comps. (Nov 2026 — the deal TERMS are no longer stored here:
+    // a show has ONE deal, on budget_income. The migration-262 deal columns
+    // are left in place, unread and unwritten.)
     comps?: number | null;
   };
   try {
@@ -228,14 +221,18 @@ export async function POST(request: Request) {
       ? dayOfNet(reconciledGuarantee, reconciledOverage, reconciledMerch, reconciledDeductions)
       : undefined;
 
-  const status = body.status ?? 'pending';
+  // Nov 2026 — only a request that SAYS a status sets one. Every save used to
+  // write 'pending' when it carried none, so logging a payment on a reconciled
+  // show quietly un-reconciled it (and the tour Overview counted it unsettled).
+  // A new row still starts 'pending' (column default).
+  const status = body.status;
   const now = new Date().toISOString();
   const payload: Record<string, unknown> = {
     routing_id,
     workspace_id: profile.workspace_id,
-    status,
     updated_at: now,
   };
+  if (status !== undefined) payload.status = status;
   if (body.day_of_guarantee !== undefined) payload.day_of_guarantee = body.day_of_guarantee;
   if (body.day_of_overage !== undefined) payload.day_of_overage = body.day_of_overage;
   if (body.day_of_merch !== undefined) payload.day_of_merch = body.day_of_merch;
@@ -260,13 +257,6 @@ export async function POST(request: Request) {
   // M1-B — Walk grain fields.
   if (body.deposit_received !== undefined) payload.deposit_received = body.deposit_received;
   if (body.full_and_final !== undefined) payload.full_and_final = body.full_and_final;
-  // Migration 262 — deal & box office grain fields.
-  if (body.deal_type !== undefined) payload.deal_type = body.deal_type;
-  if (body.deal_pct !== undefined) payload.deal_pct = body.deal_pct;
-  if (body.bonus_threshold !== undefined) payload.bonus_threshold = body.bonus_threshold;
-  if (body.bonus_pct !== undefined) payload.bonus_pct = body.bonus_pct;
-  if (body.ticket_price !== undefined) payload.ticket_price = body.ticket_price;
-  if (body.ticket_capacity !== undefined) payload.ticket_capacity = body.ticket_capacity;
   if (body.comps !== undefined) payload.comps = body.comps;
 
   if (status === 'reconciled') {

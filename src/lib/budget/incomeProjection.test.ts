@@ -14,6 +14,7 @@ import {
   type ProjectionInput,
   type ProjectionConfig,
 } from './incomeProjection.ts';
+import { normaliseDealType, tieredShare } from '../income/deal.ts';
 
 let pass = 0;
 const approx = (a: number, b: number, eps = 1e-6) => Math.abs(a - b) <= eps;
@@ -152,5 +153,21 @@ const base: ProjectionInput = {
 
 /* ---- 10. default config constants ------------------------------------- */
 check('default config = 0.65 / 0.08', DEFAULT_PROJECTION_CONFIG.haircut === 0.65 && DEFAULT_PROJECTION_CONFIG.taxPct === 0.08);
+
+/* ---- 11. One deal list (Nov 2026) — DOOR projects like VS; old words map --- */
+{
+  const vs: ProjectionInput = { ...base, dealType: 'VS', capacity: 1000, sellThru: 0.8, faceValue: 30, dealPct: 0.6, preTaxGuarantee: 0 };
+  const door = projectIncome({ ...vs, dealType: 'DOOR' }, cfg).preTaxOverage;
+  check('DOOR projects like VS (guarantee 0)', door !== null && approx(door, projectIncome(vs, cfg).preTaxOverage!));
+  check('old words: guarantee_plus → VS, door_deal → DOOR, festival/guarantee → FLAT',
+    normaliseDealType('guarantee_plus') === 'VS' && normaliseDealType('door_deal') === 'DOOR' &&
+    normaliseDealType('festival') === 'FLAT' && normaliseDealType('Guarantee') === 'FLAT' && normaliseDealType('vs') === 'VS' &&
+    normaliseDealType('nonsense') === null && normaliseDealType(null) === null);
+  // The escalator is ONE function: the engine's share = tieredShare on the same pool.
+  const t: ProjectionInput = { ...vs, dealThreshold: 500, dealPctAbove: 0.7 };
+  const tickets = Math.round(1000 * 0.8);
+  check('engine share = tieredShare (one escalator for Expected and Actual)',
+    approx(artistShare(t, cfg.taxPct)!, tieredShare(tickets * 30 * (1 - cfg.taxPct), tickets, 0.6, 500, 0.7)));
+}
 
 console.log(`\n✓ incomeProjection: ${pass} checks passed`);
