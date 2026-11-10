@@ -67,6 +67,14 @@ browser key restricted to the Map Tiles API and the app's domains).**
 
 **Last verified**:
 
+#### PRK-23 — Pick several things at once
+
+**Do**: Click a bus, then ⌘-click (Ctrl on Windows) a second bus and a marker; Shift-drag a box round a row of buses; press ⌘A. With several picked: drag one of them, press → / Shift+→, press ] a few times, pick a colour, Duplicate, Delete, ⌘Z.
+
+**Expect**: Each pick is outlined and the panel says "3 selected · 2 vehicles · 1 marker". ⌘/Ctrl- or Shift-clicking a picked item takes it out. Plain drag on the map still pans; Shift-drag draws a dashed box and picks everything it touches (adding to what's picked). Dragging any picked item moves them all; arrows nudge them all; ] turns them as ONE block (a row of buses stays a row, and it spins in place rather than drifting); colour paints only the vehicles; Duplicate parks a copy of the group beside it; Delete removes them all; each is one ⌘Z. The white turn knob shows only when a single vehicle is picked. A plain click on one of several picks just that one.
+
+**Last verified**:
+
 #### PRK-08 — Square the map to the building
 
 **Do**: Turn the map with the ↺ / ↻ buttons; select a bus and press the arrow-pointer button.

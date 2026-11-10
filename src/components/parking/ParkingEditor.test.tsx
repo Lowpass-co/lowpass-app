@@ -156,3 +156,75 @@ describe('PDF pages', () => {
     expect((screen.getByRole('button', { name: 'Remove page 1' }) as HTMLButtonElement).disabled).toBe(true);
   });
 });
+
+describe('several at once (Cmd/Ctrl-click, ⌘A)', () => {
+  beforeEach(() => {
+    // jsdom has no pointer capture.
+    Element.prototype.setPointerCapture = () => {};
+  });
+  const twoBuses = (): SavedParkingMap => ({
+    id: 'm',
+    version: 3,
+    updatedAt: new Date().toISOString(),
+    anchor: { lat: 53.8027, lng: -1.5432 },
+    view: { cx: 0, cy: 0, ppm: 3, rotation: 0 },
+    notes: '',
+    pdf: null,
+    items: [
+      { id: 'a', kind: 'vehicle', type: 'bus_eu', label: 'Bus 1', x: -5, y: 0, heading: 0, length: 13.5, width: 2.55, height: 4 },
+      { id: 'b', kind: 'vehicle', type: 'bus_eu', label: 'Bus 2', x: 5, y: 0, heading: 0, length: 13.5, width: 2.55, height: 4 },
+      { id: 'g', kind: 'marker', type: 'gate', label: '', detail: '', x: 40, y: 0 },
+    ],
+  });
+  const lastItems = () => (parseMapBody((calls.filter((c) => c.method === 'PUT').at(-1)!.body as { map: unknown }).map).items);
+  const hits = (c: HTMLElement) => [...c.querySelectorAll('polygon[fill="transparent"]')];
+  const mapEl = (c: HTMLElement) => c.querySelector('.pk-map')!;
+
+  it('Cmd-click adds, Ctrl-click takes out, and the panel says what is picked', () => {
+    const { container } = mount(twoBuses());
+    const [a, b] = hits(container);
+    fireEvent.pointerDown(a, { button: 0, pointerId: 1 });
+    fireEvent.pointerUp(mapEl(container), { pointerId: 1 });
+    expect(screen.getByDisplayValue('Bus 1')).toBeTruthy();
+    fireEvent.pointerDown(b, { button: 0, pointerId: 2, metaKey: true });
+    fireEvent.pointerUp(mapEl(container), { pointerId: 2 });
+    expect(screen.getByText('2 selected')).toBeTruthy();
+    fireEvent.pointerDown(a, { button: 0, pointerId: 3, ctrlKey: true });
+    fireEvent.pointerUp(mapEl(container), { pointerId: 3 });
+    expect(screen.queryByText('2 selected')).toBeNull();
+    expect(screen.getByDisplayValue('Bus 2')).toBeTruthy();
+  });
+
+  it('⌘A picks everything; Turn right 5° turns them as one block; Delete removes all; ⌘Z brings all back', async () => {
+    mount(twoBuses());
+    fireEvent.keyDown(window, { key: 'a', metaKey: true });
+    expect(screen.getByText('3 selected')).toBeTruthy();
+    expect(screen.getByText('2 vehicles · 1 marker')).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Turn right 45°' }));
+    await act(async () => vi.advanceTimersByTime(1000));
+    const turned = lastItems();
+    const [a, b] = turned as Extract<(typeof turned)[number], { kind: 'vehicle' }>[];
+    expect([a.heading, b.heading]).toEqual([45, 45]);
+    expect(Math.hypot(a.x - b.x, a.y - b.y)).toBeCloseTo(10, 2); // still 10 m apart: a row stays a row
+
+    fireEvent.keyDown(window, { key: 'Delete' });
+    await act(async () => vi.advanceTimersByTime(1000));
+    expect(lastItems()).toHaveLength(0);
+
+    fireEvent.keyDown(window, { key: 'z', metaKey: true });
+    await act(async () => vi.advanceTimersByTime(1000));
+    expect(lastItems().map((i) => i.id)).toEqual(['a', 'b', 'g']);
+  });
+
+  it('arrows nudge every picked item; colour paints only the vehicles', async () => {
+    mount(twoBuses());
+    fireEvent.keyDown(window, { key: 'a', ctrlKey: true });
+    fireEvent.keyDown(window, { key: 'ArrowRight', shiftKey: true });
+    fireEvent.click(screen.getByRole('radio', { name: 'Teal' }));
+    await act(async () => vi.advanceTimersByTime(1000));
+    const out = lastItems();
+    expect(out.map((i) => (i.kind === 'vehicle' || i.kind === 'marker' ? i.x : null))).toEqual([-4, 6, 41]);
+    expect(out.map((i) => (i.kind === 'vehicle' ? i.colour : 'n/a'))).toEqual(['teal', 'teal', 'n/a']);
+  });
+});

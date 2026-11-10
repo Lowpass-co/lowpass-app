@@ -43,16 +43,16 @@ import {
   type Pt,
   type View,
 } from '@/lib/parking/geo';
-import { AREAS, MARKERS, PAINTS, VEHICLES, areaLabel, markerSpec, vehicleSpec, type AreaType, type MarkerType, type VehicleType } from '@/lib/parking/catalogue';
+import { AREAS, MARKERS, PAINTS, VEHICLES, areaLabel, markerSpec, vehicleSpec, type AreaType, type MarkerType, type PaintId, type VehicleType } from '@/lib/parking/catalogue';
 import { pathLength, type ParkingItem } from '@/lib/parking/model';
-import { addMarker, addVehicle, duplicateItem, finishDraft, moveItem, record, redo, removeItem, replaceItem, undo, type History } from '@/lib/parking/edit';
+import { addMarker, addVehicle, duplicateItem, duplicateItems, finishDraft, itemsInBox, moveItems, record, redo, removeItems, replaceItem, toggleSelection, turnItems, undo, type History } from '@/lib/parking/edit';
 import type { ParkingShow, SavedParkingMap } from '@/server/parking/maps';
 import { ParkingScene, MARKER_ICON, type Draft, type SceneTile } from './ParkingScene';
 import { LIVE_PALETTE, roleColour, areaColour } from './palette';
 import { getTileSession, tileUrl, tilesKey, viewportInfo, type TileSession } from './googleTiles';
 import { exportParkingPdf } from './exportPdf';
 import { Parking3D } from './Parking3D';
-import { freeSpot, printFrame } from '@/lib/parking/print';
+import { freeSpot, itemPoints, printFrame } from '@/lib/parking/print';
 import { MAX_PAGES, add3dPage, addPlanPage, movePage, pagesOf, planFrame, removePage, updatePage, type Page3d, type PdfPage, type PrintScale } from '@/lib/parking/pages';
 import '@/components/advance/advance.css';
 import './parking.css';
@@ -61,7 +61,12 @@ type Tool = { kind: 'select' } | { kind: 'draw'; shape: 'route' | 'area' | 'meas
 
 type Drag =
   | { kind: 'pan'; start: Pt; view0: View; moved: boolean }
-  | { kind: 'move'; id: string; start: Pt; item0: ParkingItem; items0: ParkingItem[]; moved: boolean }
+  /** Moves every selected item; a plain click (no move) on one of several collapses the selection to it. */
+  | { kind: 'move'; ids: string[]; start: Pt; items0: ParkingItem[]; moved: boolean; collapseTo: string | null }
+  /** Shift-drag on the map: everything touched by the box joins `base`. */
+  | { kind: 'box'; start: Pt; base: string[]; moved: boolean }
+  /** A Cmd/Ctrl/Shift-click toggle: owns the press so the map doesn't pan or deselect. */
+  | { kind: 'hold' }
   | { kind: 'rotate'; id: string; items0: ParkingItem[]; moved: boolean }
   | { kind: 'end'; id: string; which: 'a' | 'b'; items0: ParkingItem[]; moved: boolean }
   | { kind: 'pinch'; d0: number; view0: View; mid: Pt };
@@ -83,7 +88,9 @@ export function ParkingEditor({ show, tourName, initial, canEdit }: ParkingEdito
   const [items, setItems] = useState<ParkingItem[]>(initial?.items ?? []);
   const [notes, setNotes] = useState(initial?.notes ?? '');
   const [hist, setHist] = useState<History<ParkingItem[]>>({ past: [], future: [] });
-  const [selected, setSelected] = useState<string | null>(null);
+  // Selected ids (Cmd/Ctrl/Shift-click adds, Shift-drag boxes, ⌘A = all).
+  const [selected, setSelected] = useState<string[]>([]);
+  const [box, setBox] = useState<{ a: Pt; b: Pt } | null>(null);
   const [tool, setTool] = useState<Tool>({ kind: 'select' });
   const [areaType, setAreaType] = useState<AreaType>('crew');
   const [draft, setDraft] = useState<Draft | null>(null);
@@ -108,6 +115,7 @@ export function ParkingEditor({ show, tourName, initial, canEdit }: ParkingEdito
   const mapRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef(view);
   const itemsRef = useRef(items);
+  const selectedRef = useRef(selected);
   const sizeRef = useRef(size);
   const drag = useRef<Drag | null>(null);
   const pointers = useRef(new Map<number, Pt>());
@@ -120,6 +128,7 @@ export function ParkingEditor({ show, tourName, initial, canEdit }: ParkingEdito
   const focusSnap = useRef<ParkingItem[] | null>(null);
   viewRef.current = view;
   itemsRef.current = items;
+  selectedRef.current = selected;
   sizeRef.current = size;
   dataRef.current = { anchor, view, items, notes };
 
@@ -312,13 +321,29 @@ export function ParkingEditor({ show, tourName, initial, canEdit }: ParkingEdito
       return;
     }
     if (drag.current) return; // an item or handle already took this press
+    if (e.shiftKey && e.pointerType === 'mouse' && canEdit && tool.kind === 'select') {
+      drag.current = { kind: 'box', start: local(e), base: selectedRef.current, moved: false };
+      return;
+    }
     drag.current = { kind: 'pan', start: local(e), view0: viewRef.current, moved: false };
   };
 
   const onItemDown = (e: ReactPointerEvent, item: ParkingItem) => {
     if (!canEdit || tool.kind !== 'select') return;
-    setSelected(item.id);
-    drag.current = { kind: 'move', id: item.id, start: ground(e), item0: item, items0: itemsRef.current, moved: false };
+    const cur = selectedRef.current;
+    if (e.metaKey || e.ctrlKey || e.shiftKey) {
+      const next = toggleSelection(cur, item.id);
+      setSelected(next);
+      // Still in → a drag moves the whole selection; taken out → hold still.
+      drag.current = next.includes(item.id) ? { kind: 'move', ids: next, start: ground(e), items0: itemsRef.current, moved: false, collapseTo: null } : { kind: 'hold' };
+      return;
+    }
+    if (cur.includes(item.id) && cur.length > 1) {
+      drag.current = { kind: 'move', ids: cur, start: ground(e), items0: itemsRef.current, moved: false, collapseTo: item.id };
+      return;
+    }
+    setSelected([item.id]);
+    drag.current = { kind: 'move', ids: [item.id], start: ground(e), items0: itemsRef.current, moved: false, collapseTo: null };
   };
 
   const onHandleDown = (e: ReactPointerEvent, item: ParkingItem, handle: string) => {
@@ -326,7 +351,7 @@ export function ParkingEditor({ show, tourName, initial, canEdit }: ParkingEdito
     e.stopPropagation();
     mapRef.current?.setPointerCapture(e.pointerId);
     pointers.current.set(e.pointerId, local(e));
-    setSelected(item.id);
+    setSelected([item.id]);
     drag.current =
       handle === 'rotate'
         ? { kind: 'rotate', id: item.id, items0: itemsRef.current, moved: false }
@@ -356,11 +381,19 @@ export function ParkingEditor({ show, tourName, initial, canEdit }: ParkingEdito
       changeView({ ...d.view0, cx: d.view0.cx - (b.x - a.x), cy: d.view0.cy - (b.y - a.y) });
       return;
     }
+    if (d.kind === 'hold') return;
+    if (d.kind === 'box') {
+      const s = local(e);
+      if (!d.moved && Math.hypot(s.x - d.start.x, s.y - d.start.y) < 4) return;
+      d.moved = true;
+      setBox({ a: d.start, b: s });
+      return;
+    }
     const g = ground(e);
     if (d.kind === 'move') {
       d.moved = true;
       setDragging(true);
-      setItems((list) => replaceItem(list, moveItem(d.item0, { x: g.x - d.start.x, y: g.y - d.start.y })));
+      setItems(moveItems(d.items0, d.ids, { x: g.x - d.start.x, y: g.y - d.start.y }));
       touch();
     } else if (d.kind === 'rotate') {
       d.moved = true;
@@ -388,10 +421,23 @@ export function ParkingEditor({ show, tourName, initial, canEdit }: ParkingEdito
     }
     drag.current = null;
     setDragging(false);
-    if (!d) return;
+    if (!d || d.kind === 'hold') return;
+    if (d.kind === 'box') {
+      setBox(null);
+      if (d.moved) {
+        const { w, h } = sizeRef.current;
+        const hit = itemsInBox(itemsRef.current, viewRef.current, w, h, d.start, local(e));
+        setSelected([...d.base, ...hit.filter((id) => !d.base.includes(id))]);
+      }
+      return;
+    }
+    if (d.kind === 'move' && !d.moved && d.collapseTo) {
+      setSelected([d.collapseTo]);
+      return;
+    }
     if (d.kind === 'pan' && !d.moved) {
       if (tool.kind === 'draw') addPoint(ground(e));
-      else setSelected(null);
+      else setSelected([]);
       return;
     }
     if ((d.kind === 'move' || d.kind === 'rotate' || d.kind === 'end') && d.moved) setHist((hh) => record(hh, d.items0));
@@ -415,7 +461,7 @@ export function ParkingEditor({ show, tourName, initial, canEdit }: ParkingEdito
 
   /* ── Drawing ──────────────────────────────────────────── */
   const startDraw = (shape: 'route' | 'area' | 'measure') => {
-    setSelected(null);
+    setSelected([]);
     setTool({ kind: 'draw', shape });
     setDraft({ kind: shape, points: [], cursor: null });
   };
@@ -429,7 +475,7 @@ export function ParkingEditor({ show, tourName, initial, canEdit }: ParkingEdito
       const r = finishDraft(itemsRef.current, tool.shape, points ?? draft.points, areaType);
       if (r) {
         commit(r.items);
-        setSelected(r.id);
+        setSelected([r.id]);
       } else if ((points ?? draft.points).length) {
         showToast(tool.shape === 'area' ? 'An area needs at least three points' : 'Needs at least two points', 'error');
       }
@@ -450,17 +496,20 @@ export function ParkingEditor({ show, tourName, initial, canEdit }: ParkingEdito
   const placeVehicle = (t: VehicleType) => {
     const r = addVehicle(itemsRef.current, t, freeSpot(itemsRef.current, centre(), viewRef.current, 5), viewRef.current.rotation);
     commit(r.items);
-    setSelected(r.id);
+    setSelected([r.id]);
     cancelDraw();
   };
   const placeMarker = (t: MarkerType) => {
     const r = addMarker(itemsRef.current, t, freeSpot(itemsRef.current, centre(), viewRef.current));
     commit(r.items);
-    setSelected(r.id);
+    setSelected([r.id]);
     cancelDraw();
   };
 
-  const sel = items.find((i) => i.id === selected) ?? null;
+  // Ids that still exist (undo / delete can take items away under the selection).
+  const selIds = useMemo(() => selected.filter((id) => items.some((i) => i.id === id)), [selected, items]);
+  const sel = selIds.length === 1 ? (items.find((i) => i.id === selIds[0]) ?? null) : null;
+  const group = useMemo(() => (selIds.length > 1 ? items.filter((i) => selIds.includes(i.id)) : []), [selIds, items]);
 
   const patchSelected = (patch: Partial<ParkingItem>) => {
     if (!sel) return;
@@ -475,10 +524,30 @@ export function ParkingEditor({ show, tourName, initial, canEdit }: ParkingEdito
     focusSnap.current = null;
   };
   const deleteSelected = useCallback(() => {
-    if (!selected) return;
-    commit(removeItem(itemsRef.current, selected));
-    setSelected(null);
-  }, [selected, commit]);
+    if (!selIds.length) return;
+    commit(removeItems(itemsRef.current, selIds));
+    setSelected([]);
+  }, [selIds, commit]);
+  /** Turn what's selected: one vehicle about itself (as before), several as one block. */
+  const turnSelected = useCallback(
+    (by: number) => {
+      if (sel?.kind === 'vehicle') commit(replaceItem(itemsRef.current, { ...sel, heading: normDeg(sel.heading + by) }));
+      else if (selIds.length > 1) commit(turnItems(itemsRef.current, selIds, by));
+    },
+    [sel, selIds, commit],
+  );
+  const duplicateGroup = () => {
+    // The copies park beside the originals: the group's width across the screen + 2 m, to the right.
+    const r = (viewRef.current.rotation * Math.PI) / 180;
+    const across = { x: Math.cos(r), y: -Math.sin(r) };
+    const us = itemPoints(group).map((q) => q.x * across.x + q.y * across.y);
+    const gap = Math.max(...us) - Math.min(...us) + 2;
+    const out = duplicateItems(itemsRef.current, selIds, { x: across.x * gap, y: across.y * gap });
+    if (out.ids.length) {
+      commit(out.items);
+      setSelected(out.ids);
+    }
+  };
 
   /* ── Keyboard ─────────────────────────────────────────── */
   useEffect(() => {
@@ -488,6 +557,11 @@ export function ParkingEditor({ show, tourName, initial, canEdit }: ParkingEdito
       const t = e.target as HTMLElement | null;
       if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable)) return;
       const mod = e.metaKey || e.ctrlKey;
+      if (mod && e.key.toLowerCase() === 'a' && tool.kind === 'select') {
+        e.preventDefault();
+        setSelected(itemsRef.current.map((i) => i.id));
+        return;
+      }
       if (mod && e.key.toLowerCase() === 'z') {
         e.preventDefault();
         if (e.shiftKey) doRedo();
@@ -500,8 +574,8 @@ export function ParkingEditor({ show, tourName, initial, canEdit }: ParkingEdito
         else if (e.key === 'Backspace' && draft?.points.length) setDraft({ ...draft, points: draft.points.slice(0, -1) });
         return;
       }
-      if (e.key === 'Escape') return setSelected(null);
-      if (!sel) return;
+      if (e.key === 'Escape') return setSelected([]);
+      if (!selIds.length) return;
       if (e.key === 'Delete' || e.key === 'Backspace') {
         e.preventDefault();
         deleteSelected();
@@ -515,17 +589,14 @@ export function ParkingEditor({ show, tourName, initial, canEdit }: ParkingEdito
         const sy = e.key === 'ArrowUp' ? 1 : e.key === 'ArrowDown' ? -1 : 0;
         const r = (viewRef.current.rotation * Math.PI) / 180;
         const d = { x: (sx * Math.cos(r) + sy * Math.sin(r)) * step, y: (-sx * Math.sin(r) + sy * Math.cos(r)) * step };
-        commit(replaceItem(itemsRef.current, moveItem(sel, d)));
+        commit(moveItems(itemsRef.current, selIds, d));
         return;
       }
-      if ((e.key === '[' || e.key === ']') && sel.kind === 'vehicle') {
-        const by = (e.key === ']' ? 1 : -1) * (e.shiftKey ? 45 : 5);
-        commit(replaceItem(itemsRef.current, { ...sel, heading: normDeg(sel.heading + by) }));
-      }
+      if (e.key === '[' || e.key === ']') turnSelected((e.key === ']' ? 1 : -1) * (e.shiftKey ? 45 : 5));
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [canEdit, mode, tool, draft, sel, doUndo, doRedo, finishDraw, deleteSelected, commit]);
+  }, [canEdit, mode, tool, draft, selIds, doUndo, doRedo, finishDraw, deleteSelected, turnSelected, commit]);
 
   /* ── Export ───────────────────────────────────────────── */
   const venueName = show.venue.name ?? show.venue.city ?? 'Show';
@@ -675,13 +746,22 @@ export function ParkingEditor({ show, tourName, initial, canEdit }: ParkingEdito
                   const r = duplicateItem(itemsRef.current, sel.id, { x: Math.cos(h) * gap, y: -Math.sin(h) * gap });
                   if (r) {
                     commit(r.items);
-                    setSelected(r.id);
+                    setSelected([r.id]);
                   }
                 }}
               />
+            ) : group.length ? (
+              <GroupPanel
+                items={group}
+                onTurn={turnSelected}
+                onColour={(colour) => commit(itemsRef.current.map((i) => (i.kind === 'vehicle' && selIds.includes(i.id) ? ({ ...i, colour } as ParkingItem) : i)))}
+                onDuplicate={duplicateGroup}
+                onDelete={deleteSelected}
+                onClear={() => setSelected([])}
+              />
             ) : (
               <p className="pk-muted" style={{ margin: 0 }}>
-                Click anything on the map to edit it. Drag to move; drag the white knob to turn a vehicle (Shift = free). Arrow keys nudge 10 cm (Shift 1 m); [ and ] turn 5° (Shift 45°). ⌘Z undoes.
+                Click anything on the map to edit it. ⌘/Ctrl- or Shift-click to pick several; Shift-drag a box; ⌘A picks everything. Drag to move; drag the white knob to turn a vehicle (Shift = free). Arrow keys nudge 10 cm (Shift 1 m); [ and ] turn 5° (Shift 45°) — several turn as one block. ⌘Z undoes.
               </p>
             )}
 
@@ -807,13 +887,23 @@ export function ParkingEditor({ show, tourName, initial, canEdit }: ParkingEdito
             items={items}
             tiles={tiles}
             palette={LIVE_PALETTE}
-            selectedId={selected}
+            selectedIds={selIds}
             draft={draft}
             grid={!session}
             onItemDown={canEdit && tool.kind === 'select' ? onItemDown : undefined}
             onHandleDown={canEdit && tool.kind === 'select' ? onHandleDown : undefined}
           >
             <VenuePin at={project(view, size.w, size.h, { x: 0, y: 0 })} />
+            {box ? (
+              <rect
+                className="pk-box"
+                x={Math.min(box.a.x, box.b.x)}
+                y={Math.min(box.a.y, box.b.y)}
+                width={Math.abs(box.b.x - box.a.x)}
+                height={Math.abs(box.b.y - box.a.y)}
+                pointerEvents="none"
+              />
+            ) : null}
           </ParkingScene>
         ) : null}
 
@@ -971,6 +1061,93 @@ export function ParkingEditor({ show, tourName, initial, canEdit }: ParkingEdito
         {mode === 'plan' && session ? <div className="pk-badge pk-attrib">Google Maps{attribution ? ` · ${attribution}` : ''}</div> : null}
       </div>
     </div>
+  );
+}
+
+/** Several things picked at once: what they are, and what can be done to all of them. */
+function GroupPanel({
+  items,
+  onTurn,
+  onColour,
+  onDuplicate,
+  onDelete,
+  onClear,
+}: {
+  items: ParkingItem[];
+  onTurn: (by: number) => void;
+  onColour: (colour: PaintId | undefined) => void;
+  onDuplicate: () => void;
+  onDelete: () => void;
+  onClear: () => void;
+}) {
+  const vehicles = items.filter((i) => i.kind === 'vehicle');
+  const kinds: [string, number][] = [
+    ['vehicle', vehicles.length],
+    ['marker', items.filter((i) => i.kind === 'marker').length],
+    ['area', items.filter((i) => i.kind === 'area').length],
+    ['route', items.filter((i) => i.kind === 'route').length],
+    ['measurement', items.filter((i) => i.kind === 'measure').length],
+  ];
+  const what = kinds.filter(([, n]) => n).map(([k, n]) => `${n} ${k}${n === 1 ? '' : 's'}`).join(' · ');
+  const colours = new Set(vehicles.map((v) => (v.kind === 'vehicle' ? (v.colour ?? '') : '')));
+  const shared = colours.size === 1 ? [...colours][0] : null;
+  return (
+    <section className="pk-inspect" aria-label="Selected items">
+      <div className="adv-row-flex" style={{ gap: 'var(--lp-space-2)' }}>
+        <b style={{ fontSize: 'var(--lp-text-sm)' }} className="adv-grow">{items.length} selected</b>
+        <button type="button" className="adv-btn adv-btn-sm" onClick={onDuplicate} aria-label="Duplicate all">
+          <Copy size={13} />
+        </button>
+        <button type="button" className="adv-btn adv-btn-sm" onClick={onDelete} aria-label="Delete all">
+          <Trash2 size={13} />
+        </button>
+      </div>
+      <span className="pk-muted">{what}</span>
+      <div className="pk-field">
+        Turn together
+        <div className="adv-row-flex" style={{ gap: 'var(--lp-space-1)', flexWrap: 'wrap' }}>
+          {[-45, -5, 5, 45].map((by) => (
+            <button key={by} type="button" className="adv-btn adv-btn-sm" onClick={() => onTurn(by)} aria-label={`Turn ${by < 0 ? 'left' : 'right'} ${Math.abs(by)}°`}>
+              {by < 0 ? <RotateCcw size={13} aria-hidden /> : <RotateCw size={13} aria-hidden />} {Math.abs(by)}°
+            </button>
+          ))}
+        </div>
+      </div>
+      {vehicles.length ? (
+        <div className="pk-field">
+          Colour{vehicles.length < items.length ? ' (vehicles)' : ''}
+          <div className="pk-swatches" role="radiogroup" aria-label="Colour of the selected vehicles">
+            <button
+              type="button"
+              role="radio"
+              aria-checked={shared === ''}
+              aria-label="Default (each type's colour)"
+              title="Default — each type's colour"
+              className="pk-paint pk-paint-default"
+              style={{ background: roleColour(LIVE_PALETTE, 'bus') }}
+              onClick={() => onColour(undefined)}
+            />
+            {PAINTS.map((c) => (
+              <button
+                key={c.id}
+                type="button"
+                role="radio"
+                aria-checked={shared === c.id}
+                aria-label={c.label}
+                title={c.label}
+                className="pk-paint"
+                style={{ background: `var(--lp-map-paint-${c.id})` }}
+                onClick={() => onColour(c.id)}
+              />
+            ))}
+          </div>
+        </div>
+      ) : null}
+      <span className="pk-muted">
+        Drag any of them to move them all; arrows nudge, [ ] turn. ⌘/Ctrl-click one to take it out.{' '}
+        <button type="button" className="adv-link" onClick={onClear}>Clear</button>
+      </span>
+    </section>
   );
 }
 

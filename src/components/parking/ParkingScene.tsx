@@ -53,7 +53,7 @@ export function ParkingScene({
   items,
   tiles,
   palette: p,
-  selectedId = null,
+  selectedIds = [],
   draft = null,
   grid = false,
   labelScale = 1,
@@ -69,7 +69,8 @@ export function ParkingScene({
   items: ParkingItem[];
   tiles: SceneTile[];
   palette: Palette;
-  selectedId?: string | null;
+  /** Highlighted items; the turn knob shows only when exactly one is picked. */
+  selectedIds?: readonly string[];
   draft?: Draft | null;
   grid?: boolean;
   labelScale?: number;
@@ -81,6 +82,8 @@ export function ParkingScene({
   children?: ReactNode;
 }) {
   const P = (pt: Pt) => project(view, width, height, pt);
+  const isSel = (id: string) => selectedIds.includes(id);
+  const single = selectedIds.length === 1;
   const pts = (list: Pt[]) => list.map((q) => { const s = P(q); return `${s.x.toFixed(2)},${s.y.toFixed(2)}`; }).join(' ');
   const ls = labelScale;
   const interactive = !!onItemDown;
@@ -129,20 +132,20 @@ export function ParkingScene({
               onPointerDown={down(a)}
               style={{ cursor }}
             />
-            {selectedId === a.id ? <polygon points={pts(a.points)} fill="none" stroke={p.select} strokeWidth={2} strokeDasharray="4 3" pointerEvents="none" /> : null}
+            {isSel(a.id) ? <polygon points={pts(a.points)} fill="none" stroke={p.select} strokeWidth={2} strokeDasharray="4 3" pointerEvents="none" /> : null}
             <Label x={centre.x} y={centre.y} ls={ls} p={p} halo={halo} text={a.label || areaLabel(a.type)} />
           </g>
         );
       })}
 
-      {routes.map((r) => (r.kind === 'route' ? <RoutePath key={r.id} points={r.points.map(P)} p={p} ls={ls} selected={selectedId === r.id} label={r.label} onDown={down(r)} cursor={cursor} halo={halo} /> : null))}
+      {routes.map((r) => (r.kind === 'route' ? <RoutePath key={r.id} points={r.points.map(P)} p={p} ls={ls} selected={isSel(r.id)} label={r.label} onDown={down(r)} cursor={cursor} halo={halo} /> : null))}
 
       {vehicles.map((v) => {
         const spec = vehicleSpec(v.type);
         const fill = vehicleColour(p, v);
         const body = vehicleCorners(v).map(P);
         const c = P(v);
-        const sel = selectedId === v.id;
+        const sel = isSel(v.id);
         const h = (v.heading * Math.PI) / 180;
         const fwd = { x: Math.sin(h), y: Math.cos(h) };
         const nose = { x: v.x + fwd.x * (v.length / 2), y: v.y + fwd.y * (v.length / 2) };
@@ -164,7 +167,7 @@ export function ParkingScene({
             {sel ? (
               <>
                 <polygon points={body.map((q) => `${q.x},${q.y}`).join(' ')} fill="none" stroke={p.select} strokeWidth={2.5} strokeDasharray="5 3" pointerEvents="none" />
-                {onHandleDown ? (
+                {onHandleDown && single ? (
                   <>
                     <line x1={front.x} y1={front.y} x2={knob.x} y2={knob.y} stroke={p.select} strokeWidth={1.5} pointerEvents="none" />
                     <circle cx={knob.x} cy={knob.y} r={7} fill={p.select} stroke={p.halo} strokeWidth={1.5} style={{ cursor: 'grab' }} onPointerDown={(e) => onHandleDown(e, v, 'rotate')} aria-label="Turn" />
@@ -189,7 +192,7 @@ export function ParkingScene({
             {[a, b].map((s, i) => (
               <circle key={i} cx={s.x} cy={s.y} r={3.5 * ls} fill={p.measure} stroke={p.halo} strokeWidth={1.5} onPointerDown={onHandleDown ? (e) => onHandleDown(e, m, i ? 'b' : 'a') : undefined} style={{ cursor: onHandleDown ? 'grab' : undefined }} />
             ))}
-            {selectedId === m.id ? <line x1={a.x} y1={a.y} x2={b.x} y2={b.y} stroke={p.select} strokeOpacity={0.5} strokeWidth={8} pointerEvents="none" /> : null}
+            {isSel(m.id) ? <line x1={a.x} y1={a.y} x2={b.x} y2={b.y} stroke={p.select} strokeOpacity={0.5} strokeWidth={8} pointerEvents="none" /> : null}
             <Label x={(a.x + b.x) / 2} y={(a.y + b.y) / 2 - 12 * ls} ls={ls} p={p} halo={halo} text={fmtMetres(dist(m.a, m.b))} />
           </g>
         );
@@ -212,7 +215,7 @@ export function ParkingScene({
         const anchor = crowded ? 'end' : 'start';
         return (
           <g key={m.id} onPointerDown={down(m)} style={{ cursor }}>
-            <circle cx={s.x} cy={s.y} r={r} fill={p.chip} stroke={selectedId === m.id ? p.select : p.ink} strokeWidth={(selectedId === m.id ? 2.5 : 1.5) * ls} />
+            <circle cx={s.x} cy={s.y} r={r} fill={p.chip} stroke={isSel(m.id) ? p.select : p.ink} strokeWidth={(isSel(m.id) ? 2.5 : 1.5) * ls} />
             <Icon x={s.x - r * 0.62} y={s.y - r * 0.62} width={r * 1.24} height={r * 1.24} color={p.ink} strokeWidth={2} />
             <text x={tx} textAnchor={anchor} y={s.y + (m.detail ? -1 * ls : 4 * ls)} fontSize={12 * ls} fontWeight={600} fill={p.ink} style={halo}>
               {name}

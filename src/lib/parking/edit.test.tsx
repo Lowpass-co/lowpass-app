@@ -1,7 +1,8 @@
 /* Parking maps — editing rules. */
 
 import { describe, expect, it } from 'vitest';
-import { addMarker, addVehicle, duplicateItem, finishDraft, moveItem, record, redo, removeItem, undo, type History } from './edit';
+import { addMarker, addVehicle, duplicateItem, duplicateItems, finishDraft, groupCentre, itemsInBox, moveItem, moveItems, record, redo, removeItem, removeItems, toggleSelection, turnItems, undo, type History } from './edit';
+import { dist, project } from './geo';
 import { parseMapBody, type ParkingItem } from './model';
 
 describe('adding', () => {
@@ -77,5 +78,77 @@ describe('undo / redo', () => {
     expect(v).toBe(2);
     h = record(h, v); v = 9;
     expect(redo(h, v)).toBeNull();
+  });
+});
+
+describe('several at once', () => {
+  const bus = (id: string, x: number, y: number, heading = 0): ParkingItem => ({ id, kind: 'vehicle', type: 'bus_eu', label: id, x, y, heading, length: 13.5, width: 2.55, height: 4 });
+  const row = [bus('a', 0, 0), bus('b', 4, 0), bus('c', 8, 0), { id: 'm', kind: 'marker', type: 'gate', label: '', detail: '', x: 30, y: 30 } as ParkingItem];
+
+  it('Cmd/Ctrl/Shift-click adds, and takes out what is already in', () => {
+    expect(toggleSelection(['a'], 'b')).toEqual(['a', 'b']);
+    expect(toggleSelection(['a', 'b'], 'a')).toEqual(['b']);
+  });
+
+  it('move / delete touch only the selection', () => {
+    const moved = moveItems(row, ['a', 'c'], { x: 1, y: 2 });
+    expect(moved.map((i) => (i.kind === 'vehicle' || i.kind === 'marker' ? [i.x, i.y] : null))).toEqual([[1, 2], [4, 0], [9, 2], [30, 30]]);
+    expect(removeItems(row, ['a', 'm']).map((i) => i.id)).toEqual(['b', 'c']);
+  });
+
+  it('a group turns as one block: a row stays a row, headings turn with it', () => {
+    const t = turnItems(row, ['a', 'b', 'c'], 90);
+    const [a, b, c] = t as Extract<ParkingItem, { kind: 'vehicle' }>[];
+    expect([a.heading, b.heading, c.heading]).toEqual([90, 90, 90]);
+    // Turned clockwise about the middle bus: the east–west row is now north–south.
+    expect(b.x).toBeCloseTo(4);
+    expect(b.y).toBeCloseTo(0);
+    expect(a.x).toBeCloseTo(4);
+    expect(a.y).toBeCloseTo(4);
+    expect(dist(a, c)).toBeCloseTo(8);
+    expect(t[3]).toBe(row[3]); // not selected: untouched
+  });
+
+  it('turning again and again spins in place (no creep), and 72 × 5° comes home', () => {
+    const ids = ['a', 'b', 'm'];
+    const c0 = groupCentre(row, ids)!;
+    let t = row;
+    for (let k = 0; k < 72; k++) t = turnItems(t, ids, 5);
+    const c1 = groupCentre(t, ids)!;
+    expect(dist(c0, c1)).toBeLessThan(0.01);
+    for (const [i, j] of t.map((x, n) => [x, row[n]])) {
+      if (i.kind === 'vehicle' && j.kind === 'vehicle') {
+        expect(dist(i, j)).toBeLessThan(0.02);
+        expect(i.heading).toBe(j.heading);
+      }
+    }
+  });
+
+  it('areas, routes and measures turn by their points', () => {
+    const shapes: ParkingItem[] = [
+      { id: 'r', kind: 'route', label: '', points: [{ x: 0, y: 0 }, { x: 10, y: 0 }] },
+      { id: 'q', kind: 'measure', a: { x: 0, y: 0 }, b: { x: 0, y: 10 } },
+    ];
+    const t = turnItems(shapes, ['r', 'q'], 180);
+    const r = t[0] as Extract<ParkingItem, { kind: 'route' }>;
+    expect(dist(r.points[0], r.points[1])).toBeCloseTo(10);
+  });
+
+  it('duplicate copies every selected item and names the vehicles on', () => {
+    const d = duplicateItems(row, ['a', 'b'], { x: 0, y: -10 });
+    expect(d.ids).toHaveLength(2);
+    const copies = d.items.filter((i) => d.ids.includes(i.id)) as Extract<ParkingItem, { kind: 'vehicle' }>[];
+    expect(new Set(copies.map((c) => c.label)).size).toBe(2);
+    expect(copies.every((c) => c.y === -10)).toBe(true);
+  });
+
+  it('a box on screen takes anything with a point inside it', () => {
+    const view = { cx: 4, cy: 0, ppm: 10, rotation: 30 };
+    const [w, h] = [800, 600];
+    const s = project(view, w, h, { x: 8, y: 0 });
+    // A small box around bus c's centre catches only c.
+    expect(itemsInBox(row, view, w, h, { x: s.x - 5, y: s.y - 5 }, { x: s.x + 5, y: s.y + 5 })).toEqual(['c']);
+    // The whole screen catches the buses; the gate at 30,30 is off it.
+    expect(itemsInBox(row, view, w, h, { x: 0, y: 0 }, { x: w, y: h })).toEqual(['a', 'b', 'c']);
   });
 });
