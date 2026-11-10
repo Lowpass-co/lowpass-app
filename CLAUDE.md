@@ -509,7 +509,7 @@ recreate a `_legacy/` tree: delete dead code instead of parking it.
   import Cesium as a value in app code — `import type` only. Vehicles are
   `vehicleBlocks()` (`src/lib/parking/blocks3d.ts`): the plan's silhouette
   parts lifted to true heights, standing at the LOWEST mesh height under the
-  vehicle (so a tree doesn't lift a bus). 3D is look-only; "Use this view for
+  vehicle (so a tree doesn't lift a bus). Camera: right-drag / Ctrl-drag turn + tilt (Cesium's default had right-drag zoom), plus ↺ ↻ ⌃ ⌄ and a north compass that `orbit()` around the screen-centre ground point. 3D is look-only; "Use this view for
   the PDF" saves `view.cam3d` (validated by `parseCamera3d`). No sky
   atmosphere — with the globe off it painted over the vehicles.
 - Known: each export is a new file (share the Parking maps folder for a link

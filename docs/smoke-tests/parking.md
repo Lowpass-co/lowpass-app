@@ -145,6 +145,14 @@ browser key restricted to the Map Tiles API and the app's domains).**
 
 **Last verified**:
 
+#### PRK-19 — Turn and tilt the 3D camera
+
+**Do**: In 3D, right-drag (or Ctrl-drag) across the map; tap ↺ / ↻; hold ↻; tap ⌃ / ⌄; tap the compass.
+
+**Expect**: Right-drag turns and tilts around what you're looking at (left-drag still moves, scroll zooms). ↺ / ↻ turn 15° per tap and keep turning while held; ⌃ / ⌄ tilt 10° (never flat, never past straight down); the compass needle shows north and a tap faces north. Arrow / bracket keys don't move things on the plan while in 3D.
+
+**Last verified**:
+
 #### PRK-17 — Use this view for the PDF
 
 **Do**: In 3D, frame the approach; press **Use this view for the PDF**; Export PDF.
