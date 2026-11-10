@@ -1,9 +1,9 @@
 /* ============================================
-   LOWPASS — Advance · one show · Parking (Nov 2026, Adam)
+   LOWPASS — Production › Parking · one show (Nov 2026, Adam)
 
-   /advance/[tourId]/[routingId]/parking — the show's parking map: an overhead
+   /operations/[tourId]/parking/[routingId] — the show's parking map: an overhead
    satellite plan pinned to the venue, vehicles at true size, exported as a
-   PDF for drivers. Opening it writes nothing. Admins/managers edit; read-only
+   PDF for drivers; the show's advance links here. Opening it writes nothing. Admins/managers edit; read-only
    members see it.
    ============================================ */
 

@@ -2,7 +2,7 @@
 
 import { beforeEach, describe, expect, it } from 'vitest';
 import { FakeDb } from '@/test-utils/fakeSupabase';
-import { ParkingConflict, ParkingNotFound, loadParkingMap, loadParkingShow, recordPdf, saveParkingMap } from './maps';
+import { ParkingConflict, ParkingNotFound, loadParkingIndex, loadParkingMap, loadParkingShow, recordPdf, saveParkingMap } from './maps';
 import type { ParkingMapData } from '@/lib/parking/model';
 
 const WS = 'ws-1';
@@ -99,5 +99,25 @@ describe('recordPdf', () => {
   it('needs a saved map', async () => {
     const show = (await loadParkingShow(db.client(), 't1', 'show-1'))!;
     await expect(recordPdf(db.client(), { show, fileId: 'f-mine' })).rejects.toBeInstanceOf(ParkingNotFound);
+  });
+});
+
+describe('loadParkingIndex — Production › Parking', () => {
+  it('lists the tour’s show days in date order with their maps; days off are left out unless a map exists', async () => {
+    db.seed('routing', [
+      { id: 'off-1', tour_id: 't1', date: '2026-12-03', day_type: 'off', city: 'Glasgow' },
+      { id: 'off-2', tour_id: 't1', date: '2026-12-04', day_type: 'off', city: 'Glasgow' },
+      { id: 'other', tour_id: 't2', date: '2026-12-01', day_type: 'show', city: 'Hull' },
+    ]);
+    const show = (await loadParkingShow(db.client(), 't1', 'show-1'))!;
+    await saveParkingMap(db.client(), { show, userId: 'u1', data: data(1), version: null });
+    db.seed('parking_maps', [{ id: 'pm-off', workspace_id: WS, tour_id: 't1', routing_id: 'off-2', items: [], updated_at: '2026-11-01T00:00:00Z', pdf_exported_at: null }]);
+
+    const rows = await loadParkingIndex(db.client(), 't1');
+    expect(rows.map((r) => r.routingId)).toEqual(['show-1', 'show-2', 'off-2']);
+    expect(rows[0]).toMatchObject({ hasMap: true, summary: '1 bus', venue: 'First Direct Arena' });
+    expect(rows[1]).toMatchObject({ hasMap: false, summary: null });
+    expect(rows[2]).toMatchObject({ hasMap: true, summary: null });
+    expect(db.writes()).toBe(1); // only the save above — the index reads
   });
 });

@@ -1,5 +1,5 @@
 /* ============================================
-   /api/tours/[id]/advance/[routingId]/parking — the show's parking map (Nov 2026)
+   /api/tours/[id]/parking/[routingId] — a show's parking map (Production › Parking, Nov 2026)
 
      GET                              → { show, map | null }
      PUT   { map, version | null }    → { map }       save (409 { error, current } if stale)

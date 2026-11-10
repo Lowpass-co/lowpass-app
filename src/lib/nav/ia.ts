@@ -160,6 +160,13 @@ const TOUR_RAIL: RailEntry[] = [
   /* Patch is a mode of Channel list, not a page — so it has no item. */
   { kind: 'item', id: 'channel-list', label: 'Channel list', icon: 'ListOrdered', resource: 'operations.channel_list', href: (c) => `/operations/${c.tourId}/channel-list` },
   { kind: 'item', id: 'stage-plot', label: 'Stage plot', icon: 'Shapes', resource: 'operations.stage_plot', href: (c) => `/operations/${c.tourId}/stage-plot` },
+  /* Nov 2026 (Adam) — a separate tool, per show; the show's advance links to it.
+     Matches the per-show editor too. */
+  {
+    kind: 'item', id: 'parking', label: 'Parking', icon: 'ParkingSquare',
+    href: (c) => `/operations/${c.tourId}/parking`,
+    match: (p) => /^\/operations\/[^/]+\/parking(\/|$)/.test(p),
+  },
   { kind: 'item', id: 'assets', label: 'Gear', icon: 'Package', badge: 'gear', href: (c) => `/operations/${c.tourId}/hire` },
   g('Logistics'),
   { kind: 'item', id: 'crew', label: 'Crew', icon: 'Users', resource: 'operations.personnel', href: (c) => `/operations/${c.tourId}/personnel` },
@@ -466,7 +473,9 @@ export function hasOwnRail(pathname: string): boolean {
     /* S-3b — the STANDALONE rider editor renders the same RiderPackSidebar the
        tour-scoped one does (280px, unconditional whenever the pack has a
        context id). Same component, same collapse rule. */
-    /^\/rider-packs\/[^/]+/.test(pathname)
+    /^\/rider-packs\/[^/]+/.test(pathname) ||
+    /* The parking editor's tool panel sits where a rail would (Nov 2026). */
+    /^\/operations\/[^/]+\/parking\/[^/]+/.test(pathname)
   );
 }
 

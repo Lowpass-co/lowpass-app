@@ -89,7 +89,7 @@ describe('the filled advance body', () => {
     progress: { answered: 4, total: 5 },
     contacts: showContacts(DATA),
     crewCalls: [],
-    linked: { hotels: [], flights: [], deal: null },
+    linked: { hotels: [], flights: [], deal: null, parking: null },
     documents: [],
   };
 

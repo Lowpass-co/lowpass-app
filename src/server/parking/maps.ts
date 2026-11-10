@@ -7,6 +7,7 @@
                      a save that names a stale version gets ParkingConflict
                      (409) with the current row, never a silent overwrite.
    recordPdf       — remember the last exported PDF (a tour Files row).
+   loadParkingIndex — Production › Parking: the tour's show days and their maps.
 
    Every write passes through parseMapBody() first (the route does that);
    tenancy is the route's requireWrite + tourGate AND the table's RLS, which
@@ -18,6 +19,7 @@ import { resolveVenue, type RoutingVenueSource } from '@/lib/venues/resolveVenue
 import { ROUTING_VENUE_SELECT } from '@/server/advance/board';
 import type { ParkingMapData, ParkingItem } from '@/lib/parking/model';
 import type { LatLng, View } from '@/lib/parking/geo';
+import { summariseMap } from '@/lib/parking/summary';
 
 export interface ParkingShow {
   tourId: string;
@@ -194,4 +196,48 @@ export async function recordPdf(
   const row = (rows as MapRow[] | null)?.[0];
   if (!row) throw new ParkingNotFound('Save the map before exporting it.');
   return toSaved(row, file.file_name);
+}
+
+/* ── Production › Parking: every show on the tour, with its map ─────────── */
+
+export interface ParkingIndexRow {
+  routingId: string;
+  date: string;
+  dayType: string | null;
+  venue: string | null;
+  city: string | null;
+  summary: string | null;
+  hasMap: boolean;
+  updatedAt: string | null;
+  pdfExportedAt: string | null;
+}
+
+/** Days off and travel days have no parking — unless a map was already drawn. */
+const NO_PARKING_DAYS = new Set(['off', 'travel']);
+
+export async function loadParkingIndex(client: SupabaseClient, tourId: string): Promise<ParkingIndexRow[]> {
+  const [{ data: days }, { data: maps }] = await Promise.all([
+    client.from('routing').select(`${ROUTING_VENUE_SELECT}, tour_id`).eq('tour_id', tourId).order('date', { ascending: true }),
+    client.from('parking_maps').select('routing_id, items, updated_at, pdf_exported_at').eq('tour_id', tourId),
+  ]);
+  const byShow = new Map(
+    ((maps ?? []) as { routing_id: string; items: ParkingItem[] | null; updated_at: string; pdf_exported_at: string | null }[]).map((m) => [m.routing_id, m]),
+  );
+  return ((days ?? []) as (RoutingVenueSource & { id: string; date: string; day_type: string | null })[])
+    .filter((d) => byShow.has(d.id) || !NO_PARKING_DAYS.has((d.day_type ?? 'show').toLowerCase()))
+    .map((d) => {
+      const m = byShow.get(d.id);
+      const v = resolveVenue(d);
+      return {
+        routingId: d.id,
+        date: d.date,
+        dayType: d.day_type ?? null,
+        venue: v.name,
+        city: v.city ?? d.city ?? null,
+        summary: m ? summariseMap(Array.isArray(m.items) ? m.items : []) : null,
+        hasMap: !!m,
+        updatedAt: m?.updated_at ?? null,
+        pdfExportedAt: m?.pdf_exported_at ?? null,
+      };
+    });
 }

@@ -9,19 +9,19 @@ browser key restricted to the Map Tiles API and the app's domains).**
 
 ## Way in
 
-#### PRK-01 — Parking card on the show's advance
+#### PRK-01 — Parking lives under Production; the advance links to it
 
-**Do**: Open any show's advance (`/advance/<tour>/<show>`).
+**Do**: Open a tour; in the rail under **Production**, click **Parking**. Then open any show's advance.
 
-**Expect**: A **Parking** card in the right column. No map yet → "Draw the parking map"; a saved map → a one-line count ("2 buses · 1 truck · 3 markers") and "Open parking map".
+**Expect**: Parking lists every show day (days off and travel days left out) with its map ("2 buses · 1 truck" / "Not drawn") and PDF date; clicking a row opens that show's map. On the advance, "From elsewhere in Lowpass" has a **Parking** line ("No parking map yet" / the count) with "Draw it in Parking →" / "Edit in Parking →" to the same map. The editor's "All shows" goes back to the list; "Advance" goes to the show's advance.
 
 **Last verified**:
 
 #### PRK-02 — Opening writes nothing
 
-**Do**: Open the parking page for a show that has never had a map; leave without touching anything.
+**Do**: Open the parking map for a show that has never had one; leave without touching anything.
 
-**Expect**: No `parking_maps` row is created (the card still says "Draw the parking map").
+**Expect**: No `parking_maps` row is created (Parking still says "Not drawn").
 
 **Last verified**:
 
@@ -108,6 +108,22 @@ browser key restricted to the Map Tiles API and the app's domains).**
 **Do**: Press **Export PDF**.
 
 **Expect**: An A4 landscape PDF opens: title + date, the map at a stated scale ("Scale 1:500 at A4"), scale bar, north arrow (pointing the right way when the map is turned), Google attribution, a key of vehicles / markers / areas, notes, and a "Get there" Google Maps link for each gate (else the venue). It lands in tour Files › Parking maps and appears in the show's Files card.
+
+**Last verified**:
+
+#### PRK-14 — The PDF frames the drawing, not the window
+
+**Do**: Draw one bus and two markers; zoom the editor right out on a wide screen; Export PDF.
+
+**Expect**: The dashed "Prints at 1:N · A4" outline on the map shows exactly what prints; with "Fit the drawing" it hugs the drawing (a lone bus prints at 1:500 or closer, not 1:1,500). Picking a scale in Print scale resizes the outline and the PDF matches it.
+
+**Last verified**:
+
+#### PRK-15 — Vehicles look like what they are
+
+**Do**: Add each vehicle type.
+
+**Expect**: Buses show a windscreen, mirrors and roof units; "+ trailer" buses (EU/UK 18.75 m, US 19 m) a drawbar and a separate trailer; the EU artic a flat-fronted cab and a ribbed box trailer; the US truck a long hood, cab and sleeper; the splitter a van and its trailer. A name too long for the vehicle sits beside it, not across its ends. Two markers dropped in a row land side by side, labels apart.
 
 **Last verified**:
 

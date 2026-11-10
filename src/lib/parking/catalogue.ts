@@ -7,7 +7,7 @@
    the bus / truck company's spec sheet.
    ============================================ */
 
-export type VehicleType = 'bus_us' | 'bus_eu' | 'truck_us' | 'truck_eu' | 'splitter' | 'car' | 'generator';
+export type VehicleType = 'bus_us' | 'bus_us_trailer' | 'bus_eu' | 'bus_eu_trailer' | 'truck_us' | 'truck_eu' | 'splitter' | 'car' | 'generator';
 
 export interface VehicleSpec {
   type: VehicleType;
@@ -19,11 +19,21 @@ export interface VehicleSpec {
   height: number;
   /** Fill role — the colour token family it is drawn in. */
   role: 'bus' | 'truck' | 'van' | 'car' | 'power';
+  /** A towed trailer at the rear, drawn as its own section behind a drawbar
+   *  gap. `length` above is the WHOLE rig, nose to trailer tail. */
+  trailer?: { length: number; gap: number };
 }
 
 export const VEHICLES: readonly VehicleSpec[] = [
   { type: 'bus_eu', label: 'Tour bus, EU / UK', short: 'Bus', length: 13.5, width: 2.55, height: 4.0, role: 'bus' },
+  /* Nov 2026 (Adam: "a trailer option for UK and US bus"). 18.75 m is the UK
+     maximum for a vehicle towing a trailer; the trailer is a typical enclosed
+     luggage / backline trailer. Check the bus company's figures. */
+  { type: 'bus_eu_trailer', label: 'Tour bus + trailer, EU / UK', short: 'Bus', length: 18.75, width: 2.55, height: 4.0, role: 'bus', trailer: { length: 4.3, gap: 1.0 } },
   { type: 'bus_us', label: 'Tour bus, US (45 ft)', short: 'Bus', length: 13.7, width: 2.6, height: 3.7, role: 'bus' },
+  /* 45 ft coach + ~14 ft enclosed trailer + drawbar ≈ 19 m (US states commonly
+     allow 65 ft combined). */
+  { type: 'bus_us_trailer', label: 'Tour bus + trailer, US', short: 'Bus', length: 19, width: 2.6, height: 3.7, role: 'bus', trailer: { length: 4.3, gap: 1.0 } },
   { type: 'truck_eu', label: 'Truck, EU (artic)', short: 'Truck', length: 16.5, width: 2.55, height: 4.0, role: 'truck' },
   { type: 'truck_us', label: 'Truck, US (53 ft)', short: 'Truck', length: 22, width: 2.6, height: 4.1, role: 'truck' },
   { type: 'splitter', label: 'Splitter van + trailer', short: 'Van', length: 12, width: 2.1, height: 2.8, role: 'van' },

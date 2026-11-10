@@ -17,6 +17,7 @@ import { DoorOpen, PlugZap, Fence, ArrowUpFromLine, Droplet, Trash2, ShieldCheck
 import { bearing, dist, fmtMetres, niceLength, project, sceneTransform, unproject, type Pt, type View } from '@/lib/parking/geo';
 import { markerSpec, vehicleSpec, areaLabel, type MarkerType } from '@/lib/parking/catalogue';
 import { pathLength, vehicleCorners, type ParkingItem, type VehicleItem } from '@/lib/parking/model';
+import { vehicleParts, type Part, type PartKind } from '@/lib/parking/silhouettes';
 import { areaColour, roleColour, type Palette } from './palette';
 
 export interface SceneTile {
@@ -140,19 +141,29 @@ export function ParkingScene({
         const spec = vehicleSpec(v.type);
         const fill = roleColour(p, spec?.role ?? 'bus');
         const body = vehicleCorners(v).map(P);
-        // Cab band: the front 15 % of the length, so the direction reads at a glance.
-        const cab = vehicleCorners({ ...v, x: v.x + Math.sin((v.heading * Math.PI) / 180) * v.length * 0.425, y: v.y + Math.cos((v.heading * Math.PI) / 180) * v.length * 0.425, length: v.length * 0.15 }).map(P);
         const c = P(v);
         const sel = selectedId === v.id;
-        const front = P({ x: v.x + Math.sin((v.heading * Math.PI) / 180) * (v.length / 2), y: v.y + Math.cos((v.heading * Math.PI) / 180) * (v.length / 2) });
-        const knob = P({ x: v.x + Math.sin((v.heading * Math.PI) / 180) * (v.length / 2 + 3), y: v.y + Math.cos((v.heading * Math.PI) / 180) * (v.length / 2 + 3) });
+        const h = (v.heading * Math.PI) / 180;
+        const fwd = { x: Math.sin(h), y: Math.cos(h) };
+        const nose = { x: v.x + fwd.x * (v.length / 2), y: v.y + fwd.y * (v.length / 2) };
+        const front = P(nose);
+        const knob = P({ x: nose.x + fwd.x * 3, y: nose.y + fwd.y * 3 });
+        // Vehicle frame → screen: x across (right +), y back from the nose, metres.
+        const right = P({ x: nose.x + fwd.y, y: nose.y - fwd.x });
+        const back = P({ x: nose.x - fwd.x, y: nose.y - fwd.y });
+        const matrix = `matrix(${right.x - front.x} ${right.y - front.y} ${back.x - front.x} ${back.y - front.y} ${front.x} ${front.y})`;
         return (
           <g key={v.id}>
-            <polygon points={body.map((s) => `${s.x},${s.y}`).join(' ')} fill={fill} fillOpacity={0.88} stroke={p.halo} strokeWidth={1.5 * ls} strokeLinejoin="round" onPointerDown={down(v)} style={{ cursor }} />
-            <polygon points={cab.map((s) => `${s.x},${s.y}`).join(' ')} fill={p.halo} fillOpacity={0.45} pointerEvents="none" />
+            <g transform={matrix} pointerEvents="none">
+              {vehicleParts(v.type, v.length, v.width).map((part, i) => (
+                <VehiclePart key={i} part={part} fill={fill} p={p} ls={ls} />
+              ))}
+            </g>
+            {/* The whole footprint is the handle, trailer and all. */}
+            <polygon points={body.map((q) => `${q.x},${q.y}`).join(' ')} fill="transparent" stroke="none" onPointerDown={down(v)} style={{ cursor }} />
             {sel ? (
               <>
-                <polygon points={body.map((s) => `${s.x},${s.y}`).join(' ')} fill="none" stroke={p.select} strokeWidth={2.5} strokeDasharray="5 3" pointerEvents="none" />
+                <polygon points={body.map((q) => `${q.x},${q.y}`).join(' ')} fill="none" stroke={p.select} strokeWidth={2.5} strokeDasharray="5 3" pointerEvents="none" />
                 {onHandleDown ? (
                   <>
                     <line x1={front.x} y1={front.y} x2={knob.x} y2={knob.y} stroke={p.select} strokeWidth={1.5} pointerEvents="none" />
@@ -161,7 +172,7 @@ export function ParkingScene({
                 ) : null}
               </>
             ) : null}
-            <VehicleLabel c={c} front={front} ls={ls} p={p} halo={halo} name={v.label || spec?.short || 'Vehicle'} length={fmtMetres(v.length)} />
+            <VehicleLabel c={c} front={front} widthPx={v.width * Math.hypot(right.x - front.x, right.y - front.y)} ls={ls} p={p} halo={halo} name={v.label || spec?.short || 'Vehicle'} length={fmtMetres(v.length)} />
           </g>
         );
       })}
@@ -184,21 +195,30 @@ export function ParkingScene({
         );
       })}
 
-      {markers.map((m) => {
+      {markers.map((m, idx) => {
         if (m.kind !== 'marker') return null;
         const s = P(m);
         const Icon = MARKER_ICON[m.type];
         const r = 13 * ls;
         const name = m.label || markerSpec(m.type)?.label || '';
+        // Label on the right unless another marker sits there — then on the left.
+        const reach = r * 2 + Math.max(name.length, m.detail.length) * 6.5 * ls;
+        const crowded = markers.some((o, j) => {
+          if (j === idx || o.kind !== 'marker') return false;
+          const q = P(o);
+          return q.x > s.x && q.x - s.x < reach && Math.abs(q.y - s.y) < r * 2.2;
+        });
+        const tx = crowded ? s.x - r - 5 * ls : s.x + r + 5 * ls;
+        const anchor = crowded ? 'end' : 'start';
         return (
           <g key={m.id} onPointerDown={down(m)} style={{ cursor }}>
             <circle cx={s.x} cy={s.y} r={r} fill={p.chip} stroke={selectedId === m.id ? p.select : p.ink} strokeWidth={(selectedId === m.id ? 2.5 : 1.5) * ls} />
             <Icon x={s.x - r * 0.62} y={s.y - r * 0.62} width={r * 1.24} height={r * 1.24} color={p.ink} strokeWidth={2} />
-            <text x={s.x + r + 5 * ls} y={s.y + (m.detail ? -1 * ls : 4 * ls)} fontSize={12 * ls} fontWeight={600} fill={p.ink} style={halo}>
+            <text x={tx} textAnchor={anchor} y={s.y + (m.detail ? -1 * ls : 4 * ls)} fontSize={12 * ls} fontWeight={600} fill={p.ink} style={halo}>
               {name}
             </text>
             {m.detail ? (
-              <text x={s.x + r + 5 * ls} y={s.y + 12 * ls} fontSize={10.5 * ls} fill={p.ink} style={halo}>
+              <text x={tx} textAnchor={anchor} y={s.y + 12 * ls} fontSize={10.5 * ls} fill={p.ink} style={halo}>
                 {m.detail}
               </text>
             ) : null}
@@ -229,21 +249,53 @@ function Label({ x, y, text, sub, ls, p, halo }: { x: number; y: number; text: s
 
 /** Written ALONG the vehicle (as on a hand-drawn plan), kept upright, so
  *  buses parked side by side don't stack their labels on each other. */
-function VehicleLabel({ c, front, name, length, ls, p, halo }: { c: Pt; front: Pt; name: string; length: string; ls: number; p: Palette; halo: object }) {
+const PART_PAINT: Record<PartKind, { base: boolean; shade: number; ink?: number; outline: boolean }> = {
+  body: { base: true, shade: 0, outline: true },
+  cab: { base: true, shade: 0.3, outline: true },
+  hood: { base: true, shade: 0.18, outline: true },
+  glass: { base: false, shade: 0.78, outline: false },
+  roof: { base: false, shade: 0, ink: 0.38, outline: false },
+  coupling: { base: false, shade: 0.9, outline: false },
+  mirror: { base: false, shade: 0.9, outline: false },
+  rib: { base: false, shade: 0.28, outline: false },
+};
+
+/** One part of a vehicle, drawn in the vehicle's own frame (metres). */
+function VehiclePart({ part, fill, p, ls }: { part: Part; fill: string; p: Palette; ls: number }) {
+  const paint = PART_PAINT[part.kind];
+  const box = { x: (part.s ?? 0) - part.w / 2, y: part.f0, width: part.w, height: Math.max(0.01, part.f1 - part.f0), rx: part.r ?? 0 };
+  return (
+    <>
+      {paint.base ? <rect {...box} fill={fill} fillOpacity={0.93} stroke={paint.outline ? p.halo : 'none'} strokeWidth={1.3 * ls} vectorEffect="non-scaling-stroke" /> : null}
+      {paint.shade ? <rect {...box} fill={p.halo} fillOpacity={paint.shade} /> : null}
+      {paint.ink ? <rect {...box} fill={p.ink} fillOpacity={paint.ink} /> : null}
+    </>
+  );
+}
+
+/** Written ALONG the vehicle (as on a hand-drawn plan), kept upright, so
+ *  buses parked side by side don't stack their labels on each other. A name
+ *  that won't fit inside sits alongside instead of spilling over the ends. */
+function VehicleLabel({ c, front, widthPx, name, length, ls, p, halo }: { c: Pt; front: Pt; widthPx: number; name: string; length: string; ls: number; p: Palette; halo: object }) {
   let a = (Math.atan2(front.y - c.y, front.x - c.x) * 180) / Math.PI;
   if (a > 90) a -= 180;
   if (a < -90) a += 180;
-  // Fit the vehicle: shrink to its length, then drop the length (the key has it).
-  const room = 2 * Math.hypot(front.x - c.x, front.y - c.y) * 0.95;
+  const room = 2 * Math.hypot(front.x - c.x, front.y - c.y) * 0.92;
   const fit = (t: string) => Math.min(11 * ls, room / (t.length * 0.6));
   const full = `${name} · ${length}`;
-  const text = fit(full) >= 8 * ls ? full : name;
-  const size = Math.max(7 * ls, fit(text));
+  const inside = fit(full) >= 8 * ls ? full : fit(name) >= 7 * ls ? name : null;
+  const text = inside ?? full;
+  const size = inside ? Math.max(7 * ls, fit(text)) : 10 * ls;
+  // Outside: shift across the vehicle (perpendicular to its axis), clear of its side.
+  const rad = (a * Math.PI) / 180;
+  const off = inside ? 0 : widthPx / 2 + size * 0.9;
+  const x = c.x - Math.sin(rad) * off;
+  const y = c.y + Math.cos(rad) * off;
   return (
     <text
-      x={c.x}
-      y={c.y}
-      transform={`rotate(${a.toFixed(2)} ${c.x.toFixed(2)} ${c.y.toFixed(2)})`}
+      x={x}
+      y={y}
+      transform={`rotate(${a.toFixed(2)} ${x.toFixed(2)} ${y.toFixed(2)})`}
       textAnchor="middle"
       dominantBaseline="central"
       fontSize={size}

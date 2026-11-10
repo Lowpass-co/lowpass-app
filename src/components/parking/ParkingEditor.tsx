@@ -3,7 +3,8 @@
 /* ============================================
    LOWPASS — Parking map editor (Nov 2026, Adam) — phase 1, the overhead plan
 
-   /advance/[tourId]/[routingId]/parking. A satellite map pinned to the venue,
+   Production › Parking: /operations/[tourId]/parking/[routingId] (linked from
+   the show's advance). A satellite map pinned to the venue,
    with vehicles at true size, markers, routes, areas and measurements;
    autosaved; exported as an A4 PDF into tour Files, linked to the show.
 
@@ -49,6 +50,7 @@ import { ParkingScene, MARKER_ICON, type Draft, type SceneTile } from './Parking
 import { LIVE_PALETTE, roleColour, areaColour } from './palette';
 import { getTileSession, tileUrl, tilesKey, viewportInfo, type TileSession } from './googleTiles';
 import { exportParkingPdf } from './exportPdf';
+import { freeSpot, printFrame, type PrintScaleChoice } from '@/lib/parking/print';
 import '@/components/advance/advance.css';
 import './parking.css';
 
@@ -86,6 +88,7 @@ export function ParkingEditor({ show, tourName, initial, canEdit }: ParkingEdito
   const [dragging, setDragging] = useState(false);
   const [pdf, setPdf] = useState(initial?.pdf ?? null);
   const [exporting, setExporting] = useState(false);
+  const [printScale, setPrintScale] = useState<PrintScaleChoice>('auto');
 
   // Imagery
   const [session, setSession] = useState<TileSession | null>(null);
@@ -117,7 +120,7 @@ export function ParkingEditor({ show, tourName, initial, canEdit }: ParkingEdito
   sizeRef.current = size;
   dataRef.current = { anchor, view, items, notes };
 
-  const base = `/api/tours/${show.tourId}/advance/${show.routingId}/parking`;
+  const base = `/api/tours/${show.tourId}/parking/${show.routingId}`;
 
   /* ── Size ─────────────────────────────────────────────── */
   useEffect(() => {
@@ -172,6 +175,9 @@ export function ParkingEditor({ show, tourName, initial, canEdit }: ParkingEdito
     }, 500);
     return () => clearTimeout(t);
   }, [session, anchor, view, size.w, size.h, dpr]);
+
+  const frame = useMemo(() => printFrame(items, view, size, printScale), [items, view, size, printScale]);
+  const autoScale = useMemo(() => printFrame(items, view, size, 'auto').scale, [items, view, size]);
 
   /* ── Saving ───────────────────────────────────────────── */
   const save = useCallback(
@@ -430,13 +436,13 @@ export function ParkingEditor({ show, tourName, initial, canEdit }: ParkingEdito
   /* ── Adding ───────────────────────────────────────────── */
   const centre = (): Pt => ({ x: viewRef.current.cx, y: viewRef.current.cy });
   const placeVehicle = (t: VehicleType) => {
-    const r = addVehicle(itemsRef.current, t, centre(), viewRef.current.rotation);
+    const r = addVehicle(itemsRef.current, t, freeSpot(itemsRef.current, centre(), viewRef.current, 5), viewRef.current.rotation);
     commit(r.items);
     setSelected(r.id);
     cancelDraw();
   };
   const placeMarker = (t: MarkerType) => {
-    const r = addMarker(itemsRef.current, t, centre());
+    const r = addMarker(itemsRef.current, t, freeSpot(itemsRef.current, centre(), viewRef.current));
     commit(r.items);
     setSelected(r.id);
     cancelDraw();
@@ -526,7 +532,7 @@ export function ParkingEditor({ show, tourName, initial, canEdit }: ParkingEdito
         subtitle: [dateLabel, show.venue.city, tourName].filter(Boolean).join(' · '),
         anchor,
         view,
-        viewport: size,
+        frame,
         items,
         notes,
         session,
@@ -561,13 +567,18 @@ export function ParkingEditor({ show, tourName, initial, canEdit }: ParkingEdito
   };
 
   /* ── Render ───────────────────────────────────────────── */
-  const backHref = `/advance/${show.tourId}/${show.routingId}`;
+  const backHref = `/operations/${show.tourId}/parking`;
+  const advanceHref = `/advance/${show.tourId}/${show.routingId}`;
 
   if (!anchor) {
     return <AnchorPicker show={show} backHref={backHref} canEdit={canEdit} onPick={(a) => { touch(); setAnchor(a); }} />;
   }
 
   const scaleM = niceLength(110 / view.ppm);
+  // The print area, outlined on the map: exactly what the PDF will show.
+  const fc = project(view, size.w, size.h, { x: frame.cx, y: frame.cy });
+  const fw = frame.wM * view.ppm;
+  const fh = frame.hM * view.ppm;
   const counts = { vehicles: items.filter((i) => i.kind === 'vehicle').length };
 
   return (
@@ -575,16 +586,38 @@ export function ParkingEditor({ show, tourName, initial, canEdit }: ParkingEdito
       <aside className="pk-panel" aria-label="Parking map tools">
         <div className="pk-head">
           <Link href={backHref} className="adv-link" style={{ fontSize: 'var(--lp-text-xs)' }}>
-            <ArrowLeft size={13} aria-hidden /> {venueName} advance
+            <ArrowLeft size={13} aria-hidden /> All shows
           </Link>
           <h1 className="lp-page-title">Parking</h1>
-          <span className="pk-muted">{dateLabel}{show.venue.city ? ` · ${show.venue.city}` : ''}</span>
+          <span style={{ fontSize: 'var(--lp-text-sm)', fontWeight: 'var(--lp-weight-semibold)' }}>{venueName}</span>
+          <span className="pk-muted">
+            {dateLabel}
+            {show.venue.city ? ` · ${show.venue.city}` : ''} ·{' '}
+            <Link href={advanceHref} className="adv-link">
+              Advance
+            </Link>
+          </span>
           <div className="adv-row-flex" style={{ gap: 'var(--lp-space-2)', marginTop: 'var(--lp-space-2)', flexWrap: 'wrap' }}>
             {canEdit ? <SaveStatus status={status} lastSavedAt={savedAt} errorMessage={saveError} onRetry={() => void save()} /> : <span className="pk-muted">View only</span>}
             <button type="button" className="adv-btn adv-btn-primary adv-btn-sm" onClick={() => void doExport()} disabled={exporting} style={{ marginLeft: 'auto' }}>
               <Download size={14} aria-hidden /> {exporting ? 'Making PDF…' : 'Export PDF'}
             </button>
           </div>
+          <label className="pk-field" style={{ flexDirection: 'row', alignItems: 'center', gap: 'var(--lp-space-2)' }}>
+            Print scale
+            <select
+              className="adv-field"
+              style={{ height: 30, width: 'auto', flex: 1 }}
+              value={String(printScale)}
+              onChange={(e) => setPrintScale(e.target.value === 'auto' ? 'auto' : (Number(e.target.value) as PrintScaleChoice))}
+              aria-label="Print scale"
+            >
+              <option value="auto">Fit the drawing ({`1:${autoScale.toLocaleString('en-GB')}`})</option>
+              {[200, 250, 500, 750, 1000, 1500, 2000].map((n) => (
+                <option key={n} value={n}>1:{n.toLocaleString('en-GB')}</option>
+              ))}
+            </select>
+          </label>
           {pdf ? <span className="pk-muted">Last PDF {pdf.exportedAt ? new Date(pdf.exportedAt).toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short' }) : ''} · in Files › Parking maps</span> : null}
         </div>
 
@@ -817,6 +850,26 @@ export function ParkingEditor({ show, tourName, initial, canEdit }: ParkingEdito
             </div>
           ) : null}
         </div>
+
+        {size.w ? (
+          <div
+            aria-hidden
+            style={{
+              position: 'absolute',
+              left: fc.x - fw / 2,
+              top: fc.y - fh / 2,
+              width: fw,
+              height: fh,
+              border: '1.5px dashed var(--lp-map-select)',
+              boxShadow: '0 0 0 1px var(--lp-map-halo)',
+              pointerEvents: 'none',
+            }}
+          >
+            <span className="pk-badge" style={{ left: 0, top: 0, transform: 'translateY(-100%)', borderRadius: 'var(--lp-radius-sm) var(--lp-radius-sm) 0 0' }}>
+              Prints at 1:{frame.scale.toLocaleString('en-GB')} · A4
+            </span>
+          </div>
+        ) : null}
 
         <div className="pk-badge pk-scale" aria-label={`Scale bar: ${fmtMetres(scaleM)}`}>
           <span>{fmtMetres(scaleM)}</span>
@@ -1064,7 +1117,7 @@ function AnchorPicker({ show, backHref, canEdit, onPick }: { show: ParkingShow; 
     <div className="pk-anchor">
       <div className="pk-anchor-card">
         <Link href={backHref} className="adv-link" style={{ fontSize: 'var(--lp-text-xs)' }}>
-          <ArrowLeft size={13} aria-hidden /> Back to the advance
+          <ArrowLeft size={13} aria-hidden /> All shows
         </Link>
         <h1 className="lp-page-title" style={{ margin: 0 }}>Where is {show.venue.name ?? 'the venue'}?</h1>
         <p className="pk-muted" style={{ margin: 0 }}>
