@@ -25,7 +25,7 @@ import { areaLabel, markerSpec, vehicleSpec } from '@/lib/parking/catalogue';
 import { vehicleBlocks, type Block } from '@/lib/parking/blocks3d';
 import { vehicleCorners, type ParkingItem, type VehicleItem } from '@/lib/parking/model';
 import type { PartKind } from '@/lib/parking/silhouettes';
-import { areaColour, roleColour, type Palette } from './palette';
+import { areaColour, vehicleColour, type Palette } from './palette';
 import type { CesiumModule } from './loadCesium';
 
 type C = CesiumModule;
@@ -157,7 +157,7 @@ export async function populate(
 
   for (const v of vehicles) {
     const g = groundOf(v.id, 5);
-    const base = roleColour(o.palette, vehicleSpec(v.type)?.role ?? 'bus');
+    const base = vehicleColour(o.palette, v);
     for (const b of vehicleBlocks(v)) addBlock(Cesium, viewer, o.anchor, b, g, blockColour(Cesium, o.palette, base, b.kind), halo);
     const top = ll({ x: v.x, y: v.y });
     viewer.entities.add({

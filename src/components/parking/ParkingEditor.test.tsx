@@ -79,6 +79,20 @@ describe('ParkingEditor', () => {
     expect(second.version).toBe(1);
   });
 
+  it('a colour is one click, saved, and one undo step', async () => {
+    mount();
+    fireEvent.click(screen.getByRole('button', { name: /Tour bus, EU \/ UK/ }));
+    await act(async () => vi.advanceTimersByTime(1000));
+    fireEvent.click(screen.getByRole('radio', { name: 'Teal' }));
+    await act(async () => vi.advanceTimersByTime(1000));
+    const last = () => calls.filter((c) => c.method === 'PUT').at(-1)!.body as { map: { items: { colour?: string }[] } };
+    expect(last().map.items[0].colour).toBe('teal');
+    expect(screen.getByRole('radio', { name: 'Teal' }).getAttribute('aria-checked')).toBe('true');
+    fireEvent.click(screen.getByRole('button', { name: 'Undo' }));
+    await act(async () => vi.advanceTimersByTime(1000));
+    expect(last().map.items[0].colour).toBeUndefined();
+  });
+
   it('a 409 shows the conflict and stops saving', async () => {
     reply = () => new Response(JSON.stringify({ error: 'x', current: { id: 'm', version: 7, items: [], notes: 'theirs', view: { cx: 0, cy: 0, ppm: 2, rotation: 0 }, anchor: show.venue.coords, updatedAt: '', pdf: null } }), { status: 409 });
     mount();

@@ -499,7 +499,7 @@ recreate a `_legacy/` tree: delete dead code instead of parking it.
   Map Tiles API + the app's domains — never the server key. Tiles are fetched
   for the view and never stored (Google's terms); "Google Maps · <credit>" stays
   visible on screen and on the PDF. No key → a true-scale grid, no imagery.
-- Overlay colours are `--lp-map-*` (fixed, not themed — they sit on a photo).
+- Overlay colours are `--lp-map-*` (fixed, not themed — they sit on a photo). A vehicle's colour is `vehicleColour()` (palette.ts): its chosen paint (`PAINTS`, `--lp-map-paint-*`) else its type's role colour — the plan, 3D and the PDF key all call it.
 - **3D (phase 2):** the editor's Plan | 3D switch → `<Parking3D>`; the PDF's
   page 2. ONE builder, `scene3d.ts` (`populate`), for both: Google
   Photorealistic 3D Tiles (same browser key) rendered by **CesiumJS loaded at

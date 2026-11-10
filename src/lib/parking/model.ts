@@ -12,7 +12,7 @@
    parking_maps.items.
    ============================================ */
 
-import { MARKERS, VEHICLES, AREAS, type AreaType, type MarkerType, type VehicleType } from './catalogue';
+import { MARKERS, VEHICLES, AREAS, PAINTS, type AreaType, type MarkerType, type PaintId, type VehicleType } from './catalogue';
 import { normDeg, type Camera3d, type LatLng, type Pt, type View } from './geo';
 
 export interface VehicleItem {
@@ -26,6 +26,8 @@ export interface VehicleItem {
   length: number;
   width: number;
   height: number;
+  /** A paint instead of the type's colour; absent = the type's colour. */
+  colour?: PaintId;
 }
 
 export interface MarkerItem {
@@ -87,6 +89,7 @@ export const LIMITS = {
 const VEHICLE_TYPES = new Set<string>(VEHICLES.map((v) => v.type));
 const MARKER_TYPES = new Set<string>(MARKERS.map((m) => m.type));
 const AREA_TYPES = new Set<string>(AREAS.map((a) => a.type));
+const PAINT_IDS = new Set<string>(PAINTS.map((p) => p.id));
 
 export class ParkingInputError extends Error {}
 
@@ -106,6 +109,11 @@ function text(v: unknown, max: number): string {
   if (v == null) return '';
   if (typeof v !== 'string') fail('Text fields must be strings');
   return (v as string).replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, '').trim().slice(0, max);
+}
+
+function paint(v: unknown): PaintId {
+  if (typeof v !== 'string' || !PAINT_IDS.has(v)) fail('Unknown vehicle colour');
+  return v as PaintId;
 }
 
 function id(v: unknown): string {
@@ -143,6 +151,7 @@ export function parseItem(raw: unknown): ParkingItem {
         length: num(o.length, 'Length', LIMITS.minSize, LIMITS.maxLength),
         width: num(o.width, 'Width', LIMITS.minSize, LIMITS.maxWidth),
         height: num(o.height, 'Height', LIMITS.minSize, LIMITS.maxHeight),
+        ...(o.colour == null || o.colour === '' ? {} : { colour: paint(o.colour) }),
       };
     }
     case 'marker': {

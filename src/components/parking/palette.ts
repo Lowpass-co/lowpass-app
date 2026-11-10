@@ -1,7 +1,7 @@
 /* Parking map colours. Live: CSS variables. Export: the same variables
    resolved to literal colours (an SVG drawn into a canvas can't read CSS). */
 
-import type { VehicleSpec, AreaType } from '@/lib/parking/catalogue';
+import { PAINTS, vehicleSpec, type AreaType, type PaintId, type VehicleSpec } from '@/lib/parking/catalogue';
 
 export const PALETTE_KEYS = [
   'bus',
@@ -22,6 +22,7 @@ export const PALETTE_KEYS = [
   'blank',
   'grid',
   'sky',
+  ...PAINTS.map((p) => `paint-${p.id}` as const),
 ] as const;
 
 export type PaletteKey = (typeof PALETTE_KEYS)[number];
@@ -36,6 +37,11 @@ export function resolvePalette(): Palette {
 }
 
 export const roleColour = (p: Palette, role: VehicleSpec['role']): string => p[role];
+
+/** A vehicle's colour: its chosen paint, else its type's colour. */
+export function vehicleColour(p: Palette, v: { type: string; colour?: PaintId }): string {
+  return v.colour ? p[`paint-${v.colour}`] : roleColour(p, vehicleSpec(v.type)?.role ?? 'bus');
+}
 
 export function areaColour(p: Palette, t: AreaType): string {
   return t === 'crew' ? p['area-crew'] : t === 'guest' ? p['area-guest'] : t === 'no_go' ? p['area-no-go'] : p['area-other'];

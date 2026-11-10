@@ -43,6 +43,24 @@ export const VEHICLES: readonly VehicleSpec[] = [
 
 export const vehicleSpec = (t: string): VehicleSpec | undefined => VEHICLES.find((v) => v.type === t);
 
+/** Paints a vehicle can be given instead of its type's colour (Nov 2026,
+ *  Adam: "add colours to the vehicles") — e.g. band bus vs crew bus. One
+ *  list; each is a `--lp-map-paint-<id>` token. */
+export const PAINTS = [
+  { id: 'orange', label: 'Orange' },
+  { id: 'red', label: 'Red' },
+  { id: 'yellow', label: 'Yellow' },
+  { id: 'green', label: 'Green' },
+  { id: 'teal', label: 'Teal' },
+  { id: 'blue', label: 'Blue' },
+  { id: 'purple', label: 'Purple' },
+  { id: 'pink', label: 'Pink' },
+  { id: 'white', label: 'White' },
+  { id: 'black', label: 'Black' },
+] as const;
+
+export type PaintId = (typeof PAINTS)[number]['id'];
+
 export type MarkerType = 'load_in' | 'shore_power' | 'gate' | 'height_limit' | 'water' | 'dump' | 'security' | 'note';
 
 export interface MarkerSpec {

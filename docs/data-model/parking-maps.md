@@ -28,7 +28,7 @@ faces north, 90 = east.
 
 | `kind` | Fields |
 | --- | --- |
-| `vehicle` | `type` (`VEHICLES` in `src/lib/parking/catalogue.ts`), `label`, `x`, `y`, `heading`, `length`, `width`, `height` (m) |
+| `vehicle` | `type` (`VEHICLES` in `src/lib/parking/catalogue.ts`), `label`, `x`, `y`, `heading`, `length`, `width`, `height` (m), optional `colour` (a `PAINTS` id; absent = the type's colour) |
 | `marker` | `type` (`MARKERS`), `label`, `detail`, `x`, `y` |
 | `route` | `label`, `points[]` (≥ 2) |
 | `area` | `type` (`crew` / `guest` / `no_go` / `other`), `label`, `points[]` (≥ 3) |

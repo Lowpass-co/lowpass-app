@@ -18,7 +18,7 @@ import { bearing, dist, fmtMetres, niceLength, project, sceneTransform, unprojec
 import { markerSpec, vehicleSpec, areaLabel, type MarkerType } from '@/lib/parking/catalogue';
 import { pathLength, vehicleCorners, type ParkingItem, type VehicleItem } from '@/lib/parking/model';
 import { vehicleParts, type Part, type PartKind } from '@/lib/parking/silhouettes';
-import { areaColour, roleColour, type Palette } from './palette';
+import { areaColour, vehicleColour, type Palette } from './palette';
 
 export interface SceneTile {
   id: string;
@@ -139,7 +139,7 @@ export function ParkingScene({
 
       {vehicles.map((v) => {
         const spec = vehicleSpec(v.type);
-        const fill = roleColour(p, spec?.role ?? 'bus');
+        const fill = vehicleColour(p, v);
         const body = vehicleCorners(v).map(P);
         const c = P(v);
         const sel = selectedId === v.id;

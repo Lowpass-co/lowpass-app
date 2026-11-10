@@ -42,7 +42,7 @@ import {
   type Pt,
   type View,
 } from '@/lib/parking/geo';
-import { AREAS, MARKERS, VEHICLES, areaLabel, markerSpec, vehicleSpec, type AreaType, type MarkerType, type VehicleType } from '@/lib/parking/catalogue';
+import { AREAS, MARKERS, PAINTS, VEHICLES, areaLabel, markerSpec, vehicleSpec, type AreaType, type MarkerType, type VehicleType } from '@/lib/parking/catalogue';
 import { pathLength, type ParkingItem } from '@/lib/parking/model';
 import { addMarker, addVehicle, duplicateItem, finishDraft, moveItem, record, redo, removeItem, replaceItem, undo, type History } from '@/lib/parking/edit';
 import type { ParkingShow, SavedParkingMap } from '@/server/parking/maps';
@@ -643,6 +643,7 @@ export function ParkingEditor({ show, tourName, initial, canEdit }: ParkingEdito
                 item={sel}
                 anchor={anchor}
                 onPatch={patchSelected}
+                onChangeNow={(patch) => sel && commit(replaceItem(itemsRef.current, { ...sel, ...patch } as ParkingItem))}
                 onFocus={onFieldFocus}
                 onBlur={onFieldBlur}
                 onDelete={deleteSelected}
@@ -954,10 +955,13 @@ function Inspector({
   onBlur,
   onDelete,
   onDuplicate,
+  onChangeNow = () => {},
 }: {
   item: ParkingItem;
   anchor: LatLng;
   readOnly?: boolean;
+  /** One-click changes (colour, standard size): applied as one undo step. */
+  onChangeNow?: (p: Partial<ParkingItem>) => void;
   onPatch: (p: Partial<ParkingItem>) => void;
   onFocus: () => void;
   onBlur: () => void;
@@ -1000,6 +1004,36 @@ function Inspector({
               ))}
             </select>
           </label>
+          <div className="pk-field">
+            Colour
+            <div className="pk-swatches" role="radiogroup" aria-label="Vehicle colour">
+              <button
+                type="button"
+                role="radio"
+                aria-checked={!item.colour}
+                aria-label={`Default (${vehicleSpec(item.type)?.label ?? 'type'} colour)`}
+                title="Default — the type's colour"
+                disabled={readOnly}
+                className="pk-paint pk-paint-default"
+                style={{ background: roleColour(LIVE_PALETTE, vehicleSpec(item.type)?.role ?? 'bus') }}
+                onClick={() => onChangeNow({ colour: undefined } as Partial<ParkingItem>)}
+              />
+              {PAINTS.map((c) => (
+                <button
+                  key={c.id}
+                  type="button"
+                  role="radio"
+                  aria-checked={item.colour === c.id}
+                  aria-label={c.label}
+                  title={c.label}
+                  disabled={readOnly}
+                  className="pk-paint"
+                  style={{ background: `var(--lp-map-paint-${c.id})` }}
+                  onClick={() => onChangeNow({ colour: c.id } as Partial<ParkingItem>)}
+                />
+              ))}
+            </div>
+          </div>
           <div className="pk-grid3">
             {(['length', 'width', 'height'] as const).map((k) => (
               <label key={k} className="pk-field">
@@ -1028,9 +1062,7 @@ function Inspector({
               style={{ alignSelf: 'flex-start', fontSize: 'var(--lp-text-xs)' }}
               onClick={() => {
                 const s = vehicleSpec(item.type)!;
-                onFocus();
-                onPatch({ length: s.length, width: s.width, height: s.height });
-                onBlur();
+                onChangeNow({ length: s.length, width: s.width, height: s.height });
               }}
             >
               Use the standard {vehicleSpec(item.type)!.label} size
