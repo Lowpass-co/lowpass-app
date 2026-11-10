@@ -477,6 +477,27 @@ recreate a `_legacy/` tree: delete dead code instead of parking it.
   `OperationsSummaryClient`, the `/edit` page and `TourEditForm`). A new line
   here must be something to DO, with a link.
 
+### Parking maps — overhead plan, true size (Nov 2026, Adam — migration 287)
+
+- `/advance/[tourId]/[routingId]/parking`, opened from the **Parking** card on
+  the show's advance. Phase 1 of the scope doc ("Parking maps — scope"): Google
+  satellite pinned to the venue, vehicles / markers / routes / areas /
+  measurements, autosave, A4 PDF into tour Files › Parking maps, linked to the
+  show. Phase 2 (3D page) reuses the same items; nothing is pixels.
+- **Everything is metres east / north of the map's anchor** (`src/lib/parking/geo.ts`).
+  Never store or compute sizes in pixels. `parseMapBody()` is the only way into
+  `parking_maps.items`; `<ParkingScene>` is the ONE renderer — the PDF rasterises
+  the same component, so the editor and paper can't disagree.
+- Saves are optimistic on `version` (409 → "Load theirs / Keep mine"); opening
+  writes nothing.
+- Imagery: `NEXT_PUBLIC_GOOGLE_MAP_TILES_KEY`, a BROWSER key restricted to the
+  Map Tiles API + the app's domains — never the server key. Tiles are fetched
+  for the view and never stored (Google's terms); "Google Maps · <credit>" stays
+  visible on screen and on the PDF. No key → a true-scale grid, no imagery.
+- Overlay colours are `--lp-map-*` (fixed, not themed — they sit on a photo).
+- Known: each export is a new file (share the Parking maps folder for a link
+  that stays current).
+
 ### A city is not a venue (Nov 2026, Adam)
 
 - Days off / travel days have a city, never a venue. `venueIsCity()` /

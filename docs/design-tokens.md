@@ -310,6 +310,23 @@ success · pink). Every colour inside `src/components/grid/grid.css` resolves
 to one of these `var(--lp-…)` tokens (or a `color-mix` / hex+alpha of one) —
 no literal hex in the grid.
 
+## Parking map overlays (`--lp-map-*`, Nov 2026)
+
+Drawn on satellite imagery, so they do **not** switch with the theme: the background is a photo. Fills are saturated and every label has a dark halo.
+
+| Token | Use |
+| --- | --- |
+| `--lp-map-bus` / `-truck` / `-van` / `-car` / `-power` | Vehicle fills by role (`VehicleSpec.role`) |
+| `--lp-map-route` | Approach routes |
+| `--lp-map-area-crew` / `-guest` / `-no-go` / `-other` | Parking areas (filled at ~30%) |
+| `--lp-map-measure` | Measure lines |
+| `--lp-map-ink` / `--lp-map-halo` | Label text and its outline |
+| `--lp-map-chip` | Marker chip background |
+| `--lp-map-select` | Selection outline |
+| `--lp-map-blank` / `--lp-map-grid` | Background when no imagery is configured |
+
+The PDF export resolves these to literal colours with `getComputedStyle` (an SVG drawn into a canvas cannot read CSS variables) — `src/components/parking/palette.ts`.
+
 ## 13. Keyboard interaction contract (G1-C — app-wide law)
 
 Adam's rule, now the standard every interactive component inherits. Applies to

@@ -1,0 +1,132 @@
+# Parking maps smoke tests
+
+> **Last bulk verification**: (pending — feat/parking-maps)
+
+Walk these after changes to the parking editor, its PDF, or the Google tiles.
+Format defined in `docs/smoke-tests/README.md`. Prefix: `PRK`.
+**Prereq: migration 287 applied; `NEXT_PUBLIC_GOOGLE_MAP_TILES_KEY` set (a
+browser key restricted to the Map Tiles API and the app's domains).**
+
+## Way in
+
+#### PRK-01 — Parking card on the show's advance
+
+**Do**: Open any show's advance (`/advance/<tour>/<show>`).
+
+**Expect**: A **Parking** card in the right column. No map yet → "Draw the parking map"; a saved map → a one-line count ("2 buses · 1 truck · 3 markers") and "Open parking map".
+
+**Last verified**:
+
+#### PRK-02 — Opening writes nothing
+
+**Do**: Open the parking page for a show that has never had a map; leave without touching anything.
+
+**Expect**: No `parking_maps` row is created (the card still says "Draw the parking map").
+
+**Last verified**:
+
+#### PRK-03 — A venue with no map position
+
+**Do**: Open parking for a show whose venue was typed (not picked from Google).
+
+**Expect**: "Where is <venue>?" — searching the address, or pasting `53.8027, -1.5446`, opens the map pinned there.
+
+**Last verified**:
+
+## Drawing
+
+#### PRK-04 — Satellite imagery, pinned and attributed
+
+**Do**: Open First Direct Arena, Leeds.
+
+**Expect**: Google satellite imagery centred on the venue pin; "Google Maps · <imagery credit>" bottom right; scale bar bottom left.
+
+**Last verified**:
+
+#### PRK-05 — A bus is true size
+
+**Do**: Add "Tour bus, EU / UK", then Measure from one end of it to the other.
+
+**Expect**: The measurement reads 13.5 m (± a few cm from where you clicked). Zoom and rotate the map: the bus stays the same size against the imagery.
+
+**Last verified**:
+
+#### PRK-06 — Move, turn, nudge, undo
+
+**Do**: Drag a vehicle; drag its white knob to turn it; select it and press arrow keys / Shift+arrow, `[` / `]`; then ⌘Z repeatedly.
+
+**Expect**: Drag moves; the knob turns in 5° steps (Shift = free); arrows nudge 10 cm / 1 m along the screen; brackets turn 5° / 45°; ⌘Z walks every step back, ⌘⇧Z forward.
+
+**Last verified**:
+
+#### PRK-07 — Routes, areas, measurements
+
+**Do**: Draw a route (click points, double-click or Enter), a crew-parking area, and a measurement (two clicks).
+
+**Expect**: Route in cyan with arrows; area shaded with its label; measurement labelled in metres. Esc cancels a drawing; Backspace removes the last point.
+
+**Last verified**:
+
+#### PRK-08 — Square the map to the building
+
+**Do**: Turn the map with the ↺ / ↻ buttons; select a bus and press the arrow-pointer button.
+
+**Expect**: Map and drawing turn together; the compass shows where north is; the pointer button turns the map so that bus points up. The compass button resets north up.
+
+**Last verified**:
+
+## Saving
+
+#### PRK-09 — Autosave survives a reload
+
+**Do**: Add a truck and type notes; wait for "Saved"; reload.
+
+**Expect**: Everything is where you left it, including the view.
+
+**Last verified**:
+
+#### PRK-10 — Two tabs never overwrite each other silently
+
+**Do**: Open the same map in two tabs. Change something in tab A, wait for Saved. Change something in tab B.
+
+**Expect**: Tab B shows "This map was changed somewhere else…" with **Load theirs** / **Keep mine**; nothing is lost until you choose.
+
+**Last verified**:
+
+#### PRK-11 — Read-only members can look, not edit
+
+**Do**: Open a map as a read-only member.
+
+**Expect**: The map and its notes show; no add / draw tools; nothing saves. Export PDF opens the PDF but doesn't save it to Files.
+
+**Last verified**:
+
+## PDF
+
+#### PRK-12 — Export: page 1, true scale, saved and linked
+
+**Do**: Press **Export PDF**.
+
+**Expect**: An A4 landscape PDF opens: title + date, the map at a stated scale ("Scale 1:500 at A4"), scale bar, north arrow (pointing the right way when the map is turned), Google attribution, a key of vehicles / markers / areas, notes, and a "Get there" Google Maps link for each gate (else the venue). It lands in tour Files › Parking maps and appears in the show's Files card.
+
+**Last verified**:
+
+#### PRK-13 — The scale on paper is true
+
+**Do**: Print the PDF at 100 % (no "fit to page"); measure the scale bar and a bus with a ruler.
+
+**Expect**: Both match the stated 1:N (e.g. at 1:500 a 13.5 m bus is 27 mm).
+
+**Last verified**:
+
+## Known broken
+
+#### PRK-90 — Re-exporting makes a new file
+
+**Do**: Export twice.
+
+**Expect**: One PDF that updates, so a share link sent to a driver stays current.
+
+**Currently**: Each export is a new file in Files › Parking maps (the parking map remembers the latest). Share the **folder** (Files › Parking maps › Share…) to give drivers a link that always has the newest.
+
+**Tracked in**: feat/parking-maps follow-up.
