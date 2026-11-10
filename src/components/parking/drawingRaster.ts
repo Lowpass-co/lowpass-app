@@ -80,9 +80,11 @@ const RASTER_MAX_AREA = 16_000_000;
 const PDF_MAX_PX_PER_PT = 4;
 
 /** Pixels per source unit for a region (see the header). */
-export function rasterScale(kind: 'pdf' | 'image', w: number, h: number, maxEdge = RASTER_MAX_EDGE): number {
+export function rasterScale(kind: 'pdf' | 'image', w: number, h: number, maxEdge = RASTER_MAX_EDGE, fill = false): number {
   const k = Math.min(maxEdge / Math.max(w, h), Math.sqrt(RASTER_MAX_AREA / (w * h)));
-  return Math.min(k, kind === 'pdf' ? PDF_MAX_PX_PER_PT : 1);
+  // fill: a close-up for the AI fills its size whatever the source — a vector
+  // PDF stays sharp, and even an upscaled photo gives finer pixels to point at.
+  return fill ? k : Math.min(k, kind === 'pdf' ? PDF_MAX_PX_PER_PT : 1);
 }
 
 /** Render a region of a page (source units) to a canvas. */
@@ -92,10 +94,11 @@ export async function renderRegion(
   r: { u0: number; v0: number; u1: number; v1: number },
   paper: string,
   maxEdge = RASTER_MAX_EDGE,
+  fill = false,
 ): Promise<HTMLCanvasElement> {
   const w = r.u1 - r.u0;
   const h = r.v1 - r.v0;
-  const k = rasterScale(src.kind, w, h, maxEdge);
+  const k = rasterScale(src.kind, w, h, maxEdge, fill);
   const canvas = document.createElement('canvas');
   canvas.width = Math.max(1, Math.round(w * k));
   canvas.height = Math.max(1, Math.round(h * k));

@@ -1142,6 +1142,7 @@ export function ParkingEditor({ show, tourName, initial, canEdit }: ParkingEdito
             initial={setup.initial}
             satelliteOn={satelliteOn && !!session}
             view={view}
+            readUrl={`${base}/drawings/read`}
             requestMapPoint={requestMapPoint}
             onMarks={onPinMarks}
             onPreview={onPreviewDrawing}

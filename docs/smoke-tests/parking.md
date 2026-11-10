@@ -179,6 +179,14 @@ browser key restricted to the Map Tiles API and the app's domains).**
 
 **Last verified**:
 
+#### PRK-29 — Read it for me (AI)
+
+**Do**: Add the S2 Truck Parking PDF; on Crop press **Read it for me**.
+
+**Expect**: In ~15–30 s it lands on Scale with the crop round the car park and two printed dimensions drawn on their arrows (e.g. 24.08 m and 16 m), "The two agree within ~1 %". If the lines sit off the arrows or the two disagree by > 2 %, re-click them (the AI only proposes). A drawing with a north arrow offers "Place in the middle (north from the drawing)". Settings → AI limits shows the calls (parking.drawing.overview / refine), a few cents each.
+
+**Last verified**:
+
 #### PRK-25 — Indoor parking: the roof comes off
 
 **Do**: On a venue whose trucks park inside (the Velodrom, a basement dock), set up its drawing and tick **Inside a building**; floor −5 for a basement. Park a truck on it. Open 3D.

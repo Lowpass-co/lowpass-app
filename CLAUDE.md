@@ -554,6 +554,15 @@ recreate a `_legacy/` tree: delete dead code instead of parking it.
   files and offers the latest other map's drawings at this venue (shifted by
   the anchor difference). `view.satellite === false` = no imagery. The code
   reads/saves without the column until 288 is pasted (`withDrawings`).
+- **"Read it for me"** (AI-assisted setup, Nov 2026): `/drawings/read` (Sonnet
+  5.5, `DRAWING_READ_MODEL`, through `withAiUsage`). OVERVIEW: the whole page →
+  crop, printed dimensions + rough ends, north. REFINE: per dimension, two
+  1,200 px close-ups round its ends (`endBox`; `renderRegion(…, fill)` — NOT
+  capped at 4 px/pt) → the exact arrow tips. Rules + parsing pure in
+  `src/lib/parking/drawingRead.ts` (nothing the model says is trusted
+  unparsed). It only PROPOSES: it fills crop / dimensions / north and stops on
+  the Scale step, where the two dimensions must agree and are drawn on the
+  page; pinning stays two human clicks. ~3 calls, ~5 ¢ a drawing.
 - Known: each export is a new file (share the Parking maps folder for a link
   that stays current).
 

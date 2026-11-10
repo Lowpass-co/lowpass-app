@@ -3,7 +3,7 @@
 
    Source of truth for converting Anthropic token usage into
    micro-USD cost. All rates verified against the official pricing
-   page on 2026-06-03:
+   page on 2026-06-03 (the 5.5 rows on 2026-11-11):
 
      https://platform.claude.com/docs/en/about-claude/pricing
 
@@ -46,6 +46,13 @@ export const PRICING: Record<string, ModelPriceCard> = {
   // to use Sonnet; both 4.5 and 4.6 share rates.
   'claude-sonnet-4-6': { input: 3.0, output: 15.0, cacheWrite: 3.75, cacheRead: 0.3 },
   'claude-sonnet-4-5': { input: 3.0, output: 15.0, cacheWrite: 3.75, cacheRead: 0.3 },
+  // 5.5 family — checked against the pricing page 2026-11-11. Without these
+  // rows a 5.5 call costs 0 here, which also lets it past the workspace
+  // budget (the cap sums recorded cost). Haiku 5.5 is $0.50 / $2.50 above
+  // 100k prompt tokens; no endpoint sends prompts that long.
+  'claude-opus-5-5': { input: 4.0, output: 20.0, cacheWrite: 5.0, cacheRead: 0.2 },
+  'claude-sonnet-5-5': { input: 2.0, output: 10.0, cacheWrite: 2.5, cacheRead: 0.1 },
+  'claude-haiku-5-5': { input: 0.1, output: 0.5, cacheWrite: 0.125, cacheRead: 0.01 },
   // Opus 4.5+ — priced in for completeness; not used by any endpoint yet.
   'claude-opus-4-8': { input: 5.0, output: 25.0, cacheWrite: 6.25, cacheRead: 0.5 },
   'claude-opus-4-7': { input: 5.0, output: 25.0, cacheWrite: 6.25, cacheRead: 0.5 },
