@@ -235,6 +235,32 @@
 }
 
 /* ============================================
+   Parking maps (Nov 2026) — overlays drawn ON SATELLITE IMAGERY.
+   Deliberately the same in light and dark: the background is a photo, not
+   the theme. Saturated fills + a dark halo read on tarmac, grass and roofs.
+   Resolved to literal colours by the PDF export (getComputedStyle).
+   ============================================ */
+:root {
+  --lp-map-bus: #FF4500;
+  --lp-map-truck: #2F80ED;
+  --lp-map-van: #A855F7;
+  --lp-map-car: #FACC15;
+  --lp-map-power: #22C55E;
+  --lp-map-route: #22D3EE;
+  --lp-map-area-crew: #22C55E;
+  --lp-map-area-guest: #3B82F6;
+  --lp-map-area-no-go: #EF4444;
+  --lp-map-area-other: #E5E7EB;
+  --lp-map-measure: #FFFFFF;
+  --lp-map-ink: #FFFFFF;
+  --lp-map-halo: #0B0B0C;
+  --lp-map-chip: #111113;
+  --lp-map-select: #FFFFFF;
+  --lp-map-blank: #1C1C1F;
+  --lp-map-grid: #2E2E33;
+}
+
+/* ============================================
    UX01 — Foundation tokens (spacing, type, z, motion, radii, shadows, row density, aliases)
    Additive only — existing tokens above are unchanged.
    ============================================ */

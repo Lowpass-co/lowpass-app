@@ -22,6 +22,7 @@ import { saveAnswers, reviewPending } from './api';
 import { ShowSections } from './ShowSections';
 import { CustomiseDrawer } from './CustomiseDrawer';
 import { LinkedFilesPanel } from '@/components/files/LinkedFilesPanel';
+import { ParkingCard } from '@/components/parking/ParkingCard';
 import { RequestFlow } from './RequestFlow';
 import { PackFlow } from './packs/PackFlow';
 import { ExportButton } from '@/components/export/ExportButton';
@@ -405,14 +406,17 @@ export function AdvanceShowPage({ show, rail, templates }: { show: AdvanceShowDa
               </button>
             </div>
 
+            {/* The show's parking map — overhead plan, true-size vehicles (Nov 2026). */}
+            <ParkingCard tourId={tourId} routingId={routingId} index={3} />
+
             {/* Files linked to this show (and its venue, from any of your tours) — Nov 2026. */}
-            <div className="adv-card" style={{ ['--i' as string]: 3 }}>
+            <div className="adv-card" style={{ ['--i' as string]: 4 }}>
               <h3>Files</h3>
               <LinkedFilesPanel type="show" id={routingId} tourId={tourId} heading={null} />
             </div>
 
             {previous && previous.n > 0 ? (
-              <div className="adv-card" style={{ ['--i' as string]: 4 }}>
+              <div className="adv-card" style={{ ['--i' as string]: 5 }}>
                 <h3>Played here before</h3>
                 <span style={{ fontSize: 'var(--lp-text-sm)' }}>{fmtLong(previous.date)} · {previous.tour}</span>
                 <span className="adv-muted" style={{ fontSize: 'var(--lp-text-xs)' }}>{previous.n} answers you haven’t filled in here yet</span>
