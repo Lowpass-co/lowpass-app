@@ -43,7 +43,7 @@ Heights are stored now for the 3D page (phase 2); the overhead plan ignores them
 
 ## Code
 
-- Rules: `src/lib/parking/{geo,catalogue,model,edit,summary}.ts` (pure, tested)
-- Server: `src/server/parking/maps.ts`; API `/api/tours/[id]/advance/[routingId]/parking` (GET / PUT / PATCH)
-- UI: `src/components/parking/` — `ParkingEditor` (page), `ParkingScene` (the ONE renderer: editor + PDF), `exportPdf`, `googleTiles`, `ParkingCard` (advance aside)
-- Page: `/advance/[tourId]/[routingId]/parking`
+- Rules: `src/lib/parking/{geo,catalogue,model,edit,summary,print,silhouettes}.ts` (pure, tested) — `print.ts` frames the PDF on the drawing; `silhouettes.ts` is each vehicle's parts (cab, hood, glass, drawbar, trailer…) with heights for the 3D page
+- Server: `src/server/parking/maps.ts` (`loadParkingShow`, `loadParkingMap`, `saveParkingMap`, `recordPdf`, `loadParkingIndex`); API `/api/tours/[id]/parking/[routingId]` (GET / PUT / PATCH)
+- UI: `src/components/parking/` — `ParkingIndex` (the tour's shows), `ParkingEditor` (one show), `ParkingScene` (the ONE renderer: editor + PDF), `exportPdf`, `googleTiles`
+- Pages: Production › Parking — `/operations/[tourId]/parking` and `/operations/[tourId]/parking/[routingId]`. The show's advance links to it (`linked.parking` in `loadAdvanceShow`).

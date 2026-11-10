@@ -6,7 +6,8 @@
    Rendered in the browser, at export time, from the same <ParkingScene> the
    editor shows — so the PDF can't disagree with the screen:
 
-     1. pick a print scale (1:N) that fits the editor's view in the map frame
+     1. frame the DRAWING at a standard scale (printFrame — the editor outlines
+      the same frame, so what's outlined is what prints)
      2. draw the Google tiles for that frame onto a canvas (fetched now,
         never stored — the terms forbid caching)
      3. draw the scene's SVG (no images inside it) on top
@@ -23,7 +24,6 @@ import {
   dist,
   fmtMetres,
   niceLength,
-  printScaleFor,
   tileRect,
   tileZoomFor,
   toLatLng,
@@ -34,13 +34,14 @@ import {
 import { areaLabel, markerSpec, vehicleSpec } from '@/lib/parking/catalogue';
 import { pathLength, type ParkingItem } from '@/lib/parking/model';
 import { ParkingScene } from './ParkingScene';
+import { PRINT_FRAME_MM, type PrintFrame } from '@/lib/parking/print';
 import { areaColour, resolvePalette, roleColour, type Palette } from './palette';
 import { tileUrl, type TileSession } from './googleTiles';
 
 // A4 landscape, millimetres.
 const PAGE = { w: 297, h: 210 };
 const MARGIN = 10;
-const FRAME = { x: MARGIN, y: 26, w: 196, h: 174 };
+const FRAME = { x: MARGIN, y: 26, w: PRINT_FRAME_MM.w, h: PRINT_FRAME_MM.h };
 const SIDE = { x: FRAME.x + FRAME.w + 6, w: PAGE.w - MARGIN - (FRAME.x + FRAME.w + 6) };
 const PX_PER_MM = 8; // ≈ 203 dpi
 const LABEL_SCALE = 2.2; // 12 px labels → ~9 pt on paper
@@ -50,8 +51,8 @@ export interface ExportInput {
   subtitle: string;
   anchor: LatLng;
   view: View;
-  /** The editor's map size in CSS px — the area that must fit the frame. */
-  viewport: { w: number; h: number };
+  /** What prints: centre + 1:N, from printFrame() — the same frame the editor outlines. */
+  frame: PrintFrame;
   items: ParkingItem[];
   notes: string;
   session: TileSession | null;
@@ -110,12 +111,10 @@ function svgToImage(svg: string): Promise<HTMLImageElement> {
 
 /** Render the map frame as a JPEG data URL at a true print scale. */
 export async function renderMapImage(input: ExportInput, palette: Palette, fontFamily: string): Promise<{ jpeg: string; scale: number; view: View }> {
-  const groundW = input.viewport.w / input.view.ppm;
-  const groundH = input.viewport.h / input.view.ppm;
-  const scale = Math.max(printScaleFor(groundW, FRAME.w), printScaleFor(groundH, FRAME.h));
+  const { scale } = input.frame;
   const W = Math.round(FRAME.w * PX_PER_MM);
   const H = Math.round(FRAME.h * PX_PER_MM);
-  const view: View = { ...input.view, ppm: (PX_PER_MM * 1000) / scale };
+  const view: View = { ...input.view, cx: input.frame.cx, cy: input.frame.cy, ppm: (PX_PER_MM * 1000) / scale };
 
   const canvas = document.createElement('canvas');
   canvas.width = W;

@@ -479,11 +479,16 @@ recreate a `_legacy/` tree: delete dead code instead of parking it.
 
 ### Parking maps — overhead plan, true size (Nov 2026, Adam — migration 287)
 
-- `/advance/[tourId]/[routingId]/parking`, opened from the **Parking** card on
-  the show's advance. Phase 1 of the scope doc ("Parking maps — scope"): Google
-  satellite pinned to the venue, vehicles / markers / routes / areas /
-  measurements, autosave, A4 PDF into tour Files › Parking maps, linked to the
-  show. Phase 2 (3D page) reuses the same items; nothing is pixels.
+- **A Production tool, per show** (Adam: "a separate tool"): rail Production ›
+  **Parking** → `/operations/[tourId]/parking` (every show day + its map,
+  `loadParkingIndex`) → `/operations/[tourId]/parking/[routingId]` (the editor;
+  its tool panel folds the app rail via `hasOwnRail`). The show's advance only
+  LINKS to it — a Parking line in "From elsewhere in Lowpass"
+  (`linked.parking`), shown there, edited here. API:
+  `/api/tours/[id]/parking/[routingId]`. Phase 1 of the scope doc ("Parking
+  maps — scope"): Google satellite pinned to the venue, vehicles / markers /
+  routes / areas / measurements, autosave, A4 PDF into tour Files › Parking
+  maps, linked to the show. Phase 2 (3D page) reuses the same items.
 - **Everything is metres east / north of the map's anchor** (`src/lib/parking/geo.ts`).
   Never store or compute sizes in pixels. `parseMapBody()` is the only way into
   `parking_maps.items`; `<ParkingScene>` is the ONE renderer — the PDF rasterises

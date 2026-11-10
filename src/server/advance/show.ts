@@ -25,6 +25,8 @@ import type { RoutingVenueSource } from '@/lib/venues/resolveVenue';
 import { markTmOnly } from './advanceSections';
 import { ROUTING_VENUE_SELECT } from './board';
 import { loadTemplateSet, templateForDay, type AdvTemplate } from './templates';
+import { summariseMap } from '@/lib/parking/summary';
+import type { ParkingItem } from '@/lib/parking/model';
 
 export interface FieldSource {
   kind: 'pack' | 'venue' | 'previous' | 'you';
@@ -56,6 +58,8 @@ export interface LinkedFacts {
   hotels: { name: string; checkIn: string | null; checkOut: string | null; rooms: number }[];
   flights: { label: string; at: string | null }[];
   deal: { title: string; status: string } | null;
+  /** The show's parking map (Production › Parking), if one is drawn. */
+  parking: { summary: string | null; pdfExportedAt: string | null } | null;
 }
 
 export interface AdvanceShowData {
@@ -131,7 +135,7 @@ export async function loadAdvanceShow(
   const [allSections] = await markTmOnly(client, [rawSections]);
 
   const data = inst?.data ?? {};
-  const [{ data: pendRows }, { data: linkRows }, { data: hotelRows }, { data: flightRows }, { data: dealRows }, { data: docRows }] =
+  const [{ data: pendRows }, { data: linkRows }, { data: hotelRows }, { data: flightRows }, { data: dealRows }, { data: docRows }, { data: parkingRow }] =
     await Promise.all([
       inst
         ? client
@@ -158,6 +162,7 @@ export async function loadAdvanceShow(
         .select('id, file_name, mime_type, page_count, answers_used, created_at')
         .eq('routing_id', routingId)
         .order('created_at', { ascending: false }),
+      client.from('parking_maps').select('items, pdf_exported_at').eq('routing_id', routingId).maybeSingle(),
     ]);
 
   const pending = (pendRows ?? []) as PendingAnswer[];
@@ -211,6 +216,12 @@ export async function loadAdvanceShow(
       })),
       flights,
       deal: ((dealRows ?? []) as { title: string; status: string }[]).map((d) => ({ title: d.title, status: d.status }))[0] ?? null,
+      parking: parkingRow
+        ? {
+            summary: summariseMap(Array.isArray((parkingRow as { items: unknown }).items) ? ((parkingRow as { items: ParkingItem[] }).items) : []),
+            pdfExportedAt: (parkingRow as { pdf_exported_at: string | null }).pdf_exported_at,
+          }
+        : null,
     },
     documents: (docRows ?? []) as AdvDocument[],
     changes: cfg && tpl ? dayChanges(allSections, tpl.sections) : { off: [], added: [], addedQuestions: 0 },

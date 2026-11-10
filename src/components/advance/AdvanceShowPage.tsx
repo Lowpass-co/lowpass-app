@@ -22,7 +22,6 @@ import { saveAnswers, reviewPending } from './api';
 import { ShowSections } from './ShowSections';
 import { CustomiseDrawer } from './CustomiseDrawer';
 import { LinkedFilesPanel } from '@/components/files/LinkedFilesPanel';
-import { ParkingCard } from '@/components/parking/ParkingCard';
 import { RequestFlow } from './RequestFlow';
 import { PackFlow } from './packs/PackFlow';
 import { ExportButton } from '@/components/export/ExportButton';
@@ -375,6 +374,18 @@ export function AdvanceShowPage({ show, rail, templates }: { show: AdvanceShowDa
                   {show.linked.deal ? <span>{show.linked.deal.title} · {show.linked.deal.status}</span> : <span className="adv-muted">No deal memo</span>}
                   <Link href={`/budget/${tourId}?tab=income`}>Edit in Income &amp; settlements →</Link>
                 </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                  <span className="adv-muted" style={{ fontSize: 'var(--lp-text-xs)' }}>Parking</span>
+                  {show.linked.parking ? (
+                    <span>
+                      {show.linked.parking.summary ?? 'Map started'}
+                      {show.linked.parking.pdfExportedAt ? ` · PDF ${fmtWhen(show.linked.parking.pdfExportedAt)}` : ''}
+                    </span>
+                  ) : (
+                    <span className="adv-muted">No parking map yet</span>
+                  )}
+                  <Link href={`/operations/${tourId}/parking/${routingId}`}>{show.linked.parking ? 'Edit in Parking →' : 'Draw it in Parking →'}</Link>
+                </div>
               </div>
               <span className="adv-muted" style={{ fontSize: 'var(--lp-text-xs)', lineHeight: 1.4 }}>Shown here, edited in one place. Never sent to the venue.</span>
             </div>
@@ -406,17 +417,14 @@ export function AdvanceShowPage({ show, rail, templates }: { show: AdvanceShowDa
               </button>
             </div>
 
-            {/* The show's parking map — overhead plan, true-size vehicles (Nov 2026). */}
-            <ParkingCard tourId={tourId} routingId={routingId} index={3} />
-
             {/* Files linked to this show (and its venue, from any of your tours) — Nov 2026. */}
-            <div className="adv-card" style={{ ['--i' as string]: 4 }}>
+            <div className="adv-card" style={{ ['--i' as string]: 3 }}>
               <h3>Files</h3>
               <LinkedFilesPanel type="show" id={routingId} tourId={tourId} heading={null} />
             </div>
 
             {previous && previous.n > 0 ? (
-              <div className="adv-card" style={{ ['--i' as string]: 5 }}>
+              <div className="adv-card" style={{ ['--i' as string]: 4 }}>
                 <h3>Played here before</h3>
                 <span style={{ fontSize: 'var(--lp-text-sm)' }}>{fmtLong(previous.date)} · {previous.tour}</span>
                 <span className="adv-muted" style={{ fontSize: 'var(--lp-text-xs)' }}>{previous.n} answers you haven’t filled in here yet</span>
