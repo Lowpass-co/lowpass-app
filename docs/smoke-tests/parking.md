@@ -281,6 +281,22 @@ browser key restricted to the Map Tiles API and the app's domains).**
 
 **Last verified**:
 
+#### PRK-33 — Two fingers turn and tilt the 3D on a phone
+
+**Do**: On a phone, open a driver link → Look around in 3D. Twist two fingers; slide two fingers up, then down; pinch.
+
+**Expect**: Twist turns the view (the compass turns with it); sliding up tilts towards side-on, down towards top-down; pinch zooms. (Before Nov 2026 two fingers only zoomed.)
+
+**Last verified**:
+
+#### PRK-34 — 3D labels don't stack
+
+**Do**: In 3D (editor or driver link), look at a row of vehicles parked side by side (e.g. five trucks at the dock); zoom in on the row; turn round it.
+
+**Expect**: Small, name-only labels, never piled on one another — from far off the row shows one or two; zooming in brings the rest back as the vehicles spread apart on screen. Gate / marker labels still show where they don't touch a nearer one.
+
+**Last verified**:
+
 ## Known broken
 
 #### PRK-90 — Re-exporting makes a new file
