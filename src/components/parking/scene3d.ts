@@ -12,7 +12,9 @@
        mesh: the LOWEST of the vehicle's centre and corners, so a tree over a
        bus doesn't lift it onto the canopy
      · routes, areas, measurements — draped on the ground
-     · markers and vehicle names — labels that stay readable through roofs
+     · markers and vehicle names — labels that stay readable through roofs,
+       laid out each frame (labels3d.ts): nearest first, a label that would
+       touch one already placed is hidden — no stacks over parked rows
      · venue drawings (Nov 2026): an INSIDE drawing cuts its footprint out of
        the Google mesh (ClippingPolygonCollection — the roof comes off) and
        lies there as the floor, at the street height around it + its floor
@@ -34,6 +36,7 @@ import { vehicleBlocks, type Block } from '@/lib/parking/blocks3d';
 import { vehicleCorners, type ParkingDrawing, type ParkingItem, type VehicleItem } from '@/lib/parking/model';
 import { drawingUnder, footprint, insideAt, itemFloor, itemPoint, pointInPolygon, svgMatrix } from '@/lib/parking/drawings';
 import type { PartKind } from '@/lib/parking/silhouettes';
+import { labelBox, placeLabels, type LabelBox } from '@/lib/parking/labels3d';
 import { areaColour, vehicleColour, type Palette } from './palette';
 import type { CesiumModule } from './loadCesium';
 
@@ -70,9 +73,13 @@ export function createViewer(Cesium: C, container: HTMLElement, opts: { withTile
   // Mouse, as in Apple / Google Maps: left-drag moves, RIGHT-drag (or
   // Ctrl / middle-drag) turns and tilts, wheel / pinch zooms. Cesium's
   // default had right-drag zooming, so there was no obvious way to turn.
+  // Touch: PINCH must stay in BOTH lists — Cesium hands one two-finger
+  // gesture to zoom (spread) AND tilt (twist = turn, slide up/down = tilt).
+  // Leaving it out of tilt (as this list once did) left phones zoom-only.
   const ctl = scene.screenSpaceCameraController;
   ctl.tiltEventTypes = [
     Cesium.CameraEventType.RIGHT_DRAG,
+    Cesium.CameraEventType.PINCH,
     Cesium.CameraEventType.MIDDLE_DRAG,
     { eventType: Cesium.CameraEventType.LEFT_DRAG, modifier: Cesium.KeyboardEventModifier.CTRL },
   ];
@@ -204,18 +211,30 @@ export async function populate(
 
   const ink = Cesium.Color.fromCssColorString(o.palette.ink);
   const halo = Cesium.Color.fromCssColorString(o.palette.halo);
-  const label = (text: string, size = 15): CesiumNS.LabelGraphics.ConstructorOptions => ({
-    text,
-    font: `700 ${size}px system-ui, sans-serif`,
-    fillColor: ink,
-    // A dark chip behind the text reads on sky, roofs and tarmac alike
-    // (an outline looked hollow at this size).
-    showBackground: true,
-    backgroundColor: Cesium.Color.fromCssColorString(o.palette.chip).withAlpha(0.82),
-    backgroundPadding: new Cesium.Cartesian2(6, 4),
-    verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
-    disableDepthTestDistance: Number.POSITIVE_INFINITY,
-  });
+  // Labels: one collection, small and quiet (a translucent chip, name only —
+  // sizes are in the vehicle list / the PDF key), laid out every frame so
+  // they never stack (see layoutLabels).
+  const labels = viewer.scene.primitives.add(new Cesium.LabelCollection()) as CesiumNS.LabelCollection;
+  const placed: PlacedLabel[] = [];
+  const chip = Cesium.Color.fromCssColorString(o.palette.chip).withAlpha(0.68);
+  const addLabel = (position: CesiumNS.Cartesian3, text: string, size: number, offsetY = 0) => {
+    if (!text.trim()) return;
+    const font = `600 ${size}px system-ui, sans-serif`;
+    const label = labels.add({
+      position,
+      text,
+      font,
+      fillColor: ink,
+      showBackground: true,
+      backgroundColor: chip,
+      backgroundPadding: new Cesium.Cartesian2(LABEL_PAD.x, LABEL_PAD.y),
+      horizontalOrigin: Cesium.HorizontalOrigin.CENTER,
+      verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
+      pixelOffset: new Cesium.Cartesian2(0, offsetY),
+      disableDepthTestDistance: Number.POSITIVE_INFINITY,
+    });
+    placed.push({ label, position, offsetY, size: measure(text, font, size) });
+  };
   const onGround = tileset ? Cesium.ClassificationType.CESIUM_3D_TILE : Cesium.ClassificationType.TERRAIN;
 
   for (const v of vehicles) {
@@ -223,10 +242,7 @@ export async function populate(
     const base = vehicleColour(o.palette, v);
     for (const b of vehicleBlocks(v)) addBlock(Cesium, viewer, o.anchor, b, g, blockColour(Cesium, o.palette, base, b.kind), halo);
     const top = ll({ x: v.x, y: v.y });
-    viewer.entities.add({
-      position: Cesium.Cartesian3.fromDegrees(top.lng, top.lat, g + v.height + 1.2),
-      label: label(`${v.label || vehicleSpec(v.type)?.short || 'Vehicle'} · ${fmtMetres(v.length)}`),
-    });
+    addLabel(Cesium.Cartesian3.fromDegrees(top.lng, top.lat, g + v.height + 0.6), v.label || vehicleSpec(v.type)?.short || 'Vehicle', 13);
   }
 
   for (const i of o.items) {
@@ -255,7 +271,7 @@ export async function populate(
           ...(fh == null ? { classificationType: onGround } : { height: fh }),
         },
       });
-      viewer.entities.add({ position: Cesium.Cartesian3.fromDegrees(mid.lng, mid.lat, (fh ?? ground0) + 2), label: label(i.label || areaLabel(i.type), 13) });
+      addLabel(Cesium.Cartesian3.fromDegrees(mid.lng, mid.lat, (fh ?? ground0) + 2), i.label || areaLabel(i.type), 12);
     } else if (i.kind === 'measure') {
       const a = ll(i.a);
       const b = ll(i.b);
@@ -269,12 +285,13 @@ export async function populate(
           material: new Cesium.PolylineDashMaterialProperty({ color: Cesium.Color.fromCssColorString(o.palette.measure) }),
         },
       });
-      viewer.entities.add({ position: Cesium.Cartesian3.fromDegrees(m.lng, m.lat, ground0 + 2), label: label(fmtMetres(dist(i.a, i.b)), 13) });
+      addLabel(Cesium.Cartesian3.fromDegrees(m.lng, m.lat, ground0 + 2), fmtMetres(dist(i.a, i.b)), 12);
     } else if (i.kind === 'marker') {
       const at = ll(i);
       const h = baseFor(i, heights.get(i.id) ?? ground0);
+      const position = Cesium.Cartesian3.fromDegrees(at.lng, at.lat, h + 1);
       viewer.entities.add({
-        position: Cesium.Cartesian3.fromDegrees(at.lng, at.lat, h + 1),
+        position,
         point: {
           pixelSize: 14,
           color: Cesium.Color.fromCssColorString(o.palette.chip),
@@ -282,12 +299,56 @@ export async function populate(
           outlineWidth: 2,
           disableDepthTestDistance: Number.POSITIVE_INFINITY,
         },
-        label: { ...label(`${i.label || markerSpec(i.type)?.label || ''}${i.detail ? ` · ${i.detail}` : ''}`, 13), pixelOffset: new Cesium.Cartesian2(0, -12) },
       });
+      addLabel(position, `${i.label || markerSpec(i.type)?.label || ''}${i.detail ? ` · ${i.detail}` : ''}`, 12, -12);
     }
   }
+  // Before each frame: show only the labels that fit (nearest first).
+  const scene = viewer.scene;
+  scene.preRender.addEventListener(() => layoutLabels(Cesium, scene, placed));
   viewer.scene.requestRender();
   return { tileset, ground0 };
+}
+
+/* ── Labels ───────────────────────────────────────────────── */
+
+const LABEL_PAD = { x: 5, y: 3 };
+
+interface PlacedLabel {
+  label: CesiumNS.Label;
+  position: CesiumNS.Cartesian3;
+  offsetY: number;
+  /** On-screen size (CSS px) including the chip's padding. */
+  size: { w: number; h: number };
+}
+
+let measureCtx: CanvasRenderingContext2D | null = null;
+function measure(text: string, font: string, size: number): { w: number; h: number } {
+  measureCtx ??= document.createElement('canvas').getContext('2d');
+  let w = text.length * size * 0.6;
+  if (measureCtx) {
+    measureCtx.font = font;
+    w = measureCtx.measureText(text).width;
+  }
+  return { w: w + LABEL_PAD.x * 2, h: size * 1.25 + LABEL_PAD.y * 2 };
+}
+
+const toScreen = { pt: null as CesiumNS.Cartesian2 | null };
+function layoutLabels(Cesium: C, scene: CesiumNS.Scene, placed: PlacedLabel[]) {
+  if (!placed.length) return;
+  const cam = scene.camera.positionWC;
+  const boxes: LabelBox[] = [];
+  placed.forEach((p, i) => {
+    toScreen.pt ??= new Cesium.Cartesian2();
+    const at = Cesium.SceneTransforms.worldToWindowCoordinates(scene, p.position, toScreen.pt);
+    if (!at || !Number.isFinite(at.x)) return; // behind the camera
+    boxes.push(labelBox(String(i), at, p.size, p.offsetY, Cesium.Cartesian3.distance(cam, p.position)));
+  });
+  const shown = placeLabels(boxes);
+  placed.forEach((p, i) => {
+    const on = shown.has(String(i));
+    if (p.label.show !== on) p.label.show = on;
+  });
 }
 
 /** A drawing laid flat at `height`: baked north-up into a canvas (so the

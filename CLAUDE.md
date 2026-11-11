@@ -520,7 +520,7 @@ recreate a `_legacy/` tree: delete dead code instead of parking it.
   import Cesium as a value in app code — `import type` only. Vehicles are
   `vehicleBlocks()` (`src/lib/parking/blocks3d.ts`): the plan's silhouette
   parts lifted to true heights, standing at the LOWEST mesh height under the
-  vehicle (so a tree doesn't lift a bus). Camera: right-drag / Ctrl-drag turn + tilt (Cesium's default had right-drag zoom), plus ↺ ↻ ⌃ ⌄ and a north compass that `orbit()` around the screen-centre ground point. 3D is look-only; a 3D PDF page
+  vehicle (so a tree doesn't lift a bus). Camera: right-drag / Ctrl-drag turn + tilt (Cesium's default had right-drag zoom); touch: two fingers twist / slide to turn / tilt — PINCH must stay in `tiltEventTypes` as well as zoom (once missing: phones were zoom-only); labels are name only and laid out per frame by `placeLabels` (labels3d.ts, nearest first, none touching); plus ↺ ↻ ⌃ ⌄ and a north compass that `orbit()` around the screen-centre ground point. 3D is look-only; a 3D PDF page
   keeps its camera (validated by `parseCamera3d`; see PDF pages below). No sky
   atmosphere — with the globe off it painted over the vehicles.
 - **PDF pages** (`src/lib/parking/pages.ts`, on `view.pages`, checked by
