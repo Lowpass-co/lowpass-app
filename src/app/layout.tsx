@@ -31,12 +31,27 @@ const barlowCondensed = Barlow_Condensed({
   display: 'swap',
 });
 
+/** Link previews (WhatsApp, iMessage, Slack) need the og:image as an absolute
+ *  URL. NEXT_PUBLIC_APP_URL when set; otherwise Next's own default (on Vercel,
+ *  the production / branch URL). The image is src/app/opengraph-image.png —
+ *  the wordmark on the app's dark background; before it existed, previews fell
+ *  back to the placeholder PWA icon. */
+function siteUrl(): URL | undefined {
+  try {
+    return process.env.NEXT_PUBLIC_APP_URL ? new URL(process.env.NEXT_PUBLIC_APP_URL) : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 export const metadata: Metadata = {
+  metadataBase: siteUrl(),
   title: {
     default: 'Lowpass — Tour Management',
     template: '%s | Lowpass',
   },
   description: 'Advance, budget, and manage tours from one place.',
+  openGraph: { siteName: 'Lowpass', type: 'website' },
   manifest: '/manifest.webmanifest',
   themeColor: '#FF4500',
   icons: {
