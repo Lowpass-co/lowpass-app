@@ -9,8 +9,10 @@
    didn't clear it). v2 no longer intercepts navigations at all: HTML/RSC always
    goes straight to the network, untouched. Only hashed static assets are cached
    (cache-first, fire-and-forget put — never awaited). CACHE_NAME bump forces the
-   new SW to activate + purge the old cache (including any cached navigations). */
-const CACHE_NAME = 'lowpass-v2';
+   new SW to activate + purge the old cache (including any cached navigations).
+   v3 (Nov 2026): the app icons / favicon were redrawn under the SAME file names
+   (the slope mark), and unhashed files cached cache-first would never refresh. */
+const CACHE_NAME = 'lowpass-v3';
 const PRECACHE_URLS = ['/offline.html', '/manifest.webmanifest'];
 
 self.addEventListener('install', (event) => {
