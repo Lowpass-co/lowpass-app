@@ -50,3 +50,16 @@ Heights drive the 3D page (`vehicleBlocks`, `src/lib/parking/blocks3d.ts`); the 
 - Server: `src/server/parking/maps.ts` (`loadParkingShow`, `loadParkingMap`, `saveParkingMap`, `recordPdf`, `loadParkingIndex`); API `/api/tours/[id]/parking/[routingId]` (GET / PUT / PATCH)
 - UI: `src/components/parking/` — `ParkingIndex` (the tour's shows), `ParkingEditor` (one show), `ParkingScene` (the ONE renderer: editor + PDF), `exportPdf`, `googleTiles`
 - Pages: Production › Parking — `/operations/[tourId]/parking` and `/operations/[tourId]/parking/[routingId]`. The show's advance links to it (`linked.parking` in `loadAdvanceShow`).
+
+## Driver links (`parking_share_links`, migration 289)
+
+| Column | Meaning |
+| --- | --- |
+| `workspace_id`, `tour_id`, `routing_id` | The one show's map the link opens. |
+| `token_hash` | sha-256 of the token (the token is shown once and never stored). |
+| `label` | Who it's for ("Bus 2 – Dave"), ≤ 60. |
+| `expires_at` | Required; 1 h – 14 days (48 h default). `revoked_at` = turned off early. |
+| `max_3d_opens`, `opens_3d` | Each 3D open is a billed Google session; the link may open 3D this many times (0–100, default 20). |
+| `views`, `last_viewed_at` | Plan opens, for the owner's list. |
+
+`parking_share_touch(p_token_hash, p_take_3d)` counts a view or takes a 3D open atomically and returns the row with `took`; EXECUTE is granted to `service_role` only. Server: `src/server/parking/driverLinks.ts`; rules: `src/lib/parking/driverLinks.ts`; public API `/api/public/parking/[token]` (+ `/3d`); owner API `/api/tours/[id]/parking/[routingId]/driver-links`.

@@ -31,12 +31,8 @@ import {
   niceLength,
   normDeg,
   project,
-  tileRect,
-  tileZoomFor,
   toLatLng,
   unproject,
-  viewBounds,
-  visibleTiles,
   zoomAt,
   type Camera3d,
   type LatLng,
@@ -48,16 +44,18 @@ import { pathLength, type ParkingDrawing, type ParkingItem } from '@/lib/parking
 import { drawableKind, footprint, headroomWarnings, itemFloor, levelLabel, levelsOf, shiftDrawings, svgMatrix } from '@/lib/parking/drawings';
 import type { DrawingFile, VenueReuse } from '@/server/parking/maps';
 import { DrawingsPanel } from './DrawingsPanel';
+import { DriverLinksPanel } from './DriverLinksPanel';
 import { DrawingSetup } from './DrawingSetup';
 import { sceneDrawings, useDrawingRasters } from './drawingLayers';
 import type { DrawingFileRef } from './drawingRaster';
 import { addMarker, addVehicle, duplicateItem, duplicateItems, finishDraft, itemsInBox, moveItems, record, redo, removeItems, replaceItem, toggleSelection, turnItems, undo, type History } from '@/lib/parking/edit';
 import type { ParkingShow, SavedParkingMap } from '@/server/parking/maps';
-import { ParkingScene, MARKER_ICON, type Draft, type SceneTile } from './ParkingScene';
+import { ParkingScene, MARKER_ICON, type Draft } from './ParkingScene';
 import { LIVE_PALETTE, roleColour, areaColour } from './palette';
-import { getTileSession, tileUrl, tilesKey, viewportInfo, type TileSession } from './googleTiles';
+import { tilesKey } from './googleTiles';
 import { exportParkingPdf } from './exportPdf';
 import { Parking3D } from './Parking3D';
+import { useMapTiles } from './useMapTiles';
 import { freeSpot, itemPoints, printFrame } from '@/lib/parking/print';
 import { MAX_PAGES, add3dPage, addPlanPage, movePage, pagesOf, planFrame, removePage, updatePage, type Page3d, type PdfPage, type PrintScale } from '@/lib/parking/pages';
 import '@/components/advance/advance.css';
@@ -115,11 +113,6 @@ export function ParkingEditor({ show, tourName, initial, canEdit }: ParkingEdito
   const [exporting, setExporting] = useState(false);
   const [mode, setMode] = useState<'plan' | '3d'>('plan');
 
-  // Imagery
-  const [session, setSession] = useState<TileSession | null>(null);
-  const [imageryError, setImageryError] = useState<string | null>(tilesKey() ? null : 'not-configured');
-  const [attribution, setAttribution] = useState('');
-  const [maxZoom, setMaxZoom] = useState(20);
 
   // Saving
   const [status, setStatus] = useState<SaveStatusKind>('idle');
@@ -167,18 +160,6 @@ export function ParkingEditor({ show, tourName, initial, canEdit }: ParkingEdito
   }, [size.w]);
 
   /* ── Imagery ──────────────────────────────────────────── */
-  useEffect(() => {
-    if (!tilesKey() || !anchor) return;
-    let live = true;
-    getTileSession()
-      .then((s) => live && setSession(s))
-      .catch((e: Error) => live && setImageryError(e.message));
-    return () => {
-      live = false;
-    };
-  }, [anchor]);
-
-  const dpr = typeof window === 'undefined' ? 1 : Math.min(window.devicePixelRatio || 1, 2);
   // Satellite off (view.satellite === false): a venue drawing or the grid is the base.
   const satelliteOn = view.satellite !== false;
   // Levels: the street plus each inside drawing's floor. Picking one fades the rest.
@@ -189,29 +170,7 @@ export function ParkingEditor({ show, tourName, initial, canEdit }: ParkingEdito
   /** A new item goes on the level being shown. */
   const atLevel = (list: ParkingItem[], id: string): ParkingItem[] =>
     levelRef.current == null ? list : list.map((i) => (i.id === id ? ({ ...i, floor: levelRef.current } as ParkingItem) : i));
-  const tiles: SceneTile[] = useMemo(() => {
-    if (!satelliteOn || !session || !anchor || !size.w) return [];
-    const z = tileZoomFor(anchor.lat, view.ppm, dpr, session.tileScale, maxZoom);
-    const layer = (zz: number) =>
-      visibleTiles(anchor, view, size.w, size.h, zz, 64).map((k) => ({ id: `${k.z}/${k.x}/${k.y}`, href: tileUrl(session, k), ...tileRect(anchor, k) }));
-    // A coarse layer underneath, so zooming never flashes blank.
-    const under = z - 3 >= 1 ? layer(z - 3) : [];
-    return [...under, ...layer(z)];
-  }, [satelliteOn, session, anchor, view, size.w, size.h, dpr, maxZoom]);
-
-  useEffect(() => {
-    if (!session || !anchor || !size.w) return;
-    const t = setTimeout(() => {
-      const z = tileZoomFor(anchor.lat, view.ppm, dpr, session.tileScale, 22);
-      viewportInfo(session, z, viewBounds(anchor, view, size.w, size.h), toLatLng(anchor, { x: view.cx, y: view.cy }))
-        .then((v) => {
-          setAttribution(v.copyright);
-          setMaxZoom(v.maxZoom);
-        })
-        .catch(() => {});
-    }, 500);
-    return () => clearTimeout(t);
-  }, [session, anchor, view, size.w, size.h, dpr]);
+  const { session, tiles, attribution, maxZoom, imageryError } = useMapTiles(anchor, view, size, satelliteOn);
 
   // The PDF's pages (pages.ts) live on the view; plan pages are outlined on the map.
   const pages = useMemo(() => pagesOf(view), [view]);
@@ -1015,6 +974,20 @@ export function ParkingEditor({ show, tourName, initial, canEdit }: ParkingEdito
           onShow={showDrawing}
           onOpenFiles={() => void loadDrawingFiles()}
         />
+
+        {canEdit ? (
+          <DriverLinksPanel
+            base={base}
+            venueName={venueName}
+            ensureSaved={async () => {
+              if (saveTimer.current) {
+                clearTimeout(saveTimer.current);
+                saveTimer.current = null;
+              }
+              await save();
+            }}
+          />
+        ) : null}
 
         <section className="pk-sec">
           <h3>Notes on the PDF</h3>
