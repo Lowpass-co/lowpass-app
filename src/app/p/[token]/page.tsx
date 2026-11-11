@@ -10,7 +10,7 @@
 import { PublicParkingView } from '@/components/parking/PublicParkingView';
 
 export const dynamic = 'force-dynamic';
-export const metadata = { title: 'Parking map — Lowpass', robots: { index: false, follow: false } };
+export const metadata = { title: 'Parking map', description: 'Where to park, with directions to the gate.', robots: { index: false, follow: false } };
 
 export default async function DriverParkingPage({ params }: { params: Promise<{ token: string }> }) {
   const { token } = await params;

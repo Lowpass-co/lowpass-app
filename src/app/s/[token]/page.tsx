@@ -14,7 +14,7 @@
 import { PublicShowView } from '@/components/show-link/PublicShowView';
 
 export const dynamic = 'force-dynamic';
-export const metadata = { title: 'Show — Lowpass' };
+export const metadata = { title: 'Show' };
 
 export default async function PublicShowPage({
   params,

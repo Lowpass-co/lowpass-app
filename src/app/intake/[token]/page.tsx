@@ -20,7 +20,7 @@ interface IntakePageProps {
 }
 
 export const dynamic = 'force-dynamic';
-export const metadata = { title: 'Personnel info form — Lowpass' };
+export const metadata = { title: 'Personnel info form' };
 
 function Frame({ children }: { children: React.ReactNode }) {
   return (

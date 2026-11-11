@@ -11,7 +11,7 @@
 import { PublicFileLinkView } from '@/components/files/PublicFileLinkView';
 
 export const dynamic = 'force-dynamic';
-export const metadata = { title: 'Shared files — Lowpass', robots: { index: false, follow: false } };
+export const metadata = { title: 'Shared files', description: 'Files shared with you through Lowpass.', robots: { index: false, follow: false } };
 
 export default async function FileLinkPage({ params }: { params: Promise<{ token: string }> }) {
   const { token } = await params;

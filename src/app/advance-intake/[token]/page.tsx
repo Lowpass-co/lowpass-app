@@ -30,7 +30,7 @@ import type { RoutingVenueSource } from '@/lib/venues/resolveVenue';
 import { VenueIntakeForm } from '@/components/advance/VenueIntakeForm';
 
 export const dynamic = 'force-dynamic';
-export const metadata = { title: 'Advance request — Lowpass' };
+export const metadata = { title: 'Advance request' };
 
 interface LinkRow {
   id: string;
