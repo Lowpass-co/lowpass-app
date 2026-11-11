@@ -6,6 +6,7 @@
    ============================================ */
 
 import type { Metadata } from 'next';
+import { headers } from 'next/headers';
 import { Inter, Montserrat, Barlow_Condensed } from 'next/font/google';
 import './globals.css';
 import '@/lib/entities';
@@ -31,21 +32,27 @@ const barlowCondensed = Barlow_Condensed({
   display: 'swap',
 });
 
-/** Link previews (WhatsApp, iMessage, Slack) need the og:image as an absolute
- *  URL. NEXT_PUBLIC_APP_URL when set; otherwise Next's own default (on Vercel,
- *  the production / branch URL). The image is src/app/opengraph-image.png —
- *  the wordmark on the app's dark background; before it existed, previews fell
- *  back to the placeholder PWA icon. */
-function siteUrl(): URL | undefined {
+/** Link previews (WhatsApp, iMessage, Slack) need the og:image as an ABSOLUTE
+ *  URL (the image is src/app/opengraph-image.png). Its base is, in order:
+ *  NEXT_PUBLIC_APP_URL, else the address the page was opened on. NOT Next's own
+ *  default: on Vercel that is the project's "production URL"
+ *  (lowpass-app.vercel.app), which serves nothing — every preview image 404'd
+ *  (Nov 2026). The request's host is always one that serves this app, so a
+ *  link previews with an image from the same address it was sent with. */
+async function siteUrl(): Promise<URL | undefined> {
   try {
-    return process.env.NEXT_PUBLIC_APP_URL ? new URL(process.env.NEXT_PUBLIC_APP_URL) : undefined;
+    if (process.env.NEXT_PUBLIC_APP_URL) return new URL(process.env.NEXT_PUBLIC_APP_URL);
+    const h = await headers();
+    const host = h.get('x-forwarded-host') ?? h.get('host');
+    if (!host) return undefined;
+    const proto = h.get('x-forwarded-proto') ?? (host.startsWith('localhost') ? 'http' : 'https');
+    return new URL(`${proto.split(',')[0].trim()}://${host.split(',')[0].trim()}`);
   } catch {
     return undefined;
   }
 }
 
-export const metadata: Metadata = {
-  metadataBase: siteUrl(),
+const baseMetadata: Metadata = {
   title: {
     default: 'Lowpass — Tour Management',
     template: '%s | Lowpass',
@@ -64,6 +71,10 @@ export const metadata: Metadata = {
     title: 'Lowpass',
   },
 };
+
+export async function generateMetadata(): Promise<Metadata> {
+  return { ...baseMetadata, metadataBase: await siteUrl() };
+}
 
 export default function RootLayout({
   children,
