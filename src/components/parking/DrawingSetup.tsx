@@ -22,11 +22,13 @@
    ============================================ */
 
 import { useCallback, useEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type WheelEvent as ReactWheelEvent } from 'react';
-import { Minus, Plus, X } from 'lucide-react';
+import { Minus, Plus, Sparkles, X } from 'lucide-react';
 import { CHECK_WARN_PCT, PIN_WARN_PCT, agreement, pinDrawing, placeAt, scaleFromDimension } from '@/lib/parking/drawings';
 import { fmtMetres, type Pt, type View } from '@/lib/parking/geo';
 import { LIMITS, newItemId, type ParkingDrawing, type SrcPt } from '@/lib/parking/model';
 import { canvasUrl, openDrawing, pageCount, pageSize, renderRegion, type DrawingFileRef, type DrawingSource } from './drawingRaster';
+import { OVERVIEW_MAX_PX, REFINE_PX, endBox, pickDimensions, rotationFromNorth, toSourcePt, type OverviewRead, type PxPt } from '@/lib/parking/drawingRead';
+import { aiCapMessage, detectAiCap } from '@/lib/ai/client';
 import { resolvePalette } from './palette';
 
 type Step = 'crop' | 'scale' | 'place';
@@ -38,6 +40,8 @@ export interface DrawingSetupProps {
   initial?: ParkingDrawing;
   satelliteOn: boolean;
   view: View;
+  /** POST here to have AI read the drawing (crop, dimensions, north). */
+  readUrl: string;
   /** Wait for a click on the map (null if cancelled). */
   requestMapPoint: (prompt: string) => Promise<Pt | null>;
   /** Numbered pins to show on the map while pinning. */
@@ -54,7 +58,7 @@ const parseM = (s: string) => {
   return Number.isFinite(n) && n > 0 ? n : null;
 };
 
-export function DrawingSetup({ file, initial, satelliteOn, view, requestMapPoint, onMarks, onPreview, onDone, onCancel }: DrawingSetupProps) {
+export function DrawingSetup({ file, initial, satelliteOn, view, readUrl, requestMapPoint, onMarks, onPreview, onDone, onCancel }: DrawingSetupProps) {
   const [src, setSrc] = useState<DrawingSource | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [page, setPage] = useState(initial?.page ?? 1);
@@ -80,6 +84,10 @@ export function DrawingSetup({ file, initial, satelliteOn, view, requestMapPoint
   const [inside, setInside] = useState(initial?.inside ?? false);
   const [floor, setFloor] = useState(fmtNum(initial?.floor ?? 0));
   const [clear, setClear] = useState(initial?.clearHeight != null ? fmtNum(initial.clearHeight) : '');
+  // AI read (crop, two dimensions, north) — proposals the person checks.
+  const [reading, setReading] = useState<string | null>(null);
+  const [aiNote, setAiNote] = useState<string | null>(null);
+  const [north, setNorth] = useState<number | null>(null);
 
   /* ── Open the file, render the page for this pane ─────────── */
   useEffect(() => {
@@ -187,6 +195,84 @@ export function DrawingSetup({ file, initial, satelliteOn, view, requestMapPoint
     }
   };
 
+  /* ── AI: read the drawing ──────────────────────────────────── */
+  const ask = async (body: unknown) => {
+    const r = await fetch(readUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    const cap = await detectAiCap(r);
+    if (cap) throw new Error(aiCapMessage(cap));
+    const j = (await r.json().catch(() => ({}))) as { error?: string };
+    if (!r.ok) throw new Error(j.error ?? `The drawing couldn’t be read (${r.status}).`);
+    return j;
+  };
+  const encode = (c: HTMLCanvasElement) => {
+    // JPEG keeps a line drawing well under the 3.5 MB the route takes.
+    let q = 0.85;
+    let url = c.toDataURL('image/jpeg', q);
+    while (url.length > 4_400_000 && q > 0.4) url = c.toDataURL('image/jpeg', (q -= 0.15));
+    return { data: url.slice(url.indexOf(',') + 1), type: 'image/jpeg', w: c.width, h: c.height };
+  };
+  const readForMe = async () => {
+    if (!src || !size || reading) return;
+    const paper = resolvePalette().paper;
+    const whole = { u0: 0, v0: 0, u1: size.w, v1: size.h };
+    const clamp = (b: Crop): Crop => ({ u0: Math.max(0, b.u0), v0: Math.max(0, b.v0), u1: Math.min(size.w, b.u1), v1: Math.min(size.h, b.v1) });
+    setError(null);
+    setAiNote(null);
+    try {
+      setReading('Reading the drawing…');
+      const page0 = await renderRegion(src, page, whole, paper, OVERVIEW_MAX_PX);
+      const ov = (await ask({ stage: 'overview', image: encode(page0) })) as OverviewRead;
+      const pageImg = { w: page0.width, h: page0.height };
+      const toSrc = (p: PxPt) => toSourcePt(p, whole, pageImg);
+      const picked = pickDimensions(ov.dimensions ?? []);
+      // Close-ups round both ends of each dimension: the model points again, ~15× finer.
+      const refined: { a: SrcPt; b: SrcPt; metres: number; text: string }[] = [];
+      for (const [i, d] of picked.entries()) {
+        setReading(`Measuring ${d.text} (${i + 1} of ${picked.length})…`);
+        const a = toSrc(d.a);
+        const b = toSrc(d.b);
+        const len = Math.hypot(b.u - a.u, b.v - a.v);
+        const boxes = [clamp(endBox(a, len, size)), clamp(endBox(b, len, size))] as const;
+        const shots = await Promise.all(boxes.map((bx) => renderRegion(src, page, bx, paper, REFINE_PX, true)));
+        const angle = (Math.atan2(b.v - a.v, b.u - a.u) * 180) / Math.PI;
+        const r = (await ask({ stage: 'refine', text: d.text, metres: d.metres, angle, images: shots.map(encode) })) as { ends: (PxPt | null)[] };
+        refined.push({
+          a: r.ends[0] ? toSourcePt(r.ends[0], boxes[0], { w: shots[0].width, h: shots[0].height }) : a,
+          b: r.ends[1] ? toSourcePt(r.ends[1], boxes[1], { w: shots[1].width, h: shots[1].height }) : b,
+          metres: d.metres,
+          text: d.text,
+        });
+      }
+      if (ov.crop) {
+        const tl = toSrc({ x: ov.crop.x0, y: ov.crop.y0 });
+        const br = toSrc({ x: ov.crop.x1, y: ov.crop.y1 });
+        const next = clamp({ u0: tl.u, v0: tl.v, u1: br.u, v1: br.v });
+        setCrop(next);
+        fit(next);
+      }
+      setNorth(ov.north);
+      if (refined[0]) {
+        setDim([refined[0].a, refined[0].b]);
+        setMetres(fmtNum(refined[0].metres));
+      }
+      if (refined[1]) {
+        setChk([refined[1].a, refined[1].b]);
+        setChkMetres(fmtNum(refined[1].metres));
+      } else setChk([]);
+      setMeasuring('dim');
+      setStep('scale');
+      setAiNote(
+        !refined.length
+          ? 'No printed dimension found — click one yourself.'
+          : `Read ${refined.map((r) => `${r.text} (${fmtMetres(r.metres)})`).join(' and ')}${ov.north != null ? ', and the north arrow' : ''}. Check the lines sit on those dimensions${refined.length < 2 ? ', and add a second to check against' : ''}.`,
+      );
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'The drawing couldn’t be read.');
+    } finally {
+      setReading(null);
+    }
+  };
+
   /* ── Derived ───────────────────────────────────────────────── */
   const m1 = parseM(metres);
   const scale = dim.length === 2 && m1 ? scaleFromDimension(dim[0], dim[1], m1) : null;
@@ -262,7 +348,8 @@ export function DrawingSetup({ file, initial, satelliteOn, view, requestMapPoint
   };
   const placeByHand = () => {
     if (!crop || !scale) return;
-    const p = placeAt({ crop, scale }, { x: view.cx, y: view.cy }, view.rotation);
+    // North from the drawing's own arrow when it was read; else as the screen is turned.
+    const p = placeAt({ crop, scale }, { x: view.cx, y: view.cy }, north != null ? rotationFromNorth(north) : view.rotation);
     restartPin();
     setPlaced({ ...p, pinned: false, pinCheck: null });
   };
@@ -330,7 +417,7 @@ export function DrawingSetup({ file, initial, satelliteOn, view, requestMapPoint
           </li>
         ))}
       </ol>
-      <p className="pk-setup-prompt" aria-live="polite">{error ?? prompt}</p>
+      <p className="pk-setup-prompt" aria-live="polite">{reading ?? error ?? (step === 'scale' && aiNote ? aiNote : prompt)}</p>
 
       <div
         ref={pane}
@@ -385,6 +472,9 @@ export function DrawingSetup({ file, initial, satelliteOn, view, requestMapPoint
       <div className="pk-setup-foot">
         {step === 'crop' ? (
           <>
+            <button type="button" className="adv-btn adv-btn-sm" onClick={() => void readForMe()} disabled={!src || !size || !!reading} title="AI finds the plan, two printed dimensions and the north arrow; you check them">
+              <Sparkles size={13} aria-hidden /> {reading ? 'Reading…' : 'Read it for me'}
+            </button>
             <button type="button" className="adv-btn adv-btn-sm" onClick={() => size && setCrop({ u0: 0, v0: 0, u1: size.w, v1: size.h })} disabled={!size}>
               Whole page
             </button>
@@ -435,7 +525,7 @@ export function DrawingSetup({ file, initial, satelliteOn, view, requestMapPoint
                 </button>
               ) : null}
               <button type="button" className="adv-btn adv-btn-sm" onClick={placeByHand}>
-                Place in the middle of the map
+                {north != null ? 'Place in the middle (north from the drawing)' : 'Place in the middle of the map'}
               </button>
               {placed?.pinned && placed.pinCheck != null ? (
                 <span className={`pk-setup-verdict${Math.abs(placed.pinCheck) > PIN_WARN_PCT ? ' is-warn' : ''}`} role="status">
