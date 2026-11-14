@@ -2476,3 +2476,11 @@ Shows that had a Manual override show those figures on the settlement (where
 the settlement already had a figure, the settlement's stands). The migration's
 three read-only lists: shows that had a per-ticket bonus (re-enter as the
 escalator), unknown deal types, settlement deals with no income row.
+
+#### PAY-DD-01 — Dropdown cells save on pick (Nov 2026)
+Payroll → Summary → a person's **Employment** cell: click it, click again to
+open the list, pick **Band** — it saves at once (no Enter needed) and the row
+moves to the Band group. Reload: still Band. Same for any dropdown cell in a
+spreadsheet grid.
+Name, Role and Employment here are the same data Crew and People show — see
+PPL-02…04 in operations.md.

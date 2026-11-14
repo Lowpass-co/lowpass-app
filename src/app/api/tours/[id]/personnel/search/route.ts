@@ -24,6 +24,8 @@ interface SearchHit {
   display_name: string;
   email: string | null;
   phone: string | null;
+  /** The person's usual role (People record) — seeds the role on a new tour. */
+  default_role: string | null;
 }
 
 export async function GET(
@@ -89,6 +91,16 @@ export async function GET(
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
+  // Their usual role (People record) pre-fills the role on this tour.
+  const ids = ((data ?? []) as Array<{ id: string }>).map((p) => p.id);
+  const roleById = new Map<string, string>();
+  if (ids.length > 0) {
+    const { data: master } = await supabase.from('personnel').select('id, role').in('id', ids);
+    for (const m of (master ?? []) as Array<{ id: string; role: string | null }>) {
+      if (m.role?.trim()) roleById.set(m.id, m.role.trim());
+    }
+  }
+
   const hits: SearchHit[] = ((data ?? []) as Array<{
     id: string;
     full_name: string;
@@ -100,6 +112,7 @@ export async function GET(
     display_name: p.preferred_name?.trim() || p.full_name?.trim() || 'Unknown',
     email: p.email,
     phone: p.phone,
+    default_role: roleById.get(p.id) ?? null,
   }));
 
   return NextResponse.json({ persons: hits });

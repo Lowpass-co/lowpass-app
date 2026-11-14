@@ -32,6 +32,7 @@ import { SaveStatus } from '@/components/forms/SaveStatus';
 import { BrandedSelect } from '@/components/ui/BrandedSelect';
 import { ROLE_TAG_OPTIONS, type RoleTag } from '@/lib/personnel/role-tags';
 import { PersonnelRatesSection } from './PersonnelRatesSection';
+import { EMPLOYMENT_OPTIONS, type Employment } from '@/lib/personnel/employment';
 import type {
   PersonnelListItem,
   PersonnelStatus,
@@ -53,6 +54,8 @@ interface PersonnelManageSlideOverProps {
   onClose: () => void;
   onSaved: () => void;
   onRemoved: () => void;
+  /** Open the person's People record (closes this panel). */
+  onEditPerson: (personId: string) => void;
 }
 
 interface EditState {
@@ -62,6 +65,9 @@ interface EditState {
   startsOn: string;
   endsOn: string;
   status: PersonnelStatus;
+  /** Principal / Band / Crew on this tour — the payroll card's field (the same
+   *  one Payroll's Employment column edits). */
+  employment: Employment;
 }
 
 function memberToState(m: PersonnelListItem): EditState {
@@ -71,6 +77,7 @@ function memberToState(m: PersonnelListItem): EditState {
     startsOn: m.starts_on ?? '',
     endsOn: m.ends_on ?? '',
     status: m.status,
+    employment: m.employment ?? 'crew',
   };
 }
 
@@ -82,6 +89,7 @@ export function PersonnelManageSlideOver({
   onClose,
   onSaved,
   onRemoved,
+  onEditPerson,
 }: PersonnelManageSlideOverProps) {
   const { showToast } = useToast();
   const [removeOpen, setRemoveOpen] = useState(false);
@@ -104,6 +112,7 @@ export function PersonnelManageSlideOver({
       onClose={onClose}
       onSaved={onSaved}
       onRemoved={onRemoved}
+      onEditPerson={onEditPerson}
       removeOpen={removeOpen}
       setRemoveOpen={setRemoveOpen}
       validationError={validationError}
@@ -121,6 +130,7 @@ interface EditorProps {
   onClose: () => void;
   onSaved: () => void;
   onRemoved: () => void;
+  onEditPerson: (personId: string) => void;
   removeOpen: boolean;
   setRemoveOpen: (v: boolean) => void;
   validationError: string | null;
@@ -136,6 +146,7 @@ function PersonnelManageEditor({
   onClose,
   onSaved,
   onRemoved,
+  onEditPerson,
   removeOpen,
   setRemoveOpen,
   validationError,
@@ -177,6 +188,7 @@ function PersonnelManageEditor({
             starts_on: s.startsOn || null,
             ends_on: s.endsOn || null,
             status: s.status,
+            person_type: s.employment,
           }),
         },
       );
@@ -209,7 +221,8 @@ function PersonnelManageEditor({
     void (async () => {
       try {
         const res = await fetch(
-          `/api/tours/${tourId}/personnel/${member.id}/removal-preview`,
+          // The preview is the GET on the member route itself.
+          `/api/tours/${tourId}/personnel/${member.id}`,
         );
         if (!res.ok) return;
         const data = (await res.json()) as typeof removalPreview;
@@ -261,6 +274,13 @@ function PersonnelManageEditor({
     onClose();
   };
 
+  // The person's own details live on their People record — save what's
+  // here, then hand over to that panel.
+  const handleEditPerson = async () => {
+    await flushSave();
+    onEditPerson(member.person_id);
+  };
+
   const handleCancel = async () => {
     await cancel();
     showToast('Changes reverted.');
@@ -298,16 +318,35 @@ function PersonnelManageEditor({
             padding: 'var(--lp-space-4)',
           }}
         >
-          {/* Header */}
+          {/* Header — the person (name, phone, passport…) is edited on their
+              People record; this panel is only their place on THIS tour. */}
           <div>
-            <div
-              style={{
-                fontSize: 'var(--lp-text-base)',
-                fontWeight: 'var(--lp-weight-semibold)',
-                color: 'var(--lp-text)',
-              }}
-            >
-              {member.display_name}
+            <div className="flex items-center justify-between" style={{ gap: 'var(--lp-space-2)' }}>
+              <div
+                style={{
+                  fontSize: 'var(--lp-text-base)',
+                  fontWeight: 'var(--lp-weight-semibold)',
+                  color: 'var(--lp-text)',
+                }}
+              >
+                {member.display_name}
+              </div>
+              <button
+                type="button"
+                onClick={() => void handleEditPerson()}
+                className="btn-transition"
+                style={{
+                  fontSize: 'var(--lp-text-sm)',
+                  fontWeight: 'var(--lp-weight-medium)',
+                  color: 'var(--color-lp-orange)',
+                  background: 'transparent',
+                  border: 'none',
+                  cursor: 'pointer',
+                  padding: 0,
+                }}
+              >
+                Edit person
+              </button>
             </div>
             <div
               className="lp-mono"
@@ -377,6 +416,31 @@ function PersonnelManageEditor({
                 label: `${o.label} — ${o.description}`,
               }))}
               ariaLabel="Role tag"
+              size="sm"
+              className="w-full"
+              triggerClassName="min-h-9 w-full"
+            />
+          </div>
+
+          {/* Employment on this tour — the same field as Payroll's column. */}
+          <div>
+            <label
+              htmlFor="lp-personnel-employment"
+              className="lp-label-caps"
+              style={{
+                display: 'block',
+                marginBottom: 'var(--lp-space-1)',
+                fontSize: 'var(--lp-text-2xs)',
+                color: 'var(--lp-text-secondary)',
+              }}
+            >
+              Employment on tour
+            </label>
+            <BrandedSelect
+              value={state.employment}
+              onChange={(v) => set((p) => ({ ...p, employment: v as Employment }))}
+              options={EMPLOYMENT_OPTIONS.map((o) => ({ value: o.value, label: o.label }))}
+              ariaLabel="Employment on tour"
               size="sm"
               className="w-full"
               triggerClassName="min-h-9 w-full"
@@ -660,6 +724,7 @@ function PersonnelManageEditor({
           onClose();
         }}
       />
+
     </>
   );
 }

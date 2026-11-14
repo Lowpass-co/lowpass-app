@@ -625,6 +625,11 @@ export interface PersonnelRate {
   workspace_id: string;
   /** Workspace roster row when added from Personnel; rooming/payroll use person_name. */
   roster_personnel_id?: string | null;
+  /** The person (persons.id == personnel.id) — mig 204. Name follows their
+   *  People record (mig 285). */
+  person_id?: string | null;
+  /** The tour roster row this card belongs to — mig 204. Role follows it. */
+  tour_personnel_id?: string | null;
   person_name: string;
   role: string | null;
   person_type: PersonType;

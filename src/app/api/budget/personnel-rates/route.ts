@@ -19,6 +19,8 @@ import { insertSeedLines, lastTourSeed } from '@/server/payroll/seedRateCard';
 import { loadTourRateContext, rateAmountsFor } from '@/lib/payroll/loadRateLines';
 import { PERMISSIONS } from '@/types';
 import { refreshDerivedLines } from '@/server/budget/reconcileDerivedLines';
+import { renamePerson, setTourRole } from '@/server/people/tourPersonEdits';
+import { isEmployment } from '@/lib/personnel/employment';
 
 const PERSON_TYPE_ORDER: Record<string, number> = {
   principal: 1,
@@ -343,6 +345,38 @@ export async function PATCH(request: Request) {
     return NextResponse.json({ error: 'id is required' }, { status: 400 });
   }
 
+  const { data: current } = await supabase
+    .from('personnel_rates')
+    .select('id, tour_id, person_id, tour_personnel_id')
+    .eq('id', id)
+    .eq('workspace_id', profile.workspace_id)
+    .maybeSingle();
+  if (!current) {
+    return NextResponse.json({ error: 'Not found' }, { status: 404 });
+  }
+  const cur = current as { id: string; tour_id: string; person_id: string | null; tour_personnel_id: string | null };
+
+  // Nov 2026 (Adam) — the card does not own a name or a role. Name is the
+  // People record (renames them everywhere); role is THIS tour's roster row.
+  // Migration 285's triggers copy both back onto the card, so Crew, Payroll,
+  // Rooming and People can't disagree. A card off the roster keeps its own.
+  let identityChanged = false;
+  if (updates.person_name !== undefined && cur.person_id) {
+    const r = await renamePerson(supabase, profile.workspace_id, cur.person_id, updates.person_name);
+    if (!r.ok) return NextResponse.json({ error: r.error }, { status: r.status });
+    identityChanged = true;
+    delete updates.person_name;
+  }
+  if (updates.role !== undefined && cur.tour_personnel_id) {
+    const r = await setTourRole(supabase, cur.tour_personnel_id, updates.role);
+    if (!r.ok) return NextResponse.json({ error: r.error }, { status: r.status });
+    identityChanged = true;
+    delete updates.role;
+  }
+  if (updates.person_type !== undefined && !isEmployment(updates.person_type)) {
+    return NextResponse.json({ error: 'Employment must be principal, band or crew.' }, { status: 400 });
+  }
+
   // Stage 1 — identity/meta (non-rate columns) go in a direct update; rate_type
   // is set HERE first so writeRates reads the new day/split layout. The five rate
   // columns are NOT touched here — they + the lines are written by writeRates.
@@ -387,6 +421,8 @@ export async function PATCH(request: Request) {
     if (wr.error) return NextResponse.json({ error: wr.error }, { status: 500 });
     card = (wr.card ?? card) as Record<string, unknown>;
   }
+  // Salary / per-diem lines are labelled "Name — Role".
+  if (identityChanged) await refreshDerivedLines(supabase, cur.tour_id, profile.workspace_id, 'payroll');
 
   return NextResponse.json(canApprove ? card : stripCommission(card));
 }
