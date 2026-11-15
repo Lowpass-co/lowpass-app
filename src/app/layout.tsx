@@ -33,20 +33,25 @@ const barlowCondensed = Barlow_Condensed({
 });
 
 /** Link previews (WhatsApp, iMessage, Slack) need the og:image as an ABSOLUTE
- *  URL (the image is src/app/opengraph-image.png). Its base is, in order:
- *  NEXT_PUBLIC_APP_URL, else the address the page was opened on. NOT Next's own
- *  default: on Vercel that is the project's "production URL"
- *  (lowpass-app.vercel.app), which serves nothing — every preview image 404'd
- *  (Nov 2026). The request's host is always one that serves this app, so a
- *  link previews with an image from the same address it was sent with. */
+ *  URL (the image is src/app/opengraph-image.png). Its base is the address the
+ *  page was opened on — that host is by definition one that serves this app —
+ *  else NEXT_PUBLIC_APP_URL, else Next's default. Host FIRST (Nov 2026): with
+ *  the env first, production still pointed every preview at
+ *  lowpass-app.vercel.app, which serves nothing (DEPLOYMENT_NOT_FOUND); Next's
+ *  own default on Vercel is that same dead address. */
 async function siteUrl(): Promise<URL | undefined> {
   try {
-    if (process.env.NEXT_PUBLIC_APP_URL) return new URL(process.env.NEXT_PUBLIC_APP_URL);
     const h = await headers();
     const host = h.get('x-forwarded-host') ?? h.get('host');
-    if (!host) return undefined;
-    const proto = h.get('x-forwarded-proto') ?? (host.startsWith('localhost') ? 'http' : 'https');
-    return new URL(`${proto.split(',')[0].trim()}://${host.split(',')[0].trim()}`);
+    if (host) {
+      const proto = h.get('x-forwarded-proto') ?? (host.startsWith('localhost') ? 'http' : 'https');
+      return new URL(`${proto.split(',')[0].trim()}://${host.split(',')[0].trim()}`);
+    }
+  } catch {
+    /* no request (static render) — fall through */
+  }
+  try {
+    return process.env.NEXT_PUBLIC_APP_URL ? new URL(process.env.NEXT_PUBLIC_APP_URL) : undefined;
   } catch {
     return undefined;
   }
