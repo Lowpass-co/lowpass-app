@@ -31,6 +31,7 @@ import {
 import { ShellV3Mount } from '@/components/shell-v3/ShellV3Mount';
 import { getLandingSuggestion } from '@/server/workspace/landingPreference';
 import { EmptyWorkspacePrompt } from '@/components/shell-v2/EmptyWorkspacePrompt';
+import { NoWorkspace } from '@/components/onboarding/NoWorkspace';
 
 export default async function WorkspaceLayout({
   children,
@@ -42,16 +43,20 @@ export default async function WorkspaceLayout({
      Now both read the same per-request cache: the chain runs once. */
   const supabase = await getRequestSupabase();
 
-  /* Unauthenticated / no workspace → /login. Same gate as ever. */
+  /* Not signed in → /login. Signed in but no workspace we can open → say so
+     (<NoWorkspace>). It used to redirect to /login too, which LOOPED: the
+     middleware sends a signed-in user on /login back to /artists, forever
+     (a new sign-up with no membership hit it — migration 290). */
+  const user = await getRequestUser();
+  if (!user) redirect('/login');
   const workspaceName = await getRequestWorkspaceName();
-  if (workspaceName == null) redirect('/login');
+  if (workspaceName == null) return <NoWorkspace email={user.email ?? null} />;
 
   /* Landing preference (659890a, merged into S-3b) — the workspace tier is
      where a stranded member arrives, so the offer belongs here and nowhere
      deeper. Suggestion only: it never redirects and never writes. It renders
      inside the shell's <main>, above the page body. */
-  const user = await getRequestUser();
-  const suggestion = user ? await getLandingSuggestion(supabase, user.id) : null;
+  const suggestion = await getLandingSuggestion(supabase, user.id);
 
   const h = await headers();
   const pathname = h.get('x-pathname') ?? '/artists';

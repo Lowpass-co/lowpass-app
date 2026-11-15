@@ -101,6 +101,24 @@ own secret checks (e.g. `CRON_SECRET`).
 
 **Last verified**:
 
+## New accounts (Nov 2026 — needs migration 290)
+
+#### AUTH-10 — A new sign-up lands in its own workspace, with the welcome
+
+**Do**: Paste migration 290. Sign up a brand-new account (new email), confirm from the email.
+
+**Expect**: Lands on `/artists` — "<name>'s Workspace", no artists — and the welcome opens by itself. No reloading. (Before 290 a new account had no workspace membership, couldn't read its own workspace, and `/artists` ⇄ `/login` looped.)
+
+**Last verified**:
+
+#### AUTH-11 — Signed in with no workspace: a message, not a loop
+
+**Do**: (Staging / by hand) delete a test account's `workspace_members` row for its active workspace, then open `/artists`.
+
+**Expect**: "We can't open your workspace" with Try again / Sign out. The page doesn't reload by itself; Sign out goes to `/login`.
+
+**Last verified**:
+
 ## Known broken
 
 #### AUTH-04 — Login globe not yet deduped onto AuthShell
