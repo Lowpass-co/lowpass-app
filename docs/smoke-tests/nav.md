@@ -278,22 +278,27 @@ and "Tour settings › Dates & routing" links.
 ## Tour Overview (Nov 2026)
 
 #### NAV-OV-01 — Next show
-The next show or festival day (today counts): date · venue, city · "tomorrow"
-/ "in 3 days" · Advance N of M answered · to review · venue request. **Open
-advance** goes to that show's advance. No shows ahead: "No shows coming up"
-with an import link.
+The next show or festival day (today counts). Its label is **TODAY** (orange)
+on the day, else "NEXT SHOW · TOMORROW" / "· IN 3 DAYS"; the venue large;
+under it date · city · Advance N of M answered · N to review · venue request.
+**Open advance** (the page's only orange button) goes to that show's advance.
+No shows ahead: "No shows coming up" with an import link. The page is full
+width; on a wide enough window Needs you and This tour sit side by side.
 
 #### NAV-OV-02 — Needs you
-Each line is a count and a link, and only appears when it's non-zero: days in
+Each row is a large count, the words beside it and a grey arrow — the whole
+row is the link, and only appears when it's non-zero: days in
 the next two weeks not fully advanced (Advance), advance answers to review,
 shows played but not settled (Settlements), receipts needing details
 (Receipts), crew not confirmed (Crew), budget lines over estimate (Budget).
 Clear everything → "Nothing needs you right now."
 
-#### NAV-OV-03 — Advance · Budget · Production
-One line each: "N of M days advanced · K waiting on venues"; "£X spent of £Y
-planned · £Z net planned" (the Budget page's own totals); "Rider updated … ·
-Channel list not made · Stage plot updated …". Each row opens its page.
+#### NAV-OV-03 — This tour: Advance · Budget · Production
+One line each: "N of M days ahead fully advanced · K waiting on venues" (days
+already played don't count); "£X over · £S spent of £P" or "£X left · …"
+(the Budget page's own totals), "· £N net" only when income is planned;
+"Rider updated … · Channel list not made · Stage plot updated …". Each row
+opens its page.
 
 #### NAV-OV-04 — Only what you can open
 As a member without Budget access: no Budget row, no money lines, no settle /

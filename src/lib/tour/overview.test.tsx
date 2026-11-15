@@ -97,12 +97,19 @@ describe('the three area lines', () => {
     expect(advanceLine(facts())).toBe('No days to advance yet');
     expect(
       advanceLine(facts({ shows: [show('2026-11-10'), show('2026-11-11', { answered: 2, requestKind: 'sent' }), show('2026-11-12', { answered: 0, requestKind: 'not_sent' })] })),
-    ).toBe('1 of 3 days advanced · 1 waiting on a venue');
+    ).toBe('1 of 3 days ahead fully advanced · 1 waiting on a venue');
+    // Days already played don't count.
+    expect(advanceLine(facts({ shows: [show('2026-11-01'), show('2026-11-10', { answered: 0 })] }))).toBe('0 of 1 day ahead fully advanced');
+    expect(advanceLine(facts({ shows: [show('2026-11-01')] }))).toBe('No days left to advance');
   });
   it('budget, in the tour currency', () => {
     expect(budgetLine(facts())).toBe('Budget not set up yet');
     expect(budgetLine(facts({ money: { currency: 'GBP', plannedCosts: 48000, spentCosts: 12400.4, plannedNet: -1500 } }))).toBe(
-      '£12,400 spent of £48,000 planned · −£1,500 net planned',
+      '£35,600 left · £12,400 spent of £48,000 · −£1,500 net',
+    );
+    // Over budget, no income planned: no "net" (it was just the costs negated).
+    expect(budgetLine(facts({ money: { currency: 'GBP', plannedCosts: 43562, spentCosts: 46011, plannedNet: -43562 } }))).toBe(
+      '£2,449 over · £46,011 spent of £43,562',
     );
   });
   it('production', () => {

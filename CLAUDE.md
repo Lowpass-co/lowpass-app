@@ -505,6 +505,11 @@ recreate a `_legacy/` tree: delete dead code instead of parking it.
   use (`loadAdvanceBoard`, `countReceiptsNeedingDetails`, `loadTourPnl` with
   `reconcile:false` — a page load writes nothing). Parts the viewer can't
   open (P-1 visible resources) are neither read nor shown.
+- **Look** (redrawn Nov 2026, Adam): full width like the other pages, one
+  panel style (`overview.css`, rows split by hairlines), "TODAY" headline on a
+  show day, Needs-you rows = large count + `what` + grey chevron (the whole row
+  links), ONE orange button (Open advance). Needs you · This tour sit side by
+  side via a CONTAINER query (the content area, not the window, decides).
 - No charts, no activity feed, no stat cards: two card dashboards were built
   and deleted before (budget Summary, the tour Summary page — deleted with
   `OperationsSummaryClient`, the `/edit` page and `TourEditForm`). A new line
