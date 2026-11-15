@@ -17,7 +17,6 @@
    a separate sprint).
    ============================================ */
 
-import { redirect } from 'next/navigation';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 /* IA Cleanup §I2 — WorkspaceTopBar now mounted by
    src/app/(app)/(workspace)/layout.tsx (the route group's
@@ -38,7 +37,9 @@ import { dayTypesPresent } from '@/lib/routing/dayTypesPresent';
 export default async function ArtistsLandingPage() {
   const supabase = await createServerSupabaseClient();
   const data = await getWorkspaceLandingData(supabase);
-  if (!data) redirect('/login');
+  // No data = not signed in or no workspace: the (workspace) layout handles
+  // both (redirect / <NoWorkspace>). Redirecting to /login here looped.
+  if (!data) return null;
 
   return (
     <>

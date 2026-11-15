@@ -421,6 +421,14 @@ recreate a `_legacy/` tree: delete dead code instead of parking it.
 
 ### Getting started — welcome + "Get set up" (Nov 2026, Adam)
 
+- **A new account owns a workspace AND is its member** (migration 290: trigger
+  `profiles_owner_membership` on profiles INSERT — owners only, never on
+  UPDATE). `handle_new_user` (002) never added the membership, and since 086
+  reading a workspace needs one, so new sign-ups couldn't open their own.
+- **Signed in but no workspace → `<NoWorkspace>`, never `redirect('/login')`**
+  (`(workspace)/layout.tsx`): the middleware bounces a signed-in user on
+  `/login` back to `/artists`, so that redirect looped forever.
+
 - Replaces the old "App tour & tutorial" panel (deleted with its registry).
   `src/components/onboarding/GettingStarted.tsx` is mounted once in AppShell;
   rules are pure in `src/lib/onboarding/checklist.ts`; facts come from
