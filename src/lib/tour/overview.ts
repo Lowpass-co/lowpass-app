@@ -59,12 +59,18 @@ export interface OverviewFacts {
 export interface NeedsYouLine {
   id: 'advance-soon' | 'advance-review' | 'receipts' | 'settle' | 'crew' | 'over-estimate';
   count: number;
+  /** The sentence, count included: "7 days in the next two weeks aren't fully advanced". */
   text: string;
+  /** The same without the count, for a layout that shows the number on its own. */
+  what: string;
   href: string;
   cta: string;
 }
 
-const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
+const word = (n: number, one: string, many = `${one}s`) => (n === 1 ? one : many);
+const plural = (n: number, one: string, many = `${one}s`) => `${n} ${word(n, one, many)}`;
+/** A needs-you line: the sentence and the same words without the count. */
+const line = (count: number, what: string) => ({ count, what, text: `${count} ${what}` });
 
 export function daysBetween(fromIso: string, toIso: string): number {
   const a = Date.parse(`${fromIso.slice(0, 10)}T12:00:00Z`);
@@ -97,25 +103,23 @@ export function needsYou(f: OverviewFacts): NeedsYouLine[] {
   if (soon.length) {
     out.push({
       id: 'advance-soon',
-      count: soon.length,
-      text: `${plural(soon.length, 'day')} in the next two weeks ${soon.length === 1 ? 'isn’t' : 'aren’t'} fully advanced`,
+      ...line(soon.length, `${word(soon.length, 'day')} in the next two weeks ${soon.length === 1 ? 'isn’t' : 'aren’t'} fully advanced`),
       href: `/advance/${t}`,
       cta: 'Advance',
     });
   }
   const review = upcoming.reduce((n, s) => n + s.toReview, 0);
   if (review) {
-    out.push({ id: 'advance-review', count: review, text: `${plural(review, 'advance answer')} to review`, href: `/advance/${t}`, cta: 'Review' });
+    out.push({ id: 'advance-review', ...line(review, `${word(review, 'advance answer')} to review`), href: `/advance/${t}`, cta: 'Review' });
   }
   const unsettled = !a.budget ? 0 : f.shows.filter((s) => isShowDay(s.dayType) && s.date < f.today && !f.settledRoutingIds.has(s.routingId)).length;
   if (unsettled) {
-    out.push({ id: 'settle', count: unsettled, text: `${plural(unsettled, 'show')} played but not settled`, href: `/budget/${t}?tab=income`, cta: 'Settle' });
+    out.push({ id: 'settle', ...line(unsettled, `${word(unsettled, 'show')} played but not settled`), href: `/budget/${t}?tab=income`, cta: 'Settle' });
   }
   if (a.receipts && f.receiptsNeedingDetails) {
     out.push({
       id: 'receipts',
-      count: f.receiptsNeedingDetails,
-      text: `${plural(f.receiptsNeedingDetails, 'receipt')} ${f.receiptsNeedingDetails === 1 ? 'needs' : 'need'} details`,
+      ...line(f.receiptsNeedingDetails, `${word(f.receiptsNeedingDetails, 'receipt')} ${f.receiptsNeedingDetails === 1 ? 'needs' : 'need'} details`),
       href: `/budget/${t}?tab=receipts`,
       cta: 'Receipts',
     });
@@ -123,8 +127,7 @@ export function needsYou(f: OverviewFacts): NeedsYouLine[] {
   if (a.crew && f.unconfirmedCrew) {
     out.push({
       id: 'crew',
-      count: f.unconfirmedCrew,
-      text: `${plural(f.unconfirmedCrew, 'crew member')} not confirmed`,
+      ...line(f.unconfirmedCrew, `${word(f.unconfirmedCrew, 'crew member')} not confirmed`),
       href: `/operations/${t}/personnel`,
       cta: 'Crew',
     });
@@ -132,8 +135,7 @@ export function needsYou(f: OverviewFacts): NeedsYouLine[] {
   if (a.budget && f.linesOverEstimate) {
     out.push({
       id: 'over-estimate',
-      count: f.linesOverEstimate,
-      text: `${plural(f.linesOverEstimate, 'budget line')} over estimate`,
+      ...line(f.linesOverEstimate, `${word(f.linesOverEstimate, 'budget line')} over estimate`),
       href: `/budget/${t}?tab=budget`,
       cta: 'Budget',
     });
@@ -141,12 +143,15 @@ export function needsYou(f: OverviewFacts): NeedsYouLine[] {
   return out;
 }
 
-/** "7 of 10 days advanced · 2 waiting on venues" */
-export function advanceLine(f: Pick<OverviewFacts, 'shows'>): string {
+/** "3 of 12 days ahead fully advanced · 2 waiting on venues" — days already
+ *  played don't count: there is nothing left to advance on them. */
+export function advanceLine(f: Pick<OverviewFacts, 'shows' | 'today'>): string {
   if (!f.shows.length) return 'No days to advance yet';
-  const done = f.shows.filter(advanced).length;
-  const waiting = f.shows.filter((s) => !advanced(s) && (s.requestKind === 'sent' || s.requestKind === 'opened')).length;
-  return `${done} of ${plural(f.shows.length, 'day')} advanced${waiting ? ` · ${waiting} waiting on ${waiting === 1 ? 'a venue' : 'venues'}` : ''}`;
+  const ahead = f.shows.filter((s) => s.date >= f.today);
+  if (!ahead.length) return 'No days left to advance';
+  const done = ahead.filter(advanced).length;
+  const waiting = ahead.filter((s) => !advanced(s) && (s.requestKind === 'sent' || s.requestKind === 'opened')).length;
+  return `${done} of ${plural(ahead.length, 'day')} ahead fully advanced${waiting ? ` · ${waiting} waiting on ${waiting === 1 ? 'a venue' : 'venues'}` : ''}`;
 }
 
 export function money(n: number, currency: string): string {
@@ -155,12 +160,18 @@ export function money(n: number, currency: string): string {
   return `${n < 0 ? '−' : ''}${sym[currency] ?? `${currency} `}${s}`;
 }
 
-/** "£12,400 spent of £48,000 planned · £6,200 net planned" */
+/** "£2,449 over · £46,011 spent of £43,562" / "£35,600 left · £12,400 spent
+ *  of £48,000 · −£1,500 net". Net only when income is planned — with none,
+ *  "net" is just the costs with a minus sign, which read as a contradiction. */
 export function budgetLine(f: Pick<OverviewFacts, 'money'>): string {
   const m = f.money;
   if (!m) return 'Budget not set up yet';
   if (!m.plannedCosts && !m.spentCosts) return 'No costs entered yet';
-  return `${money(m.spentCosts, m.currency)} spent of ${money(m.plannedCosts, m.currency)} planned · ${money(m.plannedNet, m.currency)} net planned`;
+  const gap = m.plannedCosts - m.spentCosts;
+  const head = gap < 0 ? `${money(-gap, m.currency)} over` : `${money(gap, m.currency)} left`;
+  const income = m.plannedNet + m.plannedCosts;
+  const net = income > 0 ? ` · ${money(m.plannedNet, m.currency)} net` : '';
+  return `${head} · ${money(m.spentCosts, m.currency)} spent of ${money(m.plannedCosts, m.currency)}${net}`;
 }
 
 const PROD_LABEL: Record<OverviewFacts['production'][number]['kind'], string> = {
