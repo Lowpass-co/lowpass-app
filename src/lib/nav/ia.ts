@@ -278,6 +278,9 @@ const YOU_RAIL: RailEntry[] = [
     match: (p) => /^\/settings\/?$/.test(p) || p.startsWith('/settings/ai-limits'),
   },
   { kind: 'item', id: 'team', label: 'Team & roles', icon: 'Users', href: () => '/settings/members' },
+  /* Nov 2026 — the phone view crew use (Members land there); here so admins
+     can see what their crew see. */
+  { kind: 'item', id: 'crew-view', label: 'Crew phone view', icon: 'Smartphone', href: () => '/crew' },
   { kind: 'item', id: 'bugs', label: 'Report a bug', icon: 'Flag', href: () => '/bugs' },
 ];
 

@@ -28,14 +28,18 @@ import './driver.css';
 
 type Loaded = { kind: 'ok'; data: DriverMapPayload } | { kind: 'error'; message: string } | { kind: 'loading' };
 
-export function PublicParkingView({ token }: { token: string }) {
-  const [state, setState] = useState<Loaded>({ kind: 'loading' });
+/** `token`: a driver link (/p/…) — loads through the token route, 3D capped.
+ *  `initial`: a signed-in crew member's map (/crew), already loaded through
+ *  their own access — plan only, no link expiry. */
+export function PublicParkingView({ token, initial }: { token?: string; initial?: DriverMapPayload }) {
+  const [state, setState] = useState<Loaded>(initial ? { kind: 'ok', data: initial } : { kind: 'loading' });
   const [mode, setMode] = useState<'plan' | '3d'>('plan');
   const [left3d, setLeft3d] = useState(0);
   const [note3d, setNote3d] = useState<string | null>(null);
   const [opening, setOpening] = useState(false);
 
   useEffect(() => {
+    if (!token) return;
     let live = true;
     fetch(`/api/public/parking/${encodeURIComponent(token)}`, { method: 'POST' })
       .then(async (r) => {
@@ -61,6 +65,7 @@ export function PublicParkingView({ token }: { token: string }) {
   const floors = useMemo(() => new Map([...rasters].map(([id, r]) => [id, r.dark])), [rasters]);
 
   const open3d = useCallback(async () => {
+    if (!token) return;
     setOpening(true);
     setNote3d(null);
     try {
@@ -105,18 +110,19 @@ export function PublicParkingView({ token }: { token: string }) {
         <span className="pd-muted">
           {when}
           {d.venue.city ? ` · ${d.venue.city}` : ''}
-          {d.label ? ` · for ${d.label}` : ''} · link ends {ends}
+          {d.label ? ` · for ${d.label}` : ''}
+          {token ? ` · link ends ${ends}` : ''}
         </span>
       </header>
 
-      <div className="pd-modes" role="group" aria-label="View">
+      {token ? <div className="pd-modes" role="group" aria-label="View">
         <button type="button" aria-pressed={mode === 'plan'} onClick={() => setMode('plan')}>
           {mode === '3d' ? <ArrowLeft size={14} aria-hidden /> : null} Plan
         </button>
         <button type="button" aria-pressed={mode === '3d'} disabled={opening || (mode !== '3d' && left3d <= 0)} onClick={() => mode !== '3d' && void open3d()}>
           <Box size={14} aria-hidden /> {opening ? 'Opening 3D…' : mode === '3d' ? '3D' : left3d > 0 ? `Look around in 3D (${left3d} left)` : '3D used up'}
         </button>
-      </div>
+      </div> : null}
       {note3d ? <p className="pd-note">{note3d}</p> : null}
 
       <section className="pd-stage">

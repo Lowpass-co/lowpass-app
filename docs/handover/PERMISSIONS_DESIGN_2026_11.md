@@ -1,6 +1,6 @@
 # Permissions — design (Nov 2026, for Adam's approval)
 
-Built on the audit (`PERMISSIONS_AUDIT_2026_11.md`). Nothing here is built yet.
+Built on the audit (`PERMISSIONS_AUDIT_2026_11.md`). **Built Nov 2026 — see "As built" at the end.**
 
 ## What it has to do (Adam, 16 Nov 2026)
 
@@ -133,3 +133,23 @@ Every migration idempotent, assert-before-drop (as 264), with a down block.
 3. **Artist library for members**: see the artist's riders / files for
    artists whose tours they're on (recommended), or tour items only?
 4. **Shared venues during the beta**: site-admin edits only (recommended).
+
+## As built (16 Nov 2026)
+
+| Step | What | Where |
+|---|---|---|
+| 1 | Beta blockers | migration 291 (pasted) |
+| 2 | Foundation: `tour_access`, `private.*` helpers, `my_tour_access`, invites carry crew record + access, `beta_codes`, page grants copied | 292 + `_REPORT_292_shadow_access.sql` |
+| 3 | The database enforces it: 88 tables + tour-files / rider-assets storage | 293, GENERATED from `scripts/permissions/rules.mjs` by `gen293.mjs`; emergency undo `_DOWN_293_workspace_rules.sql` |
+| 4 | App reads it: rail + page gate (`ia.ts` `area`, AppShellV3 `<NoAccess>`), `requireWrite({ area, tourId })` | `src/lib/permissions/tourAccess.ts` |
+| 5 | Team & roles: invite with crew record + tours + preset; per-member access; Admin › Beta codes; code-only sign-up (`/auth/beta-signup`) | `src/components/settings/members/TourAccessEditor.tsx` |
+| 6 | Crew phone view: `/crew` → tour → show day (advance info, parking, files). Members land there. | `src/app/(app)/crew/`, `src/server/crew/load.ts` |
+
+**Changed from the plan above:**
+- **No denormalised `tour_id` columns.** Tables that reach the tour through a parent use set helpers instead (`days_i_can`, `packs_i_can`, `lines_i_can`, `settlements_i_can`) — same once-per-query cost, no new columns, no triggers to keep in step, no backfill on the live database.
+- **No personal-data table split.** `personnel` (the master record with passport / DOB / emergency) is now admin/manager + the person themselves; members read names and contacts from `persons` (the mirror) for crew on tours they can see. Same outcome, no data move.
+- **AI index (`rag_chunks`)**: admin/manager only for now (closes audit B3) rather than per-area chunk filtering. Members don't get "Ask" until chunks carry tour + area.
+- **Tour settings** (Details, Dates & routing, Money) are managers-only in the app; a Member with Schedule edit can't reach Dates & routing yet.
+
+**Member-editable routes (step 4) — the rest stay admin/manager-only (fail closed):**
+Receipts (create / edit / delete / upload / file against a line), Parking (save, PDF record, driver links, drawing read), Advance (answers, sections, packs, venue ask). NOT yet: Files writes, Production (riders / channel list / stage plot / gear), Logistics, Schedule, Budget, Payroll, Income — a Member with edit there can edit in the database but the app's buttons will be refused by the route. Convert a route by passing `{ area, tourId }` to `requireWrite` once its side effects (derived budget lines!) are checked.

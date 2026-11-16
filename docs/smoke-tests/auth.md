@@ -153,6 +153,39 @@ own secret checks (e.g. `CRON_SECRET`).
 
 **Last verified**:
 
+#### AUTH-16 — Sign-up is by beta code only
+
+**Do**: Site admin → Admin › Beta codes → make a code for an email. Signed out, open `/signup`, enter that email, a password and the code.
+
+**Expect**: Account made and signed in straight away (no confirmation email), landing on their own new workspace. The code shows "Used" on Admin › Beta codes. The same code again → "already been used". A different email with that code → "made for a different email".
+
+**Last verified**:
+
+#### AUTH-17 — Invite a crew member with tour access
+
+**Do**: Team & roles → Invite → Member, pick their crew record, "Only these tours" → one tour, preset Crew. Open the invite link signed out → Create account (no code asked) → accept.
+
+**Expect**: They land on `/crew` (or straight into the tour if it's their only one): shows, advance info, parking, files — nothing else. The tour menu (full app) shows only Overview, Advance, Riders / Channel list / Stage plot / Gear, Parking, Files. Typing `/operations/<tour>/payroll` shows "Not on your access". People › that crew record now has a login.
+
+**Last verified**:
+
+#### AUTH-18 — A Member's access is enforced by the database (after 293)
+
+**Do**: As the AUTH-17 member, open `/budget/<tour>?tab=budget` directly, then `/operations/<tour>/personnel`.
+
+**Expect**: "Not on your access" page; and Supabase returns no budget rows for them (rows hidden by 293, not just the page). Their own crew row, room and pay lines still show where they appear.
+
+**Last verified**:
+
+#### AUTH-19 — Production assistant: Receipts edit without the budget
+
+**Do**: Give a Member Production preset + Receipts: edit. As them, add a receipt and file it against a line.
+
+**Expect**: Receipt saved; the line's actual updates. The Budget item is not in their menu; Payroll and Income aren't either.
+
+**Last verified**:
+
+
 ## Known broken
 
 #### AUTH-04 — Login globe not yet deduped onto AuthShell

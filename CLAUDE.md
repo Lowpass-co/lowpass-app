@@ -453,6 +453,33 @@ recreate a `_legacy/` tree: delete dead code instead of parking it.
 - Welcome art is live-drawn from the app's own labels (`WelcomeArt.tsx`) —
   when a rail label or template changes, update the sketch too.
 
+### Tour access — who sees what (Nov 2026, Adam — migrations 292 + 293)
+
+- **Roles**: admin / manager see every tour. **Members** (`readonly`) see only
+  the tours + areas in `tour_access` (all tours or per tour; view / edit), set
+  on Team & roles with a preset. Ten areas, ONE list:
+  `src/lib/permissions/areas.ts` (parity-tested against 292's CHECK).
+- **The database is the gate.** Every tour table's rules are GENERATED:
+  `scripts/permissions/rules.mjs` → `node scripts/permissions/gen293.mjs` →
+  `293_tour_access_rules.sql`. Never hand-edit 293; a test fails if it drifts.
+  A NEW tour table must get a line in rules.mjs (293's report lists any table
+  with a `tour_id` and no rule). Helpers live in the `private` schema.
+- **The app asks the database**: `getViewerAccess` / `getRequestViewerAccess`
+  (`my_tour_access` RPC). Rail items carry `area` in ia.ts; AppShellV3 shows
+  `<NoAccess>` for a page the viewer can't open. Never re-derive access in code.
+- **Writes**: `requireWrite(supabase, { area, tourId })` lets a Member with EDIT
+  through; without `area` a route stays admin/manager-only. Converted so far:
+  receipts, parking, advance. A route whose write touches another area (e.g.
+  derived budget lines) must do that part as the server, for that row only
+  (see receipts' `syncClientFor`).
+- **Own rows**: a login linked to its crew record (`personnel.user_id`, set by
+  accepting an invite that names it) always reads its own crew / room / pay rows.
+- **Sign-up is by code only** (Admin › Beta codes, `/auth/beta-signup`); public
+  sign-up is OFF in Supabase. Invite links work as codes for their email.
+- **Members land on `/crew`** (phone-first: shows, advance info, parking, files).
+- Plan + as-built: `docs/handover/PERMISSIONS_DESIGN_2026_11.md`. DB tests:
+  `database/tests/` (PGlite).
+
 ### File & folder share links (Nov 2026, Adam)
 
 - Tour Files → ⋯ → **Share…** makes a `/f/<token>` link to one file or one
