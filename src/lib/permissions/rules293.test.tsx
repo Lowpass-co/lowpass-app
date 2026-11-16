@@ -1,7 +1,6 @@
 import { spawnSync } from 'node:child_process';
 import { describe, expect, it } from 'vitest';
 import { AREAS as TS_AREAS } from '@/lib/permissions/areas';
-// @ts-expect-error — plain .mjs data module, no types
 import { AREAS, RULES } from '../../../scripts/permissions/rules.mjs';
 
 describe('permissions rules (293)', () => {

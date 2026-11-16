@@ -20,7 +20,7 @@ import {
   getRequestUser,
   getRequestProfile,
   getRequestWorkspaceName,
-  getRequestVisibleResources,
+  getRequestViewerAccess,
 } from '@/lib/server/requestContext';
 import { ArtistTourPicker } from '@/components/picker/ArtistTourPicker';
 import type { PickerArtist, PickerTour } from '@/lib/nav/pickerModel';
@@ -77,7 +77,7 @@ export async function ShellV3Mount({
   const scope = resolveScope(pathname, search ?? '');
   const wantsReceiptBadge = scope.scope === 'tour' && scope.mode === 'money' && !!scope.tourId;
 
-  const [{ data: artistsRes }, { data: toursRes }, needsDetails, profile, workspaceName, visibleResources] =
+  const [{ data: artistsRes }, { data: toursRes }, needsDetails, profile, workspaceName, viewerAccess] =
     await Promise.all([
       supabase.from('artists').select('id, name, branding, spotify_image_url').order('name', { ascending: true }),
       /* Oct 2026 picker redesign — EVERY tour, lean, with the page. The old
@@ -91,9 +91,9 @@ export async function ShellV3Mount({
          the v3 bar hardcoded "Workspace"). Cached: if the layout above already
          resolved it, this is free. */
       getRequestWorkspaceName(),
-      /* P-1 — the rail's access filter, once per request. Costs nothing extra
-         for admin/manager — canAccess short-circuits on role. */
-      getRequestVisibleResources(),
+      /* Who's looking: hides rail items they can't open and gates the page
+         (AppShellV3). Admin/manager: one role read; members: + my_tour_access. */
+      getRequestViewerAccess(scope.scope === 'tour' ? (scope.tourId ?? null) : null),
     ]);
 
   const initialArtists = (artistsRes ?? []) as SwitcherArtistMin[];
@@ -114,7 +114,7 @@ export async function ShellV3Mount({
 
   return (
     <AppShellV3
-      visibleResources={visibleResources}
+      access={viewerAccess ? { manager: viewerAccess.manager, tour: viewerAccess.tour } : null}
       pathname={pathname}
       search={search}
       artistId={artistId}

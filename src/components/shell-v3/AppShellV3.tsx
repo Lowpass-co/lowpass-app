@@ -37,12 +37,14 @@
 
 import { usePathname, useSearchParams } from 'next/navigation';
 import {
-  resolveScope, resolveRailView, upFrom, productForPath, hasOwnRail,
+  resolveScope, resolveRailView, upFrom, productForPath, hasOwnRail, areaForPath, railAllows,
+  type RailAccess,
   SCOPE_LABEL,
 } from '@/lib/nav/ia';
 import { RememberTourProduct } from '@/components/shell-v2/RememberTourProduct';
 import { NavRail } from './NavRail';
 import { TopBarV3 } from './TopBarV3';
+import { NoAccess } from './NoAccess';
 
 export interface AppShellV3Props {
   /** The URL at mount — SSR/test fallback; the live URL comes from the router. */
@@ -55,8 +57,8 @@ export interface AppShellV3Props {
   /** Known at tour scope from server data — the path doesn't carry it. */
   artistId?: string | null;
   badges?: Record<string, string | number | null | undefined>;
-  /** P-1 — resource ids this caller may read. `null`/absent = don't filter. */
-  visibleResources?: readonly string[] | null;
+  /** Who's looking (rail filter + page gate). `null`/absent = don't filter. */
+  access?: RailAccess | null;
   /** Collapse the nav rail by default (pages with a day rail). Live-computed
    *  from hasOwnRail() as well; this prop forces it on regardless of path. */
   denseRail?: boolean;
@@ -75,7 +77,7 @@ export function AppShellV3({
   switcher,
   artistId,
   badges,
-  visibleResources = null,
+  access = null,
   denseRail = false,
   headerRight,
   landing = false,
@@ -98,7 +100,11 @@ export function AppShellV3({
   const ctx = { ...base, artistId: base.artistId ?? artistId ?? null };
   /* Hrefs built, matchers run, badges read — on every URL change now, not once
      per layout mount. resolveRailView returns plain data either way. */
-  const entries = resolveRailView(ctx, pathname, search, badges ?? {}, visibleResources);
+  const entries = resolveRailView(ctx, pathname, search, badges ?? {}, access);
+  /* The page gate: the same rule as the rail, for the page at this URL. A
+     Member who follows a link to an area they don't have sees why, not a
+     half-empty page. (The database still refuses the data either way.) */
+  const pageAllowed = railAllows(access, areaForPath(pathname, search));
   const up = upFrom(ctx);
 
   /* The rail head names the level you're at: Workspace, Artist, Tour, You. */
@@ -140,7 +146,7 @@ export function AppShellV3({
           defaultCollapsed={dense}
         />
         <main style={{ flex: 1, minWidth: 0, minHeight: 0, overflow: 'auto', background: 'var(--lp-bg)' }}>
-          {children}
+          {pageAllowed ? children : <NoAccess />}
         </main>
       </div>
     </div>

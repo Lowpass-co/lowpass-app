@@ -17,7 +17,7 @@
    ============================================ */
 
 import { NextResponse } from 'next/server';
-import { createServerSupabaseClient } from '@/lib/supabase-server';
+import { createServerSupabaseClient, createServiceSupabaseClient } from '@/lib/supabase-server';
 import { requireUserAndWorkspace, requireTourInWorkspace, requireWrite } from '@/lib/auth/workspace-check';
 import {
   resolveLineItemContext,
@@ -73,12 +73,12 @@ export async function POST(
 ): Promise<NextResponse> {
   const { id: lineItemId } = await params;
   const supabase = await createServerSupabaseClient();
-  const auth = await requireWrite(supabase);
-  if ('error' in auth) return auth.error;
+  const member = await requireUserAndWorkspace(supabase);
+  if ('error' in member) return member.error;
 
-  const ctx = await resolveLineItemContext(supabase, lineItemId, auth.workspaceId);
+  const ctx = await resolveLineItemContext(supabase, lineItemId, member.workspaceId);
   if (!ctx.ok) return ctx.response;
-  const tourGate = await requireTourInWorkspace(supabase, ctx.tour_id, auth.workspaceId);
+  const tourGate = await requireTourInWorkspace(supabase, ctx.tour_id, member.workspaceId);
   if (tourGate) return tourGate;
 
   let body: {
@@ -116,6 +116,12 @@ export async function POST(
       : ctx.currency;
   const paid_at =
     typeof body.paid_at === 'string' && body.paid_at.trim() ? body.paid_at.trim() : null;
+  /* Tour access (Nov 2026): filing a receipt against a line is Receipts work;
+     any other spend is Budget work. Admins / managers pass on role. */
+  const filesReceipt = typeof body.receipt_id === 'string' && body.receipt_id.trim() !== '';
+  const auth = await requireWrite(supabase, { area: filesReceipt ? 'receipts' : 'budget', tourId: ctx.tour_id });
+  if ('error' in auth) return auth.error;
+
   const receipt_id =
     typeof body.receipt_id === 'string' && body.receipt_id.trim()
       ? body.receipt_id.trim()
@@ -150,7 +156,10 @@ export async function POST(
   /* §A3 — keep the line's actual_cost in lockstep with the new
      sum unless the user has a manual override in place. */
   // `|| 1`: a £0 transaction still changes the count (and may clear an override).
-  const sync_warning = await syncActualCostSafe(supabase, lineItemId, Number(data.amount || 0) || 1);
+  /* actual_cost is a server-kept cache on the line; a Member can't write budget
+     lines (293), so the recompute runs as the server for this line only. */
+  const syncClient = auth.membership.role === 'readonly' ? createServiceSupabaseClient() : supabase;
+  const sync_warning = await syncActualCostSafe(syncClient, lineItemId, Number(data.amount || 0) || 1);
   return NextResponse.json({ transaction: data, ...(sync_warning ? { sync_warning } : {}) }, { status: 201 });
 }
 

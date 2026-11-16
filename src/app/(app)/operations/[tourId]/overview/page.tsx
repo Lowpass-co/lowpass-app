@@ -7,7 +7,8 @@ import { notFound, redirect } from 'next/navigation';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { loadTourOverview } from '@/server/tour/overview';
 import { TourOverview } from '@/components/tour-overview/TourOverview';
-import { getRequestVisibleResources } from '@/lib/server/requestContext';
+import { getRequestViewerAccess } from '@/lib/server/requestContext';
+import { viewerCan } from '@/lib/permissions/tourAccess';
 
 export const dynamic = 'force-dynamic';
 
@@ -21,15 +22,15 @@ export default async function TourOverviewPage({ params }: { params: Promise<{ t
 
   const { data: tour } = await supabase.from('tours').select('id, workspace_id').eq('id', tourId).maybeSingle();
   if (!tour) notFound();
-  // The rail's own access list: null = everything (admin / manager).
-  const visible = await getRequestVisibleResources();
-  const can = (id: string) => visible === null || visible.includes(id);
+  // The same access the rail uses (my_tour_access): parts the viewer can't
+  // open are neither read nor shown.
+  const access = await getRequestViewerAccess(tourId);
   const data = await loadTourOverview(supabase, tourId, (tour as { workspace_id: string }).workspace_id, {
-    advance: can('advance'),
-    budget: can('budget.line_items'),
-    receipts: can('budget.receipts'),
-    crew: can('operations.personnel'),
-    production: can('operations.riders'),
+    advance: viewerCan(access, 'advance'),
+    budget: viewerCan(access, 'budget'),
+    receipts: viewerCan(access, 'receipts'),
+    crew: viewerCan(access, 'logistics'),
+    production: viewerCan(access, 'production'),
   });
   if (!data) notFound();
   return <TourOverview facts={data.facts} />;
