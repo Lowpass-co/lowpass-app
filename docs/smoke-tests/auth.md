@@ -119,6 +119,40 @@ own secret checks (e.g. `CRON_SECRET`).
 
 **Last verified**:
 
+## Beta blockers (Nov 2026 — needs migration 291)
+
+#### AUTH-12 — Busy elsewhere stays private
+
+**Do**: From a second account in its own workspace, add a contact with the email of someone on one of your tours, then open a tour's Crew page there (the double-booking check runs).
+
+**Expect**: No clash shown from your workspace — the check only looks inside workspaces the viewer belongs to. In your own workspace, a real double-booking across your own tours still shows.
+
+**Last verified**:
+
+#### AUTH-13 — A profile can't be pointed at someone else's workspace
+
+**Do**: Switch workspace with the switcher (should work). Then, as a test account, try to set your profile's workspace to one you're not in (Supabase API / devtools).
+
+**Expect**: The switch works; the forced change is refused ("Not a member of that workspace"). Removing someone from your workspace moves their profile to another workspace they're in (or none).
+
+**Last verified**:
+
+#### AUTH-14 — AI budget ceiling
+
+**Do**: As a workspace admin who isn't a Lowpass site admin: Settings › AI limits → set the monthly budget to $50. Then to $10.
+
+**Expect**: $50 is refused ("needs a Lowpass site admin"); $10 saves. As a site admin, $50 saves.
+
+**Last verified**:
+
+#### AUTH-15 — Shared venues are read-only for workspaces
+
+**Do**: As a workspace admin who isn't a site admin, open Venues → a venue.
+
+**Expect**: "Open", not "Edit"; fields read-only, no Save, a note that venue details are shared. Linked files still show. As a site admin: Edit + Save as before.
+
+**Last verified**:
+
 ## Known broken
 
 #### AUTH-04 — Login globe not yet deduped onto AuthShell

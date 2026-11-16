@@ -12,6 +12,7 @@ import { redirect } from 'next/navigation';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { VenueLibraryClient, type VenueLibraryRow } from '@/components/venues/VenueLibraryClient';
+import { getUserAndAdminStatus } from '@/lib/site-admin';
 
 export const dynamic = 'force-dynamic';
 
@@ -69,6 +70,8 @@ export default async function VenuesPage() {
     byId.set(c.id, existing);
   }
   const venues = Array.from(byId.values()).sort((a, b) => a.name.localeCompare(b.name));
+  // Shared-library edits are site-admin only (beta, Nov 2026) — the route enforces it; this hides the form.
+  const { isAdmin: isSiteAdmin } = await getUserAndAdminStatus();
 
   return (
     /* S-3b — chrome comes from the (workspace) layout's <ShellV3Mount>; this
@@ -79,7 +82,7 @@ export default async function VenuesPage() {
         subtitle="Your routing's venue library. Edits to a venue flow through to upcoming shows; past shows keep their snapshot."
       />
       <div className="mt-6">
-        <VenueLibraryClient venues={venues} />
+        <VenueLibraryClient venues={venues} canEdit={isSiteAdmin} />
       </div>
     </div>
   );

@@ -38,7 +38,7 @@ interface UpcomingShow {
   tourName: string;
 }
 
-export function VenueLibraryClient({ venues }: { venues: VenueLibraryRow[] }) {
+export function VenueLibraryClient({ venues, canEdit = false }: { venues: VenueLibraryRow[]; canEdit?: boolean }) {
   const [editing, setEditing] = useState<VenueLibraryRow | null>(null);
 
   if (venues.length === 0) {
@@ -107,8 +107,8 @@ export function VenueLibraryClient({ venues }: { venues: VenueLibraryRow[] }) {
                 cursor: 'pointer',
               }}
             >
-              <Pencil className="h-3.5 w-3.5" aria-hidden />
-              Edit
+              {canEdit ? <Pencil className="h-3.5 w-3.5" aria-hidden /> : null}
+              {canEdit ? 'Edit' : 'Open'}
             </button>
           </li>
         ))}
@@ -118,6 +118,7 @@ export function VenueLibraryClient({ venues }: { venues: VenueLibraryRow[] }) {
         <VenueEditSlideOver
           key={editing.id}
           venue={editing}
+          canEdit={canEdit}
           onClose={() => setEditing(null)}
         />
       ) : null}
@@ -125,7 +126,7 @@ export function VenueLibraryClient({ venues }: { venues: VenueLibraryRow[] }) {
   );
 }
 
-function VenueEditSlideOver({ venue, onClose }: { venue: VenueLibraryRow; onClose: () => void }) {
+function VenueEditSlideOver({ venue, canEdit, onClose }: { venue: VenueLibraryRow; canEdit: boolean; onClose: () => void }) {
   const router = useRouter();
   const { showToast } = useToast();
   const [name, setName] = useState(venue.name);
@@ -190,7 +191,7 @@ function VenueEditSlideOver({ venue, onClose }: { venue: VenueLibraryRow; onClos
     <SlideOver
       open
       onClose={onClose}
-      title="Edit venue"
+      title={canEdit ? 'Edit venue' : venue.name}
       footer={
         <div className="flex justify-end gap-2">
           <button
@@ -199,9 +200,9 @@ function VenueEditSlideOver({ venue, onClose }: { venue: VenueLibraryRow; onClos
             className="btn-transition rounded-md px-3 py-1.5"
             style={{ fontSize: 'var(--lp-text-sm)', color: 'var(--lp-text-secondary)', border: '1px solid var(--lp-border)', background: 'transparent', cursor: 'pointer' }}
           >
-            Cancel
+            {canEdit ? 'Cancel' : 'Close'}
           </button>
-          <button
+          {canEdit ? <button
             type="button"
             onClick={() => void save()}
             disabled={saving}
@@ -209,23 +210,28 @@ function VenueEditSlideOver({ venue, onClose }: { venue: VenueLibraryRow; onClos
             style={{ fontSize: 'var(--lp-text-sm)', fontWeight: 'var(--lp-weight-semibold)', color: 'var(--lp-text-inverse)', background: 'var(--color-lp-orange)', border: 0, cursor: 'pointer', opacity: saving ? 0.6 : 1 }}
           >
             {saving ? 'Saving…' : 'Save'}
-          </button>
+          </button> : null}
         </div>
       }
     >
       <div className="flex flex-col gap-4">
+        {canEdit ? null : (
+          <p style={{ margin: 0, fontSize: 'var(--lp-text-sm)', color: 'var(--lp-text-secondary)' }}>
+            Venue details are shared across Lowpass, so only a Lowpass admin can change them. Spotted something wrong? Report a bug and we’ll fix it.
+          </p>
+        )}
         <Field label="Name">
-          <input value={name} onChange={(e) => setName(e.target.value)} style={inputStyle} />
+          <input value={name} onChange={(e) => setName(e.target.value)} readOnly={!canEdit} style={inputStyle} />
         </Field>
         <Field label="Address">
-          <input value={address} onChange={(e) => setAddress(e.target.value)} style={inputStyle} />
+          <input value={address} onChange={(e) => setAddress(e.target.value)} readOnly={!canEdit} style={inputStyle} />
         </Field>
         <div className="flex gap-3">
           <Field label="City">
-            <input value={city} onChange={(e) => setCity(e.target.value)} style={inputStyle} />
+            <input value={city} onChange={(e) => setCity(e.target.value)} readOnly={!canEdit} style={inputStyle} />
           </Field>
           <Field label="Country">
-            <input value={country} onChange={(e) => setCountry(e.target.value)} style={inputStyle} />
+            <input value={country} onChange={(e) => setCountry(e.target.value)} readOnly={!canEdit} style={inputStyle} />
           </Field>
         </div>
         <Field label="Capacity">
@@ -233,12 +239,13 @@ function VenueEditSlideOver({ venue, onClose }: { venue: VenueLibraryRow; onClos
             value={capacity}
             onChange={(e) => setCapacity(e.target.value.replace(/[^0-9]/g, ''))}
             inputMode="numeric"
+            readOnly={!canEdit}
             style={inputStyle}
           />
         </Field>
 
         {/* Propagation notice */}
-        <div
+        {canEdit ? <div
           className="rounded-lg border p-3"
           style={{
             borderColor: 'var(--color-lp-warning)',
@@ -263,7 +270,7 @@ function VenueEditSlideOver({ venue, onClose }: { venue: VenueLibraryRow; onClos
           <div className="mt-2" style={{ fontSize: 'var(--lp-text-2xs)', color: 'var(--lp-text-tertiary)' }}>
             Past and frozen shows keep their saved venue snapshot and are not changed.
           </div>
-        </div>
+        </div> : null}
 
         {/* Files linked to this venue — they show on every one of your shows here. */}
         <div style={{ borderTop: '1px solid var(--lp-border)', paddingTop: 'var(--lp-space-4)' }}>

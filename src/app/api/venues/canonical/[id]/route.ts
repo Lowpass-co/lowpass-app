@@ -83,6 +83,18 @@ export async function PATCH(
   const auth = await requireWrite(supabase);
   if ('error' in auth) return auth.error;
 
+  /* Beta (Nov 2026, Adam): every tester is the admin of their own workspace,
+     so "admin/manager of any workspace" let any tester rewrite a venue that
+     YOUR tours, advance pages and driver directions read. Shared-library
+     edits are site-admin only until per-workspace corrections exist. */
+  const { data: me } = await supabase.from('profiles').select('is_site_admin').eq('id', auth.user.id).maybeSingle();
+  if (!(me as { is_site_admin?: boolean } | null)?.is_site_admin) {
+    return NextResponse.json(
+      { error: 'Venue details are shared across Lowpass — only a Lowpass admin can change them.' },
+      { status: 403 },
+    );
+  }
+
   const { id } = await params;
 
   let body: {
@@ -121,8 +133,9 @@ export async function PATCH(
      then the guard above is the ONLY thing between a caller and this table,
      which is exactly why it is the first line of the handler.
 
-     STILL TRUE AFTER THIS FIX, and Adam's call: any workspace's admin/manager
-     can still correct any venue in the shared directory. That is the venue
+     SUPERSEDED (Nov 2026): edits are now site-admin only — see the guard
+     above. The original note follows: any workspace's admin/manager
+     could correct any venue in the shared directory. That is the venue
      library working as designed — the edit surface is the global /venues list,
      not a routing row — so scoping it to "venues my workspace books" would
      remove a feature rather than close a hole. The hole was that ROLE was

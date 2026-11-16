@@ -425,6 +425,14 @@ recreate a `_legacy/` tree: delete dead code instead of parking it.
   `profiles_owner_membership` on profiles INSERT — owners only, never on
   UPDATE). `handle_new_user` (002) never added the membership, and since 086
   reading a workspace needs one, so new sign-ups couldn't open their own.
+- **`profiles.workspace_id` is always a workspace the user belongs to**
+  (migration 291: trigger refuses anything else; removing a member moves
+  their profile on). Code that reads the profile's workspace relies on it.
+- **Beta guards (291):** the crew double-booking check only looks in the
+  caller's own workspaces (busy-elsewhere is private — Adam); a workspace
+  admin can't raise their AI budget above $25 (site admin can); shared-venue
+  edits are site-admin only (route + read-only panel). Permissions plan:
+  `docs/handover/PERMISSIONS_DESIGN_2026_11.md`.
 - **Signed in but no workspace → `<NoWorkspace>`, never `redirect('/login')`**
   (`(workspace)/layout.tsx`): the middleware bounces a signed-in user on
   `/login` back to `/artists`, so that redirect looped forever.
