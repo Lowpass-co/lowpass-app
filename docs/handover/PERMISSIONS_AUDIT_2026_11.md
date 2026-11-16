@@ -69,15 +69,57 @@ reads HOLE, every fix reads OK.
 - Server-side Google calls rate-limited per user and workspace (env-set, not
   editable by testers). Invites are bound to the invited email.
 
+
+## Live results (probe run 2026-11-16)
+
+| Check | Live | Meaning |
+|---|---|---|
+| Profile self-update can change `workspace_id` | **HOLE** | A2 confirmed. |
+| `rider-assets` cross-workspace | OK — **no policies at all** | A1 is NOT live: with no rules, nobody can use the bucket (0 objects). Rider image upload from the browser is simply broken — a dead feature, not a leak. When it's fixed, add workspace-folder rules (uploads already use `{workspace_id}/…`). |
+| `advance-files` | HOLE (public) | Public but empty (0 objects) and unused by the app. Make it private or delete it. |
+| `tour-files` delete without role | **HOLE** | B4 confirmed. |
+| Money tables | OK (all nine) | Migration 264 is live: every policy uses the grant (commissions delete = admin; settings read = by design). |
+| AI index (`rag_chunks`) | **HOLE**, ~90 rows | B3 confirmed. Split: `SELECT source_kind, count(*) FROM rag_chunks GROUP BY 1;` |
+| Crew passports | **HOLE**, 1 person | B2 confirmed. |
+| AI limits writable by workspace admin | **HOLE** | A3 confirmed. |
+| Public tables without RLS | none | Good. |
+| Browser-callable privileged functions | 35 | Reviewed below — two problems (A0, A7). |
+
+### A0 — NEW, the worst for the beta: the crew-clash check reads other workspaces
+
+`check_personnel_conflicts_by_email_batch` (084, browser-callable live) answers
+"is this person booked elsewhere?" by searching EVERY workspace. Its only
+filter is that the caller has a contact with that email in one of their own
+workspaces — and any member can add a contact. So any tester can type in an
+email and get back every other workspace's workspace name, tour name, role,
+dates and status for that person. `check_personnel_conflicts_batch` (083)
+does the same by global person id. A design call: either limit results to the
+caller's own workspaces, or tell them only "busy on these dates elsewhere"
+with no workspace, tour or role.
+
+### A7 — `list_site_admins()` has no caller check
+
+Any signed-in user gets the name and email of every site admin. Low on its
+own; one line to fix (`is_site_admin()` guard, as the other admin functions have).
+
+### Functions checked and sound
+`list_all_users`, `list_all_workspaces`, `list_user_memberships` (site admin
+only); `list_workspace_members`, `update_workspace_member` (admin of that
+workspace); `promote_site_admin_by_email`, `demote_site_admin` (site admin);
+budget version approve / amend / unlock / roll back (own workspace + approver);
+`accept_workspace_invite` (token + email match); intake lookups (token).
+Trigger functions in the list cannot be called directly.
+
 ## Recommended order
 
 **Before the beta**
+0. A0 — crew-clash check limited to the caller's own workspaces (or dates-only elsewhere).
 1. A2 — a trigger on `profiles`: refuse a `workspace_id` change unless the user
    is a member of the target (workspace switch and invite-accept already check
    membership first, so they keep working). Switch `requireUserAndWorkspace` and
    `guardGoogleCall` to the membership-checked workspace.
-2. A1 — `rider-assets` rules scoped to the workspace folder (uploads already use
-   `{workspace_id}/…`, so no files move). Check older cover-logo paths first.
+2. A7 — guard `list_site_admins()`; make `advance-files` private. (A1 is not
+   live — `rider-assets` has no rules, so uploads there are broken, not open.)
 3. A3 — workspace admins can lower their caps but not raise them past a ceiling
    only a site admin can lift.
 4. A4 — shared-venue edits: site admin only during the beta (or per-workspace overrides — a design call).
