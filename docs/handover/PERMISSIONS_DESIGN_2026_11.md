@@ -35,7 +35,8 @@ tours"): a **preset**, with per-area overrides.
 | Logistics | crew list, hotels & rooming, travel |
 | Files | tour Files (and files linked from elsewhere) |
 | Schedule | dates & routing, venues on the tour |
-| Budget | budget lines, receipts, sections, versions |
+| Budget | budget lines, sections, versions |
+| Receipts | receipts and their files (separate, so receipts can be done without seeing the budget) |
 | Payroll | payroll, rate cards |
 | Income | deals, income, settlements, commissions |
 
@@ -44,8 +45,8 @@ never members, settings or other tours.
 
 Presets (editable later): **Crew** (Schedule, Advance, Production, Parking,
 Files: view) · **Production** (those: edit; Logistics: view) · **Accounts**
-(Budget + Payroll + Income: edit) · **Tour manager** (everything: edit).
-The production assistant = Production + Budget: edit.
+(Budget + Receipts + Payroll + Income: edit) · **Tour manager** (everything: edit).
+The production assistant = Production + Receipts: edit.
 
 **3. Always your own** — whatever the areas say, a member sees their own
 crew record, flights, room and pay lines (via their login ↔ crew link).
@@ -71,8 +72,8 @@ you chose. Same flow as Daysheets. Public sign-up off.
   tour via the show day; budget notes, rider rows via a parent) get a
   `tour_id` column kept in step by trigger, so every rule is the same simple,
   indexed check — no joins inside rules.
-- **Artist-level things** (artist riders, artist files): visible to members
-  who can see a tour of that artist, for that area.
+- **Artist-level things** (artist riders, artist files): admin / manager only —
+  members see tour items only (Adam, 16 Nov).
 - **File storage**: the path `{workspace}/{tour|artist}/{id}/…` is checked by
   the same function — the file and its row can never disagree.
 - **Server routes** that use the service key call the same check explicitly
@@ -115,7 +116,14 @@ so this is the cheapest it will ever be to do.
 
 Every migration idempotent, assert-before-drop (as 264), with a down block.
 
-## Decisions for Adam
+## Decisions (Adam, 16 Nov 2026)
+
+- Tour access: **explicit** — tours + preset chosen per person.
+- Areas: the nine above with **Receipts split from Budget** (ten).
+- Artist library: **tour items only** for members.
+- Shared venues during the beta: **site admin edits only**.
+
+## Questions as asked
 
 1. **Tour access: explicit or automatic?** Recommended **explicit** — you
    choose tours + preset when inviting. Automatic ("on the crew list = can
