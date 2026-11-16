@@ -15,6 +15,7 @@
 
 import { NextResponse } from 'next/server';
 import { requireWrite } from '@/lib/auth/workspace-check';
+import { parseAccessRows } from '@/lib/permissions/accessRows';
 import { randomBytes } from 'node:crypto';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { validateGrant, type GrantInput } from '@/lib/permissions/resources';
@@ -64,6 +65,8 @@ export async function POST(request: Request) {
 
   let body: {
     email?: unknown;
+    access?: unknown;
+    personnel_id?: unknown;
     role?: unknown;
     tags?: unknown;
     grants?: unknown;
@@ -112,6 +115,28 @@ export async function POST(request: Request) {
     permission: g.permission,
   }));
 
+  /* Tour access (Nov 2026): Members get areas on tours, and can be linked to
+     their crew record so their own rows (crew, room, pay) are theirs. */
+  const access = parseAccessRows(body.access);
+  if (typeof access === 'string') return NextResponse.json({ error: access }, { status: 400 });
+  let personnelId: string | null = null;
+  if (body.personnel_id != null) {
+    if (typeof body.personnel_id !== 'string') {
+      return NextResponse.json({ error: 'personnel_id must be a string' }, { status: 400 });
+    }
+    const { data: person } = await supabase
+      .from('personnel')
+      .select('id, user_id')
+      .eq('id', body.personnel_id)
+      .eq('workspace_id', workspaceId)
+      .maybeSingle();
+    if (!person) return NextResponse.json({ error: 'Crew record not found' }, { status: 400 });
+    if ((person as { user_id: string | null }).user_id) {
+      return NextResponse.json({ error: 'That crew record already has a login' }, { status: 409 });
+    }
+    personnelId = body.personnel_id;
+  }
+
   const token = generateToken();
 
   // workspace_invites RLS is admin-only; the INSERT itself is
@@ -126,6 +151,8 @@ export async function POST(request: Request) {
       invited_role: body.role,
       initial_tags: tags,
       initial_grants: grants,
+      ...(personnelId ? { personnel_id: personnelId } : {}),
+      ...(body.role === 'readonly' && access.length ? { initial_access: access } : {}),
       token,
       invited_by_user_id: user.id,
     })
