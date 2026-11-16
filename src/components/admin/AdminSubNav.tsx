@@ -14,11 +14,12 @@ import { useId } from 'react';
 import { cn } from '@/lib/utils';
 
 interface AdminSubNavProps {
-  activeId: 'users' | 'workspaces' | 'audit';
+  activeId: 'users' | 'workspaces' | 'audit' | 'beta-codes';
 }
 
-const TABS: ReadonlyArray<{ id: 'users' | 'workspaces' | 'audit'; label: string; href: string }> = [
+const TABS: ReadonlyArray<{ id: 'users' | 'workspaces' | 'audit' | 'beta-codes'; label: string; href: string }> = [
   { id: 'users', label: 'Users', href: '/admin/users' },
+  { id: 'beta-codes', label: 'Beta codes', href: '/admin/beta-codes' },
   { id: 'workspaces', label: 'Workspaces', href: '/admin/workspaces' },
   { id: 'audit', label: 'Audit log', href: '/admin/audit' },
 ];

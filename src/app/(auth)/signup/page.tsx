@@ -41,39 +41,48 @@ function SignupPageInner() {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState(false);
+  const [success] = useState(false); // the old "check your email" step; accounts are now made confirmed
+
+  /* Nov 2026 — sign-up is by beta code (or by an invite link) only; public
+     sign-up is off in Supabase. The account is made server-side
+     (/auth/beta-signup), already confirmed, then we sign in here. */
+  const inviteToken = (() => {
+    if (!nextPath?.startsWith('/invite/accept')) return null;
+    try {
+      return new URL(nextPath, 'http://x').searchParams.get('token');
+    } catch {
+      return null;
+    }
+  })();
+  const [code, setCode] = useState('');
 
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError(null);
-
-    /* Sprint 10 §5.1 — thread `next` through the email-
-       confirmation callback so post-confirm redirect lands on
-       the deep-link (e.g. /invite/accept?token=...). */
-    const callbackParams = new URLSearchParams();
-    if (nextPath) callbackParams.set('next', nextPath);
-    const callbackUrl = `${window.location.origin}/auth/callback${callbackParams.toString() ? `?${callbackParams.toString()}` : ''}`;
-
-    const { error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        data: {
-          name,
-        },
-        emailRedirectTo: callbackUrl,
-      },
-    });
-
-    if (error) {
-      setError(error.message);
+    try {
+      const res = await fetch('/auth/beta-signup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(inviteToken ? { invite: inviteToken, password, name } : { code, email, password, name }),
+      });
+      const body = (await res.json().catch(() => null)) as { email?: string; error?: string } | null;
+      if (!res.ok || !body?.email) {
+        setError(body?.error ?? `Sign-up failed (${res.status})`);
+        setLoading(false);
+        return;
+      }
+      const { error: signInError } = await supabase.auth.signInWithPassword({ email: body.email, password });
+      if (signInError) {
+        setError(signInError.message);
+        setLoading(false);
+        return;
+      }
+      window.location.href = nextPath ?? '/artists';
+    } catch {
+      setError('Network error — try again.');
       setLoading(false);
-      return;
     }
-
-    setSuccess(true);
-    setLoading(false);
   };
 
   if (success) {
@@ -120,16 +129,34 @@ function SignupPageInner() {
           autoComplete="name"
           required
         />
-        <AuthField
-          id="email"
-          label="Email"
-          type="email"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          placeholder="you@example.com"
-          autoComplete="email"
-          required
-        />
+        {inviteToken ? (
+          <p className="text-[13px]" style={{ color: 'var(--lp-text-tertiary)' }}>
+            Your account will use the email your invite was sent to.
+          </p>
+        ) : (
+          <>
+            <AuthField
+              id="email"
+              label="Email"
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="you@example.com"
+              autoComplete="email"
+              required
+            />
+            <AuthField
+              id="code"
+              label="Beta code"
+              type="text"
+              value={code}
+              onChange={(e) => setCode(e.target.value)}
+              placeholder="XXXX-XXXX-XXXX"
+              autoComplete="off"
+              required
+            />
+          </>
+        )}
         <div className="space-y-1.5">
           <AuthField
             id="password"

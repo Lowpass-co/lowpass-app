@@ -138,6 +138,7 @@ const UNGUARDED: Record<string, string> = {
 
   /* ── P0-C6 — 13 remaining (17 converted): 8 site-admin, 3 self-scoped, 1 read-only, 1 open question ── */
   '/admin/notifications/test-send': /* POST */ 'PERMANENT — site-admin. requireSiteAdmin.',
+  '/admin/beta-codes': /* POST, PATCH */ 'PERMANENT — site-admin. Gated by requireSiteAdmin (lib/supabase-admin) and beta_codes RLS (is_site_admin, migration 292); beta codes belong to no workspace, so workspace role does not apply.',
   '/admin/users/[id]': /* DELETE */ 'PERMANENT — site-admin. Gated by requireSiteAdmin (lib/supabase-admin), a STRONGER and orthogonal axis to workspace role; requireWrite would be weaker, not additive.',
   '/admin/users/[id]/memberships/[memberId]': /* DELETE */ 'PERMANENT — site-admin. requireSiteAdmin.',
   '/admin/users/[id]/reset-password': /* POST */ 'PERMANENT — site-admin. requireSiteAdmin.',
