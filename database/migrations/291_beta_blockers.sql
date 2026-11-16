@@ -28,13 +28,22 @@
 --          and unused by the app. Now private, rules removed.
 --
 -- IDEMPOTENT: CREATE OR REPLACE / DROP … IF EXISTS / guarded UPDATE.
+-- ONE TRANSACTION (BEGIN … COMMIT): all of it applies, or none of it.
 -- The last statement is READ-ONLY and reports each fix as OK / CHECK.
 -- ============================================================================
 
 
+BEGIN;
+
 -- ── 1. Crew clash: own workspaces only ──────────────────────────────────────
--- Same signatures and columns as 084 (the app's callers are unchanged); the
--- one change is the final workspace filter on the CONFLICTING tour.
+-- Same arguments and columns as 084 (what the app reads, incl. conflict_role);
+-- the one change is the final workspace filter on the CONFLICTING tour.
+-- DROP first: live still had the 083 shape (no conflict_role — 084 was never
+-- applied there), and CREATE OR REPLACE cannot change a function's columns
+-- (42P13). The whole migration is one transaction, so a failure part-way
+-- leaves the functions as they were.
+DROP FUNCTION IF EXISTS public.check_personnel_conflicts_batch(UUID[], DATE, DATE, UUID);
+DROP FUNCTION IF EXISTS public.check_personnel_conflicts_by_email_batch(TEXT[], DATE, DATE, UUID);
 
 CREATE OR REPLACE FUNCTION public.check_personnel_conflicts_batch(
   p_canonical_person_ids UUID[],
@@ -311,6 +320,8 @@ DROP POLICY IF EXISTS "advance_files_select" ON storage.objects;
 DROP POLICY IF EXISTS "advance_files_insert" ON storage.objects;
 DROP POLICY IF EXISTS "advance_files_delete" ON storage.objects;
 DROP POLICY IF EXISTS "advance_files_update" ON storage.objects;
+
+COMMIT;
 
 
 -- ── READ-ONLY check ─────────────────────────────────────────────────────────
