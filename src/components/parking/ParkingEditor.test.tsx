@@ -159,6 +159,38 @@ describe('the panel: Add · Drawings · Share (Nov 2026)', () => {
   });
 });
 
+describe('right-click on the plan (Nov 2026)', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+  it('the empty map: our menu, not the browser’s — add a vehicle right there', async () => {
+    mount();
+    const map = screen.getByRole('application', { name: /Parking map for/ });
+    const ev = new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 10, clientY: 10 });
+    await act(async () => {
+      map.dispatchEvent(ev);
+    });
+    expect(ev.defaultPrevented).toBe(true);
+    expect(screen.getByRole('menu')).toBeTruthy();
+    fireEvent.click(screen.getByRole('menuitem', { name: /Sprinter/ }));
+    expect(screen.queryByRole('menu')).toBeNull();
+    await act(async () => vi.advanceTimersByTime(1000));
+    const put = calls.filter((c) => c.method === 'PUT').at(-1)!.body as { map: unknown };
+    expect(parseMapBody(put.map).items.map((i) => i.kind === 'vehicle' && i.type)).toEqual(['sprinter']);
+  });
+  it('Flatten 3D is a draw tool on the Add tab', () => {
+    mount();
+    fireEvent.click(screen.getByRole('button', { name: /Flatten 3D/ }));
+    expect(screen.getByText(/Draw round what to flatten/)).toBeTruthy();
+  });
+  it('every marker name reads in full (no truncated tiles)', () => {
+    mount();
+    for (const name of ['Load-in door', 'Shore power', 'Gate / entrance', 'Height limit', 'Dump / waste']) {
+      expect(screen.getByRole('button', { name })).toBeTruthy();
+    }
+  });
+});
+
 describe('PDF pages', () => {
   beforeEach(() => {
     vi.useFakeTimers();

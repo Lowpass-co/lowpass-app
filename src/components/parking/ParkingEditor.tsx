@@ -18,8 +18,8 @@
    ============================================ */
 
 import Link from 'next/link';
-import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
-import { ArrowLeft, ChevronDown, ChevronUp, Compass, Copy, Download, Keyboard, Minus, Navigation, Plus, Redo2, RotateCcw, RotateCw, Route as RouteIcon, Ruler, Pentagon, Trash2, Undo2, X } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent } from 'react';
+import { ArrowLeft, ChevronDown, ChevronUp, Compass, Copy, Download, Keyboard, Layers, Minus, Navigation, Plus, Redo2, RotateCcw, RotateCw, Route as RouteIcon, Ruler, Pentagon, Trash2, Undo2, X } from 'lucide-react';
 import { useToast } from '@/components/ui/Toast';
 import { SaveStatus } from '@/components/forms/SaveStatus';
 import type { SaveStatus as SaveStatusKind } from '@/lib/forms/useAutoSave';
@@ -51,6 +51,7 @@ import type { DrawingFileRef } from './drawingRaster';
 import { addMarker, addVehicle, duplicateItem, duplicateItems, finishDraft, itemsInBox, moveItems, record, redo, removeItems, replaceItem, toggleSelection, turnItems, undo, type History } from '@/lib/parking/edit';
 import type { ParkingShow, SavedParkingMap } from '@/server/parking/maps';
 import { ParkingScene, MARKER_ICON, type Draft } from './ParkingScene';
+import { MapContextMenu } from './MapContextMenu';
 import { LIVE_PALETTE, roleColour, areaColour } from './palette';
 import { tilesKey } from './googleTiles';
 import { exportParkingPdf } from './exportPdf';
@@ -64,7 +65,7 @@ import './parking.css';
 type Tool =
   | { kind: 'select' }
   /** `insideFor`: outlining an inside drawing's inside area, not adding an item. */
-  | { kind: 'draw'; shape: 'route' | 'area' | 'measure'; insideFor?: string }
+  | { kind: 'draw'; shape: 'route' | 'area' | 'measure'; insideFor?: string; flat3d?: boolean }
   /** Setting up a drawing: the next click on the map is a pin point. */
   | { kind: 'pick'; prompt: string };
 
@@ -318,6 +319,12 @@ export function ParkingEditor({ show, tourName, initial, canEdit }: ParkingEdito
   };
 
   const onItemDown = (e: ReactPointerEvent, item: ParkingItem) => {
+    if (e.pointerType === 'mouse' && e.button === 2) {
+      // Right-click: pick it (keep a selection it's part of) for the menu; no drag.
+      rightClicked.current = item.id;
+      if (!selectedRef.current.includes(item.id)) setSelected([item.id]);
+      return;
+    }
     if (!canEdit || tool.kind !== 'select') return;
     const cur = selectedRef.current;
     if (e.metaKey || e.ctrlKey || e.shiftKey) {
@@ -454,9 +461,9 @@ export function ParkingEditor({ show, tourName, initial, canEdit }: ParkingEdito
   }, [anchor, mode]);
 
   /* ── Drawing ──────────────────────────────────────────── */
-  const startDraw = (shape: 'route' | 'area' | 'measure') => {
+  const startDraw = (shape: 'route' | 'area' | 'measure', flat3d = false) => {
     setSelected([]);
-    setTool({ kind: 'draw', shape });
+    setTool({ kind: 'draw', shape, ...(flat3d ? { flat3d: true } : {}) });
     setDraft({ kind: shape, points: [], cursor: null });
   };
   const cancelDraw = () => {
@@ -497,9 +504,11 @@ export function ParkingEditor({ show, tourName, initial, canEdit }: ParkingEdito
         setDraft(null);
         return;
       }
-      const r = finishDraft(itemsRef.current, tool.shape, points ?? draft.points, areaType);
+      const r = finishDraft(itemsRef.current, tool.shape, points ?? draft.points, tool.flat3d ? 'other' : areaType);
       if (r) {
-        commit(atLevel(r.items, r.id));
+        // "Flatten 3D" draws an area that is Flat in 3D from the start.
+        const made = tool.flat3d ? r.items.map((i) => (i.id === r.id && i.kind === 'area' ? { ...i, flat3d: true, label: i.label || 'Flat in 3D' } : i)) : r.items;
+        commit(atLevel(made, r.id));
         setSelected([r.id]);
       } else if ((points ?? draft.points).length) {
         showToast(tool.shape === 'area' ? 'An area needs at least three points' : 'Needs at least two points', 'error');
@@ -518,14 +527,14 @@ export function ParkingEditor({ show, tourName, initial, canEdit }: ParkingEdito
 
   /* ── Adding ───────────────────────────────────────────── */
   const centre = (): Pt => ({ x: viewRef.current.cx, y: viewRef.current.cy });
-  const placeVehicle = (t: VehicleType) => {
-    const r = addVehicle(itemsRef.current, t, freeSpot(itemsRef.current, centre(), viewRef.current, 5), viewRef.current.rotation);
+  const placeVehicle = (t: VehicleType, at?: Pt) => {
+    const r = addVehicle(itemsRef.current, t, at ?? freeSpot(itemsRef.current, centre(), viewRef.current, 5), viewRef.current.rotation);
     commit(atLevel(r.items, r.id));
     setSelected([r.id]);
     cancelDraw();
   };
-  const placeMarker = (t: MarkerType) => {
-    const r = addMarker(itemsRef.current, t, freeSpot(itemsRef.current, centre(), viewRef.current));
+  const placeMarker = (t: MarkerType, at?: Pt) => {
+    const r = addMarker(itemsRef.current, t, at ?? freeSpot(itemsRef.current, centre(), viewRef.current));
     commit(atLevel(r.items, r.id));
     setSelected([r.id]);
     cancelDraw();
@@ -645,6 +654,36 @@ export function ParkingEditor({ show, tourName, initial, canEdit }: ParkingEdito
     },
     [sel, selIds, commit],
   );
+  /** Duplicate what's selected: one item parks alongside (a vehicle: its
+   *  width + 1 m to its right), several as a block beside the block. */
+  const duplicateSelected = () => {
+    if (selIds.length > 1) return duplicateGroup();
+    const one = itemsRef.current.find((i) => i.id === selIds[0]);
+    if (!one) return;
+    const h = one.kind === 'vehicle' ? (one.heading * Math.PI) / 180 : 0;
+    const gap = one.kind === 'vehicle' ? one.width + 1 : 5;
+    const r = duplicateItem(itemsRef.current, one.id, { x: Math.cos(h) * gap, y: -Math.sin(h) * gap });
+    if (r) {
+      commit(r.items);
+      setSelected([r.id]);
+    }
+  };
+  /** Turn by 90° etc. — a single non-vehicle doesn't turn (areas/routes keep their shape). */
+  const turnAny = (by: number) => {
+    if (selIds.length > 1 || sel?.kind === 'vehicle') turnSelected(by);
+  };
+  /* ── Right-click menu (Nov 2026, Adam) ───────────────── */
+  const [menu, setMenu] = useState<{ x: number; y: number; at: Pt } | null>(null);
+  const rightClicked = useRef<string | null>(null);
+  const closeMenu = useCallback(() => setMenu(null), []);
+  const onMapContextMenu = (e: ReactMouseEvent<HTMLDivElement>) => {
+    e.preventDefault(); // never the browser's menu over the map (plan or 3D)
+    if (mode !== 'plan' || tool.kind !== 'select') return;
+    const hit = rightClicked.current;
+    rightClicked.current = null;
+    if (!hit && selectedRef.current.length) setSelected([]);
+    setMenu({ ...local(e), at: ground(e) });
+  };
   const duplicateGroup = () => {
     // The copies park beside the originals: the group's width across the screen + 2 m, to the right.
     const r = (viewRef.current.rotation * Math.PI) / 180;
@@ -879,16 +918,7 @@ export function ParkingEditor({ show, tourName, initial, canEdit }: ParkingEdito
                 onFocus={onFieldFocus}
                 onBlur={onFieldBlur}
                 onDelete={deleteSelected}
-                onDuplicate={() => {
-                  // A copy parks alongside: one vehicle width + 1 m to its right.
-                  const h = sel.kind === 'vehicle' ? (sel.heading * Math.PI) / 180 : 0;
-                  const gap = sel.kind === 'vehicle' ? sel.width + 1 : 5;
-                  const r = duplicateItem(itemsRef.current, sel.id, { x: Math.cos(h) * gap, y: -Math.sin(h) * gap });
-                  if (r) {
-                    commit(r.items);
-                    setSelected([r.id]);
-                  }
-                }}
+                onDuplicate={duplicateSelected}
               />
             ) : (
               <GroupPanel
@@ -944,12 +974,13 @@ export function ParkingEditor({ show, tourName, initial, canEdit }: ParkingEdito
 
                 <section className="pk-sec">
                   <h3>Markers</h3>
-                  <div className="pk-grid4">
+                  {/* Two columns, icon beside the name: every label reads in full (Adam). */}
+                  <div className="pk-grid2">
                     {MARKERS.map((m) => {
                       const Icon = MARKER_ICON[m.type];
                       return (
-                        <button key={m.type} type="button" className="pk-tile pk-tile-icon" onClick={() => placeMarker(m.type)} title={m.label}>
-                          <Icon size={16} aria-hidden />
+                        <button key={m.type} type="button" className="pk-tile pk-tile-row" onClick={() => placeMarker(m.type)}>
+                          <Icon size={15} aria-hidden />
                           <span>{m.label}</span>
                         </button>
                       );
@@ -959,21 +990,34 @@ export function ParkingEditor({ show, tourName, initial, canEdit }: ParkingEdito
 
                 <section className="pk-sec">
                   <h3>Draw</h3>
-                  <div className="pk-grid3">
-                    <button type="button" className="pk-tile pk-tile-icon" aria-pressed={tool.kind === 'draw' && tool.shape === 'route' && !tool.insideFor} onClick={() => startDraw('route')}>
-                      <RouteIcon size={16} aria-hidden />
+                  <div className="pk-grid2">
+                    <button type="button" className="pk-tile pk-tile-row" aria-pressed={tool.kind === 'draw' && tool.shape === 'route' && !tool.insideFor} onClick={() => startDraw('route')}>
+                      <RouteIcon size={15} aria-hidden />
                       <span>Route</span>
                     </button>
-                    <button type="button" className="pk-tile pk-tile-icon" aria-pressed={tool.kind === 'draw' && tool.shape === 'area' && !tool.insideFor} onClick={() => startDraw('area')}>
-                      <Pentagon size={16} aria-hidden />
+                    <button type="button" className="pk-tile pk-tile-row" aria-pressed={tool.kind === 'draw' && tool.shape === 'area' && !tool.insideFor && !tool.flat3d} onClick={() => startDraw('area')}>
+                      <Pentagon size={15} aria-hidden />
                       <span>Area</span>
                     </button>
-                    <button type="button" className="pk-tile pk-tile-icon" aria-pressed={tool.kind === 'draw' && tool.shape === 'measure'} onClick={() => startDraw('measure')}>
-                      <Ruler size={16} aria-hidden />
+                    <button type="button" className="pk-tile pk-tile-row" aria-pressed={tool.kind === 'draw' && tool.shape === 'measure'} onClick={() => startDraw('measure')}>
+                      <Ruler size={15} aria-hidden />
                       <span>Measure</span>
                     </button>
+                    <button
+                      type="button"
+                      className="pk-tile pk-tile-row"
+                      aria-pressed={tool.kind === 'draw' && tool.shape === 'area' && !!tool.flat3d}
+                      onClick={() => startDraw('area', true)}
+                      title="Draw round parked vehicles or a roof in Google's 3D model: in 3D that area becomes the flat satellite photo"
+                    >
+                      <Layers size={15} aria-hidden />
+                      <span>Flatten 3D</span>
+                    </button>
                   </div>
-                  {tool.kind === 'draw' && tool.shape === 'area' && !tool.insideFor ? (
+                  {tool.kind === 'draw' && tool.flat3d ? (
+                    <span className="pk-muted">Draw round what to flatten — parked buses or a roof in Google&apos;s 3D model. In 3D it becomes the flat satellite photo.</span>
+                  ) : null}
+                  {tool.kind === 'draw' && tool.shape === 'area' && !tool.insideFor && !tool.flat3d ? (
                     <label className="pk-field">
                       New area is
                       <select className="adv-field" value={areaType} onChange={(e) => setAreaType(e.target.value as AreaType)}>
@@ -1107,6 +1151,7 @@ export function ParkingEditor({ show, tourName, initial, canEdit }: ParkingEdito
         onPointerUp={mode === 'plan' ? onMapUp : undefined}
         onPointerCancel={mode === 'plan' ? onMapUp : undefined}
         onDoubleClick={() => mode === 'plan' && tool.kind === 'draw' && finishDraw()}
+        onContextMenu={onMapContextMenu}
         role="application"
         aria-label={`Parking map for ${venueName}`}
       >
@@ -1187,6 +1232,35 @@ export function ParkingEditor({ show, tourName, initial, canEdit }: ParkingEdito
             ) : null}
             <button type="button" className="adv-btn adv-btn-sm" onClick={cancelDraw}>Cancel</button>
           </div>
+        ) : null}
+
+        {menu && mode === 'plan' ? (
+          <MapContextMenu
+            x={menu.x}
+            y={menu.y}
+            bounds={size}
+            items={items.filter((i) => selIds.includes(i.id))}
+            onClose={closeMenu}
+            actions={{
+              canEdit,
+              region,
+              addVehicle: (t) => placeVehicle(t, menu.at),
+              addMarker: (t) => placeMarker(t, menu.at),
+              duplicate: duplicateSelected,
+              turn: turnAny,
+              colour: (colour) => commit(itemsRef.current.map((i) => (i.kind === 'vehicle' && selIds.includes(i.id) ? ({ ...i, colour } as ParkingItem) : i))),
+              toggleFlat3d: () => {
+                if (sel?.kind === 'area') commit(replaceItem(itemsRef.current, { ...sel, flat3d: sel.flat3d ? undefined : true }));
+              },
+              remove: deleteSelected,
+              northUp: () => changeView({ ...viewRef.current, rotation: 0 }),
+              addPage: () => {
+                setPages(addPlanPage(pages, viewRef.current, sizeRef.current));
+                setTab('share');
+                showToast('This view is now a PDF page (Share tab)');
+              },
+            }}
+          />
         ) : null}
 
         {mode === 'plan' && tool.kind === 'pick' ? (
