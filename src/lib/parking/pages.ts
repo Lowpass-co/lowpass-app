@@ -11,8 +11,8 @@
      3d           a camera you added in 3D (null = the default view)
 
    Stored on the map's `view.pages` (jsonb, validated by parsePages). A map
-   that has never set pages gets defaultPages(): the plan + the 3D view —
-   what the PDF printed before pages existed.
+   that has never set pages gets defaultPages(): the plan, a street map and
+   the 3D view.
    ============================================ */
 
 import { PRINT_SCALES, printScaleFor, type Camera3d, type View } from './geo';
@@ -21,18 +21,24 @@ import { LIMITS, type ParkingItem } from './model';
 
 export type PrintScale = (typeof PRINT_SCALES)[number];
 
-/** `level`: a page for one level of a stacked venue (drawings.ts levelsOf); absent = every level. */
-export type PlanFitPage = { id: string; kind: 'plan'; title: string; fit: true; scale: 'auto' | PrintScale; level?: number };
-export type PlanFixedPage = { id: string; kind: 'plan'; title: string; fit: false; cx: number; cy: number; rotation: number; scale: PrintScale; level?: number };
+/** `level`: a page for one level of a stacked venue (drawings.ts levelsOf); absent = every level.
+ *  `base`: 'street' = Google's street map (roads, names) under the items instead of the satellite
+ *  photo — a clean map for getting there (Nov 2026, Adam); absent = the map's own look. */
+export type PlanFitPage = { id: string; kind: 'plan'; title: string; fit: true; scale: 'auto' | PrintScale; level?: number; base?: 'street' };
+export type PlanFixedPage = { id: string; kind: 'plan'; title: string; fit: false; cx: number; cy: number; rotation: number; scale: PrintScale; level?: number; base?: 'street' };
 export type Page3d = { id: string; kind: '3d'; title: string; cam: Camera3d | null };
 export type PdfPage = PlanFitPage | PlanFixedPage | Page3d;
 
 export const MAX_PAGES = LIMITS.pages;
 export const PAGE_TITLE_MAX = LIMITS.pageTitle;
 
+/** A street map wide enough to see the roads in: 1:2,500 (~490 m across the frame). */
+export const STREET_SCALE: PrintScale = 2500;
+
 export function defaultPages(cam3d?: Camera3d): PdfPage[] {
   return [
     { id: 'plan', kind: 'plan', title: 'Plan', fit: true, scale: 'auto' },
+    { id: 'street', kind: 'plan', title: 'Street map', fit: true, scale: STREET_SCALE, base: 'street' },
     { id: '3d', kind: '3d', title: '3D', cam: cam3d ?? null },
   ];
 }
@@ -67,6 +73,12 @@ export function addPlanPage(pages: PdfPage[], view: View, viewport: { w: number;
     ...(view.level != null ? { level: view.level } : {}),
   };
   return [...pages, page];
+}
+
+/** A street-map page framing the parking at 1:2,500. */
+export function addStreetPage(pages: PdfPage[]): PdfPage[] {
+  if (pages.length >= MAX_PAGES) return pages;
+  return [...pages, { id: newId(), kind: 'plan', title: nextTitle(pages, 'Street map'), fit: true, scale: STREET_SCALE, base: 'street' }];
 }
 
 export function add3dPage(pages: PdfPage[], cam: Camera3d): PdfPage[] {

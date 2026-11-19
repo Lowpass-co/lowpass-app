@@ -27,7 +27,10 @@ export interface TileSession {
   tileScale: number;
 }
 
-let session: Promise<TileSession> | null = null;
+/** One session per map type per page load: 'satellite' for the map, 'roadmap'
+ *  for the PDF's street-map pages (roads and their names, Nov 2026). */
+type MapType = 'satellite' | 'roadmap';
+const sessions = new Map<MapType, Promise<TileSession>>();
 
 function locale(): { language: string; region: string } {
   const lang = (typeof navigator !== 'undefined' && navigator.language) || 'en-GB';
@@ -35,17 +38,18 @@ function locale(): { language: string; region: string } {
   return { language: lang, region };
 }
 
-/** One session per page load, renewed a day before Google's expiry. */
-export function getTileSession(): Promise<TileSession> {
+/** One session per page load (per map type), renewed a day before Google's expiry. */
+export function getTileSession(mapType: MapType = 'satellite'): Promise<TileSession> {
   const key = tilesKey();
   if (!key) return Promise.reject(new Error('Map imagery is not set up (NEXT_PUBLIC_GOOGLE_MAP_TILES_KEY).'));
-  if (session) {
-    return session.then((s) => (s.expiresAt - Date.now() > 86_400_000 ? s : ((session = null), getTileSession())));
+  const have = sessions.get(mapType);
+  if (have) {
+    return have.then((s) => (s.expiresAt - Date.now() > 86_400_000 ? s : (sessions.delete(mapType), getTileSession(mapType))));
   }
-  session = fetch(`${BASE}/v1/createSession?key=${encodeURIComponent(key)}`, {
+  const session = fetch(`${BASE}/v1/createSession?key=${encodeURIComponent(key)}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ mapType: 'satellite', ...locale() }),
+    body: JSON.stringify({ mapType, ...locale() }),
   })
     .then(async (r) => {
       const j = (await r.json().catch(() => ({}))) as { session?: string; expiry?: string; tileWidth?: number; error?: { message?: string } };
@@ -53,9 +57,10 @@ export function getTileSession(): Promise<TileSession> {
       return { token: j.session, expiresAt: Number(j.expiry ?? 0) * 1000 || Date.now() + 86_400_000 * 13, tileScale: (j.tileWidth ?? 256) / 256 };
     })
     .catch((e) => {
-      session = null;
+      sessions.delete(mapType);
       throw e;
     });
+  sessions.set(mapType, session);
   return session;
 }
 

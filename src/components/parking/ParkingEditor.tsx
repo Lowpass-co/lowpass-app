@@ -58,7 +58,7 @@ import { exportParkingPdf } from './exportPdf';
 import { Parking3D } from './Parking3D';
 import { useMapTiles } from './useMapTiles';
 import { freeSpot, itemPoints, printFrame } from '@/lib/parking/print';
-import { MAX_PAGES, add3dPage, addPlanPage, movePage, pagesOf, planFrame, removePage, updatePage, type Page3d, type PdfPage, type PrintScale } from '@/lib/parking/pages';
+import { MAX_PAGES, add3dPage, addPlanPage, addStreetPage, movePage, pagesOf, planFrame, removePage, updatePage, type Page3d, type PdfPage, type PrintScale } from '@/lib/parking/pages';
 import '@/components/advance/advance.css';
 import './parking.css';
 
@@ -777,6 +777,7 @@ export function ParkingEditor({ show, tourName, initial, canEdit }: ParkingEdito
                 title: p.title,
                 ...planFrame(p, itemsOnLevel(items, drawings, p.level), view, size),
                 ...(p.level != null && levels.length > 1 ? { level: p.level, levelLabel: levelLabel(p.level, drawings) } : {}),
+                ...(p.base ? { base: p.base } : {}),
               }
             : {
                 kind: '3d' as const,
@@ -1908,7 +1909,7 @@ function PagesPanel({
             <span className="pk-pagenum" aria-hidden>
               {i + 1}
             </span>
-            <span className="pk-pagekind">{p.kind === '3d' ? '3D' : 'Plan'}</span>
+            <span className="pk-pagekind">{p.kind === '3d' ? '3D' : p.base === 'street' ? 'Street' : 'Plan'}</span>
             <input
               className="adv-field pk-pagetitle"
               value={p.title}
@@ -1988,6 +1989,9 @@ function PagesPanel({
         <div className="adv-row-flex" style={{ gap: 'var(--lp-space-2)', flexWrap: 'wrap' }}>
           <button type="button" className="adv-btn adv-btn-sm" onClick={onAddPlan} disabled={mode !== 'plan' || pages.length >= MAX_PAGES}>
             <Plus size={13} aria-hidden /> This plan view
+          </button>
+          <button type="button" className="adv-btn adv-btn-sm" onClick={() => onChange(addStreetPage(pages))} disabled={pages.length >= MAX_PAGES}>
+            <Plus size={13} aria-hidden /> Street map
           </button>
           <span className="pk-muted">{mode === 'plan' ? 'For a 3D page, switch to 3D and add the view there.' : 'In 3D: “Add this view as a page”.'}</span>
         </div>

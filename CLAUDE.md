@@ -617,7 +617,10 @@ recreate a `_legacy/` tree: delete dead code instead of parking it.
   nothing and isn't sandwiched between vehicles (`placeNames`); the key lists the
   numbers. The driver link's plan + Vehicles list use the same numbers, and the
   link carries the latest export (`pdf`, signed 1 h). The editor keeps names. No pages saved =
-  `defaultPages()` (Plan + 3D). One off-screen Cesium viewer renders all 3D
+  `defaultPages()` (Plan + Street map + 3D). A plan page with `base: 'street'`
+  prints Google's ROADMAP tiles (its own session, `getTileSession('roadmap')`,
+  credit from the viewport call) instead of the photo, without venue drawings —
+  "+ Street map" adds one at 1:2,500. One off-screen Cesium viewer renders all 3D
   pages; a 3D failure drops only the 3D pages, with a warning.
 - **Venue drawings** (Nov 2026, Adam — migration 288, `parking_maps.drawings`):
   a venue's PDF / JPG from tour Files (or linked to the venue), laid on the map
