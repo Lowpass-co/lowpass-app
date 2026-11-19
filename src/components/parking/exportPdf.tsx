@@ -283,7 +283,17 @@ function gpsLink(p: LatLng): string {
   return `https://www.google.com/maps/search/?api=1&query=${p.lat.toFixed(6)},${p.lng.toFixed(6)}`;
 }
 
-export async function exportParkingPdf(input: ExportInput): Promise<ExportResult> {
+/** Where the export is, for the editor's "Making your PDF" screen. */
+export interface ExportProgress {
+  step: string;
+  done: number;
+  total: number;
+}
+
+export async function exportParkingPdf(input: ExportInput, onProgress?: (p: ExportProgress) => void): Promise<ExportResult> {
+  const steps = input.pages.length + (input.pages.some((p) => p.kind === '3d') ? 1 : 0);
+  const say = (step: string, done: number) => onProgress?.({ step, done, total: steps });
+  say('Getting the map ready', 0);
   // One numbering for every page and level: the badges and the key agree everywhere.
   input = { ...input, numbers: vehicleNumbers(input.items) };
   // Street-map pages need their own Google session (roadmap tiles + their credit).
@@ -298,6 +308,7 @@ export async function exportParkingPdf(input: ExportInput): Promise<ExportResult
   let shots: { jpeg: string; credits: string }[] | null = null;
   let warning: string | null = null;
   if (pages3d.length) {
+    say(pages3d.length > 1 ? `Building the 3D views (${pages3d.length})` : 'Building the 3D view', 0);
     if (!input.session && !input.allDrawings.length) warning = 'The PDF has no 3D pages: map imagery isn’t set up.';
     else {
       try {
@@ -350,8 +361,10 @@ export async function exportParkingPdf(input: ExportInput): Promise<ExportResult
     doc.text(att, FRAME.x + FRAME.w - 1.5, FRAME.y + FRAME.h - 1.2, { align: 'right', maxWidth: tw - 2 });
   };
 
+  const base3d = pages3d.length ? 1 : 0;
   for (let n = 0; n < printable.length; n++) {
     const page = printable[n];
+    say(`Page ${n + 1} of ${printable.length} · ${page.title}`, base3d + n);
     if (n > 0) doc.addPage('a4', 'landscape');
 
     if (page.kind === '3d') {

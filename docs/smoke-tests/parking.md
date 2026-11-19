@@ -393,6 +393,14 @@ browser key restricted to the Map Tiles API and the app's domains).**
 
 **Last verified**:
 
+#### PRK-47 — Export shows its progress, then opens the PDF
+
+**Do**: Export PDF on a map with a 3D page. Close the dialog halfway; click "Making PDF…".
+
+**Expect**: No blank tab. A "Making your PDF" dialog with a spinner, the step ("Building the 3D view", "Page 2 of 3 · Street map") and a bar that fills. Closing it lets the work carry on; the button brings it back; it reappears by itself when done. Then "Your PDF is ready · N pages" with **Open PDF** (opens the new tab) and Download, and where the Files copy got to ("Saving a copy…" → "Saved to Files › Parking maps and linked to this show").
+
+**Last verified**:
+
 ## Known broken
 
 #### PRK-90 — Re-exporting makes a new file

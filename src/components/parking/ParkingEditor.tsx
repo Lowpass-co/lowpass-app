@@ -19,8 +19,9 @@
 
 import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent } from 'react';
-import { ArrowLeft, ChevronDown, ChevronUp, Compass, Copy, Download, Keyboard, Layers, Minus, Navigation, Plus, Redo2, RotateCcw, RotateCw, Route as RouteIcon, Ruler, Pentagon, Trash2, Undo2, X } from 'lucide-react';
+import { ArrowLeft, ChevronDown, ChevronUp, Compass, Copy, Download, ExternalLink, Keyboard, Loader2, Layers, Minus, Navigation, Plus, Redo2, RotateCcw, RotateCw, Route as RouteIcon, Ruler, Pentagon, Trash2, Undo2, X } from 'lucide-react';
 import { useToast } from '@/components/ui/Toast';
+import { Modal } from '@/components/ui/Modal';
 import { SaveStatus } from '@/components/forms/SaveStatus';
 import type { SaveStatus as SaveStatusKind } from '@/lib/forms/useAutoSave';
 import { uploadToFiles } from '@/lib/uploads/filesUpload';
@@ -117,6 +118,14 @@ export function ParkingEditor({ show, tourName, initial, canEdit }: ParkingEdito
   const [dragging, setDragging] = useState(false);
   const [pdf, setPdf] = useState(initial?.pdf ?? null);
   const [exporting, setExporting] = useState(false);
+  /** The export's own screen (Nov 2026, Adam: a blank tab "looks like it just
+   *  hangs"): progress while the PDF is made, then "Open PDF". The new tab is
+   *  opened by THAT click — a tab opened after a long wait is blocked as a pop-up. */
+  const [pdfJob, setPdfJob] = useState<PdfJob | null>(null);
+  const [pdfJobShown, setPdfJobShown] = useState(true);
+  const pdfUrl = pdfJob?.phase === 'ready' ? pdfJob.url : null;
+  // Freed a minute after it's done with — a tab just opened on it is still loading it.
+  useEffect(() => (pdfUrl ? () => void setTimeout(() => URL.revokeObjectURL(pdfUrl), 60_000) : undefined), [pdfUrl]);
   const [mode, setMode] = useState<'plan' | '3d'>('plan');
 
 
@@ -757,9 +766,8 @@ export function ParkingEditor({ show, tourName, initial, canEdit }: ParkingEdito
   const doExport = async () => {
     if (!anchor || exporting) return;
     setExporting(true);
-    // Open the tab NOW, while the click still counts as a click: the 3D page
-    // can take a while, and a window opened after that is blocked as a popup.
-    const tab = window.open('about:blank', '_blank');
+    setPdfJobShown(true);
+    setPdfJob({ phase: 'making', step: 'Saving the map', done: 0, total: 1 });
     try {
       if (saveTimer.current) {
         clearTimeout(saveTimer.current);
@@ -802,17 +810,10 @@ export function ParkingEditor({ show, tourName, initial, canEdit }: ParkingEdito
         floors: floorCanvases,
         satellite: satelliteOn,
         warnings: warnings.map((w) => w.text),
-      });
+      }, (p) => setPdfJob({ phase: 'making', ...p }));
       const url = URL.createObjectURL(out.blob);
-      if (tab && !tab.closed) tab.location.href = url;
-      else {
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = out.fileName;
-        a.click();
-      }
-      setTimeout(() => URL.revokeObjectURL(url), 120_000);
-      if (out.warning) showToast(out.warning, 'error');
+      setPdfJobShown(true);
+      setPdfJob({ phase: 'ready', url, fileName: out.fileName, pages: out.pageCount, warning: out.warning, saved: canEdit ? 'saving' : null });
       if (canEdit) {
         try {
           const file = await uploadToFiles({ scope: 'tour', scopeId: show.tourId, folder: 'Parking maps', file: new File([out.blob], out.fileName, { type: 'application/pdf' }) });
@@ -820,18 +821,13 @@ export function ParkingEditor({ show, tourName, initial, canEdit }: ParkingEdito
           const r = await fetch(base, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pdfFileId: file.id }) });
           const j = (await r.json().catch(() => ({}))) as { map?: SavedParkingMap };
           if (j.map?.pdf) setPdf(j.map.pdf);
-          showToast(
-            link.ok
-              ? `PDF (${out.pageCount} ${out.pageCount === 1 ? 'page' : 'pages'}) saved to Files › Parking maps, linked to this show`
-              : 'PDF saved to Files › Parking maps, but it couldn’t be linked to this show',
-            link.ok ? undefined : 'error',
-          );
+          setPdfJob((job) => (job?.phase === 'ready' && job.url === url ? { ...job, saved: link.ok ? 'saved' : 'unlinked' } : job));
         } catch (e) {
-          showToast(`The PDF opened, but it couldn’t be saved to Files: ${e instanceof Error ? e.message : 'error'}`, 'error');
+          setPdfJob((job) => (job?.phase === 'ready' && job.url === url ? { ...job, saved: 'error', saveError: e instanceof Error ? e.message : 'error' } : job));
         }
       }
     } catch (e) {
-      if (tab && !tab.closed) tab.close();
+      setPdfJob(null);
       showToast(e instanceof Error ? e.message : 'Couldn’t make the PDF', 'error');
     } finally {
       setExporting(false);
@@ -894,7 +890,7 @@ export function ParkingEditor({ show, tourName, initial, canEdit }: ParkingEdito
               Advance
             </Link>
           </span>
-          <button type="button" className="adv-btn adv-btn-primary adv-btn-sm" onClick={() => void doExport()} disabled={exporting} style={{ marginTop: 'var(--lp-space-1)' }}>
+          <button type="button" className="adv-btn adv-btn-primary adv-btn-sm" onClick={() => (exporting ? setPdfJobShown(true) : void doExport())} style={{ marginTop: 'var(--lp-space-1)' }}>
             <Download size={14} aria-hidden /> {exporting ? 'Making PDF…' : 'Export PDF'}
           </button>
         </div>
@@ -1448,6 +1444,7 @@ export function ParkingEditor({ show, tourName, initial, canEdit }: ParkingEdito
         ) : null}
         {mode === 'plan' && session ? <div className="pk-badge pk-attrib">Google Maps{attribution ? ` · ${attribution}` : ''}</div> : null}
       </div>
+      {pdfJob ? <PdfJobDialog job={pdfJob} open={pdfJobShown} onHide={() => (pdfJob.phase === 'ready' ? setPdfJob(null) : setPdfJobShown(false))} /> : null}
     </div>
   );
 }
@@ -1997,5 +1994,64 @@ function PagesPanel({
         </div>
       ) : null}
     </section>
+  );
+}
+
+type PdfJob =
+  | { phase: 'making'; step: string; done: number; total: number }
+  | { phase: 'ready'; url: string; fileName: string; pages: number; warning: string | null; saved: 'saving' | 'saved' | 'unlinked' | 'error' | null; saveError?: string };
+
+/** The export's screen: progress while the PDF is made (closing it lets the
+ *  work carry on — the dialog comes back when the PDF is ready), then "Open
+ *  PDF", whose click opens the new tab, and where the copy in Files got to. */
+function PdfJobDialog({ job, open, onHide }: { job: PdfJob; open: boolean; onHide: () => void }) {
+  if (job.phase === 'making') {
+    const pct = job.total ? Math.round((Math.min(job.done, job.total) / job.total) * 100) : 0;
+    return (
+      <Modal open={open} onClose={onHide} title="Making your PDF" size="sm" closeOnBackdrop={false}>
+        <div className="pk-pdfjob" role="status" aria-live="polite">
+          <Loader2 size={28} className="pk-spin" aria-hidden />
+          <p className="pk-pdfjob-step">{job.step}</p>
+          <div className="pk-pdfjob-bar" aria-hidden>
+            <span style={{ width: `${Math.max(6, pct)}%` }} />
+          </div>
+          <p className="pk-muted">The 3D page takes the longest. You can close this — it keeps going and comes back when the PDF is ready.</p>
+        </div>
+      </Modal>
+    );
+  }
+  const saved =
+    job.saved === 'saving'
+      ? 'Saving a copy to Files › Parking maps…'
+      : job.saved === 'saved'
+        ? 'Saved to Files › Parking maps and linked to this show.'
+        : job.saved === 'unlinked'
+          ? 'Saved to Files › Parking maps, but it couldn’t be linked to this show.'
+          : job.saved === 'error'
+            ? `Couldn’t save it to Files (${job.saveError ?? 'error'}) — download it instead.`
+            : null;
+  return (
+    <Modal
+      open={open}
+      onClose={onHide}
+      title="Your PDF is ready"
+      subtitle={`${job.pages} ${job.pages === 1 ? 'page' : 'pages'}`}
+      size="sm"
+      footer={
+        <>
+          <a className="adv-btn adv-btn-sm" href={job.url} download={job.fileName}>
+            <Download size={14} aria-hidden /> Download
+          </a>
+          <a className="adv-btn adv-btn-primary adv-btn-sm" href={job.url} target="_blank" rel="noopener" onClick={() => setTimeout(onHide, 0)}>
+            <ExternalLink size={14} aria-hidden /> Open PDF
+          </a>
+        </>
+      }
+    >
+      <div className="pk-pdfjob">
+        {job.warning ? <p className="pk-pdfjob-warn">{job.warning}</p> : null}
+        {saved ? <p className="pk-muted">{saved}</p> : null}
+      </div>
+    </Modal>
   );
 }
