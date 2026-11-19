@@ -129,7 +129,11 @@ export async function populate(
     floors?: ReadonlyMap<string, HTMLCanvasElement>;
   },
 ): Promise<Scene3d> {
-  const drawings = drawingsIn3d(o.drawings ?? []);
+  // Heights use EVERY drawing (a vehicle inside a hidden drawing still stands
+  // on the street under the roof, not on top of it); the roof cut and the
+  // floors only the shown ones.
+  const drawings = o.drawings ?? [];
+  const shown = drawingsIn3d(drawings);
   let tileset: CesiumNS.Cesium3DTileset | null = null;
   if (o.tilesKey) {
     tileset = await Cesium.createGooglePhotorealistic3DTileset({ key: o.tilesKey, onlyUsingWithGoogleGeocoder: true });
@@ -200,7 +204,7 @@ export async function populate(
   // Inside drawings take the roof off, "Flat in 3D" areas take everything off
   // (Google's model has whatever was parked there baked in): the mesh is
   // clipped to their outlines.
-  const cuts = [...inside.map((d) => insideFootprint(d)), ...flats.map((a) => a.points)];
+  const cuts = [...inside.filter((d) => shown.includes(d)).map((d) => insideFootprint(d)), ...flats.map((a) => a.points)];
   if (tileset && cuts.length) {
     tileset.clippingPolygons = new Cesium.ClippingPolygonCollection({
       polygons: cuts.map((f) => new Cesium.ClippingPolygon({ positions: Cesium.Cartesian3.fromDegreesArray(f.flatMap((q) => [ll(q).lng, ll(q).lat])) })),
@@ -215,7 +219,7 @@ export async function populate(
   // The floors: every inside drawing's inside area (a floor colour under the
   // drawing's lines — drawn even before the lines are ready, so the cut-away
   // never shows as a hole); with no city mesh, every drawing.
-  for (const d of drawings) {
+  for (const d of shown) {
     if (tileset && !d.inside) continue;
     addFloor(Cesium, viewer, o.anchor, d, o.floors?.get(d.id) ?? null, (d.inside ? street.get(d.id) ?? ground0 : ground0) + (d.inside ? d.floor : 0) + 0.03, o.palette.floor);
   }
