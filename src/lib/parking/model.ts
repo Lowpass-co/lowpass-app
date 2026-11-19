@@ -61,6 +61,9 @@ export interface AreaItem {
   label: string;
   points: Pt[];
   floor?: number;
+  /** Flat in 3D (Nov 2026, Adam): Google's 3D model is cut away here and the
+   *  2D satellite photo laid flat instead — no baked-in parked buses. */
+  flat3d?: boolean;
 }
 
 export interface MeasureItem {
@@ -257,7 +260,15 @@ export function parseItem(raw: unknown): ParkingItem {
       return { id: id(o.id), kind: 'route', label: text(o.label, LIMITS.label), points: pts(o.points, 'Route', 2), ...floorOf(o) };
     case 'area': {
       if (typeof o.type !== 'string' || !AREA_TYPES.has(o.type)) fail('Unknown area type');
-      return { id: id(o.id), kind: 'area', type: o.type as AreaType, label: text(o.label, LIMITS.label), points: pts(o.points, 'Area', 3), ...floorOf(o) };
+      return {
+        id: id(o.id),
+        kind: 'area',
+        type: o.type as AreaType,
+        label: text(o.label, LIMITS.label),
+        points: pts(o.points, 'Area', 3),
+        ...floorOf(o),
+        ...(o.flat3d === true ? { flat3d: true } : {}),
+      };
     }
     case 'measure':
       return { id: id(o.id), kind: 'measure', a: pt(o.a, 'Measure start'), b: pt(o.b, 'Measure end'), ...floorOf(o) };

@@ -17,6 +17,7 @@ import {
   visibleTiles,
   zoomAt,
   type View,
+  tilesCovering,
 } from './geo';
 import { LIMITS, ParkingInputError, nextLabel, parseItem, parseMapBody, pathLength, vehicleCorners, type ParkingItem } from './model';
 
@@ -251,5 +252,20 @@ describe('the anchor survives a save (Adam, Nov 2026: icons moved on reload)', (
   it('still refuses nonsense', () => {
     expect(() => send(91, 0)).toThrow();
     expect(() => send(Number.NaN, 0)).toThrow();
+  });
+});
+
+describe('tilesCovering (Flat in 3D: the satellite photo laid over an area)', () => {
+  const o2 = { lat: 51.503, lng: 0.003 };
+  it('a bus park gets sharp tiles, within the cap', () => {
+    const r = tilesCovering(o2, [{ x: -40, y: -30 }, { x: 40, y: -30 }, { x: 40, y: 30 }, { x: -40, y: 30 }], 36);
+    expect(r.z).toBeGreaterThanOrEqual(19);
+    expect(r.tiles.length).toBeGreaterThan(0);
+    expect(r.tiles.length).toBeLessThanOrEqual(36);
+  });
+  it('a huge area steps down a zoom rather than fetching hundreds of tiles', () => {
+    const r = tilesCovering(o2, [{ x: -1500, y: -1500 }, { x: 1500, y: 1500 }], 36);
+    expect(r.z).toBeLessThan(19);
+    expect(r.tiles.length).toBeLessThanOrEqual(36);
   });
 });
