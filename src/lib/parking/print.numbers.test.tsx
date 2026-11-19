@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { badgeRadii, convexOverlap, insideName, placeNames, rectAt, vehicleNumbers } from './print';
+import { badgeRadii, convexOverlap, insideName, layoutNames, rectAt, vehicleNumbers } from './print';
 import type { ParkingItem } from './model';
 
 const v = (id: string, x: number, y: number) => ({ id, kind: 'vehicle', type: 'car', x, y, heading: 0, length: 5, width: 2, label: '' }) as unknown as ParkingItem;
@@ -46,34 +46,54 @@ describe('convexOverlap', () => {
   });
 });
 
-describe('placeNames', () => {
-  const body = (c: { x: number; y: number }) => rectAt(c, 0, 60, 12);
-  const spot = (id: string, c: { x: number; y: number }) => ({ id, centre: c, angle: 0, halfWidth: 6, w: 40, h: 10 });
-  it('puts a lone vehicle\'s name just off its side', () => {
-    const out = placeNames([spot('a', { x: 100, y: 100 })], [body({ x: 100, y: 100 })], { w: 400, h: 400 });
-    expect(out.get('a')).toEqual({ x: 100, y: 113 });
-  });
-  it('leaves names out of a tight row, but names the ends', () => {
-    // Five vehicles 14 px apart: a name (10 px tall + gaps) fits on neither side between them.
-    const cs = [0, 1, 2, 3, 4].map((i) => ({ x: 100, y: 100 + i * 14 }));
-    const out = placeNames(cs.map((c, i) => spot(String(i), c)), cs.map(body), { w: 400, h: 400 });
-    expect([...out.keys()].sort()).toEqual(['0', '4']);
-  });
-  it('never places a name off the picture', () => {
-    const out = placeNames([spot('a', { x: 100, y: 4 })], [], { w: 400, h: 400 });
-    expect(out.get('a')).toEqual({ x: 100, y: 17 });
-    expect(placeNames([spot('a', { x: 5, y: 100 })], [], { w: 400, h: 400 }).has('a')).toBe(false);
-  });
-});
+describe('layoutNames — names first', () => {
+  // A vehicle 60 × 12 px lying along x; its tag 40 × 10.
+  const body = (c: { x: number; y: number }, angle = 0) => rectAt(c, angle, 60, 12);
+  const spot = (id: string, c: { x: number; y: number }, angle = 0) => ({ id, centre: c, angle, halfWidth: 6, halfLength: 30, w: 40, h: 10 });
+  const B = { w: 600, h: 600 };
 
-describe('placeNames — never sandwiched', () => {
-  it('puts the name on the open side, not in the gap between two vehicles', () => {
-    const body = (c: { x: number; y: number }) => rectAt(c, 0, 60, 12);
-    // Gap of 20 px between bodies: a 10 px name fits in it, but it would be ambiguous.
-    const a = { x: 100, y: 100 };
-    const b = { x: 100, y: 132 };
-    const out = placeNames([{ id: 'a', centre: a, angle: 0, halfWidth: 6, w: 40, h: 10 }], [body(a), body(b)], { w: 400, h: 400 });
-    expect(out.get('a')).toEqual({ x: 100, y: 87 });
+  it('a lone vehicle is named just past its end, along it', () => {
+    const out = layoutNames([spot('a', { x: 200, y: 200 })], [body({ x: 200, y: 200 })], B);
+    expect(out.get('a')).toMatchObject({ how: 'end', angle: 0, at: { x: 252, y: 200 } });
+  });
+
+  it('a row of vehicles side by side is named at their ends — every one of them', () => {
+    const cs = [0, 1, 2, 3, 4].map((i) => ({ x: 200, y: 200 + i * 14 }));
+    const out = layoutNames(cs.map((c, i) => spot(String(i), c)), cs.map((c) => body(c)), B);
+    expect([...out.values()].map((p) => p.how)).toEqual(['end', 'end', 'end', 'end', 'end']);
+  });
+
+  it('nose to tail with no room at the ends: beside, on the open side', () => {
+    const cs = [{ x: 200, y: 200 }, { x: 263, y: 200 }, { x: 137, y: 200 }];
+    const out = layoutNames([spot('a', cs[0])], cs.map((c) => body(c)), B);
+    expect(out.get('a')).toMatchObject({ how: 'side' });
+  });
+
+  it('boxed in on every side: a callout, upright, with a leader line back to it', () => {
+    const c = { x: 300, y: 300 };
+    const ring = [
+      { x: 363, y: 300 },
+      { x: 237, y: 300 },
+      { x: 300, y: 286 },
+      { x: 300, y: 314 },
+      { x: 363, y: 286 },
+      { x: 237, y: 286 },
+      { x: 363, y: 314 },
+      { x: 237, y: 314 },
+    ];
+    const out = layoutNames([spot('a', c)], [body(c), ...ring.map((q) => body(q))], B);
+    expect(out.get('a')).toMatchObject({ how: 'callout', angle: 0, leader: c });
+  });
+
+  it('never off the picture, never on a vehicle or another tag', () => {
+    const cs = [{ x: 30, y: 30 }, { x: 30, y: 44 }];
+    const out = layoutNames(cs.map((c, i) => spot(String(i), c)), cs.map((c) => body(c)), B);
+    const tags = [...out.values()].map((p) => rectAt(p.at, p.angle, 40, 10));
+    for (const t of tags) {
+      expect(t.every((q) => q.x >= 0 && q.y >= 0)).toBe(true);
+      for (const c of cs) expect(convexOverlap(t, body(c))).toBe(false);
+    }
+    expect(convexOverlap(tags[0], tags[1])).toBe(false);
   });
 });
 

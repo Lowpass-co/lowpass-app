@@ -19,7 +19,7 @@ import { markerSpec, vehicleSpec, areaLabel, type MarkerType } from '@/lib/parki
 import { pathLength, vehicleCorners, type ParkingItem, type VehicleItem } from '@/lib/parking/model';
 import { vehicleParts, type Part, type PartKind } from '@/lib/parking/silhouettes';
 import { areaColour, vehicleColour, type Palette } from './palette';
-import { badgeRadii, insideName, placeNames, type NameSpot } from '@/lib/parking/print';
+import { badgeRadii, insideName, layoutNames, type NameSpot } from '@/lib/parking/print';
 
 export interface SceneTile {
   id: string;
@@ -81,6 +81,7 @@ export function ParkingScene({
   labelScale = 1,
   numbers,
   forPrint = false,
+  flashId,
   fontFamily = 'var(--font-sans)',
   onItemDown,
   onHandleDown,
@@ -108,6 +109,8 @@ export function ParkingScene({
   numbers?: ReadonlyMap<string, number>;
   /** PDF + driver link: leave out the editor's tools — a Flat-in-3D area is a 3D setting, not a place to park. */
   forPrint?: boolean;
+  /** A vehicle to flash (driver link: tapped in the list). */
+  flashId?: string | null;
   /** Live: the CSS token. Export: the resolved family (a rasterised SVG can't read CSS). */
   fontFamily?: string;
   onItemDown?: (e: ReactPointerEvent, item: ParkingItem) => void;
@@ -200,6 +203,9 @@ export function ParkingScene({
                     </>
                   ) : null}
                 </>
+              ) : null}
+              {flashId === v.id ? (
+                <polygon className="pk-flash" points={body.map((q) => `${q.x},${q.y}`).join(' ')} fill={p.select} fillOpacity={0.25} stroke={p.select} strokeWidth={4} pointerEvents="none" />
               ) : null}
               {warnIds?.has(v.id) ? (
                 <polygon points={body.map((q) => `${q.x},${q.y}`).join(' ')} fill="none" stroke={p['area-no-go']} strokeWidth={3} pointerEvents="none" />
@@ -328,13 +334,13 @@ export function ParkingScene({
   );
 }
 
-/** Numbered vehicles (the PDF and the driver link): a white badge with a
- *  dark number on each vehicle's centre (the body carries the colour; a badge
- *  in the same colour vanished into it), drawn over everything so a
- *  neighbour's body never hides it, shrinking where badges would touch
- *  (badgeRadii). The vehicle's NAME goes beside it only where it crosses
- *  nothing — no vehicle, badge or other name (placeNames) — so a lone bus is
- *  named and a tight row keeps just its numbers (the key / list names them). */
+/** Vehicles on paper and the driver link — NAMES FIRST (Nov 2026, Adam: "we
+ *  should prioritise that over the numbers (which can be smaller)"). Each
+ *  vehicle carries a small numbered badge (the key / list cross-reference)
+ *  and its name: inside it when it's big enough on screen (insideName), else
+ *  a tag past its end, beside it, or out at the nearest clear spot with a
+ *  leader line (layoutNames) — never on another vehicle, badge or tag.
+ *  Drawn over everything so a neighbour's body never hides it. */
 function NumberBadges({
   vehicles,
   numbers,
@@ -354,34 +360,31 @@ function NumberBadges({
 }) {
   const shown = vehicles.filter((v) => numbers.has(v.id)).sort((a, b) => numbers.get(a.id)! - numbers.get(b.id)!);
   const centres = shown.map((v) => P(v));
-  const radii = badgeRadii(centres, 7 * ls, 4 * ls);
-  const size = 8.5 * ls;
+  const radii = badgeRadii(centres, 5 * ls, 3.2 * ls);
+  const size = 9 * ls;
+  const nameOf = (v: VehicleItem) => v.label || vehicleSpec(v.type)?.short || 'Vehicle';
   const bodies = shown.map((v) => vehicleCorners(v).map(P));
   // A badge as an octagon round its circle (a square's corners stuck out past a turned car's side).
   const badges = centres.map((c, i) => Array.from({ length: 8 }, (_, k) => ({ x: c.x + Math.cos((k * Math.PI) / 4) * radii[i] * 1.08, y: c.y + Math.sin((k * Math.PI) / 4) * radii[i] * 1.08 })));
   const spots: NameSpot[] = shown.map((v, i) => {
     const h = (v.heading * Math.PI) / 180;
     const nose = P({ x: v.x + Math.sin(h), y: v.y + Math.cos(h) });
+    const perM = Math.hypot(nose.x - centres[i].x, nose.y - centres[i].y);
     let a = (Math.atan2(nose.y - centres[i].y, nose.x - centres[i].x) * 180) / Math.PI;
     if (a > 90) a -= 180;
     if (a < -90) a += 180;
-    const side = P({ x: v.x + Math.cos(h) * (v.width / 2), y: v.y - Math.sin(h) * (v.width / 2) });
-    const name = v.label || vehicleSpec(v.type)?.short || 'Vehicle';
-    return { id: v.id, centre: centres[i], angle: a, halfWidth: Math.hypot(side.x - centres[i].x, side.y - centres[i].y), w: name.length * size * 0.6 + 4 * ls, h: size * 1.25 };
+    const name = nameOf(v);
+    return { id: v.id, centre: centres[i], angle: a, halfWidth: (v.width * perM) / 2, halfLength: (v.length * perM) / 2, w: name.length * size * 0.6 + 6 * ls, h: size * 1.45 };
   });
-  // Zoomed in far enough, the name goes INSIDE the vehicle, beside its badge —
-  // unambiguous; only vehicles too small on screen look for room beside them.
+  // Big enough on screen: the name goes INSIDE the vehicle, beside its badge.
   const inside = shown.map((v, i) => {
-    const h = (v.heading * Math.PI) / 180;
-    const nose = P({ x: v.x + Math.sin(h), y: v.y + Math.cos(h) });
-    const perM = Math.hypot(nose.x - centres[i].x, nose.y - centres[i].y);
-    const name = v.label || vehicleSpec(v.type)?.short || 'Vehicle';
-    const fit = insideName(v.length * perM, spots[i].halfWidth * 2, radii[i], name.length, 10 * ls, 7 * ls, 1.5 * ls);
+    const name = nameOf(v);
+    const fit = insideName(spots[i].halfLength * 2, spots[i].halfWidth * 2, radii[i], name.length, 10 * ls, 7 * ls, 1.5 * ls);
     if (!fit) return null;
     const a = (spots[i].angle * Math.PI) / 180;
-    return { x: centres[i].x + Math.cos(a) * fit.offset, y: centres[i].y + Math.sin(a) * fit.offset, size: fit.size, name };
+    return { x: centres[i].x + Math.cos(a) * fit.offset, y: centres[i].y + Math.sin(a) * fit.offset, size: fit.size };
   });
-  const names = placeNames(
+  const tags = layoutNames(
     spots.filter((_, i) => !inside[i]),
     [...bodies, ...badges],
     bounds,
@@ -389,52 +392,48 @@ function NumberBadges({
   );
   return (
     <g pointerEvents="none">
+      {/* Leader lines first, under every tag and badge. */}
+      {shown.map((v) => {
+        const t = tags.get(v.id);
+        return t?.leader ? (
+          <g key={`l-${v.id}`}>
+            <line x1={t.leader.x} y1={t.leader.y} x2={t.at.x} y2={t.at.y} stroke={p.halo} strokeWidth={2.2 * ls} strokeLinecap="round" />
+            <line x1={t.leader.x} y1={t.leader.y} x2={t.at.x} y2={t.at.y} stroke={p.ink} strokeWidth={0.9 * ls} strokeLinecap="round" />
+          </g>
+        ) : null;
+      })}
       {shown.map((v, i) => {
         const n = String(numbers.get(v.id));
         const r = radii[i];
-        const at = names.get(v.id);
+        const t = tags.get(v.id);
+        const ins = inside[i];
         return (
           <g key={v.id}>
-            <circle cx={centres[i].x} cy={centres[i].y} r={r} fill={p.ink} stroke={p.halo} strokeWidth={0.9 * ls} />
-            <text
-              x={centres[i].x}
-              y={centres[i].y}
-              textAnchor="middle"
-              dominantBaseline="central"
-              fontSize={r * (n.length > 2 ? 0.9 : n.length > 1 ? 1.15 : 1.35)}
-              fontWeight={800}
-              fill={p.halo}
-            >
+            <circle cx={centres[i].x} cy={centres[i].y} r={r} fill={p.ink} stroke={p.halo} strokeWidth={0.8 * ls} />
+            <text x={centres[i].x} y={centres[i].y} textAnchor="middle" dominantBaseline="central" fontSize={r * (n.length > 2 ? 0.9 : n.length > 1 ? 1.15 : 1.35)} fontWeight={800} fill={p.halo}>
               {n}
             </text>
-            {at ? (
-              <text
-                x={at.x}
-                y={at.y}
-                transform={`rotate(${spots[i].angle.toFixed(2)} ${at.x.toFixed(2)} ${at.y.toFixed(2)})`}
-                textAnchor="middle"
-                dominantBaseline="central"
-                fontSize={size}
-                fontWeight={700}
-                fill={p.ink}
-                style={halo}
-              >
-                {spots[i].w > 0 ? v.label || vehicleSpec(v.type)?.short || 'Vehicle' : null}
-              </text>
+            {t ? (
+              <g transform={`rotate(${t.angle.toFixed(2)} ${t.at.x.toFixed(2)} ${t.at.y.toFixed(2)})`}>
+                <rect x={t.at.x - spots[i].w / 2} y={t.at.y - spots[i].h / 2} width={spots[i].w} height={spots[i].h} rx={2.5 * ls} fill={p.chip} fillOpacity={0.88} stroke={vehicleColour(p, v)} strokeWidth={1.2 * ls} />
+                <text x={t.at.x} y={t.at.y} textAnchor="middle" dominantBaseline="central" fontSize={size} fontWeight={700} fill={p.ink}>
+                  {nameOf(v)}
+                </text>
+              </g>
             ) : null}
-            {inside[i] ? (
+            {ins ? (
               <text
-                x={inside[i]!.x}
-                y={inside[i]!.y}
-                transform={`rotate(${spots[i].angle.toFixed(2)} ${inside[i]!.x.toFixed(2)} ${inside[i]!.y.toFixed(2)})`}
+                x={ins.x}
+                y={ins.y}
+                transform={`rotate(${spots[i].angle.toFixed(2)} ${ins.x.toFixed(2)} ${ins.y.toFixed(2)})`}
                 textAnchor="middle"
                 dominantBaseline="central"
-                fontSize={inside[i]!.size}
+                fontSize={ins.size}
                 fontWeight={700}
                 fill={p.ink}
                 style={halo}
               >
-                {inside[i]!.name}
+                {nameOf(v)}
               </text>
             ) : null}
           </g>

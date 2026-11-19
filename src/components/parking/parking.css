@@ -437,3 +437,8 @@ span.pk-pagescale { display: inline-flex; align-items: center; padding: 0; }
 .pk-spin { color: var(--lp-orange); animation: pk-spin 0.9s linear infinite; }
 @keyframes pk-spin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .pk-spin { animation: none; } .pk-pdfjob-bar > span { transition: none; } }
+
+/* Driver link: the vehicle tapped in the list flashes on the map (Nov 2026). */
+.pk-flash { animation: pk-flash 0.8s ease-in-out 3; }
+@keyframes pk-flash { 0%, 100% { opacity: 0; } 50% { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .pk-flash { animation: none; } }

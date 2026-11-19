@@ -161,9 +161,10 @@ export interface NameSpot {
   centre: Pt;
   /** The vehicle's axis on screen, degrees, already turned upright (−90…90). */
   angle: number;
-  /** Half the vehicle's width on screen. */
+  /** Half the vehicle's width / length on screen. */
   halfWidth: number;
-  /** The name's size on screen. */
+  halfLength: number;
+  /** The name tag's size on screen. */
   w: number;
   h: number;
 }
@@ -181,38 +182,86 @@ export function rectAt(c: Pt, angle: number, w: number, h: number): Pt[] {
   ].map(([i, j]) => ({ x: c.x + ux.x * (w / 2) * i + uy.x * (h / 2) * j, y: c.y + ux.y * (w / 2) * i + uy.y * (h / 2) * j }));
 }
 
-/** Names beside the numbers — only where they cross nothing (Nov 2026, Adam:
- *  "if there is no label cross over … number + label"). Each name is written
- *  along its vehicle, just off one side or the other; it's placed only if it
- *  overlaps no vehicle, no badge, no name already placed and stays inside the
- *  picture — and only on the OPEN side: the strip just beyond the name must be
- *  clear too, so a name never sits sandwiched in the gap between two vehicles
- *  (which one would it belong to?). Taken in `spots` order (the numbers), so a
- *  tight row keeps its numbers and its outer vehicles get names. Screen
- *  pixels in, centres out. */
-export function placeNames(
+/** Where a vehicle's name tag goes. `leader`: a callout — draw a thin line
+ *  from the vehicle's centre to the tag. */
+export interface NamePlace {
+  at: Pt;
+  angle: number;
+  how: 'end' | 'side' | 'callout';
+  leader?: Pt;
+}
+
+/** NAMES FIRST (Nov 2026, Adam: the venue's own plan "manages to get labels
+ *  on the export … prioritise that over the numbers"). Every vehicle that
+ *  isn't named inside itself gets a tag, tried in this order, and only where
+ *  it crosses no vehicle, badge or tag and stays on the picture:
+ *    1. END    just past the vehicle's end, along its axis — a row of buses
+ *              or trucks side by side is named at their ends, unambiguous;
+ *    2. SIDE   just off its side — only on the OPEN side (the strip beyond
+ *              must be clear), never sandwiched between two vehicles;
+ *    3. CALLOUT the nearest clear spot round it (rings of 12 directions,
+ *              upright), with a leader line back to the vehicle.
+ *  A vehicle with no spot at all keeps just its number (the key names it).
+ *  Taken in `spots` order (the numbers). Screen pixels. */
+export function layoutNames(
   spots: readonly NameSpot[],
   obstacles: readonly (readonly Pt[])[],
   bounds: { w: number; h: number },
   gap = 2,
-): Map<string, Pt> {
+  rings = 8,
+): Map<string, NamePlace> {
   const placed: Pt[][] = [];
-  const out = new Map<string, Pt>();
+  const out = new Map<string, NamePlace>();
   const inside = (r: Pt[]) => r.every((q) => q.x >= 0 && q.y >= 0 && q.x <= bounds.w && q.y <= bounds.h);
+  const free = (r: Pt[]) => inside(r) && !obstacles.some((o) => convexOverlap(r, o)) && !placed.some((o) => convexOverlap(r, o));
+  const take = (id: string, r: Pt[], p: NamePlace) => {
+    placed.push(r);
+    out.set(id, p);
+  };
   for (const s of spots) {
     const a = (s.angle * Math.PI) / 180;
-    const perp = { x: -Math.sin(a), y: Math.cos(a) };
-    const off = s.halfWidth + gap + s.h / 2;
+    const u = { x: Math.cos(a), y: Math.sin(a) };
+    const perp = { x: -u.y, y: u.x };
+    let done = false;
+    // 1. Past either end, along the axis (the strip beyond clear too).
     for (const side of [1, -1]) {
+      const d = s.halfLength + gap + s.w / 2;
+      const c = { x: s.centre.x + u.x * d * side, y: s.centre.y + u.y * d * side };
+      const r = rectAt(c, s.angle, s.w, s.h);
+      const beyond = rectAt({ x: c.x + u.x * (s.w / 2 + s.h) * side, y: c.y + u.y * (s.w / 2 + s.h) * side }, s.angle, s.h, s.h);
+      if (free(r) && !obstacles.some((o) => convexOverlap(beyond, o))) {
+        take(s.id, r, { at: c, angle: s.angle, how: 'end' });
+        done = true;
+        break;
+      }
+    }
+    if (done) continue;
+    // 2. Beside it, on the open side.
+    for (const side of [1, -1]) {
+      const off = s.halfWidth + gap + s.h / 2;
       const c = { x: s.centre.x + perp.x * off * side, y: s.centre.y + perp.y * off * side };
       const r = rectAt(c, s.angle, s.w, s.h);
-      if (!inside(r)) continue;
-      if (obstacles.some((o) => convexOverlap(r, o)) || placed.some((o) => convexOverlap(r, o))) continue;
       const beyond = rectAt({ x: c.x + perp.x * s.h * side, y: c.y + perp.y * s.h * side }, s.angle, s.w, s.h);
-      if (obstacles.some((o) => convexOverlap(beyond, o)) || placed.some((o) => convexOverlap(beyond, o))) continue;
-      placed.push(r);
-      out.set(s.id, c);
-      break;
+      if (free(r) && !obstacles.some((o) => convexOverlap(beyond, o)) && !placed.some((o) => convexOverlap(beyond, o))) {
+        take(s.id, r, { at: c, angle: s.angle, how: 'side' });
+        done = true;
+        break;
+      }
+    }
+    if (done) continue;
+    // 3. A callout: the nearest clear spot, upright, with a leader line.
+    const r0 = Math.max(s.halfLength, s.halfWidth) + gap;
+    for (let k = 1; k <= rings && !done; k++) {
+      const R = r0 + k * s.h * 1.3;
+      for (let t = 0; t < 12 && !done; t++) {
+        const th = (t * Math.PI) / 6 - Math.PI / 2;
+        const c = { x: s.centre.x + Math.cos(th) * (R + s.w / 2 * Math.abs(Math.cos(th))), y: s.centre.y + Math.sin(th) * (R + (s.h / 2) * Math.abs(Math.sin(th))) };
+        const r = rectAt(c, 0, s.w, s.h);
+        if (free(r)) {
+          take(s.id, r, { at: c, angle: 0, how: 'callout', leader: s.centre });
+          done = true;
+        }
+      }
     }
   }
   return out;

@@ -610,16 +610,17 @@ recreate a `_legacy/` tree: delete dead code instead of parking it.
   are left out unless they're all there is) at Fit or a chosen 1:N; plan
   *fixed* pages keep their own centre / rotation / 1:N ("This plan view");
   3D pages keep a camera ("Add this view as a page"). Every plan page carries
-  the key + notes; the editor outlines each plan page's area. On plan pages
-  vehicles carry NUMBERED BADGES, not names (`vehicleNumbers` in print.ts — one
-  numbering per PDF, a nearest-neighbour walk so rows count along; `badgeRadii`
-  shrinks them before they touch); a NAME goes beside a badge only where it crosses
-  nothing and isn't sandwiched between vehicles (`placeNames`); the key lists the
-  numbers; once a vehicle is big on screen its name goes INSIDE it (`insideName`).
+  the key + notes; the editor outlines each plan page's area. On plan pages and
+  the driver map NAMES COME FIRST (Adam): every vehicle is named — inside it when
+  big enough (`insideName`), else a tag past its END, BESIDE it (open side only) or
+  a CALLOUT with a leader line (`layoutNames` in print.ts — never on a vehicle,
+  badge or tag); small numbered badges stay for the key / list (`vehicleNumbers`,
+  one numbering per PDF; `badgeRadii`).
   Selection → "Close-up PDF page" (`addCloseUpPage`). Flat-in-3D areas are never
   titled and never printed (`forPrint`). 3D pages are full width (`FRAME_3D`), the
   note once. The driver link's plan + Vehicles list use the same numbers, and the
-  link carries the latest export (`pdf`, signed 1 h). The editor keeps names. No pages saved =
+  link carries the latest export (`pdf`, signed 1 h); tapping a vehicle in its
+  list flies the map to it and flashes it (`focus` / `flashId`). The editor keeps names. No pages saved =
   `defaultPages()` (Plan + Street map + 3D). A plan page with `base: 'street'`
   prints Google's ROADMAP tiles (its own session, `getTileSession('roadmap')`,
   credit from the viewport call) instead of the photo, without venue drawings —

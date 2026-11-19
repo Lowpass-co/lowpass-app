@@ -10,7 +10,7 @@
    /api/public/parking/[token], which checks the token, expiry and scope.
    ============================================ */
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowLeft, Box, FileText, Navigation, TriangleAlert } from 'lucide-react';
 import { headroomWarnings } from '@/lib/parking/drawings';
 import { navigateUrls } from '@/lib/parking/driverLinks';
@@ -37,6 +37,14 @@ export function PublicParkingView({ token, initial }: { token?: string; initial?
   const [left3d, setLeft3d] = useState(0);
   const [note3d, setNote3d] = useState<string | null>(null);
   const [opening, setOpening] = useState(false);
+  const [focus, setFocus] = useState<{ id: string; n: number } | null>(null);
+  const stage = useRef<HTMLElement>(null);
+  /** A vehicle tapped in the list: back to the plan, map in view, fly to it and flash it. */
+  const showVehicle = (id: string) => {
+    setMode('plan');
+    setFocus({ id, n: Date.now() });
+    stage.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  };
 
   useEffect(() => {
     if (!token) return;
@@ -128,7 +136,7 @@ export function PublicParkingView({ token, initial }: { token?: string; initial?
       </div> : null}
       {note3d ? <p className="pd-note">{note3d}</p> : null}
 
-      <section className="pd-stage">
+      <section className="pd-stage" ref={stage}>
         {mode === '3d' ? (
           <div className="pk-map" data-mode="3d" style={{ height: '100%' }}>
             <Parking3D
@@ -149,7 +157,7 @@ export function PublicParkingView({ token, initial }: { token?: string; initial?
             />
           </div>
         ) : (
-          <ParkingViewer anchor={m.anchor} view0={m.view} items={m.items} drawings={drawings} rasters={rasters} satellite={satellite} />
+          <ParkingViewer anchor={m.anchor} view0={m.view} items={m.items} drawings={drawings} rasters={rasters} satellite={satellite} focus={focus} />
         )}
       </section>
 
@@ -188,11 +196,13 @@ export function PublicParkingView({ token, initial }: { token?: string; initial?
             {vehicles.map((v) =>
               v.kind === 'vehicle' ? (
                 <li key={v.id}>
-                  <span className="pd-num" style={{ borderColor: vehicleColour(LIVE_PALETTE, v) }}>{numbers.get(v.id)}</span>
-                  <b>{v.label || vehicleSpec(v.type)?.short}</b>
-                  <span className="pd-muted">
-                    {vehicleSpec(v.type)?.label} · {v.length} × {v.width} × {v.height} m
-                  </span>
+                  <button type="button" className="pd-vehicle" onClick={() => showVehicle(v.id)} aria-label={`Show ${v.label || vehicleSpec(v.type)?.short} on the map`}>
+                    <span className="pd-num" style={{ borderColor: vehicleColour(LIVE_PALETTE, v) }}>{numbers.get(v.id)}</span>
+                    <b>{v.label || vehicleSpec(v.type)?.short}</b>
+                    <span className="pd-muted">
+                      {vehicleSpec(v.type)?.label} · {v.length} × {v.width} × {v.height} m
+                    </span>
+                  </button>
                 </li>
               ) : null,
             )}
