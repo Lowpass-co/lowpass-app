@@ -480,8 +480,11 @@ recreate a `_legacy/` tree: delete dead code instead of parking it.
   manager-only actions ask `access.manager`. Migration 294 moved the last
   database rule off `can_access` (crew document uploads). `workspace_member_tags`,
   `permission_grants` and `public.can_access` are left in place, unread.
-  Known gap: Schedule EDIT doesn't yet let a Member edit dates / tour details
-  (those writes are admin / manager).
+  DECIDED (Adam, Nov 2026 — not a gap, don't "fix"): Schedule EDIT does NOT
+  let a Member edit dates / tour details — those writes stay admin / manager.
+  Crew documents (head shot, passport scans): admin / manager upload, ADMIN
+  ONLY delete — the route refuses a manager with "Only admins can delete
+  documents." to match the bucket's delete rule (085).
 - **Own rows**: a login linked to its crew record (`personnel.user_id`, set by
   accepting an invite that names it) always reads its own crew / room / pay rows.
 - **Sign-up is by code only** (Admin › Beta codes, `/auth/beta-signup`); public

@@ -203,6 +203,15 @@ own secret checks (e.g. `CRON_SECRET`).
 **Last verified**:
 
 
+#### AUTH-22 — Only admins delete crew documents
+
+**Do**: As a Manager, open a crew record in People › Documents and remove a passport scan. Then as an Admin, remove one.
+
+**Expect**: Manager: the scan stays and the panel says "Only admins can delete documents." Admin: it goes.
+
+**Last verified**:
+
+
 ## Known broken
 
 #### AUTH-04 — Login globe not yet deduped onto AuthShell
