@@ -77,6 +77,9 @@ SELECT private.lp_set_rules('intake_reminders', ARRAY[]::text[], $q$workspace_id
 SELECT private.lp_set_rules('import_pending_lines', ARRAY[]::text[], $q$workspace_id = (SELECT public.get_my_workspace_id())$q$, $q$workspace_id = (SELECT public.get_my_workspace_id())$q$);
 SELECT private.lp_set_rules('artists', ARRAY[]::text[], $q$workspace_id = (SELECT public.get_my_workspace_id())$q$, $q$workspace_id = (SELECT public.get_my_workspace_id())$q$);
 SELECT private.lp_set_rules('rag_chunks', ARRAY[]::text[], $q$workspace_id = (SELECT public.get_my_workspace_id())$q$, $q$workspace_id = (SELECT public.get_my_workspace_id())$q$);
+SELECT private.lp_set_rules('tour_roles', ARRAY[]::text[], $q$workspace_id = (SELECT public.get_my_workspace_id())$q$, $q$workspace_id = (SELECT public.get_my_workspace_id())$q$);
+SELECT private.lp_set_rules('tour_role_links', ARRAY[]::text[], $q$workspace_id = (SELECT public.get_my_workspace_id())$q$, $q$workspace_id = (SELECT public.get_my_workspace_id())$q$);
+SELECT private.lp_set_rules('advance_schedule_templates', ARRAY[]::text[], $q$workspace_id = (SELECT public.get_my_workspace_id())$q$, $q$workspace_id = (SELECT public.get_my_workspace_id())$q$);
 SELECT private.lp_set_rules('advance_day_type_templates', ARRAY[]::text[], $q$workspace_id = (SELECT public.get_my_workspace_id())$q$, $q$workspace_id = (SELECT public.get_my_workspace_id())$q$);
 SELECT private.lp_set_rules('advance_layout_templates', ARRAY[]::text[], $q$workspace_id = (SELECT public.get_my_workspace_id())$q$, $q$workspace_id = (SELECT public.get_my_workspace_id())$q$);
 SELECT private.lp_set_rules('advance_templates', ARRAY[]::text[], $q$workspace_id = (SELECT public.get_my_workspace_id())$q$, $q$workspace_id = (SELECT public.get_my_workspace_id())$q$);

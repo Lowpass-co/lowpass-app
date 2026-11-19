@@ -140,6 +140,11 @@ export const RULES = [
   // ---- AI index holds deal memos + budget lines (audit B3) ----
   { table: 'rag_chunks', kind: 'manager' },
 
+  // ---- Retired, unread (day sheets, old schedule templates): admin / manager ----
+  { table: 'tour_roles', kind: 'manager' },
+  { table: 'tour_role_links', kind: 'manager' },
+  { table: 'advance_schedule_templates', kind: 'manager' },
+
   // ---- Shared reference data: read by any member, written by admin/manager ----
   ...[
     'advance_day_type_templates', 'advance_layout_templates', 'advance_templates',

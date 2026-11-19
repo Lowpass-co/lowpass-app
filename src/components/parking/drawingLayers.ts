@@ -13,7 +13,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { svgMatrix } from '@/lib/parking/drawings';
 import type { ParkingDrawing } from '@/lib/parking/model';
-import { canvasUrl, darkCopy, drawingLook, renderCrop, type DrawingFileRef } from './drawingRaster';
+import { canvasUrl, canvasUrlWithAlpha, darkCopy, drawingLook, renderCrop, seeThroughCopy, type DrawingFileRef } from './drawingRaster';
 import { resolvePalette } from './palette';
 import type { SceneDrawing } from './ParkingScene';
 
@@ -74,7 +74,9 @@ export function useDrawingRasters(drawings: ParkingDrawing[], files: ReadonlyMap
       renderCrop(f, d, paper)
         .then(async (light) => {
           const dark = darkCopy(light);
-          const [lightUrl, darkUrl] = await Promise.all([canvasUrl(light), canvasUrl(dark)]);
+          // On screen the inside / no-satellite look is the dark copy with
+          // the paper made clear; `dark` itself stays solid for 3D + PDF.
+          const [lightUrl, darkUrl] = await Promise.all([canvasUrl(light), canvasUrlWithAlpha(seeThroughCopy(dark, light))]);
           if (!mounted.current || wanted.current.get(d.id) !== key) {
             URL.revokeObjectURL(lightUrl);
             URL.revokeObjectURL(darkUrl);

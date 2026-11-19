@@ -124,6 +124,15 @@ export function vehicleParts(type: VehicleType | string, L: number, W: number): 
         { kind: 'mirror', f0: 0.9, f1: 1.1, w: 0.2, h: 0.6, s: -(W / 2 + 0.15) },
         { kind: 'mirror', f0: 0.9, f1: 1.1, w: 0.2, h: 0.6, s: W / 2 + 0.15 },
       ]);
+    case 'sprinter':
+      // The splitter's van on its own: short hood, one body to the tail.
+      return [
+        { kind: 'hood', f0: 0, f1: 0.7, w: W * 0.9, h: 0.45, r: 0.35 },
+        { kind: 'body', f0: 0.6, f1: L, w: W, h: 1, r: 0.3 },
+        { kind: 'glass', f0: 0.7, f1: 1.2, w: W * 0.86, h: 0.9, r: 0.2 },
+        { kind: 'mirror', f0: 0.9, f1: 1.1, w: 0.2, h: 0.6, s: -(W / 2 + 0.15) },
+        { kind: 'mirror', f0: 0.9, f1: 1.1, w: 0.2, h: 0.6, s: W / 2 + 0.15 },
+      ];
     case 'car':
       return [
         { kind: 'body', f0: 0, f1: L, w: W, h: 1, r: 0.6 },

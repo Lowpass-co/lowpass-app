@@ -460,6 +460,74 @@ export function orbit(
   viewer.scene.requestRender();
 }
 
+/** Left-drag / one finger MOVES the map: the ground point you grabbed stays
+ *  under the pointer, and nothing else happens (Nov 2026, Adam: "a click and
+ *  tiny drag moved me from the O2 in London to the ALPS").
+ *
+ *  Why Cesium's own drag did that: in 3D its left-drag spins the whole GLOBE
+ *  about the Earth's centre. With the Google mesh as the only ground (globe
+ *  off), a drag that starts on sky, a gap in the mesh, or near the horizon
+ *  has no nearby ground to hold, so a few pixels became degrees of the
+ *  planet — and inertia carried it further. So:
+ *    - Cesium's left-drag spin and its inertia are switched off;
+ *    - a drag only starts on picked ground (a drag from the sky does nothing);
+ *    - each step moves the camera along the ground's plane at the grab point,
+ *      and a step longer than the camera is high above that plane is dropped
+ *      (that is a pointer at the horizon, not a drag);
+ *    - the camera can't be dragged more than `maxRadius` metres from the venue.
+ *  Turning / tilting (right-drag, Ctrl-drag, two fingers) and zoom are Cesium's
+ *  as before. Returns a cleanup. */
+export function enableGroundPan(Cesium: C, viewer: CesiumNS.Viewer, anchor: LatLng, maxRadius = 3000): () => void {
+  const scene = viewer.scene;
+  const cam = viewer.camera;
+  const ctl = scene.screenSpaceCameraController;
+  ctl.rotateEventTypes = [];
+  ctl.translateEventTypes = [];
+  ctl.inertiaSpin = 0;
+  ctl.inertiaTranslate = 0;
+  ctl.maximumZoomDistance = maxRadius * 2;
+
+  const venue = Cesium.Cartesian3.fromDegrees(anchor.lng, anchor.lat, 0);
+  const handler = new Cesium.ScreenSpaceEventHandler(scene.canvas);
+  let grab: { point: CesiumNS.Cartesian3; plane: CesiumNS.Plane } | null = null;
+
+  handler.setInputAction((e: { position: CesiumNS.Cartesian2 }) => {
+    grab = null;
+    const hit = scene.pickPositionSupported ? scene.pickPosition(e.position) : undefined;
+    if (!hit || !Number.isFinite(hit.x)) return;
+    // A "hit" kilometres away is the far horizon, not something to hold.
+    if (Cesium.Cartesian3.distance(hit, venue) > maxRadius * 1.5) return;
+    const normal = Cesium.Ellipsoid.WGS84.geodeticSurfaceNormal(hit, new Cesium.Cartesian3());
+    grab = { point: hit, plane: Cesium.Plane.fromPointNormal(hit, normal) };
+  }, Cesium.ScreenSpaceEventType.LEFT_DOWN);
+
+  handler.setInputAction((e: { endPosition: CesiumNS.Cartesian2 }) => {
+    if (!grab) return;
+    const ray = cam.getPickRay(e.endPosition);
+    if (!ray) return;
+    const at = Cesium.IntersectionTests.rayPlane(ray, grab.plane);
+    if (!at) return; // pointing above the horizon
+    const step = Cesium.Cartesian3.subtract(grab.point, at, new Cesium.Cartesian3());
+    const high = Math.abs(Cesium.Plane.getPointDistance(grab.plane, cam.positionWC));
+    if (Cesium.Cartesian3.magnitude(step) > Math.max(5, high)) return;
+    const next = Cesium.Cartesian3.add(cam.position, step, new Cesium.Cartesian3());
+    const nextGround = Cesium.Ellipsoid.WGS84.scaleToGeodeticSurface(next, new Cesium.Cartesian3());
+    if (nextGround && Cesium.Cartesian3.distance(nextGround, venue) > maxRadius) return;
+    cam.position = next;
+    scene.requestRender();
+  }, Cesium.ScreenSpaceEventType.MOUSE_MOVE);
+
+  const stop = () => {
+    grab = null;
+  };
+  handler.setInputAction(stop, Cesium.ScreenSpaceEventType.LEFT_UP);
+  handler.setInputAction(stop, Cesium.ScreenSpaceEventType.PINCH_START);
+
+  return () => {
+    if (!handler.isDestroyed()) handler.destroy();
+  };
+}
+
 export function readCamera(viewer: CesiumNS.Viewer, anchor: LatLng): Camera3d {
   const c = viewer.camera.positionCartographic;
   const at = toLocal(anchor, { lat: deg(c.latitude), lng: deg(c.longitude) });

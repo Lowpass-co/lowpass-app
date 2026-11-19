@@ -7,7 +7,7 @@
    the bus / truck company's spec sheet.
    ============================================ */
 
-export type VehicleType = 'bus_us' | 'bus_us_trailer' | 'bus_eu' | 'bus_eu_trailer' | 'truck_us' | 'truck_eu' | 'splitter' | 'car' | 'generator';
+export type VehicleType = 'bus_us' | 'bus_us_trailer' | 'bus_eu' | 'bus_eu_trailer' | 'truck_us' | 'truck_eu' | 'splitter' | 'sprinter' | 'car' | 'generator';
 
 export interface VehicleSpec {
   type: VehicleType;
@@ -37,6 +37,9 @@ export const VEHICLES: readonly VehicleSpec[] = [
   { type: 'truck_eu', label: 'Truck, EU (artic)', short: 'Truck', length: 16.5, width: 2.55, height: 4.0, role: 'truck' },
   { type: 'truck_us', label: 'Truck, US (53 ft)', short: 'Truck', length: 22, width: 2.6, height: 4.1, role: 'truck' },
   { type: 'splitter', label: 'Splitter van + trailer', short: 'Van', length: 12, width: 2.1, height: 2.8, role: 'van' },
+  /* Nov 2026 (Adam: "a sprinter without trailer"). Mercedes Sprinter extra-
+     long wheelbase, high roof: 7.37 m × 2.02 m (body, mirrors folded) × 2.8 m. */
+  { type: 'sprinter', label: 'Sprinter / splitter van, no trailer', short: 'Van', length: 7.4, width: 2.02, height: 2.8, role: 'van' },
   { type: 'car', label: 'Car / runner', short: 'Car', length: 5, width: 2, height: 1.5, role: 'car' },
   { type: 'generator', label: 'Generator', short: 'Generator', length: 6, width: 2.5, height: 2.6, role: 'power' },
 ];

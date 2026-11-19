@@ -17,7 +17,7 @@ import type { Camera3d, LatLng, Pt } from '@/lib/parking/geo';
 import type { ParkingDrawing, ParkingItem } from '@/lib/parking/model';
 import { defaultCamera3d } from '@/lib/parking/blocks3d';
 import { loadCesium, type CesiumModule } from './loadCesium';
-import { applyCamera, createViewer, lookAt, orbit, pivot, populate, readCamera } from './scene3d';
+import { applyCamera, createViewer, enableGroundPan, lookAt, orbit, pivot, populate, readCamera } from './scene3d';
 import { resolvePalette } from './palette';
 import { tilesKey } from './googleTiles';
 
@@ -57,6 +57,7 @@ export function Parking3D({ anchor, items, drawings, floors, satellite, fallback
   const initial = useRef({ anchor, items, fallback, cam3d, drawings, floors });
   useEffect(() => {
     let dead = false;
+    let stopPan: (() => void) | null = null;
     const { anchor: a, items: its, fallback: fb, cam3d: cam, drawings: dws, floors: fls } = initial.current;
     loadCesium()
       .then(async (Cesium) => {
@@ -73,6 +74,8 @@ export function Parking3D({ anchor, items, drawings, floors, satellite, fallback
         groundRef.current = scene.ground0;
         if (cam) applyCamera(Cesium, viewer, a, cam);
         else lookAt(Cesium, viewer, a, def.target, scene.ground0, def.heading, def.pitch, def.range);
+        // A drag moves the map, predictably — never spins the globe (see enableGroundPan).
+        stopPan = enableGroundPan(Cesium, viewer, a);
         setState('ready');
       })
       .catch((e: unknown) => {
@@ -82,6 +85,7 @@ export function Parking3D({ anchor, items, drawings, floors, satellite, fallback
       });
     return () => {
       dead = true;
+      stopPan?.();
       const v = viewerRef.current;
       viewerRef.current = null;
       if (v && !v.isDestroyed()) v.destroy();
