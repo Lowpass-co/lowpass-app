@@ -97,6 +97,19 @@ describe('a driver opening it', () => {
     expect(p.map.view).not.toHaveProperty('pages');
     expect(p.map.view).not.toHaveProperty('cam3d');
     expect(db.t('parking_share_links')[0].views).toBe(1);
+    expect(p.pdf).toBeNull(); // never exported
+  });
+
+  it('gets the latest exported PDF, signed — but never a file from another workspace', async () => {
+    const show = await withMap();
+    db.seed('file_references', [{ id: 'pdf-1', workspace_id: WS, file_name: 'Parking – Velodrom.pdf', storage_provider: 'tour-files', provider_file_id: 'ws-1/t1/parking.pdf' }]);
+    db.t('parking_maps')[0].pdf_file_id = 'pdf-1';
+    const { token } = await createDriverLink(db.client(), { show, userId: 'u1', input: { label: null, hours: 48, max3d: 20 } });
+    const p = await driverMapPayload(db.client(), storage, await touchLink(db.client(), token, false));
+    expect(p.pdf).toEqual({ name: 'Parking – Velodrom.pdf', url: 'https://signed/tour-files/ws-1/t1/parking.pdf' });
+    db.t('parking_maps')[0].pdf_file_id = OTHER;
+    const q = await driverMapPayload(db.client(), storage, await touchLink(db.client(), token, false));
+    expect(q.pdf).toBeNull();
   });
 
   it('a wrong, malformed, revoked or expired token says so', async () => {

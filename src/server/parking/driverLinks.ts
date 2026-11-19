@@ -145,6 +145,8 @@ export interface DriverMapPayload {
   date: string;
   map: { anchor: LatLng; view: View; items: ParkingItem[]; notes: string; drawings: ParkingDrawing[] };
   files: DriverDrawingFile[];
+  /** The map's latest exported PDF (Files › Parking maps), signed — the printable version below the map. */
+  pdf: { name: string; url: string } | null;
 }
 
 export interface SignStorage {
@@ -160,6 +162,8 @@ export const supabaseSignStorage = (service: SupabaseClient): SignStorage => ({
 
 /** Drawing files are signed for this long — the page renders them on open. */
 export const DRIVER_FILE_SECONDS = 600;
+/** The PDF is opened by a tap, maybe long after the page loaded. */
+export const DRIVER_PDF_SECONDS = 3600;
 
 export async function driverMapPayload(service: SupabaseClient, storage: SignStorage, link: DriverLinkRow): Promise<DriverMapPayload> {
   const show = await loadParkingShow(service, link.tour_id, link.routing_id);
@@ -181,6 +185,19 @@ export async function driverMapPayload(service: SupabaseClient, storage: SignSto
       if (url) files.push({ id: f.id, name: f.file_name, kind: d.kind, url });
     }
   }
+  // The latest export, if there is one — again only from the link's workspace.
+  let pdf: DriverMapPayload['pdf'] = null;
+  if (map.pdf?.fileId) {
+    const { data } = await service
+      .from('file_references')
+      .select('id, file_name, storage_provider, provider_file_id')
+      .eq('workspace_id', link.workspace_id)
+      .eq('id', map.pdf.fileId)
+      .maybeSingle();
+    const f = data as { file_name: string; storage_provider: string | null; provider_file_id: string | null } | null;
+    const url = f?.storage_provider && f.provider_file_id ? await storage.sign(f.storage_provider, f.provider_file_id, DRIVER_PDF_SECONDS) : null;
+    if (f && url) pdf = { name: f.file_name, url };
+  }
   const { pages: _pages, cam3d: _cam, level: _level, ...view } = map.view;
   void _pages;
   void _cam;
@@ -193,5 +210,6 @@ export async function driverMapPayload(service: SupabaseClient, storage: SignSto
     date: show.date,
     map: { anchor: map.anchor, view, items: map.items, notes: map.notes, drawings: map.drawings.filter((d) => files.some((f) => f.id === d.fileId)) },
     files,
+    pdf,
   };
 }

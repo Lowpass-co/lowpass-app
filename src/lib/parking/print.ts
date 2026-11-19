@@ -126,3 +126,94 @@ export function badgeRadii(centres: readonly Pt[], r: number, min: number): numb
     return Math.max(min, Math.min(r, near * 0.48));
   });
 }
+
+/** Do two convex polygons overlap? (Separating-axis test; touching = no.) */
+export function convexOverlap(a: readonly Pt[], b: readonly Pt[]): boolean {
+  for (const poly of [a, b]) {
+    for (let i = 0; i < poly.length; i++) {
+      const p = poly[i];
+      const q = poly[(i + 1) % poly.length];
+      const nx = q.y - p.y;
+      const ny = p.x - q.x;
+      let aMin = Infinity;
+      let aMax = -Infinity;
+      let bMin = Infinity;
+      let bMax = -Infinity;
+      for (const r of a) {
+        const d = r.x * nx + r.y * ny;
+        aMin = Math.min(aMin, d);
+        aMax = Math.max(aMax, d);
+      }
+      for (const r of b) {
+        const d = r.x * nx + r.y * ny;
+        bMin = Math.min(bMin, d);
+        bMax = Math.max(bMax, d);
+      }
+      if (aMax <= bMin || bMax <= aMin) return false;
+    }
+  }
+  return true;
+}
+
+export interface NameSpot {
+  id: string;
+  /** The vehicle's centre on screen. */
+  centre: Pt;
+  /** The vehicle's axis on screen, degrees, already turned upright (−90…90). */
+  angle: number;
+  /** Half the vehicle's width on screen. */
+  halfWidth: number;
+  /** The name's size on screen. */
+  w: number;
+  h: number;
+}
+
+/** A rotated rectangle's corners. */
+export function rectAt(c: Pt, angle: number, w: number, h: number): Pt[] {
+  const a = (angle * Math.PI) / 180;
+  const ux = { x: Math.cos(a), y: Math.sin(a) };
+  const uy = { x: -Math.sin(a), y: Math.cos(a) };
+  return [
+    [-1, -1],
+    [1, -1],
+    [1, 1],
+    [-1, 1],
+  ].map(([i, j]) => ({ x: c.x + ux.x * (w / 2) * i + uy.x * (h / 2) * j, y: c.y + ux.y * (w / 2) * i + uy.y * (h / 2) * j }));
+}
+
+/** Names beside the numbers — only where they cross nothing (Nov 2026, Adam:
+ *  "if there is no label cross over … number + label"). Each name is written
+ *  along its vehicle, just off one side or the other; it's placed only if it
+ *  overlaps no vehicle, no badge, no name already placed and stays inside the
+ *  picture — and only on the OPEN side: the strip just beyond the name must be
+ *  clear too, so a name never sits sandwiched in the gap between two vehicles
+ *  (which one would it belong to?). Taken in `spots` order (the numbers), so a
+ *  tight row keeps its numbers and its outer vehicles get names. Screen
+ *  pixels in, centres out. */
+export function placeNames(
+  spots: readonly NameSpot[],
+  obstacles: readonly (readonly Pt[])[],
+  bounds: { w: number; h: number },
+  gap = 2,
+): Map<string, Pt> {
+  const placed: Pt[][] = [];
+  const out = new Map<string, Pt>();
+  const inside = (r: Pt[]) => r.every((q) => q.x >= 0 && q.y >= 0 && q.x <= bounds.w && q.y <= bounds.h);
+  for (const s of spots) {
+    const a = (s.angle * Math.PI) / 180;
+    const perp = { x: -Math.sin(a), y: Math.cos(a) };
+    const off = s.halfWidth + gap + s.h / 2;
+    for (const side of [1, -1]) {
+      const c = { x: s.centre.x + perp.x * off * side, y: s.centre.y + perp.y * off * side };
+      const r = rectAt(c, s.angle, s.w, s.h);
+      if (!inside(r)) continue;
+      if (obstacles.some((o) => convexOverlap(r, o)) || placed.some((o) => convexOverlap(r, o))) continue;
+      const beyond = rectAt({ x: c.x + perp.x * s.h * side, y: c.y + perp.y * s.h * side }, s.angle, s.w, s.h);
+      if (obstacles.some((o) => convexOverlap(beyond, o)) || placed.some((o) => convexOverlap(beyond, o))) continue;
+      placed.push(r);
+      out.set(s.id, c);
+      break;
+    }
+  }
+  return out;
+}

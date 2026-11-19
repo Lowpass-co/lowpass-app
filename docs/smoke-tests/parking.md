@@ -269,7 +269,7 @@ browser key restricted to the Map Tiles API and the app's domains).**
 
 **Do**: Make a link with 2 3D views; on the phone tap Look around in 3D, back to Plan, again, back, again.
 
-**Expect**: "Look around in 3D (2 left)" → 3D opens (touch hint: pinch / two fingers); then "(1 left)"; the third time "3D used up" — the plan still works. The owner's list shows 3D 2/2.
+**Expect**: An orange-outlined "Look around in 3D" (no count on it) → 3D opens (touch hint: pinch / two fingers); the second time the same; the third time the button is grey and says "3D expired" — the plan still works. The owner's list shows 3D 2/2.
 
 **Last verified**:
 
@@ -377,11 +377,11 @@ browser key restricted to the Map Tiles API and the app's domains).**
 
 **Last verified**:
 
-#### PRK-45 — PDF: vehicles are numbered, the key names them
+#### PRK-45 — PDF and driver link: vehicles are numbered, names only where they're clear
 
 **Do**: Export a map with tight rows (a bus park, a row of trucks, cars side by side), on more than one page / level.
 
-**Expect**: On the plan pages every vehicle carries a small white numbered badge (no names on the vehicles); neighbours have consecutive numbers along a row; badges shrink rather than overlap in a tight row. The key's Vehicles list reads "7 · Truck 7 · Truck · 16.5 m" in number order (two columns past 22 vehicles), each number in the vehicle's colour. The same vehicle has the same number on every page and level. The editor on screen still shows names.
+**Expect**: On the plan pages every vehicle carries a small white numbered badge; neighbours have consecutive numbers along a row; badges shrink rather than overlap in a tight row. A vehicle's NAME is written beside it only where it crosses nothing and isn't squeezed between two vehicles — a lone bus and the outer vehicles of a row are named, the middle of a tight row is numbers only. The driver link's plan does the same, and its Vehicles list is numbered in order; under it "Printable map · Open the PDF" opens the latest export (absent if never exported). The key's Vehicles list reads "7 · Truck 7 · Truck · 16.5 m" in number order (two columns past 22 vehicles), each number in the vehicle's colour. The same vehicle has the same number on every page and level. The editor on screen still shows names.
 
 **Last verified**:
 

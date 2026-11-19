@@ -613,7 +613,10 @@ recreate a `_legacy/` tree: delete dead code instead of parking it.
   the key + notes; the editor outlines each plan page's area. On plan pages
   vehicles carry NUMBERED BADGES, not names (`vehicleNumbers` in print.ts — one
   numbering per PDF, a nearest-neighbour walk so rows count along; `badgeRadii`
-  shrinks them before they touch); the key lists the numbers. The screen keeps names. No pages saved =
+  shrinks them before they touch); a NAME goes beside a badge only where it crosses
+  nothing and isn't sandwiched between vehicles (`placeNames`); the key lists the
+  numbers. The driver link's plan + Vehicles list use the same numbers, and the
+  link carries the latest export (`pdf`, signed 1 h). The editor keeps names. No pages saved =
   `defaultPages()` (Plan + 3D). One off-screen Cesium viewer renders all 3D
   pages; a 3D failure drops only the 3D pages, with a warning.
 - **Venue drawings** (Nov 2026, Adam — migration 288, `parking_maps.drawings`):
@@ -664,7 +667,8 @@ recreate a `_legacy/` tree: delete dead code instead of parking it.
   turned off. The page opens on the PLAN (2D tiles, free at tour scale); "Look
   around in 3D" first POSTs `/api/public/parking/[token]/3d`, which TAKES one
   of the link's capped 3D opens (each = a billed Google 3D session, ~0.6 ¢ after
-  the free 1,000 / month) through `parking_share_touch()` — atomic, service
+  the free 1,000 / month; the button shows no count — grey "3D expired" when
+  used up) through `parking_share_touch()` — atomic, service
   role only. `driverMapPayload` returns only that map, venue and the drawing
   files it uses (signed 10 min). "Get there" hands gates to Google Maps / Waze
   / Apple Maps (`navigateUrls`). Read-only viewer: `<ParkingViewer>`; tiles via
