@@ -337,6 +337,14 @@ browser key restricted to the Map Tiles API and the app's domains).**
 
 **Last verified**:
 
+#### PRK-40 — The panel: Add · Drawings · Share
+
+**Do**: Open a parking map. Look at the panel; flip UK / EU ↔ US; add a vehicle; press Done; open Drawings, then Share.
+
+**Expect**: Header = venue, date, save state, Export PDF. Add = 7 vehicle tiles in that region's sizes (US in North America by default), markers, draw tools, Shortcuts folded. Adding selects the vehicle and its edit view replaces the tabs; Done goes back. Drawings = satellite switch + venue drawings with all their inside settings. Share = PDF pages, last PDF, Send to a driver, notes. Read-only members see Drawings + Share only.
+
+**Last verified**:
+
 ## Known broken
 
 #### PRK-90 — Re-exporting makes a new file

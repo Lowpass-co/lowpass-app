@@ -73,6 +73,8 @@ describe('ParkingEditor', () => {
     expect(b.version).toBeNull();
     expect(parseMapBody(b.map).items[0]).toMatchObject({ kind: 'vehicle', type: 'bus_eu', length: 13.5 });
 
+    // A new vehicle is selected (its edit view replaces the tabs); Done goes back to Add.
+    fireEvent.click(screen.getByRole('button', { name: 'Done' }));
     fireEvent.click(screen.getByRole('button', { name: /Truck, EU/ }));
     await act(async () => vi.advanceTimersByTime(1000));
     const second = calls.filter((c) => c.method === 'PUT')[1].body as { version: number };
@@ -99,16 +101,20 @@ describe('ParkingEditor', () => {
     fireEvent.click(screen.getByRole('button', { name: /Car \/ runner/ }));
     await act(async () => vi.advanceTimersByTime(1000));
     expect(screen.getByText(/changed somewhere else/)).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Done' }));
     fireEvent.click(screen.getByRole('button', { name: /Car \/ runner/ }));
     await act(async () => vi.advanceTimersByTime(3000));
     expect(calls.filter((c) => c.method === 'PUT')).toHaveLength(1);
     fireEvent.click(screen.getByRole('button', { name: 'Load theirs' }));
+    if (screen.queryByRole('button', { name: 'Done' })) fireEvent.click(screen.getByRole('button', { name: 'Done' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Share' }));
     expect(screen.getByDisplayValue('theirs')).toBeTruthy();
   });
 
   it('read-only members get no tools and never save', async () => {
     mount(null, false);
     expect(screen.queryByRole('button', { name: /Tour bus/ })).toBeNull();
+    expect(screen.queryByRole('tab', { name: 'Add' })).toBeNull();
     expect(screen.getByText('View only')).toBeTruthy();
     await act(async () => vi.advanceTimersByTime(3000));
     expect(calls.filter((c) => c.method === 'PUT')).toHaveLength(0);
@@ -125,8 +131,31 @@ describe('ParkingEditor', () => {
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: 'Find' }));
     });
-    expect(screen.getByRole('heading', { name: 'Parking' })).toBeTruthy();
+    expect(screen.getByRole('heading', { level: 1 })).toBeTruthy(); // the editor, titled with the venue
     expect(calls.some((c) => c.url.includes('geocode'))).toBe(false); // pasted numbers: no geocode call
+  });
+});
+
+describe('the panel: Add · Drawings · Share (Nov 2026)', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+  it('UK / EU sizes by default in Leeds; US flips the tiles to US sizes', () => {
+    mount();
+    expect(screen.getByRole('button', { name: /Truck, EU \(artic\), 16.5/ })).toBeTruthy();
+    fireEvent.click(screen.getByRole('radio', { name: 'US' }));
+    expect(screen.queryByRole('button', { name: /Truck, EU/ })).toBeNull();
+    expect(screen.getByRole('button', { name: /Truck, US \(53 ft\), 22/ })).toBeTruthy();
+  });
+  it('Drawings and Share hold their own sections; Export stays in the header', () => {
+    mount();
+    expect(screen.getByRole('button', { name: /Export PDF/ })).toBeTruthy();
+    fireEvent.click(screen.getByRole('tab', { name: 'Drawings' }));
+    expect(screen.getByRole('button', { name: /Add a venue drawing/ })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /Tour bus/ })).toBeNull();
+    fireEvent.click(screen.getByRole('tab', { name: 'Share' }));
+    expect(screen.getByRole('button', { name: /Send to a driver/ })).toBeTruthy();
+    expect(screen.getByRole('button', { name: /Export PDF/ })).toBeTruthy();
   });
 });
 
@@ -136,6 +165,7 @@ describe('PDF pages', () => {
   });
   it('starts with Plan + 3D; adding a plan view, renaming and reordering are saved on the view', async () => {
     mount();
+    fireEvent.click(screen.getByRole('tab', { name: 'Share' }));
     const names = () => screen.getAllByRole('textbox', { name: /Page \d name/ }).map((i) => (i as HTMLInputElement).value);
     expect(names()).toEqual(['Plan', '3D']);
     fireEvent.click(screen.getByRole('button', { name: /This plan view/ }));
@@ -152,6 +182,7 @@ describe('PDF pages', () => {
 
   it('the last page can’t be removed', () => {
     mount();
+    fireEvent.click(screen.getByRole('tab', { name: 'Share' }));
     fireEvent.click(screen.getByRole('button', { name: 'Remove page 2' }));
     expect((screen.getByRole('button', { name: 'Remove page 1' }) as HTMLButtonElement).disabled).toBe(true);
   });
@@ -266,6 +297,7 @@ describe('venue drawings: levels and last time at this venue', () => {
       }),
     );
     mount({ ...withDock(), drawings: [], anchor: { lat: 52.4548, lng: -1.7206 } });
+    fireEvent.click(screen.getByRole('tab', { name: 'Drawings' }));
     // Let the drawings fetch resolve (fake timers: flush microtasks by hand).
     for (let i = 0; i < 5; i++) await act(async () => { await Promise.resolve(); });
     fireEvent.click(screen.getByRole('button', { name: 'Use it' }));
