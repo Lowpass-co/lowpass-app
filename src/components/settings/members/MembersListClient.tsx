@@ -18,6 +18,7 @@ import { useToast } from '@/components/ui/Toast';
 import { toTitleCase } from '@/lib/text/toTitleCase';
 import { MemberManageSlideOver } from './MemberManageSlideOver';
 import { InviteMemberSlideOver } from './InviteMemberSlideOver';
+import { summariseAccess } from '@/lib/permissions/areas';
 import type {
   Member,
   PendingInvite,
@@ -74,7 +75,7 @@ export function MembersListClient({ currentUserId }: MembersListClientProps) {
   const [search, setSearch] = useState('');
   const [roleFilter, setRoleFilter] = useState<RoleFilter>('all');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
-  const [tagFilter, setTagFilter] = useState<string>('all');
+  const [access, setAccess] = useState<NonNullable<WorkspaceMembersPayload['access']>>({});
   const [manageMember, setManageMember] = useState<Member | null>(null);
   const [inviteOpen, setInviteOpen] = useState(false);
 
@@ -89,6 +90,7 @@ export function MembersListClient({ currentUserId }: MembersListClientProps) {
       const body = (await res.json()) as WorkspaceMembersPayload;
       setMembers(body.members);
       setInvites(body.invites);
+      setAccess(body.access ?? {});
       setError(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Network error');
@@ -118,25 +120,6 @@ export function MembersListClient({ currentUserId }: MembersListClientProps) {
     setRefreshing(false);
   }
 
-  // Derived data: known tags + suggested tags + counts.
-  const knownTags = useMemo(() => {
-    const set = new Set<string>();
-    for (const m of members) for (const t of m.tags) set.add(t);
-    for (const i of invites) for (const t of i.initial_tags) set.add(t);
-    return Array.from(set).sort();
-  }, [members, invites]);
-
-  const suggestedTags = useMemo(() => {
-    const counts = new Map<string, number>();
-    for (const m of members) {
-      for (const t of m.tags) counts.set(t, (counts.get(t) ?? 0) + 1);
-    }
-    return Array.from(counts.entries())
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 6)
-      .map(([t]) => t);
-  }, [members]);
-
   const counts = useMemo(() => {
     let admin = 0,
       manager = 0,
@@ -165,23 +148,21 @@ export function MembersListClient({ currentUserId }: MembersListClientProps) {
     const q = search.trim().toLowerCase();
     return members.filter((m) => {
       if (roleFilter !== 'all' && m.role !== roleFilter) return false;
-      if (tagFilter !== 'all' && !m.tags.includes(tagFilter)) return false;
       if (!q) return true;
-      const hay = `${m.display_name ?? ''} ${m.email ?? ''} ${m.tags.join(' ')}`.toLowerCase();
+      const hay = `${m.display_name ?? ''} ${m.email ?? ''}`.toLowerCase();
       return hay.includes(q);
     });
-  }, [members, search, roleFilter, statusFilter, tagFilter]);
+  }, [members, search, roleFilter, statusFilter]);
 
   const filteredInvites = useMemo(() => {
     if (statusFilter === 'active') return [];
     const q = search.trim().toLowerCase();
     return invites.filter((i) => {
       if (roleFilter !== 'all' && i.invited_role !== roleFilter) return false;
-      if (tagFilter !== 'all' && !i.initial_tags.includes(tagFilter)) return false;
       if (!q) return true;
       return i.invited_email.toLowerCase().includes(q);
     });
-  }, [invites, search, roleFilter, statusFilter, tagFilter]);
+  }, [invites, search, roleFilter, statusFilter]);
 
   if (loading) {
     return (
@@ -303,18 +284,9 @@ export function MembersListClient({ currentUserId }: MembersListClientProps) {
             { value: 'readonly', label: 'Read-only' },
           ]}
         />
-        <FilterSelect
-          label="Tag"
-          value={tagFilter}
-          onChange={setTagFilter}
-          options={[
-            { value: 'all', label: 'Any' },
-            ...knownTags.map((t) => ({ value: t, label: t })),
-          ]}
-        />
         <input
           type="text"
-          placeholder="Search by name, email, or tag…"
+          placeholder="Search by name or email…"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           style={{
@@ -363,6 +335,7 @@ export function MembersListClient({ currentUserId }: MembersListClientProps) {
             <li key={m.member_id}>
               <MemberCard
                 member={m}
+                accessRows={access[m.member_id] ?? []}
                 isCallerSelf={m.user_id === currentUserId}
                 onManage={() => setManageMember(m)}
               />
@@ -411,17 +384,16 @@ export function MembersListClient({ currentUserId }: MembersListClientProps) {
       <MemberManageSlideOver
         open={!!manageMember}
         member={manageMember}
-        knownTags={knownTags}
-        suggestedTags={suggestedTags}
         isCallerSelf={manageMember?.user_id === currentUserId}
-        onClose={() => setManageMember(null)}
+        onClose={() => {
+          setManageMember(null);
+          void fetchData(); // the card's tour-access line follows what was saved
+        }}
         onSaved={() => void fetchData()}
         onRemoved={() => void fetchData()}
       />
       <InviteMemberSlideOver
         open={inviteOpen}
-        knownTags={knownTags}
-        suggestedTags={suggestedTags}
         existingEmails={existingEmails}
         onClose={() => setInviteOpen(false)}
         onInvited={() => void fetchData()}
@@ -432,19 +404,14 @@ export function MembersListClient({ currentUserId }: MembersListClientProps) {
 
 interface MemberCardProps {
   member: Member;
+  accessRows: Array<{ tour_id: string | null; area: string; level: string }>;
   isCallerSelf: boolean;
   onManage: () => void;
 }
 
-function MemberCard({ member, isCallerSelf, onManage }: MemberCardProps) {
-  const grantSummary = useMemo(() => {
-    if (member.role !== 'readonly') return null;
-    if (member.grants.length === 0) return 'No granted resources.';
-    const labels = member.grants.map(
-      (g) => `${g.resource_id}${g.permission === 'write' ? ' (read+write)' : ''}`,
-    );
-    return `Granted: ${Array.from(new Set(labels)).slice(0, 4).join(', ')}${labels.length > 4 ? ` +${labels.length - 4} more` : ''}`;
-  }, [member.role, member.grants]);
+function MemberCard({ member, accessRows, isCallerSelf, onManage }: MemberCardProps) {
+  // A Member's tour access in one line (admins / managers see every tour).
+  const grantSummary = member.role === 'readonly' ? summariseAccess(accessRows) : null;
 
   return (
     <article
@@ -530,9 +497,6 @@ function MemberCard({ member, isCallerSelf, onManage }: MemberCardProps) {
           }}
         >
           <span>{roleLabel(member.role)}</span>
-          {member.tags.length > 0 ? (
-            <span>· Tags: {member.tags.join(', ')}</span>
-          ) : null}
           <span>· Last seen {relativeTime(member.last_sign_in_at)}</span>
         </div>
         {grantSummary ? (
@@ -646,17 +610,6 @@ function PendingInviteCard({ invite, onChanged, onToast }: PendingInviteCardProp
           {' · '}
           Expires in {expiresInDays(invite.expires_at)}d
         </div>
-        {invite.initial_tags.length > 0 ? (
-          <div
-            style={{
-              marginTop: 4,
-              fontSize: 'var(--lp-text-xs)',
-              color: 'var(--lp-text-tertiary)',
-            }}
-          >
-            Tags on accept: {invite.initial_tags.join(', ')}
-          </div>
-        ) : null}
         <div
           style={{
             marginTop: 4,

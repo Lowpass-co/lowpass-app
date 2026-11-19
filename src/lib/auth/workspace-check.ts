@@ -20,13 +20,7 @@
 
 import { NextResponse } from 'next/server';
 import type { SupabaseClient } from '@supabase/supabase-js';
-import {
-  canAccess,
-  fetchActiveGrants,
-  getActiveMembership,
-  type ActiveMembership,
-  type GrantRow,
-} from '@/lib/permissions/server';
+import { getActiveMembership, type ActiveMembership } from '@/lib/permissions/server';
 import type { Area } from '@/lib/permissions/areas';
 import { accessFromRows } from '@/lib/permissions/tourAccess';
 
@@ -72,32 +66,27 @@ export async function requireUserAndWorkspace(
    This is the missing layer. Call it from every mutating handler:
 
      const auth = await requireWrite(supabase);            // admin/manager
-     const auth = await requireWrite(supabase, { resource: 'budget.line_items' });
+     const auth = await requireWrite(supabase, { area: 'budget', tourId });   // a Member with EDIT on Budget
      const auth = await requireWrite(supabase, { adminOnly: true });
      if ('error' in auth) return auth.error;
 
-   WHY canAccess AND NOT A NEW PREDICATE: it already means exactly this —
-   admin/manager short-circuit true, readonly needs an explicit grant, and
-   `write` is checked strictly (a read grant does not satisfy it, though write
-   satisfies read). Inventing a second role model is what produced the
-   can_access / is_workspace_admin split the spec calls incoherent. One model.
+   ONE MODEL (Nov 2026): admin / manager pass on role; a Member passes only
+   with EDIT on the named area of the named tour (tour access — the same rows
+   the database rules read). The Sprint 9 page grants no longer open anything.
 
-   NO RESOURCE = ADMIN/MANAGER ONLY. Most tables have no catalogue entry, and
-   the safe reading of "no declared resource" for a WRITE is that only the two
-   privileged roles may do it — the opposite of the read-side default in the nav
+   NO AREA = ADMIN/MANAGER ONLY. The safe reading of "no declared area" for a
+   WRITE is that only the two privileged roles may do it — the opposite of the read-side default in the nav
    rail, deliberately. A nav that shows too much is a nuisance; a write that
    lets too much through is this bug.
    ============================================ */
 
 export type WriteAuth = WorkspaceAuth & {
   membership: ActiveMembership;
-  grants: GrantRow[];
 };
 
 export async function requireWrite(
   supabase: SupabaseClient,
   opts: {
-    resource?: string;
     adminOnly?: boolean;
     /** Tour access (Nov 2026): a Member passes with EDIT on this area of this
      *  tour (`my_tour_access`, the same rows the database rules read). Admins
@@ -122,35 +111,23 @@ export async function requireWrite(
     { error: 'Forbidden — your role cannot make this change.' },
     { status: 403 },
   );
+  const ok = { user: { id: user.id }, workspaceId: membership.workspace_id, membership };
+  const privileged = membership.role === 'admin' || membership.role === 'manager';
 
-  if (opts.adminOnly) {
-    if (membership.role !== 'admin') return { error: forbidden };
-    return { user: { id: user.id }, workspaceId: membership.workspace_id, membership, grants: [] };
-  }
+  if (opts.adminOnly) return membership.role === 'admin' ? ok : { error: forbidden };
 
   if (opts.area) {
-    if (membership.role === 'admin' || membership.role === 'manager') {
-      return { user: { id: user.id }, workspaceId: membership.workspace_id, membership, grants: [] };
-    }
+    if (privileged) return ok;
     if (!opts.tourId) return { error: forbidden };
     const { data, error } = await supabase.rpc('my_tour_access', { p_tour_id: opts.tourId });
     if (error) return { error: forbidden };
     const level = accessFromRows(data as { area: string; level: string }[])[opts.area];
-    if (level !== 'edit') return { error: forbidden };
-    return { user: { id: user.id }, workspaceId: membership.workspace_id, membership, grants: [] };
+    return level === 'edit' ? ok : { error: forbidden };
   }
 
-  /* Admin/manager pass on role, so the grants query only runs for readonly —
-     fetchActiveGrants returns [] for the others without touching the table. */
-  const grants = await fetchActiveGrants(supabase, membership, user.id);
-
-  const allowed = opts.resource
-    ? canAccess(membership, grants, 'page', opts.resource, 'write')
-    : membership.role === 'admin' || membership.role === 'manager';
-
-  if (!allowed) return { error: forbidden };
-
-  return { user: { id: user.id }, workspaceId: membership.workspace_id, membership, grants };
+  /* No area: admin / manager only. (The Sprint 9 page grants that used to open
+     a write here are gone — tour access is the one system, Nov 2026.) */
+  return privileged ? ok : { error: forbidden };
 }
 
 /** Confirm `tourId` belongs to `workspaceId`. Returns null on

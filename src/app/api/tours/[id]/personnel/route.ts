@@ -17,9 +17,8 @@ import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { isRoleTag } from '@/lib/personnel/role-tags';
 import {
   getActiveMembership,
-  fetchActiveGrants,
-  canAccess,
 } from '@/lib/permissions/server';
+import { getViewerAccess, viewerAllows } from '@/lib/permissions/tourAccess';
 // Rates SSOT — a new card is seeded from the person's LAST tour (Oct 2026);
 // rates are only ever typed in Payroll → Summary.
 import { lastTourSeed, insertSeedLines } from '@/server/payroll/seedRateCard';
@@ -80,8 +79,8 @@ export async function GET(
   if (!membership) {
     return NextResponse.json({ error: 'No active workspace' }, { status: 403 });
   }
-  const grants = await fetchActiveGrants(supabase, membership, user.id);
-  if (!canAccess(membership, grants, 'page', 'operations.personnel', 'read')) {
+  // Tour access (Nov 2026): the crew list is the Logistics area.
+  if (!viewerAllows(await getViewerAccess(supabase, user.id, tourId), 'logistics')) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
@@ -212,8 +211,8 @@ async function postHandler(
   if (!membership) {
     return NextResponse.json({ error: 'No active workspace' }, { status: 403 });
   }
-  const grants = await fetchActiveGrants(supabase, membership, user.id);
-  if (!canAccess(membership, grants, 'page', 'operations.personnel', 'write')) {
+  // Changing the crew is admin / manager only (as requireWrite(supabase)).
+  if (!(await getViewerAccess(supabase, user.id, tourId))?.manager) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 

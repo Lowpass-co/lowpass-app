@@ -26,9 +26,8 @@ import { NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 import {
   getActiveMembership,
-  fetchActiveGrants,
-  canAccess,
 } from '@/lib/permissions/server';
+import { getViewerAccess, viewerAllows } from '@/lib/permissions/tourAccess';
 
 export const dynamic = 'force-dynamic';
 
@@ -87,8 +86,8 @@ export async function POST(
   if (!membership) {
     return NextResponse.json({ error: 'No active workspace' }, { status: 403 });
   }
-  const grants = await fetchActiveGrants(supabase, membership, user.id);
-  if (!canAccess(membership, grants, 'page', 'operations.personnel', 'read')) {
+  // Tour access (Nov 2026): the crew list is the Logistics area.
+  if (!viewerAllows(await getViewerAccess(supabase, user.id, tourId), 'logistics')) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 

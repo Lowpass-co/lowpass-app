@@ -6,7 +6,7 @@
      PATCH { id, revoke: true } → { ok }
 
    READ CHECK (GET): session + active membership; scoped to that workspace.
-   WRITES: requireWrite with the Files resource — the same gate as the Files
+   WRITES: requireWrite with the Files AREA of the link's tour — the same gate as the Files
    page. Password hashes never leave the server.
    ============================================ */
 
@@ -18,7 +18,6 @@ import { parseCreate, sanitizeFolder } from '@/lib/files/shareLinks';
 import { createLink, listLinks, revokeLink } from '@/server/files/shareLinks';
 import { NO_STORE, readJson, shareErrorResponse, str } from '@/server/files/shareResponse';
 
-const RESOURCE = 'operations.files';
 
 export async function GET(request: Request) {
   const supabase = await createServerSupabaseClient();
@@ -46,10 +45,11 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   const supabase = await createServerSupabaseClient();
-  const auth = await requireWrite(supabase, { resource: RESOURCE });
-  if ('error' in auth) return auth.error;
   const parsed = parseCreate(await readJson(request));
   if (!parsed.ok) return NextResponse.json({ error: parsed.error }, { status: 400 });
+  // Tour access: EDIT on this tour's Files (admins / managers on role).
+  const auth = await requireWrite(supabase, { area: 'files', tourId: parsed.value.tourId });
+  if ('error' in auth) return auth.error;
   try {
     const link = await createLink(supabase, { workspaceId: auth.workspaceId, userId: auth.user.id, input: parsed.value });
     return NextResponse.json({ link }, { headers: NO_STORE });
@@ -60,11 +60,13 @@ export async function POST(request: Request) {
 
 export async function PATCH(request: Request) {
   const supabase = await createServerSupabaseClient();
-  const auth = await requireWrite(supabase, { resource: RESOURCE });
-  if ('error' in auth) return auth.error;
   const body = await readJson(request);
   const id = str(body.id);
   if (!id || body.revoke !== true) return NextResponse.json({ error: 'Send { id, revoke: true }' }, { status: 400 });
+  // The link's own tour decides (the read is RLS-scoped: a link you can't see is "not found").
+  const { data: row } = await supabase.from('file_share_links').select('tour_id').eq('id', id).maybeSingle();
+  const auth = await requireWrite(supabase, { area: 'files', tourId: (row as { tour_id: string | null } | null)?.tour_id ?? null });
+  if ('error' in auth) return auth.error;
   try {
     await revokeLink(supabase, { workspaceId: auth.workspaceId, id });
     return NextResponse.json({ ok: true });

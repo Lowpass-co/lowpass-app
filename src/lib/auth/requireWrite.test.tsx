@@ -11,14 +11,12 @@
    refuses a real readonly session is the live acceptance test, which no unit
    test can stand in for.
 
-   The case that matters most is the LAST one. `canAccess` treats write as
-   strictly stronger than read, so a member holding only a read grant must be
-   refused a write — if that ever inverts, every "view-only" grant in the
-   workspace silently becomes an edit grant.
+   Since Nov 2026 a Member's writes are decided by tour access alone (the
+   `requireWrite by tour area` block below): VIEW never buys a write.
    ============================================ */
 
 import { describe, it, expect } from 'vitest';
-import { canAccess, type ActiveMembership, type GrantRow } from '@/lib/permissions/server';
+import type { ActiveMembership } from '@/lib/permissions/server';
 
 const member = (role: ActiveMembership['role'], tags: string[] = []): ActiveMembership => ({
   workspace_id: 'ws-1',
@@ -28,18 +26,6 @@ const member = (role: ActiveMembership['role'], tags: string[] = []): ActiveMemb
   tags,
 });
 
-const grant = (
-  resource_id: string,
-  permission: GrantRow['permission'],
-  subject: Partial<GrantRow> = {},
-): GrantRow => ({
-  resource_type: 'page',
-  resource_id,
-  permission,
-  subject_type: 'user',
-  subject_id: 'u-1',
-  ...subject,
-});
 
 /** The predicate requireWrite applies when no resource is named. */
 const roleOnlyWrite = (m: ActiveMembership | null) =>
@@ -68,36 +54,21 @@ describe('the write predicate with NO resource named', () => {
   });
 });
 
-describe('the write predicate WITH a resource', () => {
-  const can = (m: ActiveMembership, g: GrantRow[], id: string) =>
-    canAccess(m, g, 'page', id, 'write');
-
-  it('admin and manager pass without any grant', () => {
-    expect(can(member('admin'), [], 'budget.line_items')).toBe(true);
-    expect(can(member('manager'), [], 'budget.line_items')).toBe(true);
+describe('ONE SYSTEM — the Sprint 9 page grants open nothing (Nov 2026)', () => {
+  /* Prevention, not detection: a second permission system that still gates a
+     page is invisible until a member's access disagrees with the screen. So
+     the old predicate is gone, and nothing may call it again. */
+  it('no app code imports the old grant checks', async () => {
+    const { execSync } = await import('node:child_process');
+    const hits = execSync("grep -rlE '\\b(canAccess|fetchActiveGrants|canAccessBatch)\\b' src --include=*.ts --include=*.tsx || true", { encoding: 'utf8' })
+      .split('\n')
+      .filter((f) => f && !f.endsWith('.test.tsx'));
+    expect(hits).toEqual([]);
   });
-
-  it('readonly with a WRITE grant may write that resource', () => {
-    expect(can(member('readonly'), [grant('budget.line_items', 'write')], 'budget.line_items')).toBe(true);
-  });
-
-  it('readonly with a write grant on a DIFFERENT resource may not', () => {
-    expect(can(member('readonly'), [grant('budget.receipts', 'write')], 'budget.line_items')).toBe(false);
-  });
-
-  it('A READ GRANT DOES NOT BUY A WRITE', () => {
-    /* If this inverts, every view-only grant becomes an edit grant silently.
-       canAccess allows write→read, never read→write. */
-    expect(can(member('readonly'), [grant('budget.line_items', 'read')], 'budget.line_items')).toBe(false);
-    // ...and the same grant still satisfies a READ, so the asymmetry is real.
-    expect(canAccess(member('readonly'), [grant('budget.line_items', 'read')], 'page', 'budget.line_items', 'read')).toBe(true);
-  });
-
-  it('a tag-mediated write grant works only when the member carries the tag', () => {
-    const g = [grant('budget.line_items', 'write', { subject_type: 'tag', subject_id: 'finance' })];
-    expect(can(member('readonly', ['finance']), g, 'budget.line_items')).toBe(true);
-    expect(can(member('readonly', ['crew']), g, 'budget.line_items')).toBe(false);
-    expect(can(member('readonly'), g, 'budget.line_items')).toBe(false);
+  it('requireWrite takes no `resource` — a write names a tour area, or is admin / manager only', async () => {
+    const { execSync } = await import('node:child_process');
+    const hits = execSync("grep -rn 'requireWrite([^)]*resource:' src --include=*.ts --include=*.tsx || true", { encoding: 'utf8' }).trim();
+    expect(hits).toBe('');
   });
 });
 

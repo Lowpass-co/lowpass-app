@@ -17,9 +17,8 @@ import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { isRoleTag, type RoleTag } from '@/lib/personnel/role-tags';
 import {
   getActiveMembership,
-  fetchActiveGrants,
-  canAccess,
 } from '@/lib/permissions/server';
+import { getViewerAccess, viewerAllows } from '@/lib/permissions/tourAccess';
 import { tourFromParams, withDerivedRefresh } from '@/server/budget/withDerivedRefresh';
 import { setTourEmployment } from '@/server/people/tourPersonEdits';
 import { isEmployment } from '@/lib/personnel/employment';
@@ -70,8 +69,8 @@ async function patchHandler(
   if (!membership) {
     return NextResponse.json({ error: 'No active workspace' }, { status: 403 });
   }
-  const grants = await fetchActiveGrants(supabase, membership, user.id);
-  if (!canAccess(membership, grants, 'page', 'operations.personnel', 'write')) {
+  // Changing the crew is admin / manager only (as requireWrite(supabase)).
+  if (!(await getViewerAccess(supabase, user.id, tourId))?.manager) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
@@ -252,8 +251,8 @@ async function deleteHandler(
   if (!membership) {
     return NextResponse.json({ error: 'No active workspace' }, { status: 403 });
   }
-  const grants = await fetchActiveGrants(supabase, membership, user.id);
-  if (!canAccess(membership, grants, 'page', 'operations.personnel', 'write')) {
+  // Changing the crew is admin / manager only (as requireWrite(supabase)).
+  if (!(await getViewerAccess(supabase, user.id, tourId))?.manager) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
@@ -327,8 +326,8 @@ export async function GET(
   if (!membership) {
     return NextResponse.json({ error: 'No active workspace' }, { status: 403 });
   }
-  const grants = await fetchActiveGrants(supabase, membership, user.id);
-  if (!canAccess(membership, grants, 'page', 'operations.personnel', 'read')) {
+  // Tour access (Nov 2026): the crew list is the Logistics area.
+  if (!viewerAllows(await getViewerAccess(supabase, user.id, tourId), 'logistics')) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 

@@ -155,3 +155,25 @@ export const LEGACY_RESOURCE_AREA: Record<string, Area | null> = {
   'budget.summary': 'budget',
   advance: 'advance',
 };
+
+/* ---------- One line for the members list ---------- */
+
+/** A member's tour access in one line, for their card on Team & roles:
+ *  "All tours · Edit: Advance · View: Schedule, Production" — or "No tour
+ *  access yet". Several tours are counted, not named (the panel lists them). */
+export function summariseAccess(rows: readonly TourAccessRow[]): string {
+  const valid = rows.filter((r) => isArea(r.area) && isLevel(r.level));
+  if (!valid.length) return 'No tour access yet';
+  const all = valid.some((r) => r.tour_id === null);
+  const tourCount = new Set(valid.filter((r) => r.tour_id !== null).map((r) => r.tour_id)).size;
+  const where = all ? 'All tours' : `${tourCount} ${tourCount === 1 ? 'tour' : 'tours'}`;
+  const best = new Map<Area, Level>();
+  for (const r of valid) {
+    const a = r.area as Area;
+    if (best.get(a) !== 'edit') best.set(a, r.level as Level);
+  }
+  const list = (level: Level) => AREAS.filter((a) => best.get(a) === level).map((a) => AREA_LABELS[a]);
+  const edit = list('edit');
+  const view = list('view');
+  return [where, edit.length ? `Edit: ${edit.join(', ')}` : null, view.length ? `View: ${view.join(', ')}` : null].filter(Boolean).join(' · ');
+}
