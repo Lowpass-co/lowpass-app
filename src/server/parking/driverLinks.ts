@@ -114,6 +114,26 @@ export async function revokeDriverLink(client: SupabaseClient, args: { routingId
 
 /* ── Public ───────────────────────────────────────────────── */
 
+/** The link's title for chat previews (WhatsApp, iMessage): "Parking · The O2 ·
+ *  Fri 20 Nov" — so a driver with links for several dates can tell them apart
+ *  (Nov 2026, Adam). READ-ONLY: a preview fetch must not count as a view, so
+ *  this never calls parking_share_touch. A dead or unknown token gets null
+ *  (the page's generic title) — the preview never says why. */
+export async function driverLinkTitle(service: SupabaseClient, token: string, now = new Date()): Promise<string | null> {
+  if (!TOKEN_RE.test(token)) return null;
+  const { data } = await service
+    .from('parking_share_links')
+    .select('id, workspace_id, tour_id, routing_id, label, expires_at, revoked_at, max_3d_opens, opens_3d, views')
+    .eq('token_hash', hashToken(token))
+    .maybeSingle();
+  const row = data as DriverLinkRow | null;
+  if (!row || linkState(row, now) !== 'live') return null;
+  const show = await loadParkingShow(service, row.tour_id, row.routing_id);
+  if (!show || show.workspaceId !== row.workspace_id) return null;
+  const when = new Date(`${show.date}T12:00:00Z`).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' });
+  return ['Parking', show.venue.name ?? show.venue.city, when].filter(Boolean).join(' · ');
+}
+
 type TouchRow = DriverLinkRow & { took: boolean };
 
 /** Token → the live link, counting this view (or taking a 3D open). */
