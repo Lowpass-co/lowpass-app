@@ -52,6 +52,15 @@ export function vehicleBlocks(v: Pick<VehicleItem, 'type' | 'x' | 'y' | 'heading
         z0 = CLEARANCE;
         z1 = Math.max(CLEARANCE + 0.2, p.h * H);
         break;
+      case 'cabin':
+        // Sits on the lower body: from the body's top to the roof line.
+        z0 = 0.5 * H;
+        z1 = Math.max(z0 + 0.3, p.h * H);
+        break;
+      case 'wheel':
+        z0 = 0;
+        z1 = Math.max(0.3, p.h * H);
+        break;
       case 'roof':
         z0 = H;
         z1 = Math.max(H + 0.15, p.h * H);

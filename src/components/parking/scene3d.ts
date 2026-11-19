@@ -102,6 +102,10 @@ function blockColour(Cesium: C, p: Palette, base: string, kind: PartKind): Cesiu
   switch (kind) {
     case 'cab':
       return body.darken(0.3, new Cesium.Color());
+    case 'cabin':
+      return body.darken(0.22, new Cesium.Color());
+    case 'wheel':
+      return Cesium.Color.fromCssColorString(p.halo);
     case 'hood':
       return body.darken(0.18, new Cesium.Color());
     case 'roof':
@@ -481,7 +485,7 @@ function addBlock(Cesium: C, viewer: CesiumNS.Viewer, anchor: LatLng, b: Block, 
   const position = Cesium.Cartesian3.fromDegrees(g.lng, g.lat, ground + (b.z0 + b.z1) / 2);
   // Cesium's heading is from EAST, clockwise; ours is a compass bearing from north.
   const orientation = Cesium.Transforms.headingPitchRollQuaternion(position, new Cesium.HeadingPitchRoll(rad(b.heading - 90), 0, 0));
-  const solid = b.kind === 'body' || b.kind === 'cab' || b.kind === 'hood';
+  const solid = b.kind === 'body' || b.kind === 'cab' || b.kind === 'hood' || b.kind === 'cabin';
   viewer.entities.add({
     position,
     orientation,

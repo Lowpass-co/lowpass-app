@@ -345,6 +345,14 @@ browser key restricted to the Map Tiles API and the app's domains).**
 
 **Last verified**:
 
+#### PRK-43 — Cars look like cars in 3D
+
+**Do**: Add a Car / runner → 3D.
+
+**Expect**: Four dark wheels, a low body (bonnet and boot) and a narrower, darker cabin on top with a windscreen — not one box. On the plan: body with a darker cabin and window strips.
+
+**Last verified**:
+
 ## Known broken
 
 #### PRK-90 — Re-exporting makes a new file
