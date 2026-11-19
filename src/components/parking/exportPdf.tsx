@@ -105,6 +105,12 @@ export interface ExportDrawing {
   blend: 'multiply' | 'normal';
   inside: boolean;
   floor: number;
+  /** Inside drawings over the photo: the light copy (the part outside the
+   *  building, lines on the photo), the inside outline in drawing units, and
+   *  the floor colour — the inside is drawn solid, whatever the opacity. */
+  light?: HTMLCanvasElement;
+  insideArea?: { u: number; v: number }[] | null;
+  floorColour?: string;
 }
 
 export interface ExportResult {
@@ -117,6 +123,8 @@ export interface ExportResult {
   warning: string | null;
 }
 
+/** A 3D page has no key column: the view takes the page's full width (Nov 2026, Adam). */
+const FRAME_3D = { x: MARGIN, y: FRAME.y, w: PAGE.w - 2 * MARGIN, h: FRAME.h };
 const PX_PER_MM_3D = 5; // a WebGL canvas of ~980 × 870 — enough for print, kind to laptops
 
 /** Every 3D page, rendered off-screen with ONE viewer (the scene is built once). */
@@ -127,8 +135,8 @@ async function render3dImages(
 ): Promise<{ jpeg: string; credits: string }[]> {
   const key = input.satellite ? tilesKey() : null;
   if (!key && !input.allDrawings.length) throw new Error('no Google Map Tiles key');
-  const W = Math.round(FRAME.w * PX_PER_MM_3D);
-  const H = Math.round(FRAME.h * PX_PER_MM_3D);
+  const W = Math.round(FRAME_3D.w * PX_PER_MM_3D);
+  const H = Math.round(FRAME_3D.h * PX_PER_MM_3D);
   const host = document.createElement('div');
   Object.assign(host.style, { position: 'fixed', left: '-20000px', top: '0', width: `${W}px`, height: `${H}px` });
   document.body.appendChild(host);
@@ -257,9 +265,30 @@ export async function renderMapImage(
     ctx.scale(view.ppm, view.ppm);
     ctx.translate(-view.cx, view.cy);
     ctx.transform(...d.matrix);
-    ctx.globalAlpha = d.opacity;
-    ctx.globalCompositeOperation = d.blend === 'multiply' ? 'multiply' : 'source-over';
-    ctx.drawImage(d.canvas, d.crop.u0, d.crop.v0, d.crop.u1 - d.crop.u0, d.crop.v1 - d.crop.v0);
+    const cw = d.crop.u1 - d.crop.u0;
+    const ch = d.crop.v1 - d.crop.v0;
+    if (d.inside && d.light && d.insideArea?.length) {
+      // As on screen: the sheet as lines on the photo at its opacity, then the
+      // inside outline as a SOLID floor with the drawing on it.
+      ctx.globalAlpha = d.opacity;
+      ctx.globalCompositeOperation = 'multiply';
+      ctx.drawImage(d.light, d.crop.u0, d.crop.v0, cw, ch);
+      ctx.globalAlpha = 1;
+      ctx.globalCompositeOperation = 'source-over';
+      ctx.beginPath();
+      d.insideArea.forEach((q, i) => (i ? ctx.lineTo(q.u, q.v) : ctx.moveTo(q.u, q.v)));
+      ctx.closePath();
+      ctx.clip();
+      if (d.floorColour) {
+        ctx.fillStyle = d.floorColour;
+        ctx.fill();
+      }
+      ctx.drawImage(d.canvas, d.crop.u0, d.crop.v0, cw, ch);
+    } else {
+      ctx.globalAlpha = d.opacity;
+      ctx.globalCompositeOperation = d.blend === 'multiply' ? 'multiply' : 'source-over';
+      ctx.drawImage(d.canvas, d.crop.u0, d.crop.v0, cw, ch);
+    }
     ctx.restore();
   }
 
@@ -273,6 +302,7 @@ export async function renderMapImage(
     grid: !src,
     labelScale: LABEL_SCALE,
     numbers: input.numbers,
+    forPrint: true,
     fontFamily,
   });
   ctx.drawImage(await svgToImage(svg), 0, 0, W, H);
@@ -347,18 +377,18 @@ export async function exportParkingPdf(input: ExportInput, onProgress?: (p: Expo
     doc.text(`Drawn to scale in Lowpass · exported ${stamp}${extra}`, MARGIN, PAGE.h - 4);
     if (total > 1) doc.text(`Page ${n} of ${total}`, PAGE.w - MARGIN, PAGE.h - 4, { align: 'right' });
   };
-  const frameBox = () => {
+  const frameBox = (f: { x: number; y: number; w: number; h: number } = FRAME) => {
     doc.setDrawColor(...ink);
     doc.setLineWidth(0.3);
-    doc.rect(FRAME.x, FRAME.y, FRAME.w, FRAME.h);
+    doc.rect(f.x, f.y, f.w, f.h);
   };
-  const credit = (att: string) => {
+  const credit = (att: string, f: { x: number; y: number; w: number; h: number } = FRAME) => {
     doc.setFontSize(6);
-    const tw = Math.min(doc.getTextWidth(att) + 3, FRAME.w - 60);
+    const tw = Math.min(doc.getTextWidth(att) + 3, f.w - 60);
     doc.setFillColor(255, 255, 255);
-    doc.rect(FRAME.x + FRAME.w - tw, FRAME.y + FRAME.h - 4, tw, 4, 'F');
+    doc.rect(f.x + f.w - tw, f.y + f.h - 4, tw, 4, 'F');
     doc.setTextColor(...ink);
-    doc.text(att, FRAME.x + FRAME.w - 1.5, FRAME.y + FRAME.h - 1.2, { align: 'right', maxWidth: tw - 2 });
+    doc.text(att, f.x + f.w - 1.5, f.y + f.h - 1.2, { align: 'right', maxWidth: tw - 2 });
   };
 
   const base3d = pages3d.length ? 1 : 0;
@@ -370,23 +400,15 @@ export async function exportParkingPdf(input: ExportInput, onProgress?: (p: Expo
     if (page.kind === '3d') {
       const shot = shots![shotIndex++];
       header(page.title, input.subtitle);
-      doc.addImage(shot.jpeg, 'JPEG', FRAME.x, FRAME.y, FRAME.w, FRAME.h);
-      frameBox();
-      credit(`Google${shot.credits ? ` · ${shot.credits}` : ''}`);
-      doc.setTextColor(...ink);
-      doc.setFontSize(9);
-      doc.setFont('helvetica', 'bold');
-      doc.text('Reading this view', SIDE.x, FRAME.y + 3);
-      doc.setFont('helvetica', 'normal');
-      doc.setFontSize(8);
-      doc.text(
-        doc.splitTextToSize(
-          'Every vehicle is drawn at its true length, width and height, where it parks, beside the real buildings. A perspective view has no single scale, so there is no scale bar here: each vehicle is labelled with its length. Measure on a plan page.',
-          SIDE.w,
-        ) as string[],
-        SIDE.x,
-        FRAME.y + 8,
-      );
+      // Full width (no key column), and the how-to-read note once, on the first 3D page only.
+      doc.addImage(shot.jpeg, 'JPEG', FRAME_3D.x, FRAME_3D.y, FRAME_3D.w, FRAME_3D.h);
+      frameBox(FRAME_3D);
+      credit(`Google${shot.credits ? ` · ${shot.credits}` : ''}`, FRAME_3D);
+      if (shotIndex === 1) {
+        doc.setFontSize(7);
+        doc.setTextColor(...grey);
+        doc.text('3D: every vehicle at its true length, width and height, where it parks. A perspective has no single scale — measure on a plan page.', MARGIN, FRAME_3D.y + FRAME_3D.h + 3.4, { maxWidth: PAGE.w - 2 * MARGIN });
+      }
       footer(n + 1, ' · 3D imagery: Google');
       continue;
     }
@@ -515,7 +537,7 @@ function drawKey(
 
   const vehicles = input.items.filter((i) => i.kind === 'vehicle');
   const markers = input.items.filter((i) => i.kind === 'marker');
-  const areas = input.items.filter((i) => i.kind === 'area');
+  const areas = input.items.filter((i) => i.kind === 'area' && !i.flat3d);
   const routes = input.items.filter((i) => i.kind === 'route');
   const measures = input.items.filter((i) => i.kind === 'measure');
 
@@ -565,7 +587,7 @@ function drawKey(
   }
   if (areas.length || routes.length || measures.length) {
     heading('Areas and routes');
-    for (const a of areas) if (a.kind === 'area') row(areaColour(palette, a.type), a.label || areaLabel(a.type));
+    for (const a of areas) if (a.kind === 'area' && !a.flat3d) row(areaColour(palette, a.type), a.label || areaLabel(a.type));
     for (const rt of routes) if (rt.kind === 'route') row(palette.route, rt.label || 'Route', fmtMetres(pathLength(rt.points)));
     for (const m of measures) if (m.kind === 'measure') row(null, `Measured: ${fmtMetres(dist(m.a, m.b))}`);
     line(2);

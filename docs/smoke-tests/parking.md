@@ -401,6 +401,14 @@ browser key restricted to the Map Tiles API and the app's domains).**
 
 **Last verified**:
 
+#### PRK-48 — Export tidy-ups: flatten areas, close-ups, 3D pages, solid inside floors
+
+**Do**: On a map with a Flat in 3D area, a tight row and an inside drawing with its opacity turned down: (1) export; (2) select a few vehicles → "Close-up PDF page" (the selection panel, or right-click) → export; (3) a map with two or more 3D pages → export; (4) the driver link's plan, zoomed out then in.
+
+**Expect**: (1) Flat in 3D areas have no title anywhere (plan, 3D) and aren't on the PDF or the key at all. (2) A "Close-up" page framing just those vehicles, close enough that names sit inside the vehicles. (3) 3D pages use the full page width (no right-hand column); the "3D: true size…" note is printed once, under the first 3D page. (4) Numbers when zoomed out, names inside the vehicles as you zoom in. Everywhere (plan, PDF, driver map) the inside area is a SOLID floor with the drawing on it — the opacity slider ("Outside opacity" for an inside drawing) only fades the sheet outside the building.
+
+**Last verified**:
+
 ## Known broken
 
 #### PRK-90 — Re-exporting makes a new file

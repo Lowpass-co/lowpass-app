@@ -53,13 +53,13 @@ import { addMarker, addVehicle, duplicateItem, duplicateItems, finishDraft, item
 import type { ParkingShow, SavedParkingMap } from '@/server/parking/maps';
 import { ParkingScene, MARKER_ICON, type Draft } from './ParkingScene';
 import { MapContextMenu } from './MapContextMenu';
-import { LIVE_PALETTE, roleColour, areaColour } from './palette';
+import { LIVE_PALETTE, roleColour, areaColour, resolvePalette } from './palette';
 import { tilesKey } from './googleTiles';
 import { exportParkingPdf } from './exportPdf';
 import { Parking3D } from './Parking3D';
 import { useMapTiles } from './useMapTiles';
 import { freeSpot, itemPoints, printFrame } from '@/lib/parking/print';
-import { MAX_PAGES, add3dPage, addPlanPage, addStreetPage, movePage, pagesOf, planFrame, removePage, updatePage, type Page3d, type PdfPage, type PrintScale } from '@/lib/parking/pages';
+import { MAX_PAGES, add3dPage, addCloseUpPage, addPlanPage, addStreetPage, movePage, pagesOf, planFrame, removePage, updatePage, type Page3d, type PdfPage, type PrintScale } from '@/lib/parking/pages';
 import '@/components/advance/advance.css';
 import './parking.css';
 
@@ -665,6 +665,15 @@ export function ParkingEditor({ show, tourName, initial, canEdit }: ParkingEdito
   );
   /** Duplicate what's selected: one item parks alongside (a vehicle: its
    *  width + 1 m to its right), several as a block beside the block. */
+  /** A PDF close-up of what's selected (pages.ts addCloseUpPage). */
+  const addCloseUp = () => {
+    const chosen = itemsRef.current.filter((i) => selIds.includes(i.id));
+    if (!chosen.length) return;
+    if (pages.length >= MAX_PAGES) return showToast(`A PDF holds at most ${MAX_PAGES} pages`, 'error');
+    const next = addCloseUpPage(pages, chosen, viewRef.current, sizeRef.current);
+    setPages(next);
+    showToast(`Added “${next[next.length - 1].title}” — page ${next.length} of the PDF (Share tab)`);
+  };
   const duplicateSelected = () => {
     if (selIds.length > 1) return duplicateGroup();
     const one = itemsRef.current.find((i) => i.id === selIds[0]);
@@ -804,7 +813,23 @@ export function ParkingEditor({ show, tourName, initial, canEdit }: ParkingEdito
           .map((d) => {
             const r = rasters.get(d.id)!;
             const lines = !d.inside && satelliteOn && !!session;
-            return { id: d.id, name: d.name, matrix: svgMatrix(d), crop: d.crop, canvas: lines ? r.light : r.dark, opacity: d.opacity, blend: lines ? ('multiply' as const) : ('normal' as const), inside: d.inside, floor: d.floor };
+            const { u0, v0, u1, v1 } = d.crop;
+            // An inside drawing over the photo prints like the screen: lines outside, a solid floor inside.
+            const overPhoto = d.inside && satelliteOn && !!session;
+            return {
+              id: d.id,
+              name: d.name,
+              matrix: svgMatrix(d),
+              crop: d.crop,
+              canvas: lines ? r.light : r.dark,
+              opacity: d.opacity,
+              blend: lines ? ('multiply' as const) : ('normal' as const),
+              inside: d.inside,
+              floor: d.floor,
+              ...(overPhoto
+                ? { light: r.light, floorColour: resolvePalette().floor, insideArea: d.insideArea ?? [{ u: u0, v: v0 }, { u: u1, v: v0 }, { u: u1, v: v1 }, { u: u0, v: v1 }] }
+                : {}),
+            };
           }),
         allDrawings: drawings,
         floors: floorCanvases,
@@ -900,9 +925,14 @@ export function ParkingEditor({ show, tourName, initial, canEdit }: ParkingEdito
           <div className="pk-selview">
             <div className="pk-head-row">
               <span className="pk-muted">Selected</span>
-              <button type="button" className="adv-link" onClick={() => setSelected([])}>
-                Done
-              </button>
+              <span className="adv-row-flex" style={{ gap: 'var(--lp-space-3)' }}>
+                <button type="button" className="adv-link" onClick={addCloseUp} title="A PDF page framing just what's selected, close enough to read the names">
+                  Close-up PDF page
+                </button>
+                <button type="button" className="adv-link" onClick={() => setSelected([])}>
+                  Done
+                </button>
+              </span>
             </div>
             {sel ? (
               <Inspector
@@ -1256,6 +1286,7 @@ export function ParkingEditor({ show, tourName, initial, canEdit }: ParkingEdito
                 setTab('share');
                 showToast('This view is now a PDF page (Share tab)');
               },
+              addCloseUp,
             }}
           />
         ) : null}
@@ -1990,7 +2021,7 @@ function PagesPanel({
           <button type="button" className="adv-btn adv-btn-sm" onClick={() => onChange(addStreetPage(pages))} disabled={pages.length >= MAX_PAGES}>
             <Plus size={13} aria-hidden /> Street map
           </button>
-          <span className="pk-muted">{mode === 'plan' ? 'For a 3D page, switch to 3D and add the view there.' : 'In 3D: “Add this view as a page”.'}</span>
+          <span className="pk-muted">{mode === 'plan' ? 'For a close-up, select vehicles (Shift-drag to box them) → “Close-up PDF page”. For a 3D page, switch to 3D and add the view there.' : 'In 3D: “Add this view as a page”.'}</span>
         </div>
       ) : null}
     </section>

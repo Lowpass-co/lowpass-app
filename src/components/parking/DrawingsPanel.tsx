@@ -128,8 +128,8 @@ export function DrawingsPanel(p: DrawingsPanelProps) {
             {canEdit ? (
               <>
                 <label className="pk-field pk-field-row">
-                  Opacity
-                  <input type="range" min={0.1} max={1} step={0.05} value={d.opacity} onChange={(e) => patch(d.id, { opacity: Number(e.target.value) })} aria-label={`Opacity of ${d.name}`} />
+                  {d.inside ? 'Outside opacity' : 'Opacity'}
+                  <input type="range" min={0.1} max={1} step={0.05} value={d.opacity} onChange={(e) => patch(d.id, { opacity: Number(e.target.value) })} aria-label={`Opacity of ${d.name}`} title={d.inside ? 'Fades the sheet outside the building. Inside, the floor is always solid.' : undefined} />
                 </label>
                 <label className="pk-check">
                   <input type="checkbox" checked={d.inside} onChange={(e) => patch(d.id, { inside: e.target.checked })} />

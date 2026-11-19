@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { badgeRadii, convexOverlap, placeNames, rectAt, vehicleNumbers } from './print';
+import { badgeRadii, convexOverlap, insideName, placeNames, rectAt, vehicleNumbers } from './print';
 import type { ParkingItem } from './model';
 
 const v = (id: string, x: number, y: number) => ({ id, kind: 'vehicle', type: 'car', x, y, heading: 0, length: 5, width: 2, label: '' }) as unknown as ParkingItem;
@@ -74,5 +74,19 @@ describe('placeNames — never sandwiched', () => {
     const b = { x: 100, y: 132 };
     const out = placeNames([{ id: 'a', centre: a, angle: 0, halfWidth: 6, w: 40, h: 10 }], [body(a), body(b)], { w: 400, h: 400 });
     expect(out.get('a')).toEqual({ x: 100, y: 87 });
+  });
+});
+
+describe('insideName', () => {
+  it('waits until the vehicle is big enough on screen, then sits before the badge', () => {
+    expect(insideName(40, 6, 6, 5, 20, 7)).toBeNull(); // zoomed out: a sliver
+    const at = insideName(400, 60, 12, 5, 20, 7)!;
+    expect(at.size).toBe(20); // capped
+    expect(at.offset).toBeLessThan(-12); // clear of the badge
+    expect(-at.offset + (5 * 0.6 * at.size) / 2).toBeLessThanOrEqual(200); // inside the half-length
+  });
+  it('a thin vehicle limits the size by its width', () => {
+    expect(insideName(400, 12, 6, 4, 20, 7)!.size).toBeCloseTo(8.64);
+    expect(insideName(400, 8, 6, 4, 20, 7)).toBeNull();
   });
 });

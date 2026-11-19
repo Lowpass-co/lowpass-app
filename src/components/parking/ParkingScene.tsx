@@ -19,7 +19,7 @@ import { markerSpec, vehicleSpec, areaLabel, type MarkerType } from '@/lib/parki
 import { pathLength, vehicleCorners, type ParkingItem, type VehicleItem } from '@/lib/parking/model';
 import { vehicleParts, type Part, type PartKind } from '@/lib/parking/silhouettes';
 import { areaColour, vehicleColour, type Palette } from './palette';
-import { badgeRadii, placeNames, rectAt, type NameSpot } from '@/lib/parking/print';
+import { badgeRadii, insideName, placeNames, type NameSpot } from '@/lib/parking/print';
 
 export interface SceneTile {
   id: string;
@@ -80,6 +80,7 @@ export function ParkingScene({
   grid = false,
   labelScale = 1,
   numbers,
+  forPrint = false,
   fontFamily = 'var(--font-sans)',
   onItemDown,
   onHandleDown,
@@ -105,6 +106,8 @@ export function ParkingScene({
   labelScale?: number;
   /** PDF: vehicles carry a numbered badge (the key lists them) instead of a name — print.ts vehicleNumbers. */
   numbers?: ReadonlyMap<string, number>;
+  /** PDF + driver link: leave out the editor's tools — a Flat-in-3D area is a 3D setting, not a place to park. */
+  forPrint?: boolean;
   /** Live: the CSS token. Export: the resolved family (a rasterised SVG can't read CSS). */
   fontFamily?: string;
   onItemDown?: (e: ReactPointerEvent, item: ParkingItem) => void;
@@ -129,7 +132,8 @@ export function ParkingScene({
 
   const layer = (list: ParkingItem[], live: boolean) => {
     const dn = live ? down : () => undefined;
-  const areas = list.filter((i) => i.kind === 'area');
+  // A Flat-in-3D area is a 3D setting: never titled, and not drawn at all on paper / for drivers.
+  const areas = list.filter((i) => i.kind === 'area' && !(forPrint && i.flat3d));
   const routes = list.filter((i) => i.kind === 'route');
   const vehicles = list.filter((i): i is VehicleItem => i.kind === 'vehicle');
   const markers = list.filter((i) => i.kind === 'marker');
@@ -155,7 +159,7 @@ export function ParkingScene({
                 style={{ cursor: live ? cursor : undefined }}
               />
               {isSel(a.id) ? <polygon points={pts(a.points)} fill="none" stroke={p.select} strokeWidth={2} strokeDasharray="4 3" pointerEvents="none" /> : null}
-              <Label x={centre.x} y={centre.y} ls={ls} p={p} halo={halo} text={a.label || areaLabel(a.type)} />
+              {a.flat3d ? null : <Label x={centre.x} y={centre.y} ls={ls} p={p} halo={halo} text={a.label || areaLabel(a.type)} />}
             </g>
           );
         })}
@@ -297,10 +301,11 @@ export function ParkingScene({
                   <polygon points={pts} fill="black" />
                 </mask>
               </defs>
-              {/* Outside the building: the sheet as an outside drawing. */}
+              {/* Outside the building: the sheet as an outside drawing (its opacity applies here only). */}
               <g mask={`url(#${mask})`}>{sheet}</g>
-              {/* Inside: a floor, the lines on it. */}
-              <g clipPath={`url(#${clip})`} opacity={d.opacity}>
+              {/* Inside: a floor, the lines on it — always solid. Faded, the roof in the
+                  photo showed through it (the O2 at 10 %: "shows the roof, not the drawing"). */}
+              <g clipPath={`url(#${clip})`}>
                 <polygon points={pts} fill={d.inside.fill} />
                 <image href={d.inside.href} x={d.x} y={d.y} width={d.w} height={d.h} preserveAspectRatio="none" />
               </g>
@@ -352,7 +357,8 @@ function NumberBadges({
   const radii = badgeRadii(centres, 7 * ls, 4 * ls);
   const size = 8.5 * ls;
   const bodies = shown.map((v) => vehicleCorners(v).map(P));
-  const badges = centres.map((c, i) => rectAt(c, 0, radii[i] * 2, radii[i] * 2));
+  // A badge as an octagon round its circle (a square's corners stuck out past a turned car's side).
+  const badges = centres.map((c, i) => Array.from({ length: 8 }, (_, k) => ({ x: c.x + Math.cos((k * Math.PI) / 4) * radii[i] * 1.08, y: c.y + Math.sin((k * Math.PI) / 4) * radii[i] * 1.08 })));
   const spots: NameSpot[] = shown.map((v, i) => {
     const h = (v.heading * Math.PI) / 180;
     const nose = P({ x: v.x + Math.sin(h), y: v.y + Math.cos(h) });
@@ -363,7 +369,24 @@ function NumberBadges({
     const name = v.label || vehicleSpec(v.type)?.short || 'Vehicle';
     return { id: v.id, centre: centres[i], angle: a, halfWidth: Math.hypot(side.x - centres[i].x, side.y - centres[i].y), w: name.length * size * 0.6 + 4 * ls, h: size * 1.25 };
   });
-  const names = placeNames(spots, [...bodies, ...badges], bounds, 1.5 * ls);
+  // Zoomed in far enough, the name goes INSIDE the vehicle, beside its badge —
+  // unambiguous; only vehicles too small on screen look for room beside them.
+  const inside = shown.map((v, i) => {
+    const h = (v.heading * Math.PI) / 180;
+    const nose = P({ x: v.x + Math.sin(h), y: v.y + Math.cos(h) });
+    const perM = Math.hypot(nose.x - centres[i].x, nose.y - centres[i].y);
+    const name = v.label || vehicleSpec(v.type)?.short || 'Vehicle';
+    const fit = insideName(v.length * perM, spots[i].halfWidth * 2, radii[i], name.length, 10 * ls, 7 * ls, 1.5 * ls);
+    if (!fit) return null;
+    const a = (spots[i].angle * Math.PI) / 180;
+    return { x: centres[i].x + Math.cos(a) * fit.offset, y: centres[i].y + Math.sin(a) * fit.offset, size: fit.size, name };
+  });
+  const names = placeNames(
+    spots.filter((_, i) => !inside[i]),
+    [...bodies, ...badges],
+    bounds,
+    1.5 * ls,
+  );
   return (
     <g pointerEvents="none">
       {shown.map((v, i) => {
@@ -397,6 +420,21 @@ function NumberBadges({
                 style={halo}
               >
                 {spots[i].w > 0 ? v.label || vehicleSpec(v.type)?.short || 'Vehicle' : null}
+              </text>
+            ) : null}
+            {inside[i] ? (
+              <text
+                x={inside[i]!.x}
+                y={inside[i]!.y}
+                transform={`rotate(${spots[i].angle.toFixed(2)} ${inside[i]!.x.toFixed(2)} ${inside[i]!.y.toFixed(2)})`}
+                textAnchor="middle"
+                dominantBaseline="central"
+                fontSize={inside[i]!.size}
+                fontWeight={700}
+                fill={p.ink}
+                style={halo}
+              >
+                {inside[i]!.name}
               </text>
             ) : null}
           </g>
