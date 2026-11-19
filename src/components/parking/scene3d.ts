@@ -35,7 +35,7 @@ import { getTileSession, tileUrl } from './googleTiles';
 import { areaLabel, markerSpec, vehicleSpec } from '@/lib/parking/catalogue';
 import { ringAround, standingHeight, vehicleBlocks, type Block } from '@/lib/parking/blocks3d';
 import { vehicleCorners, type AreaItem, type ParkingDrawing, type ParkingItem, type VehicleItem } from '@/lib/parking/model';
-import { drawingUnder, footprint, insideAt, insideFootprint, itemFloor, itemPoint, pointInPolygon, svgMatrix } from '@/lib/parking/drawings';
+import { drawingsIn3d, drawingUnder, footprint, insideAt, insideFootprint, itemFloor, itemPoint, pointInPolygon, svgMatrix } from '@/lib/parking/drawings';
 import type { PartKind } from '@/lib/parking/silhouettes';
 import { labelBox, placeLabels, type LabelBox } from '@/lib/parking/labels3d';
 import { areaColour, vehicleColour, type Palette } from './palette';
@@ -129,7 +129,7 @@ export async function populate(
     floors?: ReadonlyMap<string, HTMLCanvasElement>;
   },
 ): Promise<Scene3d> {
-  const drawings = o.drawings ?? [];
+  const drawings = drawingsIn3d(o.drawings ?? []);
   let tileset: CesiumNS.Cesium3DTileset | null = null;
   if (o.tilesKey) {
     tileset = await Cesium.createGooglePhotorealistic3DTileset({ key: o.tilesKey, onlyUsingWithGoogleGeocoder: true });
@@ -216,7 +216,7 @@ export async function populate(
   // drawing's lines — drawn even before the lines are ready, so the cut-away
   // never shows as a hole); with no city mesh, every drawing.
   for (const d of drawings) {
-    if (d.hidden || (tileset && !d.inside)) continue;
+    if (tileset && !d.inside) continue;
     addFloor(Cesium, viewer, o.anchor, d, o.floors?.get(d.id) ?? null, (d.inside ? street.get(d.id) ?? ground0 : ground0) + (d.inside ? d.floor : 0) + 0.03, o.palette.floor);
   }
   /** Where an item stands: on the inside drawing under it (its street + the item's level), else `fallback`. */

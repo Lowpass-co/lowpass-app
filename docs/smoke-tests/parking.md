@@ -317,7 +317,7 @@ browser key restricted to the Map Tiles API and the app's domains).**
 
 **Do**: Lay a venue drawing that runs from inside the building out to the street (the O2 service yard). Tick "Inside a building" → **Outline the inside** → click round the part under the roof → double-click.
 
-**Expect**: Plan: the outlined part is a grey floor with the drawing's light lines on it; the rest of the sheet stays lines on the satellite. 3D: only the outlined part loses its roof and shows the floor; trees, roads and buildings outside it stay. Vehicles inside stand on the floor, vehicles outside on the street. "Whole drawing" puts it back to the whole sheet. Re-pinning the drawing keeps the outline in the right place.
+**Expect**: Plan: the outlined part is a grey floor with the drawing's light lines on it; the rest of the sheet stays lines on the satellite. 3D: only the outlined part loses its roof and shows the floor; trees, roads and buildings outside it stay. Vehicles inside stand on the floor, vehicles outside on the street. "Whole drawing" puts it back to the whole sheet. Re-pinning the drawing keeps the outline in the right place. Hide the drawing (Drawings tab) → 3D: the roof is back, no hole, no floor; show it → the floor returns.
 
 **Last verified**:
 

@@ -626,7 +626,7 @@ recreate a `_legacy/` tree: delete dead code instead of parking it.
   over `insideArea`** (an outline in drawing units, "Outline the inside";
   null = the whole crop) — `insideFootprint()` is the one rule for
   everything inside (roof cut, floor, items on it, door headroom); never
-  `footprint()` for that. There: `--lp-map-floor` under the clear lines (plan
+  `footprint()` for that. A HIDDEN drawing is gone from 3D (`drawingsIn3d`): no roof cut, no floor. There: `--lp-map-floor` under the clear lines (plan
   + 3D); the rest of the sheet is drawn like an outside drawing. 3D: the
   mesh is clipped to the inside area (`ClippingPolygonCollection`) and the
   floor sits at the street height around it + `floor`; vehicles on it stand
