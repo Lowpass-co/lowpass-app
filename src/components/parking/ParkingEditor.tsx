@@ -19,8 +19,9 @@
 
 import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent } from 'react';
-import { ArrowLeft, ChevronDown, ChevronUp, Compass, Copy, Download, Keyboard, Layers, Minus, Navigation, Plus, Redo2, RotateCcw, RotateCw, Route as RouteIcon, Ruler, Pentagon, Trash2, Undo2, X } from 'lucide-react';
+import { ArrowLeft, ChevronDown, ChevronUp, Compass, Copy, Download, ExternalLink, Keyboard, Loader2, Layers, Minus, Navigation, Plus, Redo2, RotateCcw, RotateCw, Route as RouteIcon, Ruler, Pentagon, Trash2, Undo2, X } from 'lucide-react';
 import { useToast } from '@/components/ui/Toast';
+import { Modal } from '@/components/ui/Modal';
 import { SaveStatus } from '@/components/forms/SaveStatus';
 import type { SaveStatus as SaveStatusKind } from '@/lib/forms/useAutoSave';
 import { uploadToFiles } from '@/lib/uploads/filesUpload';
@@ -52,13 +53,13 @@ import { addMarker, addVehicle, duplicateItem, duplicateItems, finishDraft, item
 import type { ParkingShow, SavedParkingMap } from '@/server/parking/maps';
 import { ParkingScene, MARKER_ICON, type Draft } from './ParkingScene';
 import { MapContextMenu } from './MapContextMenu';
-import { LIVE_PALETTE, roleColour, areaColour } from './palette';
+import { LIVE_PALETTE, roleColour, areaColour, resolvePalette } from './palette';
 import { tilesKey } from './googleTiles';
 import { exportParkingPdf } from './exportPdf';
 import { Parking3D } from './Parking3D';
 import { useMapTiles } from './useMapTiles';
 import { freeSpot, itemPoints, printFrame } from '@/lib/parking/print';
-import { MAX_PAGES, add3dPage, addPlanPage, addStreetPage, movePage, pagesOf, planFrame, removePage, updatePage, type Page3d, type PdfPage, type PrintScale } from '@/lib/parking/pages';
+import { MAX_PAGES, add3dPage, addCloseUpPage, addPlanPage, addStreetPage, movePage, pagesOf, planFrame, removePage, updatePage, type Page3d, type PdfPage, type PrintScale } from '@/lib/parking/pages';
 import '@/components/advance/advance.css';
 import './parking.css';
 
@@ -117,6 +118,14 @@ export function ParkingEditor({ show, tourName, initial, canEdit }: ParkingEdito
   const [dragging, setDragging] = useState(false);
   const [pdf, setPdf] = useState(initial?.pdf ?? null);
   const [exporting, setExporting] = useState(false);
+  /** The export's own screen (Nov 2026, Adam: a blank tab "looks like it just
+   *  hangs"): progress while the PDF is made, then "Open PDF". The new tab is
+   *  opened by THAT click — a tab opened after a long wait is blocked as a pop-up. */
+  const [pdfJob, setPdfJob] = useState<PdfJob | null>(null);
+  const [pdfJobShown, setPdfJobShown] = useState(true);
+  const pdfUrl = pdfJob?.phase === 'ready' ? pdfJob.url : null;
+  // Freed a minute after it's done with — a tab just opened on it is still loading it.
+  useEffect(() => (pdfUrl ? () => void setTimeout(() => URL.revokeObjectURL(pdfUrl), 60_000) : undefined), [pdfUrl]);
   const [mode, setMode] = useState<'plan' | '3d'>('plan');
 
 
@@ -656,6 +665,15 @@ export function ParkingEditor({ show, tourName, initial, canEdit }: ParkingEdito
   );
   /** Duplicate what's selected: one item parks alongside (a vehicle: its
    *  width + 1 m to its right), several as a block beside the block. */
+  /** A PDF close-up of what's selected (pages.ts addCloseUpPage). */
+  const addCloseUp = () => {
+    const chosen = itemsRef.current.filter((i) => selIds.includes(i.id));
+    if (!chosen.length) return;
+    if (pages.length >= MAX_PAGES) return showToast(`A PDF holds at most ${MAX_PAGES} pages`, 'error');
+    const next = addCloseUpPage(pages, chosen, viewRef.current, sizeRef.current);
+    setPages(next);
+    showToast(`Added “${next[next.length - 1].title}” — page ${next.length} of the PDF (Share tab)`);
+  };
   const duplicateSelected = () => {
     if (selIds.length > 1) return duplicateGroup();
     const one = itemsRef.current.find((i) => i.id === selIds[0]);
@@ -757,9 +775,8 @@ export function ParkingEditor({ show, tourName, initial, canEdit }: ParkingEdito
   const doExport = async () => {
     if (!anchor || exporting) return;
     setExporting(true);
-    // Open the tab NOW, while the click still counts as a click: the 3D page
-    // can take a while, and a window opened after that is blocked as a popup.
-    const tab = window.open('about:blank', '_blank');
+    setPdfJobShown(true);
+    setPdfJob({ phase: 'making', step: 'Saving the map', done: 0, total: 1 });
     try {
       if (saveTimer.current) {
         clearTimeout(saveTimer.current);
@@ -796,23 +813,32 @@ export function ParkingEditor({ show, tourName, initial, canEdit }: ParkingEdito
           .map((d) => {
             const r = rasters.get(d.id)!;
             const lines = !d.inside && satelliteOn && !!session;
-            return { id: d.id, name: d.name, matrix: svgMatrix(d), crop: d.crop, canvas: lines ? r.light : r.dark, opacity: d.opacity, blend: lines ? ('multiply' as const) : ('normal' as const), inside: d.inside, floor: d.floor };
+            const { u0, v0, u1, v1 } = d.crop;
+            // An inside drawing over the photo prints like the screen: lines outside, a solid floor inside.
+            const overPhoto = d.inside && satelliteOn && !!session;
+            return {
+              id: d.id,
+              name: d.name,
+              matrix: svgMatrix(d),
+              crop: d.crop,
+              canvas: lines ? r.light : r.dark,
+              opacity: d.opacity,
+              blend: lines ? ('multiply' as const) : ('normal' as const),
+              inside: d.inside,
+              floor: d.floor,
+              ...(overPhoto
+                ? { light: r.light, floorColour: resolvePalette().floor, insideArea: d.insideArea ?? [{ u: u0, v: v0 }, { u: u1, v: v0 }, { u: u1, v: v1 }, { u: u0, v: v1 }] }
+                : {}),
+            };
           }),
         allDrawings: drawings,
         floors: floorCanvases,
         satellite: satelliteOn,
         warnings: warnings.map((w) => w.text),
-      });
+      }, (p) => setPdfJob({ phase: 'making', ...p }));
       const url = URL.createObjectURL(out.blob);
-      if (tab && !tab.closed) tab.location.href = url;
-      else {
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = out.fileName;
-        a.click();
-      }
-      setTimeout(() => URL.revokeObjectURL(url), 120_000);
-      if (out.warning) showToast(out.warning, 'error');
+      setPdfJobShown(true);
+      setPdfJob({ phase: 'ready', url, fileName: out.fileName, pages: out.pageCount, warning: out.warning, saved: canEdit ? 'saving' : null });
       if (canEdit) {
         try {
           const file = await uploadToFiles({ scope: 'tour', scopeId: show.tourId, folder: 'Parking maps', file: new File([out.blob], out.fileName, { type: 'application/pdf' }) });
@@ -820,18 +846,13 @@ export function ParkingEditor({ show, tourName, initial, canEdit }: ParkingEdito
           const r = await fetch(base, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pdfFileId: file.id }) });
           const j = (await r.json().catch(() => ({}))) as { map?: SavedParkingMap };
           if (j.map?.pdf) setPdf(j.map.pdf);
-          showToast(
-            link.ok
-              ? `PDF (${out.pageCount} ${out.pageCount === 1 ? 'page' : 'pages'}) saved to Files › Parking maps, linked to this show`
-              : 'PDF saved to Files › Parking maps, but it couldn’t be linked to this show',
-            link.ok ? undefined : 'error',
-          );
+          setPdfJob((job) => (job?.phase === 'ready' && job.url === url ? { ...job, saved: link.ok ? 'saved' : 'unlinked' } : job));
         } catch (e) {
-          showToast(`The PDF opened, but it couldn’t be saved to Files: ${e instanceof Error ? e.message : 'error'}`, 'error');
+          setPdfJob((job) => (job?.phase === 'ready' && job.url === url ? { ...job, saved: 'error', saveError: e instanceof Error ? e.message : 'error' } : job));
         }
       }
     } catch (e) {
-      if (tab && !tab.closed) tab.close();
+      setPdfJob(null);
       showToast(e instanceof Error ? e.message : 'Couldn’t make the PDF', 'error');
     } finally {
       setExporting(false);
@@ -894,7 +915,7 @@ export function ParkingEditor({ show, tourName, initial, canEdit }: ParkingEdito
               Advance
             </Link>
           </span>
-          <button type="button" className="adv-btn adv-btn-primary adv-btn-sm" onClick={() => void doExport()} disabled={exporting} style={{ marginTop: 'var(--lp-space-1)' }}>
+          <button type="button" className="adv-btn adv-btn-primary adv-btn-sm" onClick={() => (exporting ? setPdfJobShown(true) : void doExport())} style={{ marginTop: 'var(--lp-space-1)' }}>
             <Download size={14} aria-hidden /> {exporting ? 'Making PDF…' : 'Export PDF'}
           </button>
         </div>
@@ -904,9 +925,14 @@ export function ParkingEditor({ show, tourName, initial, canEdit }: ParkingEdito
           <div className="pk-selview">
             <div className="pk-head-row">
               <span className="pk-muted">Selected</span>
-              <button type="button" className="adv-link" onClick={() => setSelected([])}>
-                Done
-              </button>
+              <span className="adv-row-flex" style={{ gap: 'var(--lp-space-3)' }}>
+                <button type="button" className="adv-link" onClick={addCloseUp} title="A PDF page framing just what's selected, close enough to read the names">
+                  Close-up PDF page
+                </button>
+                <button type="button" className="adv-link" onClick={() => setSelected([])}>
+                  Done
+                </button>
+              </span>
             </div>
             {sel ? (
               <Inspector
@@ -1260,6 +1286,7 @@ export function ParkingEditor({ show, tourName, initial, canEdit }: ParkingEdito
                 setTab('share');
                 showToast('This view is now a PDF page (Share tab)');
               },
+              addCloseUp,
             }}
           />
         ) : null}
@@ -1448,6 +1475,7 @@ export function ParkingEditor({ show, tourName, initial, canEdit }: ParkingEdito
         ) : null}
         {mode === 'plan' && session ? <div className="pk-badge pk-attrib">Google Maps{attribution ? ` · ${attribution}` : ''}</div> : null}
       </div>
+      {pdfJob ? <PdfJobDialog job={pdfJob} open={pdfJobShown} onHide={() => (pdfJob.phase === 'ready' ? setPdfJob(null) : setPdfJobShown(false))} /> : null}
     </div>
   );
 }
@@ -1993,9 +2021,68 @@ function PagesPanel({
           <button type="button" className="adv-btn adv-btn-sm" onClick={() => onChange(addStreetPage(pages))} disabled={pages.length >= MAX_PAGES}>
             <Plus size={13} aria-hidden /> Street map
           </button>
-          <span className="pk-muted">{mode === 'plan' ? 'For a 3D page, switch to 3D and add the view there.' : 'In 3D: “Add this view as a page”.'}</span>
+          <span className="pk-muted">{mode === 'plan' ? 'For a close-up, select vehicles (Shift-drag to box them) → “Close-up PDF page”. For a 3D page, switch to 3D and add the view there.' : 'In 3D: “Add this view as a page”.'}</span>
         </div>
       ) : null}
     </section>
+  );
+}
+
+type PdfJob =
+  | { phase: 'making'; step: string; done: number; total: number }
+  | { phase: 'ready'; url: string; fileName: string; pages: number; warning: string | null; saved: 'saving' | 'saved' | 'unlinked' | 'error' | null; saveError?: string };
+
+/** The export's screen: progress while the PDF is made (closing it lets the
+ *  work carry on — the dialog comes back when the PDF is ready), then "Open
+ *  PDF", whose click opens the new tab, and where the copy in Files got to. */
+function PdfJobDialog({ job, open, onHide }: { job: PdfJob; open: boolean; onHide: () => void }) {
+  if (job.phase === 'making') {
+    const pct = job.total ? Math.round((Math.min(job.done, job.total) / job.total) * 100) : 0;
+    return (
+      <Modal open={open} onClose={onHide} title="Making your PDF" size="sm" closeOnBackdrop={false}>
+        <div className="pk-pdfjob" role="status" aria-live="polite">
+          <Loader2 size={28} className="pk-spin" aria-hidden />
+          <p className="pk-pdfjob-step">{job.step}</p>
+          <div className="pk-pdfjob-bar" aria-hidden>
+            <span style={{ width: `${Math.max(6, pct)}%` }} />
+          </div>
+          <p className="pk-muted">The 3D page takes the longest. You can close this — it keeps going and comes back when the PDF is ready.</p>
+        </div>
+      </Modal>
+    );
+  }
+  const saved =
+    job.saved === 'saving'
+      ? 'Saving a copy to Files › Parking maps…'
+      : job.saved === 'saved'
+        ? 'Saved to Files › Parking maps and linked to this show.'
+        : job.saved === 'unlinked'
+          ? 'Saved to Files › Parking maps, but it couldn’t be linked to this show.'
+          : job.saved === 'error'
+            ? `Couldn’t save it to Files (${job.saveError ?? 'error'}) — download it instead.`
+            : null;
+  return (
+    <Modal
+      open={open}
+      onClose={onHide}
+      title="Your PDF is ready"
+      subtitle={`${job.pages} ${job.pages === 1 ? 'page' : 'pages'}`}
+      size="sm"
+      footer={
+        <>
+          <a className="adv-btn adv-btn-sm" href={job.url} download={job.fileName}>
+            <Download size={14} aria-hidden /> Download
+          </a>
+          <a className="adv-btn adv-btn-primary adv-btn-sm" href={job.url} target="_blank" rel="noopener" onClick={() => setTimeout(onHide, 0)}>
+            <ExternalLink size={14} aria-hidden /> Open PDF
+          </a>
+        </>
+      }
+    >
+      <div className="pk-pdfjob">
+        {job.warning ? <p className="pk-pdfjob-warn">{job.warning}</p> : null}
+        {saved ? <p className="pk-muted">{saved}</p> : null}
+      </div>
+    </Modal>
   );
 }

@@ -333,7 +333,8 @@ export async function populate(
           material: new Cesium.PolylineArrowMaterialProperty(Cesium.Color.fromCssColorString(o.palette.route)),
         },
       });
-    } else if (i.kind === 'area' && i.points.length > 2) {
+    } else if (i.kind === 'area' && i.points.length > 2 && !i.flat3d) {
+      // A Flat-in-3D area is the flattening itself (the photo patch) — no tint, no title.
       const c = Cesium.Color.fromCssColorString(areaColour(o.palette, i.type));
       const mid = ll({ x: i.points.reduce((s, p) => s + p.x, 0) / i.points.length, y: i.points.reduce((s, p) => s + p.y, 0) / i.points.length });
       const fh = floorOfShape(i, i.points);

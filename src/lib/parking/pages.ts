@@ -75,6 +75,28 @@ export function addPlanPage(pages: PdfPage[], view: View, viewport: { w: number;
   return [...pages, page];
 }
 
+/** A close-up of what's selected (Nov 2026, Adam: "select smaller plan areas
+ *  … so that it's not … super zoomed out"): a fixed page framing just those
+ *  items at the most detailed scale that holds them (printFrame — never under
+ *  ~70 m across, so there's still road to read), at the editor's rotation. At
+ *  that size the vehicles are big enough to carry their names. */
+export function addCloseUpPage(pages: PdfPage[], selected: ParkingItem[], view: View, viewport: { w: number; h: number }): PdfPage[] {
+  if (pages.length >= MAX_PAGES || !selected.length) return pages;
+  const f = printFrame(selected, view, viewport, 'auto');
+  const page: PlanFixedPage = {
+    id: newId(),
+    kind: 'plan',
+    title: nextTitle(pages, 'Close-up'),
+    fit: false,
+    cx: Math.round(f.cx * 100) / 100,
+    cy: Math.round(f.cy * 100) / 100,
+    rotation: Math.round(view.rotation * 10) / 10,
+    scale: f.scale as PrintScale,
+    ...(view.level != null ? { level: view.level } : {}),
+  };
+  return [...pages, page];
+}
+
 /** A street-map page framing the parking at 1:2,500. */
 export function addStreetPage(pages: PdfPage[]): PdfPage[] {
   if (pages.length >= MAX_PAGES) return pages;

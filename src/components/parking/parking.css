@@ -427,3 +427,13 @@ span.pk-pagescale { display: inline-flex; align-items: center; padding: 0; }
 .pk-menu-icons { display: grid; grid-template-columns: repeat(8, 1fr); gap: 2px; padding: var(--lp-space-1); }
 .pk-menu-icons button { display: flex; align-items: center; justify-content: center; height: 28px; border: 0; border-radius: var(--lp-radius-sm); background: transparent; color: var(--lp-text); cursor: pointer; }
 .pk-menu-icons button:hover { background: var(--lp-surface-hover); }
+
+/* The export's "Making your PDF" / "Your PDF is ready" dialog (Nov 2026). */
+.pk-pdfjob { display: flex; flex-direction: column; align-items: center; gap: var(--lp-space-3); text-align: center; font-size: var(--lp-text-sm); }
+.pk-pdfjob-step { margin: 0; font-weight: var(--lp-weight-semibold); color: var(--lp-text); }
+.pk-pdfjob-bar { width: 100%; height: 6px; border-radius: var(--lp-radius-full); background: var(--lp-surface-hover); overflow: hidden; }
+.pk-pdfjob-bar > span { display: block; height: 100%; background: var(--lp-orange); transition: width var(--lp-duration-slow) ease-out; }
+.pk-pdfjob-warn { margin: 0; color: var(--color-lp-warning); }
+.pk-spin { color: var(--lp-orange); animation: pk-spin 0.9s linear infinite; }
+@keyframes pk-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .pk-spin { animation: none; } .pk-pdfjob-bar > span { transition: none; } }

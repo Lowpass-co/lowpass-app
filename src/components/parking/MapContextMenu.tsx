@@ -11,7 +11,7 @@
    ============================================ */
 
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { Copy, Navigation, RotateCcw, RotateCw, Trash2, FileImage, Layers } from 'lucide-react';
+import { Copy, FileImage, FileText, Layers, Navigation, RotateCcw, RotateCw, Trash2 } from 'lucide-react';
 import { MARKERS, PAINTS, VEHICLE_TILES, vehicleSpec, type MarkerType, type PaintId, type VehicleRegion, type VehicleType } from '@/lib/parking/catalogue';
 import type { ParkingItem } from '@/lib/parking/model';
 import { LIVE_PALETTE, roleColour } from './palette';
@@ -29,6 +29,8 @@ export interface MapMenuActions {
   remove: () => void;
   northUp: () => void;
   addPage: () => void;
+  /** A PDF close-up page framing what's selected. */
+  addCloseUp: () => void;
 }
 
 export function MapContextMenu({
@@ -134,6 +136,9 @@ export function MapContextMenu({
               <Layers size={14} aria-hidden /> {area.flat3d ? 'Show the 3D model here' : 'Flat in 3D here'}
             </button>
           ) : null}
+          <button type="button" role="menuitem" onClick={run(a.addCloseUp)}>
+            <FileText size={14} aria-hidden /> Close-up PDF page
+          </button>
           <div className="pk-menu-sep" />
           <button type="button" role="menuitem" className="pk-menu-danger" onClick={run(a.remove)}>
             <Trash2 size={14} aria-hidden /> Delete

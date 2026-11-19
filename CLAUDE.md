@@ -615,7 +615,10 @@ recreate a `_legacy/` tree: delete dead code instead of parking it.
   numbering per PDF, a nearest-neighbour walk so rows count along; `badgeRadii`
   shrinks them before they touch); a NAME goes beside a badge only where it crosses
   nothing and isn't sandwiched between vehicles (`placeNames`); the key lists the
-  numbers. The driver link's plan + Vehicles list use the same numbers, and the
+  numbers; once a vehicle is big on screen its name goes INSIDE it (`insideName`).
+  Selection → "Close-up PDF page" (`addCloseUpPage`). Flat-in-3D areas are never
+  titled and never printed (`forPrint`). 3D pages are full width (`FRAME_3D`), the
+  note once. The driver link's plan + Vehicles list use the same numbers, and the
   link carries the latest export (`pdf`, signed 1 h). The editor keeps names. No pages saved =
   `defaultPages()` (Plan + Street map + 3D). A plan page with `base: 'street'`
   prints Google's ROADMAP tiles (its own session, `getTileSession('roadmap')`,
@@ -637,7 +640,8 @@ recreate a `_legacy/` tree: delete dead code instead of parking it.
   over `insideArea`** (an outline in drawing units, "Outline the inside";
   null = the whole crop) — `insideFootprint()` is the one rule for
   everything inside (roof cut, floor, items on it, door headroom); never
-  `footprint()` for that. A HIDDEN drawing cuts no roof and lays no floor in 3D (`drawingsIn3d`), but items inside it still stand at its street height (under the roof). The cut edge gets WALLS (`walls3d.ts`): floor up to the roof height sampled on the edge (before the clip), `--lp-map-wall` toned by facing, UNLIT and see-through (most at the top); tops are `smoothTops` (a mast or cable over the edge mustn't pull a wall up it); none where the edge is open street. A thin `--lp-map-rim` line runs along the wall tops (`rimRuns`). There: `--lp-map-floor` under the clear lines (plan
+  `footprint()` for that. The INSIDE floor is always solid — `opacity` fades only
+  the sheet outside the building (plan, PDF, driver map; 3D already did). A HIDDEN drawing cuts no roof and lays no floor in 3D (`drawingsIn3d`), but items inside it still stand at its street height (under the roof). The cut edge gets WALLS (`walls3d.ts`): floor up to the roof height sampled on the edge (before the clip), `--lp-map-wall` toned by facing, UNLIT and see-through (most at the top); tops are `smoothTops` (a mast or cable over the edge mustn't pull a wall up it); none where the edge is open street. A thin `--lp-map-rim` line runs along the wall tops (`rimRuns`). There: `--lp-map-floor` under the clear lines (plan
   + 3D); the rest of the sheet is drawn like an outside drawing. 3D: the
   mesh is clipped to the inside area (`ClippingPolygonCollection`) and the
   floor sits at the street height around it + `floor`; vehicles on it stand

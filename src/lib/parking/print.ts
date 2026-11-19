@@ -217,3 +217,17 @@ export function placeNames(
   }
   return out;
 }
+
+/** A name written INSIDE the vehicle, beside its badge, once the vehicle is
+ *  big enough on screen (Nov 2026, Adam: on the driver link "they should still
+ *  show labels on zoom, not just numbers"). Along the axis, in the half on one
+ *  side of the badge; null while it wouldn't be readable (< `min` px tall).
+ *  `offset`: from the vehicle's centre along its (upright) axis, negative =
+ *  before the badge — "Bus A ①". */
+export function insideName(lengthPx: number, widthPx: number, badgeR: number, chars: number, max: number, min: number, pad = 2): { offset: number; size: number } | null {
+  const room = lengthPx / 2 - badgeR - pad * 2;
+  if (room <= 0 || chars <= 0) return null;
+  const size = Math.min(max, widthPx * 0.72, room / (chars * 0.6));
+  if (size < min) return null;
+  return { offset: -(badgeR + pad + (chars * 0.6 * size) / 2), size };
+}

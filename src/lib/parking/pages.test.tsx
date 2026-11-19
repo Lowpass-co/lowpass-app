@@ -1,7 +1,7 @@
 /* Parking maps — the PDF's pages. */
 
 import { describe, expect, it } from 'vitest';
-import { add3dPage, addPlanPage, addStreetPage, defaultPages, STREET_SCALE, movePage, pagesOf, planFrame, removePage, screenScale, updatePage, MAX_PAGES, type PdfPage } from './pages';
+import { add3dPage, addCloseUpPage, addPlanPage, addStreetPage, defaultPages, STREET_SCALE, movePage, pagesOf, planFrame, removePage, screenScale, updatePage, MAX_PAGES, type PdfPage } from './pages';
 import { parseView, ParkingInputError, type ParkingItem } from './model';
 import type { View } from './geo';
 
@@ -102,5 +102,21 @@ describe('street map pages', () => {
     expect(out.pages?.[0]).toMatchObject({ base: 'street' });
     const odd = parseView({ cx: 0, cy: 0, ppm: 3, rotation: 0, pages: [{ id: 'x', kind: 'plan', title: 'P', fit: true, scale: 'auto', base: 'moon' }] });
     expect(odd.pages?.[0]).not.toHaveProperty('base');
+  });
+});
+
+describe('close-up pages', () => {
+  it('frame just the selected vehicles, at a closer scale than the whole map', () => {
+    const far: ParkingItem = { ...bus, id: 'far', x: 600, y: 0 };
+    const whole = planFrame(defaultPages()[0] as Extract<PdfPage, { kind: 'plan' }>, [bus, far], view, screen).frame;
+    const pages = addCloseUpPage([], [bus], view, screen);
+    expect(pages[0]).toMatchObject({ kind: 'plan', fit: false, title: 'Close-up', rotation: 30 });
+    const p = pages[0];
+    if (p.kind === 'plan' && !p.fit) {
+      expect(p.scale).toBeLessThan(whole.scale);
+      expect(Math.hypot(p.cx - bus.x, p.cy - bus.y)).toBeLessThan(5);
+    }
+    expect(addCloseUpPage([], [], view, screen)).toEqual([]);
+    expect(addCloseUpPage(pages, [bus], view, screen)[1].title).toBe('Close-up 2');
   });
 });
