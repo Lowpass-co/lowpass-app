@@ -2,6 +2,7 @@
 
 import { describe, expect, it } from 'vitest';
 import {
+  drawingsIn3d,
   insideAt,
   insideFootprint,
   CHECK_WARN_PCT,
@@ -278,5 +279,16 @@ describe('inside area (Nov 2026: a plan that runs from the dock out to the stree
     expect(saved[0].insideArea).toEqual(half.insideArea);
     expect(() => parseDrawings([{ ...half, fileId: '00000000-0000-4000-8000-000000000001', insideArea: [{ u: 0, v: 0 }] }])).toThrow(/three points/);
     expect(parseDrawings([{ ...plan, fileId: '00000000-0000-4000-8000-000000000001' }])[0].insideArea).toBeNull();
+  });
+});
+
+describe('drawingsIn3d', () => {
+  it('leaves hidden drawings out of 3D (no roof cut, no floor)', () => {
+    const ds = [
+      { id: 'a', inside: true, hidden: true },
+      { id: 'b', inside: true },
+      { id: 'c', inside: false, hidden: false },
+    ];
+    expect(drawingsIn3d(ds).map((d) => d.id)).toEqual(['b', 'c']);
   });
 });

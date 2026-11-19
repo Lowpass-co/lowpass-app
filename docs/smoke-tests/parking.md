@@ -299,9 +299,9 @@ browser key restricted to the Map Tiles API and the app's domains).**
 
 #### PRK-35 — A drag in 3D moves the map, never the planet
 
-**Do**: Open 3D at a venue, zoom right in, then click and drag a few pixels — on the ground, near the horizon, and starting on the sky. On a phone, drag with one finger.
+**Do**: Open 3D at a venue, zoom right in, then click and drag a few pixels — on the ground, on an inside drawing's floor, on a Flat in 3D area, on a vehicle, near the horizon, and starting on the sky. On a phone, drag with one finger.
 
-**Expect**: Ground drags: the spot you grabbed stays under the pointer. Near the horizon: small, steady moves, no leap. From the sky: nothing moves. You can't drag more than ~3 km from the venue. Right-drag / two fingers still turn and tilt; wheel / pinch still zoom.
+**Expect**: Ground drags (floors, flat areas and vehicles included — a drag that starts on an inside floor once did nothing): the spot you grabbed stays under the pointer. Near the horizon: small, steady moves, no leap. From the sky: nothing moves. You can't drag more than ~3 km from the venue. Right-drag / two fingers still turn and tilt; wheel / pinch still zoom.
 
 **Last verified**:
 
@@ -317,7 +317,7 @@ browser key restricted to the Map Tiles API and the app's domains).**
 
 **Do**: Lay a venue drawing that runs from inside the building out to the street (the O2 service yard). Tick "Inside a building" → **Outline the inside** → click round the part under the roof → double-click.
 
-**Expect**: Plan: the outlined part is a grey floor with the drawing's light lines on it; the rest of the sheet stays lines on the satellite. 3D: only the outlined part loses its roof and shows the floor; trees, roads and buildings outside it stay. Vehicles inside stand on the floor, vehicles outside on the street. "Whole drawing" puts it back to the whole sheet. Re-pinning the drawing keeps the outline in the right place.
+**Expect**: Plan: the outlined part is a grey floor with the drawing's light lines on it; the rest of the sheet stays lines on the satellite. 3D: only the outlined part loses its roof and shows the floor; trees, roads and buildings outside it stay. Vehicles inside stand on the floor, vehicles outside on the street. "Whole drawing" puts it back to the whole sheet. Re-pinning the drawing keeps the outline in the right place. Hide the drawing (Drawings tab) → 3D: the roof is back, no hole, no floor; show it → the floor returns.
 
 **Last verified**:
 
@@ -342,6 +342,22 @@ browser key restricted to the Map Tiles API and the app's domains).**
 **Do**: Open a parking map. Look at the panel; flip UK / EU ↔ US; add a vehicle; press Done; open Drawings, then Share.
 
 **Expect**: Header = venue, date, save state, Export PDF. Add = 7 vehicle tiles in that region's sizes (US in North America by default), markers, draw tools, Shortcuts folded. Adding selects the vehicle and its edit view replaces the tabs; Done goes back. Drawings = satellite switch + venue drawings with all their inside settings. Share = PDF pages, last PDF, Send to a driver, notes. Read-only members see Drawings + Share only.
+
+**Last verified**:
+
+#### PRK-41 — Right-click on the plan
+
+**Do**: Right-click the empty map; then right-click a vehicle; then an area; then right-click inside 3D.
+
+**Expect**: Never the browser's menu. Empty map: "Add here" (the 7 vehicles in this region's sizes + the markers as icons) — what you pick lands where you clicked; North up; This view as a PDF page. A vehicle: Duplicate, Turn 90° right / left, colours, Delete (several selected: acts on all of them). An area: Flat in 3D here / Show the 3D model here. Esc or a click away closes it. 3D: right-drag still turns and tilts.
+
+**Last verified**:
+
+#### PRK-42 — Flatten 3D is findable; markers read in full
+
+**Do**: Add tab → Draw.
+
+**Expect**: Route · Area · Measure · **Flatten 3D**. Flatten 3D draws an area that is already Flat in 3D. Markers sit two to a row with their full names (Load-in door, Shore power, Gate / entrance, …).
 
 **Last verified**:
 

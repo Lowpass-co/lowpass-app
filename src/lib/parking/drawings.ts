@@ -67,6 +67,15 @@ export function footprint(d: Placement & Pick<ParkingDrawing, 'crop'>): Pt[] {
 }
 
 /** A PDF or a JPG / PNG — what can be laid on a map. */
+/** The drawings 3D builds from: the ones that aren't hidden. A hidden drawing
+ *  is gone from 3D entirely — it cuts no roof, lays no floor and lifts no
+ *  vehicle (Nov 2026, Adam: an inside drawing hidden in the panel still cut
+ *  the O2's roof but laid no floor, so the hole showed the sky with stray
+ *  bits of Google's model in it). */
+export function drawingsIn3d<T extends { hidden?: boolean }>(ds: readonly T[]): T[] {
+  return ds.filter((d) => !d.hidden);
+}
+
 /** The part of an inside drawing that is INSIDE, on the ground: its outlined
  *  area, else the whole cropped drawing. Everything "inside" — the cut-away
  *  roof, the floor, which items stand on it, door headroom — uses this, never

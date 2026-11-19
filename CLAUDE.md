@@ -572,7 +572,9 @@ recreate a `_legacy/` tree: delete dead code instead of parking it.
   tabs **Add · Drawings · Share**; a selection's edit view replaces the tabs
   (Done returns). Add's vehicles are `VEHICLE_TILES[region]` (catalogue.ts) —
   a UK / EU | US switch, `regionFor()` the default; every vehicle type must be
-  on one side (tested). 3D controls stay on the map.
+  on one side (tested). 3D controls stay on the map. Right-click on the plan =
+  `<MapContextMenu>` (never the browser's; it only lays out the editor's own
+  actions); Draw › **Flatten 3D** draws an area born `flat3d`.
 - **Selection is a list of ids** (Nov 2026, Adam): ⌘/Ctrl- or Shift-click
   toggles, Shift-drag boxes (`itemsInBox`), ⌘A takes all. Several move, nudge,
   delete, duplicate and colour together; they TURN AS ONE BLOCK (`turnItems`,
@@ -626,7 +628,7 @@ recreate a `_legacy/` tree: delete dead code instead of parking it.
   over `insideArea`** (an outline in drawing units, "Outline the inside";
   null = the whole crop) — `insideFootprint()` is the one rule for
   everything inside (roof cut, floor, items on it, door headroom); never
-  `footprint()` for that. There: `--lp-map-floor` under the clear lines (plan
+  `footprint()` for that. A HIDDEN drawing is gone from 3D (`drawingsIn3d`): no roof cut, no floor. There: `--lp-map-floor` under the clear lines (plan
   + 3D); the rest of the sheet is drawn like an outside drawing. 3D: the
   mesh is clipped to the inside area (`ClippingPolygonCollection`) and the
   floor sits at the street height around it + `floor`; vehicles on it stand

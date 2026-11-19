@@ -75,7 +75,7 @@ export function Parking3D({ anchor, items, drawings, floors, satellite, fallback
         if (cam) applyCamera(Cesium, viewer, a, cam);
         else lookAt(Cesium, viewer, a, def.target, scene.ground0, def.heading, def.pitch, def.range);
         // A drag moves the map, predictably — never spins the globe (see enableGroundPan).
-        stopPan = enableGroundPan(Cesium, viewer, a);
+        stopPan = enableGroundPan(Cesium, viewer, a, scene.ground0);
         setState('ready');
       })
       .catch((e: unknown) => {
