@@ -62,7 +62,7 @@ export function PublicParkingView({ token, initial }: { token?: string; initial?
   );
   const drawings = useMemo(() => data?.map.drawings ?? [], [data]);
   const { rasters } = useDrawingRasters(drawings, files);
-  const floors = useMemo(() => new Map([...rasters].map(([id, r]) => [id, r.dark])), [rasters]);
+  const floors = useMemo(() => new Map([...rasters].map(([id, r]) => [id, r.clear])), [rasters]);
 
   const open3d = useCallback(async () => {
     if (!token) return;
@@ -129,6 +129,8 @@ export function PublicParkingView({ token, initial }: { token?: string; initial?
         {mode === '3d' ? (
           <div className="pk-map" data-mode="3d" style={{ height: '100%' }}>
             <Parking3D
+              // Built once per mount: rebuild when a drawing's lines become ready.
+              key={[...floors.keys()].sort().join(',')}
               anchor={m.anchor}
               items={m.items}
               drawings={drawings}

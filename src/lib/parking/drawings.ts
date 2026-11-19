@@ -67,6 +67,14 @@ export function footprint(d: Placement & Pick<ParkingDrawing, 'crop'>): Pt[] {
 }
 
 /** A PDF or a JPG / PNG — what can be laid on a map. */
+/** The part of an inside drawing that is INSIDE, on the ground: its outlined
+ *  area, else the whole cropped drawing. Everything "inside" — the cut-away
+ *  roof, the floor, which items stand on it, door headroom — uses this, never
+ *  footprint(). Outside it the map stays the map. */
+export function insideFootprint(d: Placement & Pick<ParkingDrawing, 'crop' | 'insideArea'>): Pt[] {
+  return d.insideArea && d.insideArea.length >= 3 ? d.insideArea.map((p) => toGround(d, p)) : footprint(d);
+}
+
 export function drawableKind(name: string | null, mime: string | null): 'pdf' | 'image' | null {
   const m = (mime ?? '').toLowerCase();
   const n = (name ?? '').toLowerCase();
@@ -165,7 +173,7 @@ export function itemPoint(i: ParkingItem): Pt {
 
 /** Inside drawings whose footprint holds the point, highest floor first. */
 export function insideAt(drawings: ParkingDrawing[], p: Pt): ParkingDrawing[] {
-  return drawings.filter((d) => d.inside && pointInPolygon(p, footprint(d))).sort((a, b) => b.floor - a.floor);
+  return drawings.filter((d) => d.inside && pointInPolygon(p, insideFootprint(d))).sort((a, b) => b.floor - a.floor);
 }
 
 /** An item's level: its own, else the (highest) inside drawing it's drawn on, else the street. */
@@ -243,7 +251,7 @@ export function headroomWarnings(items: ParkingItem[], drawings: ParkingDrawing[
     if (c == null) continue;
     const what = `${m.label || 'Height limit'} (${fmtMetres(c)})`;
     for (const d of drawings) {
-      if (!d.inside || distToPolygon(m, footprint(d)) > DOOR_REACH_M) continue;
+      if (!d.inside || distToPolygon(m, insideFootprint(d)) > DOOR_REACH_M) continue;
       const tall = onDrawing(d).filter((v) => v.height > c);
       add(tall, `${what} on the way into ${d.name} — taller: ${names(tall)}`);
     }

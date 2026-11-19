@@ -615,11 +615,16 @@ recreate a `_legacy/` tree: delete dead code instead of parking it.
   checked against it → pin by two points (the drawing keeps ITS scale; the
   satellite's disagreement is `pinCheck`, > 3 % = maybe out of date) or place
   by hand. Look: over the satellite the paper is multiplied away (lines on
-  the photo); inside / satellite off = the dark copy (`darkCopy`, lightness
-  inverted, hues kept) so white selection lines stay visible. 3D: an INSIDE
-  drawing clips the Google mesh (`ClippingPolygonCollection` — the roof comes
-  off) and is the floor at the street height around it + `floor`; vehicles on
-  it stand there. Levels: an item's `floor` ?? the inside drawing it's on ??
+  the photo); satellite off = the clear copy (`seeThroughCopy`: lightness
+  inverted, hues kept, paper transparent). **Inside drawings are inside only
+  over `insideArea`** (an outline in drawing units, "Outline the inside";
+  null = the whole crop) — `insideFootprint()` is the one rule for
+  everything inside (roof cut, floor, items on it, door headroom); never
+  `footprint()` for that. There: `--lp-map-floor` under the clear lines (plan
+  + 3D); the rest of the sheet is drawn like an outside drawing. 3D: the
+  mesh is clipped to the inside area (`ClippingPolygonCollection`) and the
+  floor sits at the street height around it + `floor`; vehicles on it stand
+  there. The PDF still draws inside drawings as the solid dark copy. Levels: an item's `floor` ?? the inside drawing it's on ??
   0 (`itemFloor`); picking a level fades the rest and new items go on it; a
   plan PDF page can print one level. Headroom (`headroomWarnings`): a
   drawing's clear height, height-limit markers (`clear`, or read from the

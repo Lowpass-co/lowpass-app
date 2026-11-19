@@ -128,7 +128,7 @@ describe('venue drawings', () => {
   const FID = '0b6c1c9e-1d2f-4a8b-9c3d-5e6f7a8b9c0d';
   const drawing: ParkingDrawing = {
     id: 'd1', fileId: FID, name: 'Dock.pdf', kind: 'pdf', page: 1, srcW: 1191, srcH: 842, crop: { u0: 0, v0: 0, u1: 1191, v1: 842 },
-    scale: 0.0847, calib: null, x: 10, y: -5, rotation: 12, pinned: true, pinCheck: 0.8, opacity: 0.85, hidden: false, inside: true, floor: -5, clearHeight: 4.2,
+    scale: 0.0847, calib: null, x: 10, y: -5, rotation: 12, pinned: true, pinCheck: 0.8, opacity: 0.85, hidden: false, inside: true, floor: -5, clearHeight: 4.2, insideArea: null,
   };
 
   it('a map saves and loads its drawings', async () => {

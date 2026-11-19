@@ -234,7 +234,7 @@ describe('venue drawings: levels and last time at this venue', () => {
   const dock = {
     id: 'dock', fileId: '7e3f2a10-4b5c-4d6e-8f70-112233445566', name: 'Basement dock.pdf', kind: 'pdf' as const, page: 1, srcW: 1000, srcH: 600,
     crop: { u0: 0, v0: 0, u1: 1000, v1: 600 }, scale: 0.1, calib: null, x: -50, y: 30, rotation: 0, pinned: true, pinCheck: 0.4,
-    opacity: 0.85, hidden: false, inside: true, floor: -5, clearHeight: null,
+    opacity: 0.85, hidden: false, inside: true, floor: -5, clearHeight: null, insideArea: null,
   };
   const withDock = (): SavedParkingMap => ({
     id: 'm', version: 2, updatedAt: new Date().toISOString(), anchor: { lat: 52.4547, lng: -1.7206 },

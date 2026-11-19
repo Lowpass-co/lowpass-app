@@ -2,6 +2,8 @@
 
 import { describe, expect, it } from 'vitest';
 import {
+  insideAt,
+  insideFootprint,
   CHECK_WARN_PCT,
   agreement,
   clearOf,
@@ -43,6 +45,7 @@ const drawing = (o: Partial<ParkingDrawing> = {}): ParkingDrawing => ({
   inside: false,
   floor: 0,
   clearHeight: null,
+  insideArea: null,
   ...o,
 });
 
@@ -246,5 +249,34 @@ describe('parseDrawings — the gate into parking_maps.drawings', () => {
     expect(m.view).toMatchObject({ satellite: false, level: -5 });
     expect(m.items[0]).toMatchObject({ floor: -5 });
     expect(m.items[1]).toMatchObject({ clear: 4.2 });
+  });
+});
+
+describe('inside area (Nov 2026: a plan that runs from the dock out to the street)', () => {
+  const plan = drawing({ id: 'o2', inside: true, srcW: 1000, srcH: 1000, crop: { u0: 0, v0: 0, u1: 1000, v1: 1000 }, scale: 0.1, x: 0, y: 0 });
+  // Only the left half of the drawing is under the roof.
+  const half = { ...plan, insideArea: [{ u: 0, v: 0 }, { u: 500, v: 0 }, { u: 500, v: 1000 }, { u: 0, v: 1000 }] };
+
+  it('without an outline the whole drawing is inside', () => {
+    expect(insideFootprint(plan)).toEqual(footprint(plan));
+    expect(insideAt([plan], { x: 80, y: -50 }).map((d) => d.id)).toEqual(['o2']);
+  });
+
+  it('with an outline only that part is inside — the rest stays the street', () => {
+    expect(insideAt([half], { x: 20, y: -50 }).map((d) => d.id)).toEqual(['o2']);
+    expect(insideAt([half], { x: 80, y: -50 })).toEqual([]);
+  });
+
+  it('the outline moves with the drawing (it is kept in drawing units)', () => {
+    const moved = { ...half, x: 100, y: 0 };
+    expect(insideAt([moved], { x: 120, y: -50 }).map((d) => d.id)).toEqual(['o2']);
+    expect(insideAt([moved], { x: 20, y: -50 })).toEqual([]);
+  });
+
+  it('is read back from a saved map, and a bad outline is refused', () => {
+    const saved = parseDrawings([{ ...half, fileId: '00000000-0000-4000-8000-000000000001' }]);
+    expect(saved[0].insideArea).toEqual(half.insideArea);
+    expect(() => parseDrawings([{ ...half, fileId: '00000000-0000-4000-8000-000000000001', insideArea: [{ u: 0, v: 0 }] }])).toThrow(/three points/);
+    expect(parseDrawings([{ ...plan, fileId: '00000000-0000-4000-8000-000000000001' }])[0].insideArea).toBeNull();
   });
 });

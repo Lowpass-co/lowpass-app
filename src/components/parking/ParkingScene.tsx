@@ -12,7 +12,7 @@
    Imagery tiles sit in one transformed group (sceneTransform).
    ============================================ */
 
-import type { PointerEvent as ReactPointerEvent, ReactNode } from 'react';
+import { useId, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
 import { DoorOpen, PlugZap, Fence, ArrowUpFromLine, Droplet, Trash2, ShieldCheck, StickyNote, type LucideIcon } from 'lucide-react';
 import { bearing, dist, fmtMetres, niceLength, project, sceneTransform, unproject, type Pt, type View } from '@/lib/parking/geo';
 import { markerSpec, vehicleSpec, areaLabel, type MarkerType } from '@/lib/parking/catalogue';
@@ -42,6 +42,9 @@ export interface SceneDrawing {
   opacity: number;
   /** Lines on the satellite (white paper multiplied away), or the dark copy as is. */
   blend: 'multiply' | 'normal';
+  /** An inside drawing's inside area (drawing units): a floor of `fill` under
+   *  the clear lines `href`. The sheet outside it is drawn as above. */
+  inside?: { points: { u: number; v: number }[]; fill: string; href: string };
 }
 
 export interface Draft {
@@ -105,6 +108,8 @@ export function ParkingScene({
   onBackgroundDown?: (e: ReactPointerEvent) => void;
   children?: ReactNode;
 }) {
+  // Ids for the inside-area clip / mask — two scenes on one page mustn't share them.
+  const uid = `pk${useId().replace(/[^a-zA-Z0-9]/g, '')}`;
   const P = (pt: Pt) => project(view, width, height, pt);
   const isSel = (id: string) => selectedIds.includes(id);
   const single = selectedIds.length === 1;
@@ -263,11 +268,39 @@ export function ParkingScene({
           // A hair of overlap hides antialiasing seams between tiles.
           <image key={t.id} href={t.href} x={t.x} y={t.y} width={t.w * 1.002} height={t.h * 1.002} preserveAspectRatio="none" />
         ))}
-        {drawings.map((d) => (
-          <g key={d.id} transform={`matrix(${d.matrix.join(' ')})`}>
-            <image href={d.href} x={d.x} y={d.y} width={d.w} height={d.h} preserveAspectRatio="none" opacity={d.opacity} style={{ mixBlendMode: d.blend }} />
-          </g>
-        ))}
+        {drawings.map((d) => {
+          const sheet = <image href={d.href} x={d.x} y={d.y} width={d.w} height={d.h} preserveAspectRatio="none" opacity={d.opacity} style={{ mixBlendMode: d.blend }} />;
+          if (!d.inside) {
+            return (
+              <g key={d.id} transform={`matrix(${d.matrix.join(' ')})`}>
+                {sheet}
+              </g>
+            );
+          }
+          const pts = d.inside.points.map((q) => `${q.u},${q.v}`).join(' ');
+          const clip = `${uid}-in-${d.id}`;
+          const mask = `${uid}-out-${d.id}`;
+          return (
+            <g key={d.id} transform={`matrix(${d.matrix.join(' ')})`}>
+              <defs>
+                <clipPath id={clip} clipPathUnits="userSpaceOnUse">
+                  <polygon points={pts} />
+                </clipPath>
+                <mask id={mask} maskUnits="userSpaceOnUse" x={d.x} y={d.y} width={d.w} height={d.h}>
+                  <rect x={d.x} y={d.y} width={d.w} height={d.h} fill="white" />
+                  <polygon points={pts} fill="black" />
+                </mask>
+              </defs>
+              {/* Outside the building: the sheet as an outside drawing. */}
+              <g mask={`url(#${mask})`}>{sheet}</g>
+              {/* Inside: a floor, the lines on it. */}
+              <g clipPath={`url(#${clip})`} opacity={d.opacity}>
+                <polygon points={pts} fill={d.inside.fill} />
+                <image href={d.inside.href} x={d.x} y={d.y} width={d.w} height={d.h} preserveAspectRatio="none" />
+              </g>
+            </g>
+          );
+        })}
       </g>
       {grid ? <Grid view={view} width={width} height={height} colour={p.grid} /> : null}
 

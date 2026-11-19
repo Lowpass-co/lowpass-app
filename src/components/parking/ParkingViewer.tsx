@@ -72,7 +72,7 @@ export function ParkingViewer({
   }, []);
 
   const { session, tiles, attribution } = useMapTiles(anchor, view, size, satellite);
-  const scene = useMemo(() => sceneDrawings(drawings, rasters, satellite && !!session, undefined), [drawings, rasters, satellite, session]);
+  const scene = useMemo(() => sceneDrawings(drawings, rasters, satellite && !!session, undefined, LIVE_PALETTE.floor), [drawings, rasters, satellite, session]);
   const warnIds = useMemo(() => new Set(headroomWarnings(items, drawings).flatMap((w) => w.vehicleIds)), [items, drawings]);
 
   // Drag to move, two fingers / wheel to zoom.
