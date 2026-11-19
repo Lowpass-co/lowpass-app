@@ -3,6 +3,9 @@
 
    POST: multipart form — file, kind = head_shot | passport_scan
    DELETE: JSON { kind: "head_shot" } | { kind: "passport_scan", path: string }
+           ADMIN ONLY (Nov 2026, Adam). The bucket's delete rule (085) is
+           admin-only; a manager used to get a 200 here while the file stayed
+           in storage, unlinked. Refuse up front instead of pretending.
    Stores refs in personnel.extended_profile.documents; files in personnel-files bucket.
    ============================================ */
 
@@ -12,6 +15,7 @@ import { createServerSupabaseClient } from '@/lib/supabase-server';
 import type { PersonnelDocumentsBlock, PersonnelStoredDocument } from '@/lib/personnel-extended-profile';
 
 const BUCKET = 'personnel-files';
+const ONLY_ADMINS_DELETE = 'Only admins can delete documents.';
 const MAX_SIZE = 10 * 1024 * 1024;
 const ALLOWED_TYPES = [
   'application/pdf',
@@ -183,6 +187,9 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
   const supabase = await createServerSupabaseClient();
   const auth = await requireWrite(supabase);
   if ('error' in auth) return auth.error;
+  if (auth.membership.role !== 'admin') {
+    return NextResponse.json({ error: ONLY_ADMINS_DELETE }, { status: 403 });
+  }
   const {
     data: { user },
   } = await supabase.auth.getUser();
