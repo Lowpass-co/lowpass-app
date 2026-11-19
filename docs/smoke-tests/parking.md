@@ -377,6 +377,14 @@ browser key restricted to the Map Tiles API and the app's domains).**
 
 **Last verified**:
 
+#### PRK-46 — PDF: a street-map page
+
+**Do**: Open a map that has never had its PDF pages changed → Share: the pages are Plan · Street map · 3D. Export. On another map, Share → **+ Street map**.
+
+**Expect**: The Street map page is Google's street map (roads and their names), 1:2,500, centred on the parking, your vehicles / routes / markers on top, no venue drawings; credit "Google Maps · <map data>" and footer "Map: Google Maps". The key and Get there column as on the plan. No map key set up → the page prints on the grid and the PDF still comes out.
+
+**Last verified**:
+
 ## Known broken
 
 #### PRK-90 — Re-exporting makes a new file

@@ -398,7 +398,10 @@ export function parsePages(raw: unknown): PdfPage[] {
     const base = { id: id(o.id), title: text(o.title, LIMITS.pageTitle) || 'Page' };
     if (o.kind === '3d') return { ...base, kind: '3d', cam: o.cam == null ? null : parseCamera3d(o.cam) };
     if (o.kind !== 'plan') fail('Unknown page kind');
-    const lv = o.level == null || o.level === '' ? {} : { level: num(o.level, 'Page level', LIMITS.floorMin, LIMITS.floorMax) };
+    const lv = {
+      ...(o.level == null || o.level === '' ? {} : { level: num(o.level, 'Page level', LIMITS.floorMin, LIMITS.floorMax) }),
+      ...(o.base === 'street' ? { base: 'street' as const } : {}),
+    };
     if (o.fit === true) return { ...base, kind: 'plan', fit: true, scale: o.scale === 'auto' || o.scale == null ? 'auto' : printScale(o.scale), ...lv };
     return {
       ...base,

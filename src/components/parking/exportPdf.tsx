@@ -44,7 +44,7 @@ import { applyCamera, createViewer, creditsText, lookAt, populate, settle } from
 import { defaultCamera3d } from '@/lib/parking/blocks3d';
 import { PRINT_FRAME_MM, type PrintFrame } from '@/lib/parking/print';
 import { areaColour, resolvePalette, vehicleColour, type Palette } from './palette';
-import { tilesKey, tileUrl, type TileSession } from './googleTiles';
+import { getTileSession, tilesKey, tileUrl, viewportInfo, type TileSession } from './googleTiles';
 
 // A4 landscape, millimetres.
 const PAGE = { w: 297, h: 210 };
@@ -63,6 +63,8 @@ export type ResolvedPage =
       /** Only this level's items and drawings (stacked levels); absent = all. */
       level?: number;
       levelLabel?: string;
+      /** 'street': Google's street map under the items (pages.ts), no venue drawings. */
+      base?: 'street';
     }
   | { kind: '3d'; title: string; cam: Camera3d | null; fallback: { centre: Pt; extent: number; rotation: number } };
 
@@ -87,6 +89,8 @@ export interface ExportInput {
   satellite: boolean;
   /** Headroom warnings (drawings.ts), printed in the key. */
   warnings: string[];
+  /** The street-map tiles for 'street' pages — set by exportParkingPdf (null = not available). */
+  street?: { session: TileSession; maxZoom: number; attribution: string } | null;
 }
 
 export interface ExportDrawing {
@@ -215,10 +219,13 @@ export async function renderMapImage(
   ctx.fillStyle = palette.blank;
   ctx.fillRect(0, 0, W, H);
 
-  if (input.session) {
-    const z = tileZoomFor(input.anchor.lat, view.ppm, 1, input.session.tileScale, input.maxZoom);
+  // A street page draws Google's street map; every other plan page its satellite photo.
+  const street = page.base === 'street';
+  const src = street ? (input.street ? { session: input.street.session, maxZoom: input.street.maxZoom } : null) : input.session ? { session: input.session, maxZoom: input.maxZoom } : null;
+  if (src) {
+    const z = tileZoomFor(input.anchor.lat, view.ppm, 1, src.session.tileScale, src.maxZoom);
     const keys = visibleTiles(input.anchor, view, W, H, z, 8);
-    const bitmaps = await pool(keys, 8, (k) => loadTileBitmap(tileUrl(input.session!, k)));
+    const bitmaps = await pool(keys, 8, (k) => loadTileBitmap(tileUrl(src.session, k)));
     ctx.save();
     // = sceneTransform(view, W, H)
     ctx.translate(W / 2, H / 2);
@@ -234,8 +241,9 @@ export async function renderMapImage(
   }
 
   // Venue drawings, under the items (the plan's look: lines multiplied onto
-  // the photo, or the dark copy as the floor).
-  for (const d of input.drawings) {
+  // the photo, or the dark copy as the floor). Not on a street page — it's
+  // for getting there, and a floor would cover the road names.
+  for (const d of street ? [] : input.drawings) {
     ctx.save();
     ctx.translate(W / 2, H / 2);
     ctx.rotate((-view.rotation * Math.PI) / 180);
@@ -255,7 +263,7 @@ export async function renderMapImage(
     items: input.items,
     tiles: [],
     palette: { ...palette, blank: 'transparent' },
-    grid: !input.session,
+    grid: !src,
     labelScale: LABEL_SCALE,
     fontFamily,
   });
@@ -268,6 +276,8 @@ function gpsLink(p: LatLng): string {
 }
 
 export async function exportParkingPdf(input: ExportInput): Promise<ExportResult> {
+  // Street-map pages need their own Google session (roadmap tiles + their credit).
+  if (input.pages.some((p) => p.kind === 'plan' && p.base === 'street')) input = { ...input, street: await streetTiles(input.anchor) };
   if (!input.pages.length) throw new Error('Add at least one page.');
   const palette = resolvePalette();
   const fontFamily = getComputedStyle(document.body).fontFamily || 'Helvetica, Arial, sans-serif';
@@ -406,20 +416,37 @@ export async function exportParkingPdf(input: ExportInput): Promise<ExportResult
     doc.text('N', nx + dir.x * 5.2, ny + dir.y * 5.2 + 1.2, { align: 'center' });
     doc.setFont('helvetica', 'normal');
 
-    const drawn = [...new Set(pin.drawings.map((d) => d.name))];
+    const streetPage = page.base === 'street';
+    const drawn = streetPage ? [] : [...new Set(pin.drawings.map((d) => d.name))];
+    const google = streetPage ? input.street ?? null : input.session ? { attribution: input.attribution } : null;
     const credits = [
-      input.session ? `Google Maps${input.attribution ? ` · ${input.attribution}` : ''}` : null,
+      google ? `Google Maps${google.attribution ? ` · ${google.attribution}` : ''}` : null,
       drawn.length ? `Drawing${drawn.length > 1 ? 's' : ''}: ${drawn.join(', ')} (venue)` : null,
     ].filter(Boolean);
     if (credits.length) credit(credits.join(' · '));
 
     drawKey(doc, pin, palette, { ink, grey, link });
-    footer(n + 1, `${input.session ? ' · Imagery: Google Maps' : ''}${drawn.length ? ' · Drawings: the venue’s' : ''}`);
+    footer(n + 1, `${google ? (streetPage ? ' · Map: Google Maps' : ' · Imagery: Google Maps') : ''}${drawn.length ? ' · Drawings: the venue’s' : ''}`);
   }
 
   const blob = doc.output('blob');
   const safe = (t: string) => t.replace(/[\\/:*?"<>|]+/g, '-').trim();
   return { blob, fileName: `${safe(`Parking — ${input.title.replace(/^Parking — /, '')}`)}.pdf`, scale: firstScale, pageCount: total, warning };
+}
+
+/** A Google street-map (roadmap) session for the street pages, with its data
+ *  credit. Null when imagery isn't set up or Google refuses — the page then
+ *  prints on the plain grid, and the PDF still comes out. */
+async function streetTiles(anchor: LatLng): Promise<ExportInput['street']> {
+  if (!tilesKey()) return null;
+  try {
+    const session = await getTileSession('roadmap');
+    const d = 0.01;
+    const info = await viewportInfo(session, 16, { north: anchor.lat + d, south: anchor.lat - d, east: anchor.lng + d, west: anchor.lng - d }, anchor).catch(() => ({ copyright: '', maxZoom: 21 }));
+    return { session, maxZoom: Math.min(info.maxZoom, 21), attribution: info.copyright };
+  } catch {
+    return null;
+  }
 }
 
 /** The right-hand column of a plan page: key, how to get there, notes. */
