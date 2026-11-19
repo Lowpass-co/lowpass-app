@@ -20,8 +20,12 @@ import type { SceneDrawing } from './ParkingScene';
 export interface DrawingRaster {
   key: string;
   light: HTMLCanvasElement;
+  /** Solid dark copy (black paper, light lines) — the PDF's inside look. */
   dark: HTMLCanvasElement;
+  /** Light lines, paper clear — on screen and as the 3D floor's lines. */
+  clear: HTMLCanvasElement;
   lightUrl: string;
+  /** URL of `clear`. */
   darkUrl: string;
 }
 
@@ -74,9 +78,11 @@ export function useDrawingRasters(drawings: ParkingDrawing[], files: ReadonlyMap
       renderCrop(f, d, paper)
         .then(async (light) => {
           const dark = darkCopy(light);
-          // On screen the inside / no-satellite look is the dark copy with
-          // the paper made clear; `dark` itself stays solid for 3D + PDF.
-          const [lightUrl, darkUrl] = await Promise.all([canvasUrl(light), canvasUrlWithAlpha(seeThroughCopy(dark, light))]);
+          // On screen (and as the 3D floor's lines) the inside / no-satellite
+          // look is the dark copy with the paper made clear; `dark` stays
+          // solid for the PDF.
+          const clear = seeThroughCopy(dark, light);
+          const [lightUrl, darkUrl] = await Promise.all([canvasUrl(light), canvasUrlWithAlpha(clear)]);
           if (!mounted.current || wanted.current.get(d.id) !== key) {
             URL.revokeObjectURL(lightUrl);
             URL.revokeObjectURL(darkUrl);
@@ -96,7 +102,7 @@ export function useDrawingRasters(drawings: ParkingDrawing[], files: ReadonlyMap
               URL.revokeObjectURL(r.darkUrl);
               next.delete(id);
             }
-            next.set(d.id, { key, light, dark, lightUrl, darkUrl });
+            next.set(d.id, { key, light, dark, clear, lightUrl, darkUrl });
             return next;
           });
           setErrors((m) => {
@@ -126,29 +132,46 @@ export function onLevel(d: Pick<ParkingDrawing, 'inside' | 'floor'>, level: numb
   return d.inside ? d.floor === level : level === 0;
 }
 
-/** The plan's drawing layer, bottom to top: outside drawings, then inside ones by floor. */
+/** The plan's drawing layer, bottom to top: outside drawings, then inside ones by floor.
+ *  An inside drawing is two parts (Nov 2026, Adam): its INSIDE area (the
+ *  outline, else the whole crop) is a floor — `--lp-map-floor` under the
+ *  drawing's light lines — and the rest of the sheet is drawn like any
+ *  outside drawing, so the street around the building stays the map. */
 export function sceneDrawings(
   drawings: ParkingDrawing[],
   rasters: ReadonlyMap<string, DrawingRaster>,
   satelliteOn: boolean,
   level: number | undefined,
+  floorColour: string,
 ): SceneDrawing[] {
   return drawings
     .filter((d) => !d.hidden && rasters.has(d.id) && onLevel(d, level))
     .sort((a, b) => Number(a.inside) - Number(b.inside) || a.floor - b.floor)
     .map((d) => {
       const r = rasters.get(d.id)!;
-      const look = drawingLook(d, satelliteOn);
+      // The part outside the building reads like an outside drawing.
+      const outer = satelliteOn ? ('lines' as const) : ('dark' as const);
+      const look = d.inside ? outer : drawingLook(d, satelliteOn);
+      const { u0, v0, u1, v1 } = d.crop;
+      const area = d.inside
+        ? d.insideArea ?? [
+            { u: u0, v: v0 },
+            { u: u1, v: v0 },
+            { u: u1, v: v1 },
+            { u: u0, v: v1 },
+          ]
+        : null;
       return {
         id: d.id,
         href: look === 'lines' ? r.lightUrl : r.darkUrl,
         matrix: svgMatrix(d),
-        x: d.crop.u0,
-        y: d.crop.v0,
-        w: d.crop.u1 - d.crop.u0,
-        h: d.crop.v1 - d.crop.v0,
+        x: u0,
+        y: v0,
+        w: u1 - u0,
+        h: v1 - v0,
         opacity: d.opacity,
         blend: look === 'lines' ? 'multiply' : 'normal',
+        inside: area ? { points: area, fill: floorColour, href: r.darkUrl } : undefined,
       };
     });
 }

@@ -303,6 +303,8 @@ export function DrawingSetup({ file, initial, satelliteOn, view, readUrl, reques
         inside,
         floor: Number.isFinite(floorN) ? Math.max(LIMITS.floorMin, Math.min(LIMITS.floorMax, floorN)) : 0,
         clearHeight: clearN,
+        // The outline is in the drawing's own units, so it survives a re-pin.
+        insideArea: initial && initial.page === page ? initial.insideArea : null,
       };
     },
     [size, crop, scale, initial, file, page, dim, m1, checkScale, chk, m2, inside, floorN, clearN],

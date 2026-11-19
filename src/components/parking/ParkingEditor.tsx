@@ -41,7 +41,7 @@ import {
 } from '@/lib/parking/geo';
 import { AREAS, MARKERS, PAINTS, VEHICLES, areaLabel, markerSpec, vehicleSpec, type AreaType, type MarkerType, type PaintId, type VehicleType } from '@/lib/parking/catalogue';
 import { pathLength, type ParkingDrawing, type ParkingItem } from '@/lib/parking/model';
-import { drawableKind, footprint, headroomWarnings, itemFloor, levelLabel, levelsOf, shiftDrawings, svgMatrix } from '@/lib/parking/drawings';
+import { drawableKind, footprint, headroomWarnings, itemFloor, levelLabel, levelsOf, shiftDrawings, svgMatrix, toSource } from '@/lib/parking/drawings';
 import type { DrawingFile, VenueReuse } from '@/server/parking/maps';
 import { DrawingsPanel } from './DrawingsPanel';
 import { DriverLinksPanel } from './DriverLinksPanel';
@@ -63,7 +63,8 @@ import './parking.css';
 
 type Tool =
   | { kind: 'select' }
-  | { kind: 'draw'; shape: 'route' | 'area' | 'measure' }
+  /** `insideFor`: outlining an inside drawing's inside area, not adding an item. */
+  | { kind: 'draw'; shape: 'route' | 'area' | 'measure'; insideFor?: string }
   /** Setting up a drawing: the next click on the map is a pin point. */
   | { kind: 'pick'; prompt: string };
 
@@ -477,6 +478,21 @@ export function ParkingEditor({ show, tourName, initial, canEdit }: ParkingEdito
   const finishDraw = useCallback(
     (points?: Pt[]) => {
       if (tool.kind !== 'draw' || !draft) return;
+      if (tool.insideFor) {
+        // The outline is kept in the drawing's own units, so it moves with it.
+        const pts = points ?? draft.points;
+        const id = tool.insideFor;
+        if (pts.length < 3) {
+          if (pts.length) showToast('The inside needs at least three points', 'error');
+        } else {
+          setDrawings((ds) => ds.map((d) => (d.id === id ? { ...d, insideArea: pts.map((q) => toSource(d, q)) } : d)));
+          touched.current = true;
+          showToast('Inside outlined — the rest of the drawing stays the street');
+        }
+        setTool({ kind: 'select' });
+        setDraft(null);
+        return;
+      }
       const r = finishDraft(itemsRef.current, tool.shape, points ?? draft.points, areaType);
       if (r) {
         commit(atLevel(r.items, r.id));
@@ -598,7 +614,7 @@ export function ParkingEditor({ show, tourName, initial, canEdit }: ParkingEdito
   );
   const levelOptions = useMemo(() => levels.map((l) => ({ value: l, label: levelLabel(l, drawings) })), [levels, drawings]);
   /** The dark look of each drawing: 3D lays these as floors. */
-  const floorCanvases = useMemo(() => new Map([...rasters].map(([id, r]) => [id, r.dark])), [rasters]);
+  const floorCanvases = useMemo(() => new Map([...rasters].map(([id, r]) => [id, r.clear])), [rasters]);
 
   const patchSelected = (patch: Partial<ParkingItem>) => {
     if (!sel) return;
@@ -966,6 +982,12 @@ export function ParkingEditor({ show, tourName, initial, canEdit }: ParkingEdito
             changeDrawings(shiftDrawings(reuse.drawings, reuse.anchor, anchor));
             showToast(`${reuse.drawings.length === 1 ? 'The drawing' : `${reuse.drawings.length} drawings`} from last time placed — check ${reuse.drawings.length === 1 ? 'it' : 'them'} against the map`);
           }}
+          onOutline={(d) => {
+            setMode('plan');
+            setSelected([]);
+            setTool({ kind: 'draw', shape: 'area', insideFor: d.id });
+            setDraft({ kind: 'area', points: [], cursor: null });
+          }}
           onSetup={(d) => {
             const f = fileRefs.get(d.fileId);
             if (!f) return showToast(`${d.name}’s file isn’t available — was it deleted from Files?`, 'error');
@@ -1032,7 +1054,8 @@ export function ParkingEditor({ show, tourName, initial, canEdit }: ParkingEdito
             floors={floorCanvases}
             satellite={satelliteOn}
             fallback={{ centre: { x: frame.cx, y: frame.cy }, extent: Math.max(frame.wM, frame.hM) * 0.7, rotation: view.rotation }}
-            key={shown3d.key}
+            // Built once per mount: rebuild when a drawing's lines become ready.
+            key={`${shown3d.key}|${[...floorCanvases.keys()].sort().join(',')}`}
             cam3d={shown3d.cam ?? pages.find((p): p is Page3d => p.kind === '3d' && !!p.cam)?.cam ?? undefined}
             canEdit={canEdit}
             pageTitle={shown3d.pageId ? pages.find((p) => p.id === shown3d.pageId)?.title ?? null : null}
@@ -1060,7 +1083,7 @@ export function ParkingEditor({ show, tourName, initial, canEdit }: ParkingEdito
             tiles={tiles}
             palette={LIVE_PALETTE}
             selectedIds={selIds}
-            drawings={sceneDrawings(shownDrawings, rasters, satelliteOn && !!session, level)}
+            drawings={sceneDrawings(shownDrawings, rasters, satelliteOn && !!session, level, LIVE_PALETTE.floor)}
             fadedIds={fadedIds}
             warnIds={warnIds}
             draft={draft}
@@ -1093,6 +1116,7 @@ export function ParkingEditor({ show, tourName, initial, canEdit }: ParkingEdito
 
         {mode === 'plan' && tool.kind === 'draw' ? (
           <div className="pk-hint" onPointerDown={(e) => e.stopPropagation()}>
+            {tool.insideFor ? 'Click round the inside of the building (under the roof) · double-click or Enter to finish · ' : ''}
             {tool.shape === 'measure' ? 'Click two points' : `Click to add points${draft && draft.points.length > 1 && tool.shape === 'route' ? ` · ${fmtMetres(pathLength(draft.points))}` : ''} · double-click or Enter to finish`}
             {tool.shape !== 'measure' ? (
               <button type="button" className="adv-btn adv-btn-sm adv-btn-primary" onClick={() => finishDraw()}>Done</button>

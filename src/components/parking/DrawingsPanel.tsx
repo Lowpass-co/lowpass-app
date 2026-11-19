@@ -35,6 +35,8 @@ export interface DrawingsPanelProps {
   onUpload: (file: File) => void;
   onUseReuse: () => void;
   onSetup: (d: ParkingDrawing) => void;
+  /** Outline the inside area on the map. */
+  onOutline: (d: ParkingDrawing) => void;
   onShow: (d: ParkingDrawing) => void;
   onOpenFiles: () => void;
 }
@@ -133,6 +135,25 @@ export function DrawingsPanel(p: DrawingsPanelProps) {
                   <input type="checkbox" checked={d.inside} onChange={(e) => patch(d.id, { inside: e.target.checked })} />
                   Inside a building
                 </label>
+                {d.inside ? (
+                  <div className="pk-muted" style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--lp-space-2)', alignItems: 'baseline' }}>
+                    <span>
+                      {d.insideArea
+                        ? 'Inside: the outlined part — the rest is the street.'
+                        : 'Inside: the whole drawing. Outline the building if the drawing runs outside it.'}
+                    </span>
+                    {canEdit ? (
+                      <button type="button" className="adv-link" onClick={() => p.onOutline(d)}>
+                        {d.insideArea ? 'Outline again' : 'Outline the inside'}
+                      </button>
+                    ) : null}
+                    {canEdit && d.insideArea ? (
+                      <button type="button" className="adv-link" onClick={() => patch(d.id, { insideArea: null })}>
+                        Whole drawing
+                      </button>
+                    ) : null}
+                  </div>
+                ) : null}
                 {d.inside ? (
                   <div className="pk-grid2">
                     <label className="pk-field">

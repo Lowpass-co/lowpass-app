@@ -313,11 +313,11 @@ browser key restricted to the Map Tiles API and the app's domains).**
 
 **Last verified**:
 
-#### PRK-37 — Inside drawings: lines on a clear background
+#### PRK-37 — Inside drawings: a floor only where it's inside
 
-**Do**: Lay an inside drawing (or any drawing with the satellite off) on the plan.
+**Do**: Lay a venue drawing that runs from inside the building out to the street (the O2 service yard). Tick "Inside a building" → **Outline the inside** → click round the part under the roof → double-click.
 
-**Expect**: Light lines only — the paper is clear, so the satellite (or the map grid) shows through; no black slab. 3D floors and the PDF are unchanged.
+**Expect**: Plan: the outlined part is a grey floor with the drawing's light lines on it; the rest of the sheet stays lines on the satellite. 3D: only the outlined part loses its roof and shows the floor; trees, roads and buildings outside it stay. Vehicles inside stand on the floor, vehicles outside on the street. "Whole drawing" puts it back to the whole sheet. Re-pinning the drawing keeps the outline in the right place.
 
 **Last verified**:
 

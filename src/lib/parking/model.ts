@@ -128,6 +128,10 @@ export interface ParkingDrawing {
   floor: number;
   /** Clear height inside, metres (headroom checks). */
   clearHeight: number | null;
+  /** The part that IS inside, outlined on the drawing (source units). null =
+   *  the whole crop. A plan that runs from the dock out to the street keeps
+   *  the street as the map (Nov 2026, Adam). */
+  insideArea: SrcPt[] | null;
 }
 
 export interface ParkingMapData {
@@ -292,6 +296,19 @@ function fine(v: unknown, what: string, lo: number, hi: number): number {
 }
 
 /** The map's venue drawings. Every field checked; at most LIMITS.drawings. */
+function parseInsideArea(raw: unknown, srcW: number, srcH: number): SrcPt[] | null {
+  if (raw == null) return null;
+  if (!Array.isArray(raw)) fail('The inside area must be a list of points');
+  const list = raw as unknown[];
+  if (list.length < 3) fail('The inside area needs at least three points');
+  if (list.length > LIMITS.points) fail(`The inside area holds at most ${LIMITS.points} points`);
+  return list.map((p) => {
+    const q = srcPt(p, 'Inside area point');
+    // A point may sit a little off the page (clicked just outside the crop).
+    return { u: Math.max(-srcW, Math.min(srcW * 2, q.u)), v: Math.max(-srcH, Math.min(srcH * 2, q.v)) };
+  });
+}
+
 export function parseDrawings(raw: unknown): ParkingDrawing[] {
   if (raw == null) return [];
   if (!Array.isArray(raw)) fail('drawings must be a list');
@@ -345,6 +362,7 @@ export function parseDrawings(raw: unknown): ParkingDrawing[] {
       inside: o.inside === true,
       floor: num(o.floor ?? 0, 'Floor', LIMITS.floorMin, LIMITS.floorMax),
       clearHeight: o.clearHeight == null || o.clearHeight === '' ? null : num(o.clearHeight, 'Clear height', 0.5, 30),
+      insideArea: parseInsideArea(o.insideArea, srcW, srcH),
     };
   });
   if (new Set(out.map((d) => d.id)).size !== out.length) fail('Two drawings share an id');

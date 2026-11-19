@@ -34,7 +34,7 @@ import { dist, fmtMetres, toLatLng, toLocal, type Camera3d, type LatLng, type Pt
 import { areaLabel, markerSpec, vehicleSpec } from '@/lib/parking/catalogue';
 import { vehicleBlocks, type Block } from '@/lib/parking/blocks3d';
 import { vehicleCorners, type ParkingDrawing, type ParkingItem, type VehicleItem } from '@/lib/parking/model';
-import { drawingUnder, footprint, insideAt, itemFloor, itemPoint, pointInPolygon, svgMatrix } from '@/lib/parking/drawings';
+import { drawingUnder, footprint, insideAt, insideFootprint, itemFloor, itemPoint, pointInPolygon, svgMatrix } from '@/lib/parking/drawings';
 import type { PartKind } from '@/lib/parking/silhouettes';
 import { labelBox, placeLabels, type LabelBox } from '@/lib/parking/labels3d';
 import { areaColour, vehicleColour, type Palette } from './palette';
@@ -123,7 +123,7 @@ export async function populate(
     items: ParkingItem[];
     palette: Palette;
     tilesKey: string | null;
-    /** The map's drawings (levels + floors) and the rasters to lay as floors (the dark look). */
+    /** The map's drawings (levels + floors) and their clear-lines rasters, laid on the floors. */
     drawings?: ParkingDrawing[];
     floors?: ReadonlyMap<string, HTMLCanvasElement>;
   },
@@ -146,9 +146,12 @@ export async function populate(
   // The street around each inside drawing: its corners and edge middles, 4 m out.
   const inside = tileset ? drawings.filter((d) => d.inside) : [];
   for (const d of inside) {
-    const f = footprint(d);
-    const c = { x: f.reduce((a, q) => a + q.x, 0) / 4, y: f.reduce((a, q) => a + q.y, 0) / 4 };
-    const ring = f.flatMap((q, i) => [q, { x: (q.x + f[(i + 1) % 4].x) / 2, y: (q.y + f[(i + 1) % 4].y) / 2 }]);
+    const f = insideFootprint(d);
+    const n = f.length;
+    const c = { x: f.reduce((a, q) => a + q.x, 0) / n, y: f.reduce((a, q) => a + q.y, 0) / n };
+    // ≤ 16 probes: the outline's points and edge middles, thinned on long outlines.
+    const step = Math.max(1, Math.ceil((2 * n) / 16));
+    const ring = f.flatMap((q, i) => [q, { x: (q.x + f[(i + 1) % n].x) / 2, y: (q.y + f[(i + 1) % n].y) / 2 }]).filter((_, i) => i % step === 0);
     ring.forEach((q, i) => {
       const l = Math.hypot(q.x - c.x, q.y - c.y) || 1;
       probes.push({ key: `street:${d.id}:${i}`, at: { x: q.x + ((q.x - c.x) / l) * 4, y: q.y + ((q.y - c.y) / l) * 4 } });
@@ -173,23 +176,24 @@ export async function populate(
   // A drawing's street height: the lowest ground just outside it (the roof is not the street).
   const street = new Map<string, number>();
   for (const d of drawings) {
-    const hs = Array.from({ length: 8 }, (_, i) => heights.get(`street:${d.id}:${i}`)).filter((h): h is number => h != null);
+    const hs = Array.from({ length: 16 }, (_, i) => heights.get(`street:${d.id}:${i}`)).filter((h): h is number => h != null);
     street.set(d.id, hs.length ? Math.min(...hs) : ground0);
   }
   // Inside drawings take the roof off: the mesh is clipped to their footprints.
   if (tileset && inside.length) {
     tileset.clippingPolygons = new Cesium.ClippingPolygonCollection({
       polygons: inside.map(
-        (d) => new Cesium.ClippingPolygon({ positions: Cesium.Cartesian3.fromDegreesArray(footprint(d).flatMap((q) => [ll(q).lng, ll(q).lat])) }),
+        // Only the INSIDE area loses its roof; the rest of the sheet stays the city.
+        (d) => new Cesium.ClippingPolygon({ positions: Cesium.Cartesian3.fromDegreesArray(insideFootprint(d).flatMap((q) => [ll(q).lng, ll(q).lat])) }),
       ),
     });
   }
-  // The floors: every inside drawing; with no city mesh, every drawing.
+  // The floors: every inside drawing's inside area (a floor colour under the
+  // drawing's lines — drawn even before the lines are ready, so the cut-away
+  // never shows as a hole); with no city mesh, every drawing.
   for (const d of drawings) {
     if (d.hidden || (tileset && !d.inside)) continue;
-    const img = o.floors?.get(d.id);
-    if (!img) continue;
-    addFloor(Cesium, viewer, o.anchor, d, img, (d.inside ? street.get(d.id) ?? ground0 : ground0) + (d.inside ? d.floor : 0) + 0.03);
+    addFloor(Cesium, viewer, o.anchor, d, o.floors?.get(d.id) ?? null, (d.inside ? street.get(d.id) ?? ground0 : ground0) + (d.inside ? d.floor : 0) + 0.03, o.palette.floor);
   }
   /** Where an item stands: on the inside drawing under it (its street + the item's level), else `fallback`. */
   const baseFor = (it: ParkingItem, fallback: number) => {
@@ -202,7 +206,7 @@ export async function populate(
   const floorOfShape = (it: ParkingItem, pts: Pt[]): number | null => {
     const d = drawingUnder(it, drawings);
     if (!d) return null;
-    return pts.every((q) => pointInPolygon(q, footprint(d))) ? (street.get(d.id) ?? ground0) + itemFloor(it, drawings) + 0.08 : null;
+    return pts.every((q) => pointInPolygon(q, insideFootprint(d))) ? (street.get(d.id) ?? ground0) + itemFloor(it, drawings) + 0.08 : null;
   };
   const groundOf = (id: string, n: number) => {
     const hs = Array.from({ length: n }, (_, i) => heights.get(`${id}:${i}`)).filter((h): h is number => h != null);
@@ -352,9 +356,13 @@ function layoutLabels(Cesium: C, scene: CesiumNS.Scene, placed: PlacedLabel[]) {
 }
 
 /** A drawing laid flat at `height`: baked north-up into a canvas (so the
- *  rectangle's texture needs no rotation), transparent outside the drawing. */
-function addFloor(Cesium: C, viewer: CesiumNS.Viewer, anchor: LatLng, d: ParkingDrawing, img: HTMLCanvasElement, height: number) {
-  const f = footprint(d);
+ *  rectangle's texture needs no rotation), transparent outside it. An inside
+ *  drawing is a FLOOR only over its inside area (`floor` colour under the
+ *  drawing's clear lines); the rest of the sheet isn't laid in 3D — the city
+ *  mesh is there. `img` = the clear-lines raster of the crop (null = not
+ *  ready: the floor alone). */
+function addFloor(Cesium: C, viewer: CesiumNS.Viewer, anchor: LatLng, d: ParkingDrawing, img: HTMLCanvasElement | null, height: number, floor: string) {
+  const f = d.inside ? insideFootprint(d) : footprint(d);
   const x0 = Math.min(...f.map((q) => q.x));
   const x1 = Math.max(...f.map((q) => q.x));
   const y0 = Math.min(...f.map((q) => q.y));
@@ -365,11 +373,24 @@ function addFloor(Cesium: C, viewer: CesiumNS.Viewer, anchor: LatLng, d: Parking
   canvas.height = Math.max(2, Math.round((y1 - y0) * k));
   const ctx = canvas.getContext('2d');
   if (!ctx) return;
-  // Ground → canvas: x right from the west edge, y down from the north edge; then the drawing's own matrix.
-  ctx.setTransform(k, 0, 0, k, -x0 * k, y1 * k);
-  ctx.transform(...svgMatrix(d));
-  ctx.globalAlpha = d.inside ? 1 : d.opacity;
-  ctx.drawImage(img, d.crop.u0, d.crop.v0, d.crop.u1 - d.crop.u0, d.crop.v1 - d.crop.v0);
+  // Ground → canvas: x right from the west edge, y down from the north edge.
+  const toPx = (q: Pt) => ({ x: (q.x - x0) * k, y: (y1 - q.y) * k });
+  ctx.beginPath();
+  f.forEach((q, i) => (i ? ctx.lineTo(toPx(q).x, toPx(q).y) : ctx.moveTo(toPx(q).x, toPx(q).y)));
+  ctx.closePath();
+  ctx.save();
+  ctx.clip();
+  if (d.inside) {
+    ctx.fillStyle = floor;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+  }
+  if (img) {
+    ctx.setTransform(k, 0, 0, k, -x0 * k, y1 * k);
+    ctx.transform(...svgMatrix(d));
+    ctx.globalAlpha = d.inside ? 1 : d.opacity;
+    ctx.drawImage(img, d.crop.u0, d.crop.v0, d.crop.u1 - d.crop.u0, d.crop.v1 - d.crop.v0);
+  }
+  ctx.restore();
   const sw = toLatLng(anchor, { x: x0, y: y0 });
   const ne = toLatLng(anchor, { x: x1, y: y1 });
   viewer.entities.add({

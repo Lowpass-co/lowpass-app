@@ -29,7 +29,7 @@ const touch = (_db: FakeDb, args: Record<string, unknown>) => {
 
 const drawing = (fileId: string): ParkingDrawing => ({
   id: `d-${fileId.slice(0, 4)}`, fileId, name: 'Dock.pdf', kind: 'pdf', page: 1, srcW: 1000, srcH: 600, crop: { u0: 0, v0: 0, u1: 1000, v1: 600 },
-  scale: 0.1, calib: null, x: 0, y: 0, rotation: 0, pinned: true, pinCheck: 0, opacity: 0.85, hidden: false, inside: true, floor: 0, clearHeight: null,
+  scale: 0.1, calib: null, x: 0, y: 0, rotation: 0, pinned: true, pinCheck: 0, opacity: 0.85, hidden: false, inside: true, floor: 0, clearHeight: null, insideArea: null,
 });
 
 const signed: string[] = [];
