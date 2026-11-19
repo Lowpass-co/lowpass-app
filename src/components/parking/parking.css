@@ -411,3 +411,19 @@ span.pk-pagescale { display: inline-flex; align-items: center; padding: 0; }
 .pk-shortcuts summary { display: inline-flex; align-items: center; gap: var(--lp-space-1); font-size: var(--lp-text-xs); color: var(--lp-text-secondary); cursor: pointer; list-style: none; }
 .pk-shortcuts summary::-webkit-details-marker { display: none; }
 .pk-shortcuts p { margin: var(--lp-space-2) 0 0; }
+.pk-tile-row { flex-direction: row; align-items: center; gap: var(--lp-space-2); }
+.pk-tile-row span { white-space: normal; line-height: var(--lp-leading-snug); }
+
+/* Right-click menu on the plan (Nov 2026). */
+.pk-menu { position: absolute; z-index: var(--lp-z-dropdown); min-width: 200px; max-width: 260px; padding: var(--lp-space-1); border: 1px solid var(--lp-border); border-radius: var(--lp-radius-md); background: var(--lp-surface); box-shadow: var(--lp-shadow-lg); }
+.pk-menu > button, .pk-menu-paints, .pk-menu-icons { width: 100%; }
+.pk-menu > button { display: flex; align-items: center; gap: var(--lp-space-2); padding: var(--lp-space-1) var(--lp-space-2); border: 0; border-radius: var(--lp-radius-sm); background: transparent; color: var(--lp-text); font: inherit; font-size: var(--lp-text-sm); text-align: left; cursor: pointer; }
+.pk-menu > button:hover, .pk-menu > button:focus-visible { background: var(--lp-surface-hover); outline: none; }
+.pk-menu-title { padding: var(--lp-space-1) var(--lp-space-2); font-size: var(--lp-text-2xs); color: var(--lp-text-tertiary); text-transform: uppercase; letter-spacing: 0.04em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pk-menu-hint { margin-left: auto; color: var(--lp-text-tertiary); font-family: var(--lp-mono-font); font-size: var(--lp-text-2xs); }
+.pk-menu-sep { height: 1px; margin: var(--lp-space-1) 0; background: var(--lp-border); }
+.pk-menu-danger { color: var(--color-lp-error) !important; }
+.pk-menu-paints { display: flex; flex-wrap: wrap; gap: var(--lp-space-1); padding: var(--lp-space-1) var(--lp-space-2); }
+.pk-menu-icons { display: grid; grid-template-columns: repeat(8, 1fr); gap: 2px; padding: var(--lp-space-1); }
+.pk-menu-icons button { display: flex; align-items: center; justify-content: center; height: 28px; border: 0; border-radius: var(--lp-radius-sm); background: transparent; color: var(--lp-text); cursor: pointer; }
+.pk-menu-icons button:hover { background: var(--lp-surface-hover); }

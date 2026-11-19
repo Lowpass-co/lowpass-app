@@ -345,6 +345,22 @@ browser key restricted to the Map Tiles API and the app's domains).**
 
 **Last verified**:
 
+#### PRK-41 — Right-click on the plan
+
+**Do**: Right-click the empty map; then right-click a vehicle; then an area; then right-click inside 3D.
+
+**Expect**: Never the browser's menu. Empty map: "Add here" (the 7 vehicles in this region's sizes + the markers as icons) — what you pick lands where you clicked; North up; This view as a PDF page. A vehicle: Duplicate, Turn 90° right / left, colours, Delete (several selected: acts on all of them). An area: Flat in 3D here / Show the 3D model here. Esc or a click away closes it. 3D: right-drag still turns and tilts.
+
+**Last verified**:
+
+#### PRK-42 — Flatten 3D is findable; markers read in full
+
+**Do**: Add tab → Draw.
+
+**Expect**: Route · Area · Measure · **Flatten 3D**. Flatten 3D draws an area that is already Flat in 3D. Markers sit two to a row with their full names (Load-in door, Shore power, Gate / entrance, …).
+
+**Last verified**:
+
 ## Known broken
 
 #### PRK-90 — Re-exporting makes a new file
