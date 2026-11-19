@@ -19,6 +19,7 @@ import { markerSpec, vehicleSpec, areaLabel, type MarkerType } from '@/lib/parki
 import { pathLength, vehicleCorners, type ParkingItem, type VehicleItem } from '@/lib/parking/model';
 import { vehicleParts, type Part, type PartKind } from '@/lib/parking/silhouettes';
 import { areaColour, vehicleColour, type Palette } from './palette';
+import { badgeRadii, placeNames, rectAt, type NameSpot } from '@/lib/parking/print';
 
 export interface SceneTile {
   id: string;
@@ -78,6 +79,7 @@ export function ParkingScene({
   draft = null,
   grid = false,
   labelScale = 1,
+  numbers,
   fontFamily = 'var(--font-sans)',
   onItemDown,
   onHandleDown,
@@ -101,6 +103,8 @@ export function ParkingScene({
   draft?: Draft | null;
   grid?: boolean;
   labelScale?: number;
+  /** PDF: vehicles carry a numbered badge (the key lists them) instead of a name — print.ts vehicleNumbers. */
+  numbers?: ReadonlyMap<string, number>;
   /** Live: the CSS token. Export: the resolved family (a rasterised SVG can't read CSS). */
   fontFamily?: string;
   onItemDown?: (e: ReactPointerEvent, item: ParkingItem) => void;
@@ -196,7 +200,7 @@ export function ParkingScene({
               {warnIds?.has(v.id) ? (
                 <polygon points={body.map((q) => `${q.x},${q.y}`).join(' ')} fill="none" stroke={p['area-no-go']} strokeWidth={3} pointerEvents="none" />
               ) : null}
-              <VehicleLabel c={c} front={front} widthPx={v.width * Math.hypot(right.x - front.x, right.y - front.y)} ls={ls} p={p} halo={halo} name={v.label || spec?.short || 'Vehicle'} length={fmtMetres(v.length)} />
+              {numbers ? null : <VehicleLabel c={c} front={front} widthPx={v.width * Math.hypot(right.x - front.x, right.y - front.y)} ls={ls} p={p} halo={halo} name={v.label || spec?.short || 'Vehicle'} length={fmtMetres(v.length)} />}
             </g>
           );
         })}
@@ -249,6 +253,8 @@ export function ParkingScene({
             </g>
           );
         })}
+
+        {numbers ? <NumberBadges vehicles={vehicles} numbers={numbers} P={P} p={p} ls={ls} halo={halo} bounds={{ w: width, h: height }} /> : null}
       </>
     );
   };
@@ -314,6 +320,89 @@ export function ParkingScene({
       {draft ? <DraftShape draft={draft} P={P} p={p} /> : null}
       {children}
     </svg>
+  );
+}
+
+/** Numbered vehicles (the PDF and the driver link): a white badge with a
+ *  dark number on each vehicle's centre (the body carries the colour; a badge
+ *  in the same colour vanished into it), drawn over everything so a
+ *  neighbour's body never hides it, shrinking where badges would touch
+ *  (badgeRadii). The vehicle's NAME goes beside it only where it crosses
+ *  nothing — no vehicle, badge or other name (placeNames) — so a lone bus is
+ *  named and a tight row keeps just its numbers (the key / list names them). */
+function NumberBadges({
+  vehicles,
+  numbers,
+  P,
+  p,
+  ls,
+  halo,
+  bounds,
+}: {
+  vehicles: VehicleItem[];
+  numbers: ReadonlyMap<string, number>;
+  P: (pt: Pt) => Pt;
+  p: Palette;
+  ls: number;
+  halo: object;
+  bounds: { w: number; h: number };
+}) {
+  const shown = vehicles.filter((v) => numbers.has(v.id)).sort((a, b) => numbers.get(a.id)! - numbers.get(b.id)!);
+  const centres = shown.map((v) => P(v));
+  const radii = badgeRadii(centres, 7 * ls, 4 * ls);
+  const size = 8.5 * ls;
+  const bodies = shown.map((v) => vehicleCorners(v).map(P));
+  const badges = centres.map((c, i) => rectAt(c, 0, radii[i] * 2, radii[i] * 2));
+  const spots: NameSpot[] = shown.map((v, i) => {
+    const h = (v.heading * Math.PI) / 180;
+    const nose = P({ x: v.x + Math.sin(h), y: v.y + Math.cos(h) });
+    let a = (Math.atan2(nose.y - centres[i].y, nose.x - centres[i].x) * 180) / Math.PI;
+    if (a > 90) a -= 180;
+    if (a < -90) a += 180;
+    const side = P({ x: v.x + Math.cos(h) * (v.width / 2), y: v.y - Math.sin(h) * (v.width / 2) });
+    const name = v.label || vehicleSpec(v.type)?.short || 'Vehicle';
+    return { id: v.id, centre: centres[i], angle: a, halfWidth: Math.hypot(side.x - centres[i].x, side.y - centres[i].y), w: name.length * size * 0.6 + 4 * ls, h: size * 1.25 };
+  });
+  const names = placeNames(spots, [...bodies, ...badges], bounds, 1.5 * ls);
+  return (
+    <g pointerEvents="none">
+      {shown.map((v, i) => {
+        const n = String(numbers.get(v.id));
+        const r = radii[i];
+        const at = names.get(v.id);
+        return (
+          <g key={v.id}>
+            <circle cx={centres[i].x} cy={centres[i].y} r={r} fill={p.ink} stroke={p.halo} strokeWidth={0.9 * ls} />
+            <text
+              x={centres[i].x}
+              y={centres[i].y}
+              textAnchor="middle"
+              dominantBaseline="central"
+              fontSize={r * (n.length > 2 ? 0.9 : n.length > 1 ? 1.15 : 1.35)}
+              fontWeight={800}
+              fill={p.halo}
+            >
+              {n}
+            </text>
+            {at ? (
+              <text
+                x={at.x}
+                y={at.y}
+                transform={`rotate(${spots[i].angle.toFixed(2)} ${at.x.toFixed(2)} ${at.y.toFixed(2)})`}
+                textAnchor="middle"
+                dominantBaseline="central"
+                fontSize={size}
+                fontWeight={700}
+                fill={p.ink}
+                style={halo}
+              >
+                {spots[i].w > 0 ? v.label || vehicleSpec(v.type)?.short || 'Vehicle' : null}
+              </text>
+            ) : null}
+          </g>
+        );
+      })}
+    </g>
   );
 }
 

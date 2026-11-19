@@ -114,6 +114,26 @@ export async function revokeDriverLink(client: SupabaseClient, args: { routingId
 
 /* ── Public ───────────────────────────────────────────────── */
 
+/** The link's title for chat previews (WhatsApp, iMessage): "Parking · The O2 ·
+ *  Fri 20 Nov" — so a driver with links for several dates can tell them apart
+ *  (Nov 2026, Adam). READ-ONLY: a preview fetch must not count as a view, so
+ *  this never calls parking_share_touch. A dead or unknown token gets null
+ *  (the page's generic title) — the preview never says why. */
+export async function driverLinkTitle(service: SupabaseClient, token: string, now = new Date()): Promise<string | null> {
+  if (!TOKEN_RE.test(token)) return null;
+  const { data } = await service
+    .from('parking_share_links')
+    .select('id, workspace_id, tour_id, routing_id, label, expires_at, revoked_at, max_3d_opens, opens_3d, views')
+    .eq('token_hash', hashToken(token))
+    .maybeSingle();
+  const row = data as DriverLinkRow | null;
+  if (!row || linkState(row, now) !== 'live') return null;
+  const show = await loadParkingShow(service, row.tour_id, row.routing_id);
+  if (!show || show.workspaceId !== row.workspace_id) return null;
+  const when = new Date(`${show.date}T12:00:00Z`).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' });
+  return ['Parking', show.venue.name ?? show.venue.city, when].filter(Boolean).join(' · ');
+}
+
 type TouchRow = DriverLinkRow & { took: boolean };
 
 /** Token → the live link, counting this view (or taking a 3D open). */
@@ -145,6 +165,8 @@ export interface DriverMapPayload {
   date: string;
   map: { anchor: LatLng; view: View; items: ParkingItem[]; notes: string; drawings: ParkingDrawing[] };
   files: DriverDrawingFile[];
+  /** The map's latest exported PDF (Files › Parking maps), signed — the printable version below the map. */
+  pdf: { name: string; url: string } | null;
 }
 
 export interface SignStorage {
@@ -160,6 +182,8 @@ export const supabaseSignStorage = (service: SupabaseClient): SignStorage => ({
 
 /** Drawing files are signed for this long — the page renders them on open. */
 export const DRIVER_FILE_SECONDS = 600;
+/** The PDF is opened by a tap, maybe long after the page loaded. */
+export const DRIVER_PDF_SECONDS = 3600;
 
 export async function driverMapPayload(service: SupabaseClient, storage: SignStorage, link: DriverLinkRow): Promise<DriverMapPayload> {
   const show = await loadParkingShow(service, link.tour_id, link.routing_id);
@@ -181,6 +205,19 @@ export async function driverMapPayload(service: SupabaseClient, storage: SignSto
       if (url) files.push({ id: f.id, name: f.file_name, kind: d.kind, url });
     }
   }
+  // The latest export, if there is one — again only from the link's workspace.
+  let pdf: DriverMapPayload['pdf'] = null;
+  if (map.pdf?.fileId) {
+    const { data } = await service
+      .from('file_references')
+      .select('id, file_name, storage_provider, provider_file_id')
+      .eq('workspace_id', link.workspace_id)
+      .eq('id', map.pdf.fileId)
+      .maybeSingle();
+    const f = data as { file_name: string; storage_provider: string | null; provider_file_id: string | null } | null;
+    const url = f?.storage_provider && f.provider_file_id ? await storage.sign(f.storage_provider, f.provider_file_id, DRIVER_PDF_SECONDS) : null;
+    if (f && url) pdf = { name: f.file_name, url };
+  }
   const { pages: _pages, cam3d: _cam, level: _level, ...view } = map.view;
   void _pages;
   void _cam;
@@ -193,5 +230,6 @@ export async function driverMapPayload(service: SupabaseClient, storage: SignSto
     date: show.date,
     map: { anchor: map.anchor, view, items: map.items, notes: map.notes, drawings: map.drawings.filter((d) => files.some((f) => f.id === d.fileId)) },
     files,
+    pdf,
   };
 }

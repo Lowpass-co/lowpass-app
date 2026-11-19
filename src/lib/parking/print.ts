@@ -86,3 +86,134 @@ export function freeSpot(items: ParkingItem[], at: Pt, view: View, step = 4): Pt
   }
   return at;
 }
+
+/** The PDF's vehicle numbers (Nov 2026, Adam: names on a crowded row "really
+ *  tight" on the export). Each vehicle carries a small numbered badge and the
+ *  key lists 1 · Bus A · Tour bus · 13.5 m. ONE numbering for the whole PDF —
+ *  every page (and every level) uses the same number for the same vehicle.
+ *  Neighbours get consecutive numbers: a nearest-neighbour walk from the
+ *  north-west-most vehicle, so a row of trucks reads 7, 8, 9 … along the row. */
+export function vehicleNumbers(items: readonly ParkingItem[]): Map<string, number> {
+  const left = items.filter((i) => i.kind === 'vehicle').map((v) => ({ id: v.id, x: (v as { x: number }).x, y: (v as { y: number }).y }));
+  left.sort((a, b) => a.x - a.y - (b.x - b.y) || (a.id < b.id ? -1 : 1));
+  const out = new Map<string, number>();
+  let at = left.shift();
+  while (at) {
+    out.set(at.id, out.size + 1);
+    let best = -1;
+    let bestD = Infinity;
+    left.forEach((v, i) => {
+      const d = (v.x - at!.x) ** 2 + (v.y - at!.y) ** 2;
+      if (d < bestD || (d === bestD && v.id < left[best].id)) {
+        best = i;
+        bestD = d;
+      }
+    });
+    at = best >= 0 ? left.splice(best, 1)[0] : undefined;
+  }
+  return out;
+}
+
+/** Badge radii that don't overlap: each is at most just under half the gap to
+ *  the nearest other badge, never below `min` (readable on paper beats
+ *  touching — at that density they may just touch). Screen pixels. */
+export function badgeRadii(centres: readonly Pt[], r: number, min: number): number[] {
+  return centres.map((c, i) => {
+    let near = Infinity;
+    centres.forEach((o, j) => {
+      if (j !== i) near = Math.min(near, Math.hypot(o.x - c.x, o.y - c.y));
+    });
+    return Math.max(min, Math.min(r, near * 0.48));
+  });
+}
+
+/** Do two convex polygons overlap? (Separating-axis test; touching = no.) */
+export function convexOverlap(a: readonly Pt[], b: readonly Pt[]): boolean {
+  for (const poly of [a, b]) {
+    for (let i = 0; i < poly.length; i++) {
+      const p = poly[i];
+      const q = poly[(i + 1) % poly.length];
+      const nx = q.y - p.y;
+      const ny = p.x - q.x;
+      let aMin = Infinity;
+      let aMax = -Infinity;
+      let bMin = Infinity;
+      let bMax = -Infinity;
+      for (const r of a) {
+        const d = r.x * nx + r.y * ny;
+        aMin = Math.min(aMin, d);
+        aMax = Math.max(aMax, d);
+      }
+      for (const r of b) {
+        const d = r.x * nx + r.y * ny;
+        bMin = Math.min(bMin, d);
+        bMax = Math.max(bMax, d);
+      }
+      if (aMax <= bMin || bMax <= aMin) return false;
+    }
+  }
+  return true;
+}
+
+export interface NameSpot {
+  id: string;
+  /** The vehicle's centre on screen. */
+  centre: Pt;
+  /** The vehicle's axis on screen, degrees, already turned upright (−90…90). */
+  angle: number;
+  /** Half the vehicle's width on screen. */
+  halfWidth: number;
+  /** The name's size on screen. */
+  w: number;
+  h: number;
+}
+
+/** A rotated rectangle's corners. */
+export function rectAt(c: Pt, angle: number, w: number, h: number): Pt[] {
+  const a = (angle * Math.PI) / 180;
+  const ux = { x: Math.cos(a), y: Math.sin(a) };
+  const uy = { x: -Math.sin(a), y: Math.cos(a) };
+  return [
+    [-1, -1],
+    [1, -1],
+    [1, 1],
+    [-1, 1],
+  ].map(([i, j]) => ({ x: c.x + ux.x * (w / 2) * i + uy.x * (h / 2) * j, y: c.y + ux.y * (w / 2) * i + uy.y * (h / 2) * j }));
+}
+
+/** Names beside the numbers — only where they cross nothing (Nov 2026, Adam:
+ *  "if there is no label cross over … number + label"). Each name is written
+ *  along its vehicle, just off one side or the other; it's placed only if it
+ *  overlaps no vehicle, no badge, no name already placed and stays inside the
+ *  picture — and only on the OPEN side: the strip just beyond the name must be
+ *  clear too, so a name never sits sandwiched in the gap between two vehicles
+ *  (which one would it belong to?). Taken in `spots` order (the numbers), so a
+ *  tight row keeps its numbers and its outer vehicles get names. Screen
+ *  pixels in, centres out. */
+export function placeNames(
+  spots: readonly NameSpot[],
+  obstacles: readonly (readonly Pt[])[],
+  bounds: { w: number; h: number },
+  gap = 2,
+): Map<string, Pt> {
+  const placed: Pt[][] = [];
+  const out = new Map<string, Pt>();
+  const inside = (r: Pt[]) => r.every((q) => q.x >= 0 && q.y >= 0 && q.x <= bounds.w && q.y <= bounds.h);
+  for (const s of spots) {
+    const a = (s.angle * Math.PI) / 180;
+    const perp = { x: -Math.sin(a), y: Math.cos(a) };
+    const off = s.halfWidth + gap + s.h / 2;
+    for (const side of [1, -1]) {
+      const c = { x: s.centre.x + perp.x * off * side, y: s.centre.y + perp.y * off * side };
+      const r = rectAt(c, s.angle, s.w, s.h);
+      if (!inside(r)) continue;
+      if (obstacles.some((o) => convexOverlap(r, o)) || placed.some((o) => convexOverlap(r, o))) continue;
+      const beyond = rectAt({ x: c.x + perp.x * s.h * side, y: c.y + perp.y * s.h * side }, s.angle, s.w, s.h);
+      if (obstacles.some((o) => convexOverlap(beyond, o)) || placed.some((o) => convexOverlap(beyond, o))) continue;
+      placed.push(r);
+      out.set(s.id, c);
+      break;
+    }
+  }
+  return out;
+}

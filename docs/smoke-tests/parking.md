@@ -269,7 +269,7 @@ browser key restricted to the Map Tiles API and the app's domains).**
 
 **Do**: Make a link with 2 3D views; on the phone tap Look around in 3D, back to Plan, again, back, again.
 
-**Expect**: "Look around in 3D (2 left)" → 3D opens (touch hint: pinch / two fingers); then "(1 left)"; the third time "3D used up" — the plan still works. The owner's list shows 3D 2/2.
+**Expect**: An orange-outlined "Look around in 3D" (no count on it) → 3D opens (touch hint: pinch / two fingers); the second time the same; the third time the button is grey and says "3D expired" — the plan still works. The owner's list shows 3D 2/2.
 
 **Last verified**:
 
@@ -374,6 +374,14 @@ browser key restricted to the Map Tiles API and the app's domains).**
 **Do**: Show an inside drawing under a roof (the O2) → 3D; orbit round it.
 
 **Expect**: Light, see-through grey walls stand on the cut edge from the floor up to the roof (clearer at the top, more solid at the floor; the same at any time of day), never running up a mast or cable, each face its own tone (north-west faces lightest) — it reads as a building with the roof lifted off, not a hole in the world. A thin light rim runs along the wall tops where the roof was cut. No wall (and no rim) where the outline crosses open street. Hide the drawing → walls go with the cut. Same on a 3D PDF page.
+
+**Last verified**:
+
+#### PRK-45 — PDF and driver link: vehicles are numbered, names only where they're clear
+
+**Do**: Export a map with tight rows (a bus park, a row of trucks, cars side by side), on more than one page / level.
+
+**Expect**: On the plan pages every vehicle carries a small white numbered badge; neighbours have consecutive numbers along a row; badges shrink rather than overlap in a tight row. A vehicle's NAME is written beside it only where it crosses nothing and isn't squeezed between two vehicles — a lone bus and the outer vehicles of a row are named, the middle of a tight row is numbers only. The driver link's plan does the same, and its Vehicles list is numbered in order; under it "Printable map · Open the PDF" opens the latest export (absent if never exported). Pasted into WhatsApp / iMessage, the link's preview reads "Parking · <venue> · <date> | Lowpass" (a dead link: just "Parking map"), and the preview doesn't count as a view. The key's Vehicles list reads "7 · Truck 7 · Truck · 16.5 m" in number order (two columns past 22 vehicles), each number in the vehicle's colour. The same vehicle has the same number on every page and level. The editor on screen still shows names.
 
 **Last verified**:
 

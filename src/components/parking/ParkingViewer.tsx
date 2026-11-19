@@ -14,7 +14,7 @@ import { Compass, Minus, Plus, RotateCcw, RotateCw } from 'lucide-react';
 import { niceLength, normDeg, unproject, zoomAt, fmtMetres, type LatLng, type Pt, type View } from '@/lib/parking/geo';
 import { footprint, headroomWarnings } from '@/lib/parking/drawings';
 import type { ParkingDrawing, ParkingItem } from '@/lib/parking/model';
-import { itemPoints } from '@/lib/parking/print';
+import { itemPoints, vehicleNumbers } from '@/lib/parking/print';
 import { ParkingScene } from './ParkingScene';
 import { LIVE_PALETTE } from './palette';
 import { useMapTiles } from './useMapTiles';
@@ -74,6 +74,8 @@ export function ParkingViewer({
   const { session, tiles, attribution } = useMapTiles(anchor, view, size, satellite);
   const scene = useMemo(() => sceneDrawings(drawings, rasters, satellite && !!session, undefined, LIVE_PALETTE.floor), [drawings, rasters, satellite, session]);
   const warnIds = useMemo(() => new Set(headroomWarnings(items, drawings).flatMap((w) => w.vehicleIds)), [items, drawings]);
+  // Numbered vehicles, names only where they cross nothing — the page lists them by number.
+  const numbers = useMemo(() => vehicleNumbers(items), [items]);
 
   // Drag to move, two fingers / wheel to zoom.
   const pointers = useRef(new Map<number, Pt>());
@@ -138,7 +140,7 @@ export function ParkingViewer({
       aria-label="Parking map — drag to move, pinch to zoom"
     >
       {size.w ? (
-        <ParkingScene view={view} width={size.w} height={size.h} items={items} tiles={tiles} palette={LIVE_PALETTE} drawings={scene} warnIds={warnIds} grid={!session || !satellite} />
+        <ParkingScene view={view} width={size.w} height={size.h} items={items} tiles={tiles} palette={LIVE_PALETTE} drawings={scene} warnIds={warnIds} grid={!session || !satellite} numbers={numbers} />
       ) : null}
       <div className="pk-ctrls" onPointerDown={(e) => e.stopPropagation()}>
         <div className="pk-ctrl-group">
