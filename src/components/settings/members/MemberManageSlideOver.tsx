@@ -1,34 +1,22 @@
 'use client';
 
 /* ============================================
-   LOWPASS — MemberManageSlideOver (Sprint 9 §3,
-   Sprint 11 §4 auto-save adoption)
+   LOWPASS — MemberManageSlideOver (Sprint 9 §3, Sprint 11 §4,
+   one permission system Nov 2026)
 
-   Per-member admin Manage slide-over: role radio + tag editor +
-   permission matrix + sensitive-grants warning + remove. Saves
-   via PATCH /api/workspaces/members/[id], which calls the
-   update_workspace_member RPC for atomic role+tags+grants.
-
-   Sprint 11 §4 — adopts useAutoSave: state lives in the hook
-   (snapshot at open time), each role/tag/grant change debounces
-   a PATCH. The Save button is removed; the SaveStatus pill +
-   Cancel-restores-snapshot replace it.
-
-   Sensitive-grants policy: the Sprint 9 design used a
-   confirm-on-Save modal. With auto-save the modal is dropped —
-   the visible "⚠ Sensitive grants" warning panel already shows
-   the consequence the moment a sensitive grant is toggled, and
-   Cancel reverts the open-time snapshot via one final PATCH.
-   The visible+revertable pair is the safety gate.
+   Per-member admin panel: role (auto-saved via useAutoSave +
+   <SaveStatus>; Cancel restores the open-time snapshot) and, for a
+   Member, TOUR ACCESS (<MemberTourAccess> — which tours, which areas,
+   view / edit; its own Save). The Sprint 9 tags + page grants are
+   gone from the screen: tour access is the one system. The PATCH
+   still round-trips the member's stored tags / grants unchanged.
    ============================================ */
 
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import { useToast } from '@/components/ui/Toast';
-import { AlertTriangle, Loader2, X } from 'lucide-react';
+import { Loader2, X } from 'lucide-react';
 import { SlideOver } from '@/components/ui/SlideOver';
-import { TagEditor } from './TagEditor';
 import { MemberTourAccess } from './MemberTourAccess';
-import { RESOURCE_BY_ID } from '@/lib/permissions/resources';
 import { useAutoSave } from '@/lib/forms/useAutoSave';
 import { SaveStatus } from '@/components/forms/SaveStatus';
 import type {
@@ -40,8 +28,6 @@ import type {
 interface MemberManageSlideOverProps {
   open: boolean;
   member: Member | null;
-  knownTags: string[];
-  suggestedTags: string[];
   isCallerSelf: boolean;
   onClose: () => void;
   onSaved: () => void;
@@ -79,8 +65,6 @@ function relativeTime(iso: string | null): string {
 export function MemberManageSlideOver({
   open,
   member,
-  knownTags,
-  suggestedTags,
   isCallerSelf,
   onClose,
   onSaved,
@@ -92,8 +76,6 @@ export function MemberManageSlideOver({
       key={`${member.member_id}:${open ? 'open' : 'closed'}`}
       open={open}
       member={member}
-      knownTags={knownTags}
-      suggestedTags={suggestedTags}
       isCallerSelf={isCallerSelf}
       onClose={onClose}
       onSaved={onSaved}
@@ -105,8 +87,6 @@ export function MemberManageSlideOver({
 interface EditorProps {
   open: boolean;
   member: Member;
-  knownTags: string[];
-  suggestedTags: string[];
   isCallerSelf: boolean;
   onClose: () => void;
   onSaved: () => void;
@@ -116,8 +96,6 @@ interface EditorProps {
 function MemberManageEditor({
   open,
   member,
-  knownTags,
-  suggestedTags,
   isCallerSelf,
   onClose,
   onSaved,
@@ -127,7 +105,6 @@ function MemberManageEditor({
   const [removeBusy, setRemoveBusy] = useState(false);
   const [removeConfirm, setRemoveConfirm] = useState(false);
   const [removeError, setRemoveError] = useState<string | null>(null);
-  const [sensitiveSelected] = useState<string[]>([]);
 
   const {
     state,
@@ -163,13 +140,6 @@ function MemberManageEditor({
   });
 
 
-  const sensitiveLabels = useMemo(
-    () =>
-      sensitiveSelected
-        .map((id) => RESOURCE_BY_ID.get(id)?.label ?? id)
-        .sort(),
-    [sensitiveSelected],
-  );
 
   const handleClose = async () => {
     await flushSave();
@@ -304,7 +274,7 @@ function MemberManageEditor({
                 color: 'var(--lp-text-tertiary)',
               }}
             >
-              Admin: full access including members. Manager: full data access except members + billing. Read-only: only what tags / permissions allow.
+              Admin: everything, including members. Manager: every tour, every area — everything except members and billing. Read-only: only the tours and areas set under Tour access below.
             </div>
             {member.is_workspace_owner ? (
               <div
@@ -320,26 +290,6 @@ function MemberManageEditor({
             ) : null}
           </fieldset>
 
-          {/* Tags */}
-          <div>
-            <div
-              className="lp-label-caps"
-              style={{
-                fontSize: 'var(--lp-text-2xs)',
-                color: 'var(--lp-text-secondary)',
-                marginBottom: 'var(--lp-space-2)',
-              }}
-            >
-              Tags
-            </div>
-            <TagEditor
-              value={state.tags}
-              onChange={(next) => set((p) => ({ ...p, tags: next }))}
-              knownTags={knownTags}
-              suggestedTags={suggestedTags}
-            />
-          </div>
-
           {/* Tour access (Nov 2026) — replaces the page-grant matrix */}
           {state.role === 'readonly' ? (
             <MemberTourAccess memberId={member.member_id} />
@@ -348,55 +298,6 @@ function MemberManageEditor({
               Admins and managers see every tour.
             </div>
           )}
-
-          {/* Sensitive grants warning — visible the moment a
-              sensitive grant flips on. With auto-save, this panel
-              IS the gate: the user sees what they just enabled,
-              and Cancel restores the snapshot if they don't
-              actually want it. The Sprint 9 confirm-on-Save modal
-              is removed. */}
-          {state.role === 'readonly' && sensitiveSelected.length > 0 ? (
-            <div
-              style={{
-                padding: 'var(--lp-space-3)',
-                fontSize: 'var(--lp-text-sm)',
-                color: 'var(--lp-text)',
-                background: 'color-mix(in srgb, var(--color-lp-orange) 6%, transparent)',
-                border: '1px solid color-mix(in srgb, var(--color-lp-orange) 30%, transparent)',
-                borderRadius: 'var(--lp-radius-md)',
-              }}
-            >
-              <div
-                className="lp-label-caps"
-                style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: 'var(--lp-space-1)',
-                  fontSize: 'var(--lp-text-2xs)',
-                  color: 'var(--color-lp-orange)',
-                  marginBottom: 'var(--lp-space-1)',
-                }}
-              >
-                <AlertTriangle size={12} aria-hidden />
-                Sensitive grants
-              </div>
-              This member will see:
-              <ul style={{ marginTop: 4, marginLeft: 18, lineHeight: 1.6 }}>
-                {sensitiveLabels.map((l) => (
-                  <li key={l}>{l}</li>
-                ))}
-              </ul>
-              <div
-                style={{
-                  marginTop: 'var(--lp-space-1)',
-                  fontSize: 'var(--lp-text-xs)',
-                  color: 'var(--lp-text-secondary)',
-                }}
-              >
-                Hit Cancel to revert if this isn&apos;t what you intended.
-              </div>
-            </div>
-          ) : null}
 
           {removeError ? (
             <div
@@ -499,7 +400,7 @@ function MemberManageEditor({
           body={
             <p style={{ margin: 0 }}>
               Removes <strong>{member.display_name?.trim() || member.email}</strong> from
-              this workspace. Their grants and tags will be revoked. They will lose access immediately.
+              this workspace. Their tour access goes with it, immediately.
             </p>
           }
           confirmLabel="Remove"

@@ -126,9 +126,21 @@ export async function GET() {
     created_at: i.created_at,
   }));
 
+  // Each Member's tour access, for the one-line summary on their card (the
+  // panel edits it). Admin / manager read every row of their workspace (292).
+  const { data: accessRows } = await supabase
+    .from('tour_access')
+    .select('member_id, tour_id, area, level')
+    .eq('workspace_id', workspaceId);
+  const access: Record<string, Array<{ tour_id: string | null; area: string; level: string }>> = {};
+  for (const r of (accessRows ?? []) as Array<{ member_id: string; tour_id: string | null; area: string; level: string }>) {
+    (access[r.member_id] ??= []).push({ tour_id: r.tour_id, area: r.area, level: r.level });
+  }
+
   return NextResponse.json({
     workspace_id: workspaceId,
     members: (members ?? []) as MemberRow[],
     invites: invitesOut,
+    access,
   });
 }

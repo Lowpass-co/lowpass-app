@@ -22,9 +22,8 @@ import { requireWrite } from '@/lib/auth/workspace-check';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 import {
   getActiveMembership,
-  fetchActiveGrants,
-  canAccess,
 } from '@/lib/permissions/server';
+import { getViewerAccess } from '@/lib/permissions/tourAccess';
 import { tourFromParams, withDerivedRefresh } from '@/server/budget/withDerivedRefresh';
 
 export const dynamic = 'force-dynamic';
@@ -47,8 +46,8 @@ async function postHandler(
   if (!membership) {
     return NextResponse.json({ error: 'No active workspace' }, { status: 403 });
   }
-  const grants = await fetchActiveGrants(supabase, membership, user.id);
-  if (!canAccess(membership, grants, 'page', 'operations.personnel', 'write')) {
+  // Changing the crew is admin / manager only (as requireWrite(supabase)).
+  if (!(await getViewerAccess(supabase, user.id, tourId))?.manager) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 

@@ -67,4 +67,13 @@ export function viewerCan(access: ViewerAccess | null, area: Area, level: Level 
   return !!have && (level === 'view' || have === 'edit');
 }
 
+/** The same question for AUTHORISING (a page's read, a route): unknown access
+ *  (null — no membership, the RPC failed) is NO. Use this, not viewerCan, for
+ *  anything that decides what data a member gets (Nov 2026: the pages that
+ *  still read the old Sprint 9 grants moved onto tour access). */
+export function viewerAllows(access: ViewerAccess | null, area: Area, level: Level = 'view'): boolean {
+  if (!access) return false;
+  return viewerCan(access, area, level);
+}
+
 export const ALL_AREAS: readonly Area[] = AREAS;

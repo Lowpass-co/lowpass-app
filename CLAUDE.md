@@ -468,10 +468,20 @@ recreate a `_legacy/` tree: delete dead code instead of parking it.
   (`my_tour_access` RPC). Rail items carry `area` in ia.ts; AppShellV3 shows
   `<NoAccess>` for a page the viewer can't open. Never re-derive access in code.
 - **Writes**: `requireWrite(supabase, { area, tourId })` lets a Member with EDIT
-  through; without `area` a route stays admin/manager-only. Converted so far:
-  receipts, parking, advance. A route whose write touches another area (e.g.
+  through; without `area` a route stays admin/manager-only (`adminOnly` =
+  admin only). Converted so far: receipts, parking, advance, file share links. A route whose write touches another area (e.g.
   derived budget lines) must do that part as the server, for that row only
   (see receipts' `syncClientFor`).
+- **ONE system** (Nov 2026, Adam): the old page grants + member tags are
+  RETIRED. `canAccess` / `fetchActiveGrants` / `requireWrite({ resource })`,
+  `PermissionMatrix`, `TagEditor` and the "Granted:" line are deleted, and a
+  ratchet test (`requireWrite.test.tsx`) fails if any comes back. Pages ask
+  `viewerAllows(access, area)` (strict — `viewerCan` fails open, display only);
+  manager-only actions ask `access.manager`. Migration 294 moved the last
+  database rule off `can_access` (crew document uploads). `workspace_member_tags`,
+  `permission_grants` and `public.can_access` are left in place, unread.
+  Known gap: Schedule EDIT doesn't yet let a Member edit dates / tour details
+  (those writes are admin / manager).
 - **Own rows**: a login linked to its crew record (`personnel.user_id`, set by
   accepting an invite that names it) always reads its own crew / room / pay rows.
 - **Sign-up is by code only** (Admin › Beta codes, `/auth/beta-signup`); public

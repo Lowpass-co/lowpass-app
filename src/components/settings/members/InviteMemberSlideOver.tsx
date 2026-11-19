@@ -12,15 +12,12 @@ import { useEffect, useRef, useState } from 'react';
 import { Check, Copy, Loader2 } from 'lucide-react';
 import { useToast } from '@/components/ui/Toast';
 import { SlideOver } from '@/components/ui/SlideOver';
-import { TagEditor } from './TagEditor';
 import { TourAccessEditor, EMPTY_DRAFT, draftIsEmpty, draftToRows, type AccessDraft } from './TourAccessEditor';
 import { createClient } from '@/lib/supabase-client';
 import type { WorkspaceRole } from '@/lib/permissions/types';
 
 interface InviteMemberSlideOverProps {
   open: boolean;
-  knownTags: string[];
-  suggestedTags: string[];
   /** Emails already a member or with a pending invite — disables submit if duplicate. */
   existingEmails: ReadonlySet<string>;
   onClose: () => void;
@@ -31,8 +28,6 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export function InviteMemberSlideOver({
   open,
-  knownTags,
-  suggestedTags,
   existingEmails,
   onClose,
   onInvited,
@@ -40,7 +35,6 @@ export function InviteMemberSlideOver({
   const { showToast } = useToast();
   const [email, setEmail] = useState('');
   const [role, setRole] = useState<WorkspaceRole>('readonly');
-  const [tags, setTags] = useState<string[]>([]);
   const [access, setAccess] = useState<AccessDraft>(EMPTY_DRAFT);
   const [personnelId, setPersonnelId] = useState<string | null>(null);
   const [tours, setTours] = useState<{ id: string; name: string }[]>([]);
@@ -57,7 +51,6 @@ export function InviteMemberSlideOver({
     if (!open) return;
     setEmail('');
     setRole('readonly');
-    setTags([]);
     setAccess(EMPTY_DRAFT);
     setPersonnelId(null);
     const sb = createClient();
@@ -103,7 +96,7 @@ export function InviteMemberSlideOver({
         body: JSON.stringify({
           email: normalizedEmail,
           role,
-          tags,
+          tags: [],
           grants: [],
           access: role === 'readonly' ? draftToRows(access) : [],
           personnel_id: role === 'readonly' ? personnelId : null,
@@ -331,26 +324,6 @@ export function InviteMemberSlideOver({
                 ))}
               </div>
             </fieldset>
-
-            {/* Tags */}
-            <div>
-              <div
-                className="lp-label-caps"
-                style={{
-                  fontSize: 'var(--lp-text-2xs)',
-                  color: 'var(--lp-text-secondary)',
-                  marginBottom: 'var(--lp-space-2)',
-                }}
-              >
-                Tags
-              </div>
-              <TagEditor
-                value={tags}
-                onChange={setTags}
-                knownTags={knownTags}
-                suggestedTags={suggestedTags}
-              />
-            </div>
 
             {/* Tour access + crew record (Nov 2026) — Members only */}
             {role === 'readonly' ? (

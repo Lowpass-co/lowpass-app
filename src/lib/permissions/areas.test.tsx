@@ -1,14 +1,8 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import {
-  AREAS,
-  LEGACY_RESOURCE_AREA,
-  PRESET_ACCESS,
-  accessForTour,
-  can,
-  presetFor,
-} from './areas';
+import { AREAS, LEGACY_RESOURCE_AREA, PRESET_ACCESS, accessForTour, can, presetFor, summariseAccess } from './areas';
+import { viewerAllows } from './tourAccess';
 import { RESOURCE_CATALOG } from './resources';
 
 const sql = readFileSync(join(process.cwd(), 'database/migrations/292_tour_access_foundation.sql'), 'utf8');
@@ -66,5 +60,40 @@ describe('access rules', () => {
     const pa = { ...PRESET_ACCESS.production, receipts: 'edit' as const };
     expect(can(pa, 'receipts', 'edit')).toBe(true);
     expect(can(pa, 'budget')).toBe(false);
+  });
+});
+
+describe('summariseAccess', () => {
+  it('says where and what, edit before view, in the panel’s order', () => {
+    expect(
+      summariseAccess([
+        { tour_id: null, area: 'production', level: 'view' },
+        { tour_id: null, area: 'advance', level: 'edit' },
+        { tour_id: null, area: 'schedule', level: 'view' },
+      ]),
+    ).toBe('All tours · Edit: Advance · View: Production, Schedule');
+  });
+  it('counts tours; the higher level wins across them', () => {
+    expect(
+      summariseAccess([
+        { tour_id: 't1', area: 'files', level: 'view' },
+        { tour_id: 't2', area: 'files', level: 'edit' },
+      ]),
+    ).toBe('2 tours · Edit: Files');
+  });
+  it('nothing set, or only junk', () => {
+    expect(summariseAccess([])).toBe('No tour access yet');
+    expect(summariseAccess([{ tour_id: null, area: 'moon', level: 'view' }])).toBe('No tour access yet');
+  });
+});
+
+describe('viewerAllows — never fails open', () => {
+  it('unknown access is no; managers yes; members by level', () => {
+    expect(viewerAllows(null, 'schedule')).toBe(false);
+    expect(viewerAllows({ manager: true, role: 'manager', tour: {} }, 'payroll', 'edit')).toBe(true);
+    const m = { manager: false, role: 'readonly' as const, tour: { schedule: 'view' as const } };
+    expect(viewerAllows(m, 'schedule')).toBe(true);
+    expect(viewerAllows(m, 'schedule', 'edit')).toBe(false);
+    expect(viewerAllows(m, 'logistics')).toBe(false);
   });
 });

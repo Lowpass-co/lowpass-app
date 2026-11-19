@@ -18,9 +18,8 @@ import { NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 import {
   getActiveMembership,
-  fetchActiveGrants,
-  canAccess,
 } from '@/lib/permissions/server';
+import { getViewerAccess } from '@/lib/permissions/tourAccess';
 // Crew pay = Payroll's own per-person figures (Oct 2026).
 import { loadPayrollExportData } from '@/lib/export/payroll-data';
 
@@ -82,12 +81,8 @@ export async function GET(
   if (!membership) {
     return NextResponse.json({ error: 'No active workspace' }, { status: 403 });
   }
-  const grants = await fetchActiveGrants(supabase, membership, user.id);
-  // Crew users access via my_schedule — admin/manager pass too.
-  // operations.personnel.my_schedule is the resource_id; the
-  // 'crew' tag-mediated grant created at member-edit time
-  // covers it.
-  if (!canAccess(membership, grants, 'page', 'operations.personnel.my_schedule', 'read')) {
+  // Tour access (Nov 2026): anyone who can open the tour reads their OWN schedule.
+  if (!(await getViewerAccess(supabase, user.id, tourId))) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 

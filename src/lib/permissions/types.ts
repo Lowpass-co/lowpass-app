@@ -39,6 +39,8 @@ export interface WorkspaceMembersPayload {
   workspace_id: string;
   members: Member[];
   invites: PendingInvite[];
+  /** Each Member's tour access rows, by workspace_members id (Nov 2026). */
+  access?: Record<string, Array<{ tour_id: string | null; area: string; level: string }>>;
 }
 
 export interface WorkspaceListItem {

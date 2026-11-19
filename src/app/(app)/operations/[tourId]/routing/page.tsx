@@ -34,11 +34,8 @@ import {
   getRoutingDayStatus,
   type RoutingStatusByDate,
 } from '@/server/operations/getRoutingDayStatus';
-import {
-  getActiveMembership,
-  fetchActiveGrants,
-  canAccess,
-} from '@/lib/permissions/server';
+import { getActiveMembership } from '@/lib/permissions/server';
+import { getViewerAccess, viewerAllows } from '@/lib/permissions/tourAccess';
 
 export const dynamic = 'force-dynamic';
 
@@ -79,10 +76,11 @@ export default async function OperationsTourRoutingPage({
     return <NoWorkspacePanel />;
   }
 
-  const grants = await fetchActiveGrants(supabase, membership, user.id);
-
-  const canRead = canAccess(membership, grants, 'page', 'operations.routing', 'read');
-  const canWrite = canAccess(membership, grants, 'page', 'operations.routing', 'write');
+  // Tour access (Nov 2026): reading is the Schedule area; saving goes through
+  // the routing route, which is admin / manager only — so only they get the editor.
+  const access = await getViewerAccess(supabase, user.id, tourId);
+  const canRead = viewerAllows(access, 'schedule');
+  const canWrite = !!access?.manager;
 
   const { data: tour } = await supabase
     .from('tours')

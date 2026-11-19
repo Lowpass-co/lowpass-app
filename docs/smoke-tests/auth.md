@@ -186,6 +186,23 @@ own secret checks (e.g. `CRON_SECRET`).
 **Last verified**:
 
 
+#### AUTH-20 — One permission system: Team & roles shows tour access, no tags
+
+**Do**: Settings › Team & roles. Open a Member, then an Admin / Manager. Then open Invite.
+
+**Expect**: Member cards say what they can reach ("All tours · Edit: Advance · View: Production…", or "No tour access yet"); no tag chips, no "Granted:" line, no tag filter. The member panel has Role + Tour access only — no tags editor, no sensitive-grants panel. Invite has no tags field.
+
+**Last verified**:
+
+#### AUTH-21 — A Member's pages follow tour access, not old grants
+
+**Do**: Give a Member Logistics: view on one tour (no Payroll). As them open that tour's Crew page, then Dates & routing (needs Schedule: view). Then give Schedule: view and reload.
+
+**Expect**: Crew shows the roster with NO rate columns and no add / remove / swap. Dates & routing shows "Not on your access" until Schedule is given, then opens read-only (no editing — dates stay admin / manager). Share… on a tour file works only with Files: edit.
+
+**Last verified**:
+
+
 ## Known broken
 
 #### AUTH-04 — Login globe not yet deduped onto AuthShell

@@ -27,11 +27,8 @@ import {
 } from '@/components/operations/personnel/PersonnelRatesMirror';
 import { loadTourRateContext, rateAmountsFor } from '@/lib/payroll/loadRateLines';
 import type { PersonnelRate } from '@/types';
-import {
-  getActiveMembership,
-  fetchActiveGrants,
-  canAccess,
-} from '@/lib/permissions/server';
+import { getActiveMembership } from '@/lib/permissions/server';
+import { getViewerAccess, viewerAllows } from '@/lib/permissions/tourAccess';
 
 export const dynamic = 'force-dynamic';
 
@@ -69,24 +66,13 @@ export default async function OperationsTourPersonnelPage({
     return <NoWorkspacePanel />;
   }
 
-  const grants = await fetchActiveGrants(supabase, membership, user.id);
-
-  // Manager surface: admin/manager get it via role; readonly
-  // gets it only with the explicit operations.personnel grant.
-  const canManagerView = canAccess(
-    membership,
-    grants,
-    'page',
-    'operations.personnel',
-    'read',
-  );
-  const canCrewView = canAccess(
-    membership,
-    grants,
-    'page',
-    'operations.personnel.my_schedule',
-    'read',
-  );
+  // Tour access (Nov 2026): the crew list is the Logistics area; its rates
+  // mirror is money, so it also needs Payroll. Anyone else who can open the
+  // tour gets their own schedule (a login always reads its own crew rows).
+  const access = await getViewerAccess(supabase, user.id, tourId);
+  const canManagerView = viewerAllows(access, 'logistics');
+  const canSeeRates = viewerAllows(access, 'payroll');
+  const canCrewView = !!access;
 
   const { data: tour } = tourRes;
   if (!tour) notFound();
@@ -103,7 +89,7 @@ export default async function OperationsTourPersonnelPage({
   // only for the manager surface so the crew / no-access branches don't pay for
   // the query. Every value links back to Payroll — the one write surface.
   let rateMirror: RateMirrorRow[] = [];
-  if (canManagerView) {
+  if (canManagerView && canSeeRates) {
     /* F-3(b) — these two were sequential, but loadTourRateContext takes only
        (tourId, workspaceId) — it never reads rateRows. Fetch both at once. The
        only cost is one wasted context query on a tour with zero rate rows; the
@@ -157,6 +143,7 @@ export default async function OperationsTourPersonnelPage({
             conflictsOnly={conflictsOnly}
             currency={tourRow.currency ?? 'GBP'}
             rateMirror={rateMirror}
+            showRates={canSeeRates}
           />
         ) : canCrewView ? (
           <CrewMyScheduleClient tourId={tourId} />
@@ -175,6 +162,7 @@ function ManagerSurface({
   conflictsOnly,
   currency,
   rateMirror,
+  showRates,
 }: {
   tourId: string;
   tourStartDate: string | null;
@@ -182,6 +170,8 @@ function ManagerSurface({
   conflictsOnly: boolean;
   currency: string;
   rateMirror: RateMirrorRow[];
+  /** Rates are money — only with Payroll access. */
+  showRates: boolean;
 }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--lp-space-3)' }}>
@@ -201,7 +191,7 @@ function ManagerSurface({
         conflictsOnly={conflictsOnly}
       />
       {/* PAY-09 — read-only rates mirror; the ONE write surface is Payroll. */}
-      <PersonnelRatesMirror tourId={tourId} currency={currency} rows={rateMirror} />
+      {showRates ? <PersonnelRatesMirror tourId={tourId} currency={currency} rows={rateMirror} /> : null}
     </div>
   );
 }

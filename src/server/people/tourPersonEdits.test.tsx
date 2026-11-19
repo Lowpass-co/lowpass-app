@@ -25,10 +25,12 @@ vi.mock('@/server/budget/withDerivedRefresh', () => ({
   withDerivedRefresh: (h: unknown) => h,
   tourFromParams: async () => null,
 }));
+vi.mock('@/lib/permissions/tourAccess', async (orig) => ({
+  ...(await orig<typeof import('@/lib/permissions/tourAccess')>()),
+  getViewerAccess: async () => ({ manager: true, role: 'admin', tour: {} }),
+}));
 vi.mock('@/lib/permissions/server', () => ({
   getActiveMembership: async () => ({ workspace_id: WS, member_id: 'm', role: 'admin', is_workspace_owner: true, tags: [] }),
-  fetchActiveGrants: async () => [],
-  canAccess: () => true,
 }));
 
 const rates = await import('@/app/api/budget/personnel-rates/route');
