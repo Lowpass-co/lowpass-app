@@ -329,6 +329,14 @@ browser key restricted to the Map Tiles API and the app's domains).**
 
 **Last verified**:
 
+#### PRK-39 — Vehicles under a canopy stand on the street, not the roof
+
+**Do**: Park a truck under the edge of a roof or canopy (the O2's arches) → 3D.
+
+**Expect**: It stands at street level (partly hidden by the roof, as in life) — never on top of or inside the roof. To see it, draw a **Flat in 3D** area there (the roof is cut away too).
+
+**Last verified**:
+
 ## Known broken
 
 #### PRK-90 — Re-exporting makes a new file
