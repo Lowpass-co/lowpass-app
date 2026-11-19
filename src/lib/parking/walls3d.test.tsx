@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { wallRing, wallSegments, wallShade } from './walls3d';
+import { rimRuns, wallRing, wallSegments, wallShade } from './walls3d';
 
 const square = [
   { x: 0, y: 0 },
@@ -51,5 +51,25 @@ describe('wallSegments', () => {
   it('never puts a wall top below the floor', () => {
     const ws = wallSegments(square, [10, 0, 10, 10], 2);
     expect(ws[0].topB).toBe(2);
+  });
+});
+
+describe('rimRuns', () => {
+  it('runs one line along the wall tops of an unbroken stretch', () => {
+    const runs = rimRuns(wallSegments(square, [30, 31, 32, 33], 2));
+    expect(runs).toHaveLength(1);
+    expect(runs[0][0]).toEqual([0, 0, 30]);
+    expect(runs[0]).toHaveLength(5); // all the way round, back to the start
+  });
+  it('breaks where an edge has no wall (open street) and rejoins across the start', () => {
+    // Edge 1→2 is open street (both ends at street level); the rest have walls — one run 2→3→0→1.
+    const runs = rimRuns(wallSegments(square, [30, 2, 2, 30], 2));
+    expect(runs).toHaveLength(1);
+    expect(runs[0].map(([x, y]) => [x, y])).toEqual([
+      [20, 20],
+      [0, 20],
+      [0, 0],
+      [20, 0],
+    ]);
   });
 });

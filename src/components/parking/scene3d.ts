@@ -35,7 +35,7 @@ import { getTileSession, tileUrl } from './googleTiles';
 import { areaLabel, markerSpec, vehicleSpec } from '@/lib/parking/catalogue';
 import { ringAround, standingHeight, vehicleBlocks, type Block } from '@/lib/parking/blocks3d';
 import { vehicleCorners, type AreaItem, type ParkingDrawing, type ParkingItem, type VehicleItem } from '@/lib/parking/model';
-import { wallRing, wallSegments, type WallSegment } from '@/lib/parking/walls3d';
+import { rimRuns, wallRing, wallSegments, type WallSegment } from '@/lib/parking/walls3d';
 import { drawingsIn3d, drawingUnder, footprint, insideAt, insideFootprint, itemFloor, itemPoint, pointInPolygon, svgMatrix } from '@/lib/parking/drawings';
 import type { PartKind } from '@/lib/parking/silhouettes';
 import { labelBox, placeLabels, type LabelBox } from '@/lib/parking/labels3d';
@@ -244,7 +244,22 @@ export async function populate(
     if (!ring) continue;
     const bottom = (street.get(d.id) ?? ground0) + d.floor;
     const tops = ring.map((_, i) => heights.get(`wall:${d.id}:${i}`) ?? null);
-    for (const w of wallSegments(ring, tops, bottom)) addWall(Cesium, viewer, o.anchor, w, o.palette.wall);
+    const walls = wallSegments(ring, tops, bottom);
+    for (const w of walls) addWall(Cesium, viewer, o.anchor, w, o.palette.wall);
+    // The rim: a thin light line along the wall tops, where the roof was cut.
+    for (const run of rimRuns(walls)) {
+      viewer.entities.add({
+        polyline: {
+          positions: Cesium.Cartesian3.fromDegreesArrayHeights(run.flatMap(([x, y, h]) => {
+            const g = ll({ x, y });
+            return [g.lng, g.lat, h + 0.05];
+          })),
+          width: 2,
+          arcType: Cesium.ArcType.NONE,
+          material: Cesium.Color.fromCssColorString(o.palette.rim),
+        },
+      });
+    }
   }
   /** Where an item stands: on the inside drawing under it (its street + the item's level), else `fallback`. */
   const baseFor = (it: ParkingItem, fallback: number) => {

@@ -88,3 +88,34 @@ export function wallSegments(ring: readonly Pt[], tops: readonly (number | null)
   }
   return out;
 }
+
+/** The rim: a thin line along the wall tops, where the cut roof meets the
+ *  wall, so the cut reads as deliberate rather than a ragged edge of Google's
+ *  model (Nov 2026, Adam). One run per unbroken stretch of wall — an edge over
+ *  open street (no wall) breaks it. Each point is [east, north, height]. */
+export function rimRuns(segments: readonly WallSegment[]): [number, number, number][][] {
+  const runs: [number, number, number][][] = [];
+  let run: [number, number, number][] = [];
+  let last: WallSegment | null = null;
+  for (const w of segments) {
+    const joins = last && last.b.x === w.a.x && last.b.y === w.a.y;
+    if (!joins) {
+      if (run.length > 1) runs.push(run);
+      run = [[w.a.x, w.a.y, w.topA]];
+    }
+    run.push([w.b.x, w.b.y, w.topB]);
+    last = w;
+  }
+  if (run.length > 1) runs.push(run);
+  // A ring walled all the way round: the last run ends where the first starts — join them.
+  if (runs.length > 1) {
+    const first = runs[0];
+    const tail = runs[runs.length - 1];
+    const end = tail[tail.length - 1];
+    if (end[0] === first[0][0] && end[1] === first[0][1]) {
+      runs[0] = [...tail, ...first.slice(1)];
+      runs.pop();
+    }
+  }
+  return runs;
+}

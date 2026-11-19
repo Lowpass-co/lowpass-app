@@ -25,6 +25,7 @@ export const PALETTE_KEYS = [
   'paper',
   'floor',
   'wall',
+  'rim',
   ...PAINTS.map((p) => `paint-${p.id}` as const),
 ] as const;
 
