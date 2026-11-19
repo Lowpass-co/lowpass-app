@@ -30,3 +30,5 @@
 .pd-pdf:focus-visible { outline: 2px solid var(--lp-orange); outline-offset: 2px; }
 .pd-notes { margin: 0; white-space: pre-wrap; font-size: var(--lp-text-sm); line-height: var(--lp-leading-normal); }
 .pd-foot { padding-bottom: var(--lp-space-4); }
+.pd-vehicle { display: flex; flex-wrap: wrap; align-items: center; gap: var(--lp-space-2); width: 100%; min-height: 44px; padding: var(--lp-space-1) 0; border: 0; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.pd-vehicle:focus-visible { outline: 2px solid var(--lp-orange); outline-offset: 2px; border-radius: var(--lp-radius-sm); }

@@ -41,6 +41,7 @@ export function ParkingViewer({
   drawings,
   rasters,
   satellite,
+  focus,
 }: {
   anchor: LatLng;
   view0: View;
@@ -48,6 +49,8 @@ export function ParkingViewer({
   drawings: ParkingDrawing[];
   rasters: ReadonlyMap<string, DrawingRaster>;
   satellite: boolean;
+  /** A vehicle to fly to and flash (the page's Vehicles list); `n` changes each tap. */
+  focus?: { id: string; n: number } | null;
 }) {
   const host = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ w: 0, h: 0 });
@@ -125,6 +128,38 @@ export function ParkingViewer({
     return () => el.removeEventListener('wheel', onWheel);
   }, []);
 
+  // Tap a vehicle in the list → the map glides to it (centred, big enough to
+  // read) and it flashes (Nov 2026, Adam).
+  const [flashId, setFlashId] = useState<string | null>(null);
+  const viewNow = useRef(view);
+  viewNow.current = view;
+  useEffect(() => {
+    if (!focus || !size.w) return;
+    const v = items.find((i) => i.id === focus.id);
+    if (!v || v.kind !== 'vehicle') return;
+    const from = viewNow.current;
+    const ppm = Math.max(from.ppm, Math.min(size.w, size.h) * 0.45 / Math.max(v.length, 6));
+    const to = { ...from, cx: v.x, cy: v.y, ppm };
+    const reduce = typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+    const t0 = performance.now();
+    const ms = reduce ? 0 : 550;
+    let raf = 0;
+    const step = (t: number) => {
+      const k = ms ? Math.min(1, (t - t0) / ms) : 1;
+      const e = 1 - (1 - k) ** 3;
+      setView({ ...from, cx: from.cx + (to.cx - from.cx) * e, cy: from.cy + (to.cy - from.cy) * e, ppm: from.ppm * (to.ppm / from.ppm) ** e });
+      if (k < 1) raf = requestAnimationFrame(step);
+    };
+    raf = requestAnimationFrame(step);
+    setFlashId(v.id);
+    const off = setTimeout(() => setFlashId(null), 2600);
+    return () => {
+      cancelAnimationFrame(raf);
+      clearTimeout(off);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs per tap (focus.n), or once the map has a size (a tap from 3D mounts the plan fresh)
+  }, [focus?.n, size.w > 0]);
+
   const scaleM = niceLength(90 / view.ppm);
   const zoom = (f: number) => setView((v) => zoomAt(v, size.w, size.h, { x: size.w / 2, y: size.h / 2 }, f));
 
@@ -140,7 +175,7 @@ export function ParkingViewer({
       aria-label="Parking map — drag to move, pinch to zoom"
     >
       {size.w ? (
-        <ParkingScene view={view} width={size.w} height={size.h} items={items} tiles={tiles} palette={LIVE_PALETTE} drawings={scene} warnIds={warnIds} grid={!session || !satellite} numbers={numbers} />
+        <ParkingScene view={view} width={size.w} height={size.h} items={items} tiles={tiles} palette={LIVE_PALETTE} drawings={scene} warnIds={warnIds} grid={!session || !satellite} numbers={numbers} flashId={flashId} />
       ) : null}
       <div className="pk-ctrls" onPointerDown={(e) => e.stopPropagation()}>
         <div className="pk-ctrl-group">

@@ -409,6 +409,14 @@ browser key restricted to the Map Tiles API and the app's domains).**
 
 **Last verified**:
 
+#### PRK-49 — Names first on paper and the driver link; tap a vehicle to find it
+
+**Do**: Export a map with a bus park, a row of trucks and cars side by side. Open its driver link; tap vehicles in the Vehicles list (also while in 3D).
+
+**Expect**: PDF and driver map: every vehicle has its NAME — inside it when it's big enough, else a tag (bordered in the vehicle's colour) just past its end, beside it on the open side, or a callout with a thin line back to it; no tag on a vehicle, badge or another tag. Numbers are small badges (the key / list still use them). Driver link: tapping a vehicle in the list scrolls to the map (switching back from 3D), glides to it, zooms in to read it and flashes it three times.
+
+**Last verified**:
+
 ## Known broken
 
 #### PRK-90 — Re-exporting makes a new file
