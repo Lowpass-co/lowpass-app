@@ -2,7 +2,7 @@
 
 import { beforeEach, describe, expect, it } from 'vitest';
 import { FakeDb } from '@/test-utils/fakeSupabase';
-import { DriverLinkError, createDriverLink, driverMapPayload, hashToken, listDriverLinks, revokeDriverLink, touchLink, type SignStorage } from './driverLinks';
+import { DriverLinkError, createDriverLink, driverLinkTitle, driverMapPayload, hashToken, listDriverLinks, revokeDriverLink, touchLink, type SignStorage } from './driverLinks';
 import { loadParkingShow, saveParkingMap } from './maps';
 import { DriverLinkInputError, navigateUrls, parseCreate } from '@/lib/parking/driverLinks';
 import type { ParkingDrawing } from '@/lib/parking/model';
@@ -97,6 +97,19 @@ describe('a driver opening it', () => {
     expect(p.map.view).not.toHaveProperty('pages');
     expect(p.map.view).not.toHaveProperty('cam3d');
     expect(db.t('parking_share_links')[0].views).toBe(1);
+    expect(p.pdf).toBeNull(); // never exported
+  });
+
+  it('gets the latest exported PDF, signed — but never a file from another workspace', async () => {
+    const show = await withMap();
+    db.seed('file_references', [{ id: 'pdf-1', workspace_id: WS, file_name: 'Parking – Velodrom.pdf', storage_provider: 'tour-files', provider_file_id: 'ws-1/t1/parking.pdf' }]);
+    db.t('parking_maps')[0].pdf_file_id = 'pdf-1';
+    const { token } = await createDriverLink(db.client(), { show, userId: 'u1', input: { label: null, hours: 48, max3d: 20 } });
+    const p = await driverMapPayload(db.client(), storage, await touchLink(db.client(), token, false));
+    expect(p.pdf).toEqual({ name: 'Parking – Velodrom.pdf', url: 'https://signed/tour-files/ws-1/t1/parking.pdf' });
+    db.t('parking_maps')[0].pdf_file_id = OTHER;
+    const q = await driverMapPayload(db.client(), storage, await touchLink(db.client(), token, false));
+    expect(q.pdf).toBeNull();
   });
 
   it('a wrong, malformed, revoked or expired token says so', async () => {
@@ -129,5 +142,17 @@ describe('a driver opening it', () => {
     expect(u.google).toContain('destination=52.523300,13.438600');
     expect(u.waze).toContain('ll=52.523300,13.438600');
     expect(u.apple).toContain('daddr=52.523300,13.438600');
+  });
+});
+
+describe('the link preview title', () => {
+  it('names the venue and date, without counting a view; dead links get nothing', async () => {
+    const show = await withMap();
+    const now = new Date('2026-11-20T10:00:00Z');
+    const { token } = await createDriverLink(db.client(), { show, userId: 'u1', input: { label: null, hours: 48, max3d: 20 }, now });
+    expect(await driverLinkTitle(db.client(), token, now)).toBe('Parking · Velodrom · Tue 1 Dec');
+    expect(db.t('parking_share_links')[0].views).toBe(0);
+    expect(await driverLinkTitle(db.client(), token, new Date('2026-11-23T10:00:00Z'))).toBeNull(); // expired
+    expect(await driverLinkTitle(db.client(), 'not-a-token', now)).toBeNull();
   });
 });

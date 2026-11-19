@@ -42,7 +42,7 @@ import { ParkingScene } from './ParkingScene';
 import { loadCesium } from './loadCesium';
 import { applyCamera, createViewer, creditsText, lookAt, populate, settle } from './scene3d';
 import { defaultCamera3d } from '@/lib/parking/blocks3d';
-import { PRINT_FRAME_MM, type PrintFrame } from '@/lib/parking/print';
+import { PRINT_FRAME_MM, vehicleNumbers, type PrintFrame } from '@/lib/parking/print';
 import { areaColour, resolvePalette, vehicleColour, type Palette } from './palette';
 import { getTileSession, tilesKey, tileUrl, viewportInfo, type TileSession } from './googleTiles';
 
@@ -89,6 +89,8 @@ export interface ExportInput {
   satellite: boolean;
   /** Headroom warnings (drawings.ts), printed in the key. */
   warnings: string[];
+  /** Vehicle numbers, one set for the whole PDF (vehicleNumbers) — set by exportParkingPdf. */
+  numbers?: ReadonlyMap<string, number>;
   /** The street-map tiles for 'street' pages — set by exportParkingPdf (null = not available). */
   street?: { session: TileSession; maxZoom: number; attribution: string } | null;
 }
@@ -156,6 +158,11 @@ async function render3dImages(
   }
 }
 
+/** A fill light enough that its number needs dark ink. */
+const isLight = (hex: string): boolean => {
+  const [r, g, b] = hexToRgb(hex);
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b > 150;
+};
 const hexToRgb = (hex: string): [number, number, number] => {
   const h = hex.replace('#', '').slice(0, 6).padEnd(6, '0');
   return [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16)];
@@ -265,6 +272,7 @@ export async function renderMapImage(
     palette: { ...palette, blank: 'transparent' },
     grid: !src,
     labelScale: LABEL_SCALE,
+    numbers: input.numbers,
     fontFamily,
   });
   ctx.drawImage(await svgToImage(svg), 0, 0, W, H);
@@ -276,6 +284,8 @@ function gpsLink(p: LatLng): string {
 }
 
 export async function exportParkingPdf(input: ExportInput): Promise<ExportResult> {
+  // One numbering for every page and level: the badges and the key agree everywhere.
+  input = { ...input, numbers: vehicleNumbers(input.items) };
   // Street-map pages need their own Google session (roadmap tiles + their credit).
   if (input.pages.some((p) => p.kind === 'plan' && p.base === 'street')) input = { ...input, street: await streetTiles(input.anchor) };
   if (!input.pages.length) throw new Error('Add at least one page.');
@@ -498,11 +508,38 @@ function drawKey(
 
   if (vehicles.length) {
     heading('Vehicles');
-    for (const v of vehicles) {
-      if (v.kind !== 'vehicle') continue;
+    // Numbered like the badges on the plan, in number order: one line each
+    // ("7  Truck 7 · Truck · 16.5 m"), two columns when the list is long.
+    const num = (id: string) => input.numbers?.get(id) ?? 0;
+    const list = vehicles.filter((v): v is Extract<ParkingItem, { kind: 'vehicle' }> => v.kind === 'vehicle').sort((a, b) => num(a.id) - num(b.id));
+    const cols = list.length > 22 ? 2 : 1;
+    const colW = SIDE.w / cols;
+    const perCol = Math.ceil(list.length / cols);
+    const top = y;
+    let bottom = y;
+    list.forEach((v, i) => {
+      const col = Math.floor(i / perCol);
+      const ry = top + (i % perCol) * 3.6;
+      if (ry > PAGE.h - 18) return;
+      const x = SIDE.x + col * colW;
       const s = vehicleSpec(v.type);
-      row(vehicleColour(palette, v), v.label || s?.short || 'Vehicle', `${s?.label ?? ''} · ${v.length} × ${v.width} m`);
-    }
+      const fill = vehicleColour(palette, v);
+      doc.setFillColor(...hexToRgb(fill));
+      doc.circle(x + 1.7, ry - 1.1, 1.7, 'F');
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(num(v.id) > 99 ? 4.5 : 5.5);
+      doc.setTextColor(...(isLight(fill) ? ink : ([255, 255, 255] as [number, number, number])));
+      doc.text(String(num(v.id)), x + 1.7, ry - 0.45, { align: 'center' });
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(7);
+      doc.setTextColor(...ink);
+      const name = v.label || s?.short || 'Vehicle';
+      const detail = cols === 1 ? ` · ${s?.short ?? ''} · ${fmtMetres(v.length)}` : ` · ${fmtMetres(v.length)}`;
+      const text = doc.splitTextToSize(name + detail, colW - 5)[0] as string;
+      doc.text(text, x + 4.5, ry);
+      bottom = Math.max(bottom, ry);
+    });
+    y = bottom + 3.6;
     line(2);
   }
   if (markers.length) {

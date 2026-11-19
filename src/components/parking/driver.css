@@ -8,6 +8,8 @@
 .pd-modes button { flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: var(--lp-space-1); min-height: 44px; border: 1px solid var(--lp-border); border-radius: var(--lp-radius-md); background: var(--lp-surface); color: var(--lp-text); font: inherit; font-size: var(--lp-text-sm); font-weight: var(--lp-weight-semibold); cursor: pointer; }
 .pd-modes button[aria-pressed='true'] { background: var(--lp-orange); border-color: var(--lp-orange); color: var(--lp-text-inverse); }
 .pd-modes button:disabled { opacity: 0.55; cursor: default; }
+.pd-modes .pd-3d:not([aria-pressed='true']):not(:disabled) { border-color: var(--lp-orange); color: var(--lp-orange); background: color-mix(in srgb, var(--lp-orange) 10%, var(--lp-surface)); font-size: var(--lp-text-base); }
+.pd-modes .pd-3d:disabled { opacity: 1; color: var(--lp-text-tertiary); background: var(--lp-surface-hover); border-color: var(--lp-border); }
 .pd-modes button:focus-visible, .pd-nav:focus-visible { outline: 2px solid var(--lp-orange); outline-offset: 2px; }
 .pd-note { margin: 0; font-size: var(--lp-text-sm); color: var(--color-lp-warning); }
 .pd-stage { position: relative; height: min(62dvh, 640px); min-height: 320px; border-radius: var(--lp-radius-lg); overflow: hidden; border: 1px solid var(--lp-border); }
@@ -22,5 +24,9 @@
 .pd-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--lp-space-2); font-size: var(--lp-text-sm); }
 .pd-list li { display: flex; flex-wrap: wrap; align-items: center; gap: var(--lp-space-2); }
 .pd-swatch { width: 10px; height: 18px; border-radius: var(--lp-radius-xs); flex: none; }
+.pd-num { display: inline-flex; align-items: center; justify-content: center; min-width: 24px; height: 24px; padding: 0 var(--lp-space-1); border: 3px solid; border-radius: var(--lp-radius-full); background: var(--lp-map-ink); color: var(--lp-map-halo); font-size: var(--lp-text-xs); font-weight: var(--lp-weight-bold); flex: none; }
+.pd-pdf { display: flex; align-items: center; gap: var(--lp-space-3); padding: var(--lp-space-3); border: 1px solid var(--lp-border); border-radius: var(--lp-radius-md); background: var(--lp-surface); color: var(--lp-text); text-decoration: none; }
+.pd-pdf > span { display: flex; flex-direction: column; gap: 2px; }
+.pd-pdf:focus-visible { outline: 2px solid var(--lp-orange); outline-offset: 2px; }
 .pd-notes { margin: 0; white-space: pre-wrap; font-size: var(--lp-text-sm); line-height: var(--lp-leading-normal); }
 .pd-foot { padding-bottom: var(--lp-space-4); }
