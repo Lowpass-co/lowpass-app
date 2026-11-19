@@ -171,6 +171,39 @@ export function invertLightness(px: Uint8ClampedArray): void {
   }
 }
 
+/** The dark copy with the PAPER taken out (Nov 2026, Adam: the inside view
+ *  "inverts the BG to black — it should be transparent"). Each pixel keeps
+ *  the dark copy's colour; its opacity is how much ink the ORIGINAL had
+ *  there (255 − its lightest channel): white paper → clear, black or
+ *  coloured lines → solid, pale hatching → faint. The plan on screen shows
+ *  this, so the map shows through; 3D floors and the PDF keep the solid dark
+ *  copy (under a 3D floor the mesh is cut away — there is nothing to see). */
+export function seeThroughCopy(dark: HTMLCanvasElement, light: HTMLCanvasElement): HTMLCanvasElement {
+  const out = document.createElement('canvas');
+  out.width = dark.width;
+  out.height = dark.height;
+  const ctx = out.getContext('2d');
+  const lctx = light.getContext('2d');
+  if (!ctx || !lctx) return dark;
+  ctx.drawImage(dark, 0, 0);
+  const img = ctx.getImageData(0, 0, out.width, out.height);
+  paperToAlpha(img.data, lctx.getImageData(0, 0, light.width, light.height).data);
+  ctx.putImageData(img, 0, 0);
+  return out;
+}
+
+export function paperToAlpha(px: Uint8ClampedArray, original: Uint8ClampedArray): void {
+  for (let i = 0; i < px.length; i += 4) {
+    px[i + 3] = 255 - Math.min(original[i], original[i + 1], original[i + 2]);
+  }
+}
+
+/** A canvas as a blob URL that KEEPS transparency (JPEG would fill it black).
+ *  WebP where the browser can write it, else PNG (the spec's fallback). */
+export function canvasUrlWithAlpha(c: HTMLCanvasElement): Promise<string> {
+  return new Promise((res, rej) => c.toBlob((b) => (b ? res(URL.createObjectURL(b)) : rej(new Error('The drawing could not be prepared.'))), 'image/webp', 0.92));
+}
+
 /** How a drawing shows: lines on the photo, or the dark copy as a floor. */
 export function drawingLook(d: Pick<ParkingDrawing, 'inside'>, satelliteOn: boolean): 'lines' | 'dark' {
   return d.inside || !satelliteOn ? 'dark' : 'lines';

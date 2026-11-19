@@ -27,7 +27,7 @@ import { useToast } from '@/components/ui/Toast';
 import { AlertTriangle, Loader2, X } from 'lucide-react';
 import { SlideOver } from '@/components/ui/SlideOver';
 import { TagEditor } from './TagEditor';
-import { PermissionMatrix } from './PermissionMatrix';
+import { MemberTourAccess } from './MemberTourAccess';
 import { RESOURCE_BY_ID } from '@/lib/permissions/resources';
 import { useAutoSave } from '@/lib/forms/useAutoSave';
 import { SaveStatus } from '@/components/forms/SaveStatus';
@@ -127,7 +127,7 @@ function MemberManageEditor({
   const [removeBusy, setRemoveBusy] = useState(false);
   const [removeConfirm, setRemoveConfirm] = useState(false);
   const [removeError, setRemoveError] = useState<string | null>(null);
-  const [sensitiveSelected, setSensitiveSelected] = useState<string[]>([]);
+  const [sensitiveSelected] = useState<string[]>([]);
 
   const {
     state,
@@ -162,7 +162,6 @@ function MemberManageEditor({
     },
   });
 
-  const matrixDisabled = state.role !== 'readonly';
 
   const sensitiveLabels = useMemo(
     () =>
@@ -341,34 +340,14 @@ function MemberManageEditor({
             />
           </div>
 
-          {/* Permissions */}
-          <div>
-            <div
-              className="lp-label-caps"
-              style={{
-                fontSize: 'var(--lp-text-2xs)',
-                color: 'var(--lp-text-secondary)',
-                marginBottom: 'var(--lp-space-1)',
-              }}
-            >
-              Permissions
+          {/* Tour access (Nov 2026) — replaces the page-grant matrix */}
+          {state.role === 'readonly' ? (
+            <MemberTourAccess memberId={member.member_id} />
+          ) : (
+            <div style={{ fontSize: 'var(--lp-text-xs)', color: 'var(--lp-text-tertiary)' }}>
+              Admins and managers see every tour.
             </div>
-            <div
-              style={{
-                marginBottom: 'var(--lp-space-2)',
-                fontSize: 'var(--lp-text-xs)',
-                color: 'var(--lp-text-tertiary)',
-              }}
-            >
-              Read-only users see ONLY what&apos;s checked here. Admin/manager have implicit access to everything.
-            </div>
-            <PermissionMatrix
-              value={state.grants}
-              onChange={(next) => set((p) => ({ ...p, grants: next }))}
-              disabled={matrixDisabled}
-              onSensitiveGrantsChange={setSensitiveSelected}
-            />
-          </div>
+          )}
 
           {/* Sensitive grants warning — visible the moment a
               sensitive grant flips on. With auto-save, this panel

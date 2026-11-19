@@ -1,0 +1,22 @@
+/* Crew on a phone (Nov 2026). Tokens only; one column; big tap targets. */
+.crew { max-width: 560px; margin: 0 auto; padding: var(--lp-space-4) var(--lp-space-4) var(--lp-space-8); color: var(--lp-text); }
+.crew-top { display: flex; align-items: center; justify-content: space-between; gap: var(--lp-space-2); margin-bottom: var(--lp-space-4); }
+.crew-back { font-size: var(--lp-text-sm); color: var(--lp-text-secondary); text-decoration: none; }
+.crew-title { font-size: var(--lp-text-2xl); font-weight: var(--lp-weight-semibold); line-height: 1.2; margin: 0; }
+.crew-sub { font-size: var(--lp-text-sm); color: var(--lp-text-secondary); margin-top: var(--lp-space-1); }
+.crew-h2 { font-size: var(--lp-text-xs); text-transform: uppercase; letter-spacing: 0.06em; color: var(--lp-text-tertiary); margin: var(--lp-space-6) 0 var(--lp-space-2); }
+.crew-list { display: flex; flex-direction: column; border-top: 1px solid var(--lp-border-subtle); }
+.crew-row { display: flex; align-items: center; justify-content: space-between; gap: var(--lp-space-3); min-height: 52px; padding: var(--lp-space-2) 0; border-bottom: 1px solid var(--lp-border-subtle); color: inherit; text-decoration: none; }
+.crew-row:active { background: var(--lp-panel); }
+.crew-row-main { min-width: 0; }
+.crew-row-title { font-size: var(--lp-text-base); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.crew-row-meta { font-size: var(--lp-text-sm); color: var(--lp-text-secondary); }
+.crew-chev { color: var(--lp-text-tertiary); flex-shrink: 0; }
+.crew-today { color: var(--color-lp-orange); font-weight: var(--lp-weight-semibold); }
+.crew-pill { font-size: var(--lp-text-xs); color: var(--lp-text-secondary); border: 1px solid var(--lp-border-subtle); border-radius: 999px; padding: 1px 8px; flex-shrink: 0; }
+.crew-empty { font-size: var(--lp-text-sm); color: var(--lp-text-tertiary); padding: var(--lp-space-3) 0; }
+.crew-field { padding: var(--lp-space-2) 0; border-bottom: 1px solid var(--lp-border-subtle); }
+.crew-field-label { font-size: var(--lp-text-xs); color: var(--lp-text-tertiary); }
+.crew-field-value { font-size: var(--lp-text-base); white-space: pre-wrap; word-break: break-word; }
+.crew-btn { display: flex; align-items: center; justify-content: center; min-height: 48px; border-radius: var(--lp-radius-md); border: 1px solid var(--lp-border-subtle); color: inherit; text-decoration: none; font-size: var(--lp-text-base); margin-top: var(--lp-space-2); }
+.crew-btn-primary { background: var(--color-lp-orange); border-color: var(--color-lp-orange); color: var(--lp-text-inverse); }

@@ -3,7 +3,7 @@
 import { describe, expect, it } from 'vitest';
 import { PRINT_FRAME_MM, PRINT_MIN_WIDTH_M, freeSpot, itemPoints, printFrame } from './print';
 import { vehicleParts } from './silhouettes';
-import { VEHICLES } from './catalogue';
+import { VEHICLES, vehicleSpec } from './catalogue';
 import { addVehicle } from './edit';
 import { parseMapBody, type ParkingItem } from './model';
 import type { View } from './geo';
@@ -130,5 +130,16 @@ describe('vehicle colours', () => {
   it('anything else is refused', () => {
     expect(() => parseMapBody(body('#ff0000'))).toThrow();
     expect(() => parseMapBody(body('chartreuse'))).toThrow();
+  });
+});
+
+describe('sprinter, no trailer (Nov 2026)', () => {
+  it('is in the list, van-coloured, and has no trailer or drawbar', () => {
+    const spec = vehicleSpec('sprinter');
+    expect(spec).toMatchObject({ length: 7.4, role: 'van' });
+    expect(spec?.trailer).toBeUndefined();
+    const parts = vehicleParts('sprinter', 7.4, 2.02);
+    expect(parts.some((p) => p.kind === 'coupling')).toBe(false);
+    expect(Math.max(...parts.map((p) => p.f1))).toBeCloseTo(7.4);
   });
 });

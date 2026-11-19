@@ -7,7 +7,8 @@
 
    READ CHECK: session + workspace (requireUserAndWorkspace) + the tour is in
    that workspace (tourGate); the RLS client does the reads.
-   WRITES: requireWrite (admin/manager, as every advance write) + tourGate.
+   WRITES: requireWrite — admin/manager, or a Member with Parking edit on
+   this tour (tour access, Nov 2026) — + tourGate.
    The body goes through parseMapBody() — the one gate into parking_maps.items.
    ============================================ */
 
@@ -51,7 +52,7 @@ export async function GET(_request: Request, { params }: Params) {
 export async function PUT(request: Request, { params }: Params) {
   const { id: tourId, routingId } = await params;
   const supabase = await createServerSupabaseClient();
-  const auth = await requireWrite(supabase);
+  const auth = await requireWrite(supabase, { area: 'parking', tourId });
   if ('error' in auth) return auth.error;
   const gate = await tourGate(supabase, tourId, auth.workspaceId);
   if (gate) return gate;
@@ -76,7 +77,7 @@ export async function PUT(request: Request, { params }: Params) {
 export async function PATCH(request: Request, { params }: Params) {
   const { id: tourId, routingId } = await params;
   const supabase = await createServerSupabaseClient();
-  const auth = await requireWrite(supabase);
+  const auth = await requireWrite(supabase, { area: 'parking', tourId });
   if ('error' in auth) return auth.error;
   const gate = await tourGate(supabase, tourId, auth.workspaceId);
   if (gate) return gate;

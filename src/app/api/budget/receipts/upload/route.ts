@@ -18,8 +18,6 @@ const ALLOWED_EXT = ['pdf', 'jpg', 'jpeg', 'png', 'gif', 'webp'];
 
 export async function POST(request: Request) {
   const supabase = await createServerSupabaseClient();
-  const auth = await requireWrite(supabase);
-  if ('error' in auth) return auth.error;
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -63,6 +61,9 @@ export async function POST(request: Request) {
   if (!tour) {
     return NextResponse.json({ error: 'Tour not found' }, { status: 404 });
   }
+  // Tour access: Receipts edit on this tour (admins / managers pass on role).
+  const auth = await requireWrite(supabase, { area: 'receipts', tourId });
+  if ('error' in auth) return auth.error;
 
   if (!ALLOWED_TYPES.includes(file.type)) {
     return NextResponse.json(

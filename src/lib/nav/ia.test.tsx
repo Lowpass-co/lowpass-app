@@ -659,65 +659,60 @@ describe('S-3a — the artist rail describes real pages', () => {
    permission that simply hadn't been granted.
    ============================================ */
 
-import { allRailResources } from './ia';
-import { RESOURCE_CATALOG } from '@/lib/permissions/resources';
+import { railAllows, areaForPath } from './ia';
+import { AREAS, PRESET_ACCESS } from '@/lib/permissions/areas';
 
-describe('P-1 — every gated rail item names a REAL resource', () => {
-  it('no rail item invents a resource id', () => {
-    const catalogue = new Set(RESOURCE_CATALOG.map((r) => r.id));
-    const unknown = allRailResources().filter((id) => !catalogue.has(id));
-    expect(unknown).toEqual([]);
+describe('tour access — every tour item says who may open it', () => {
+  it('every tour item but the Overview has an area (or is managers-only)', () => {
+    const ungated = itemsFor('tour', null).filter((i) => !i.area).map((i) => i.id);
+    expect(ungated).toEqual(['overview']);
   });
 
-  it('the tour rail has gated items', () => {
-    // A silently-empty set would make the filter a no-op and look like it works.
-    expect(itemsFor('tour', null).some((i) => i.resource)).toBe(true);
+  it('every area is reachable from the tour rail', () => {
+    const areas = new Set(itemsFor('tour', null).map((i) => i.area));
+    for (const a of AREAS) if (a !== 'schedule') expect(areas.has(a), a).toBe(true);
   });
 });
 
-describe('P-1 — resolveRailView filters by the allow-list', () => {
+describe('tour access — resolveRailView filters by area', () => {
   const money = { scope: 'tour' as const, artistId: null, tourId: T, mode: 'money' as const };
   const ids = (view: ReturnType<typeof resolveRailView>) =>
     view.filter((e) => e.kind === 'item').map((e) => (e.kind === 'item' ? e.id : ''));
 
-  it('omitting the list shows everything — the pre-P-1 behaviour', () => {
+  it('unknown access shows everything (fail open on a nav)', () => {
     expect(ids(resolveRailView(money, `/budget/${T}`))).toContain('payroll');
   });
 
-  it('THE ACCEPTANCE SHAPE: no operations.payroll grant → no Payroll item', () => {
-    const allowed = allRailResources().filter((r) => r !== 'operations.payroll');
-    expect(ids(resolveRailView(money, `/budget/${T}`, '', {}, allowed))).not.toContain('payroll');
+  it('managers see everything', () => {
+    expect(ids(resolveRailView(money, `/budget/${T}`, '', {}, { manager: true, tour: {} }))).toContain('tour-settings');
   });
 
-  it('and the rest of Money survives that removal', () => {
-    const allowed = allRailResources().filter((r) => r !== 'operations.payroll');
-    const shown = ids(resolveRailView(money, `/budget/${T}`, '', {}, allowed));
-    expect(shown).toEqual(expect.arrayContaining(['expenses', 'income', 'receipts']));
+  it("Adam's production assistant: Production preset + Receipts", () => {
+    const pa = { manager: false, tour: { ...PRESET_ACCESS.production, receipts: 'edit' as const } };
+    const shown = ids(resolveRailView(money, `/budget/${T}`, '', {}, pa));
+    expect(shown).toEqual(['overview', 'advance', 'receipts', 'riders', 'channel-list', 'stage-plot', 'parking', 'assets', 'crew', 'rooming', 'travel', 'files']);
   });
 
-  it('ungated items survive an EMPTY allow-list — absent means ungated', () => {
-    /* Income, Travel and Tour settings have no catalogue entry. If
-       an empty list hid them, the filter would be denying by default, which is
-       a different and much worse policy than the one intended. */
-    const shown = ids(resolveRailView(money, `/budget/${T}`, '', {}, []));
-    expect(shown).toEqual(expect.arrayContaining(['income', 'travel', 'tour-settings']));
-    expect(shown).not.toContain('payroll');
-  });
-
-  it('a heading left with no items under it is dropped', () => {
-    /* With an empty allow-list "Production" keeps only Gear (ungated).
-       Asserted structurally: no view may end with a group, and no two groups
-       may be adjacent. */
-    const view = resolveRailView(money, `/budget/${T}`, '', {}, []);
+  it('a member with nothing sees only the Overview — and no empty headings', () => {
+    const view = resolveRailView(money, `/budget/${T}`, '', {}, { manager: false, tour: {} });
+    expect(ids(view)).toEqual(['overview']);
     expect(view[view.length - 1].kind).toBe('item');
     for (let i = 0; i < view.length - 1; i++) {
       if (view[i].kind === 'group') expect(view[i + 1].kind).toBe('item');
     }
   });
 
+  it('the page gate uses the same rule', () => {
+    const crew = { manager: false, tour: PRESET_ACCESS.crew };
+    expect(railAllows(crew, areaForPath(`/operations/${T}/parking/r1`))).toBe(true);
+    expect(railAllows(crew, areaForPath(`/operations/${T}/payroll`))).toBe(false);
+    expect(railAllows(crew, areaForPath(`/budget/${T}`, '?tab=income'))).toBe(false);
+    expect(railAllows(crew, areaForPath(`/operations/${T}/settings`))).toBe(false);
+    expect(railAllows(null, areaForPath(`/operations/${T}/payroll`))).toBe(true);
+  });
+
   it('the filtered view still survives an RSC boundary', () => {
-    const allowed = allRailResources().filter((r) => r !== 'operations.payroll');
-    expect(railViewIsSerialisable(resolveRailView(money, `/budget/${T}`, '', {}, allowed))).toBe(true);
+    expect(railViewIsSerialisable(resolveRailView(money, `/budget/${T}`, '', {}, { manager: false, tour: PRESET_ACCESS.crew }))).toBe(true);
   });
 });
 

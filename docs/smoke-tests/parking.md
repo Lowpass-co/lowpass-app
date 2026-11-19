@@ -297,6 +297,30 @@ browser key restricted to the Map Tiles API and the app's domains).**
 
 **Last verified**:
 
+#### PRK-35 — A drag in 3D moves the map, never the planet
+
+**Do**: Open 3D at a venue, zoom right in, then click and drag a few pixels — on the ground, near the horizon, and starting on the sky. On a phone, drag with one finger.
+
+**Expect**: Ground drags: the spot you grabbed stays under the pointer. Near the horizon: small, steady moves, no leap. From the sky: nothing moves. You can't drag more than ~3 km from the venue. Right-drag / two fingers still turn and tilt; wheel / pinch still zoom.
+
+**Last verified**:
+
+#### PRK-36 — Sprinter without a trailer
+
+**Do**: Add vehicle → "Sprinter / splitter van, no trailer".
+
+**Expect**: A 7.4 m × 2.02 m van (no trailer, no drawbar) in the van colour; 2.8 m tall in 3D.
+
+**Last verified**:
+
+#### PRK-37 — Inside drawings: lines on a clear background
+
+**Do**: Lay an inside drawing (or any drawing with the satellite off) on the plan.
+
+**Expect**: Light lines only — the paper is clear, so the satellite (or the map grid) shows through; no black slab. 3D floors and the PDF are unchanged.
+
+**Last verified**:
+
 ## Known broken
 
 #### PRK-90 — Re-exporting makes a new file

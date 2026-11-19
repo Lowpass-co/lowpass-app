@@ -8,17 +8,14 @@
    manually. Sprint 10 wires Supabase Auth invite email.
    ============================================ */
 
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { AlertTriangle, Check, ChevronDown, ChevronRight, Copy, Loader2 } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { Check, Copy, Loader2 } from 'lucide-react';
 import { useToast } from '@/components/ui/Toast';
 import { SlideOver } from '@/components/ui/SlideOver';
 import { TagEditor } from './TagEditor';
-import { PermissionMatrix } from './PermissionMatrix';
-import { RESOURCE_BY_ID } from '@/lib/permissions/resources';
-import type {
-  GrantInput,
-  WorkspaceRole,
-} from '@/lib/permissions/types';
+import { TourAccessEditor, EMPTY_DRAFT, draftIsEmpty, draftToRows, type AccessDraft } from './TourAccessEditor';
+import { createClient } from '@/lib/supabase-client';
+import type { WorkspaceRole } from '@/lib/permissions/types';
 
 interface InviteMemberSlideOverProps {
   open: boolean;
@@ -44,9 +41,10 @@ export function InviteMemberSlideOver({
   const [email, setEmail] = useState('');
   const [role, setRole] = useState<WorkspaceRole>('readonly');
   const [tags, setTags] = useState<string[]>([]);
-  const [grants, setGrants] = useState<GrantInput[]>([]);
-  const [matrixOpen, setMatrixOpen] = useState(false);
-  const [sensitiveSelected, setSensitiveSelected] = useState<string[]>([]);
+  const [access, setAccess] = useState<AccessDraft>(EMPTY_DRAFT);
+  const [personnelId, setPersonnelId] = useState<string | null>(null);
+  const [tours, setTours] = useState<{ id: string; name: string }[]>([]);
+  const [people, setPeople] = useState<{ id: string; name: string; email: string | null; user_id: string | null }[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [emptyAck, setEmptyAck] = useState(false);
@@ -60,9 +58,15 @@ export function InviteMemberSlideOver({
     setEmail('');
     setRole('readonly');
     setTags([]);
-    setGrants([]);
-    setMatrixOpen(false);
-    setSensitiveSelected([]);
+    setAccess(EMPTY_DRAFT);
+    setPersonnelId(null);
+    const sb = createClient();
+    void sb.from('tours').select('id, name').order('start_date', { ascending: false }).then(({ data }) => {
+      setTours(((data ?? []) as { id: string; name: string | null }[]).map((t) => ({ id: t.id, name: t.name ?? 'Untitled tour' })));
+    });
+    void sb.from('personnel').select('id, name, email, user_id').order('name').then(({ data }) => {
+      setPeople((data ?? []) as { id: string; name: string; email: string | null; user_id: string | null }[]);
+    });
     setEmptyAck(false);
     setError(null);
     setInviteUrl(null);
@@ -77,19 +81,15 @@ export function InviteMemberSlideOver({
   );
 
   const normalizedEmail = email.trim().toLowerCase();
+  // Pre-pick the crew record whose email matches (they can change it).
+  useEffect(() => {
+    const match = people.find((p) => !p.user_id && p.email && p.email.toLowerCase() === normalizedEmail);
+    if (match) setPersonnelId(match.id);
+  }, [normalizedEmail, people]);
   const emailValid = EMAIL_RE.test(normalizedEmail);
   const duplicateEmail = emailValid && existingEmails.has(normalizedEmail);
 
-  const sensitiveLabels = useMemo(
-    () =>
-      sensitiveSelected
-        .map((id) => RESOURCE_BY_ID.get(id)?.label ?? id)
-        .sort(),
-    [sensitiveSelected],
-  );
-
-  const matrixDisabled = role !== 'readonly';
-  const wouldBeEmpty = role === 'readonly' && grants.length === 0;
+  const wouldBeEmpty = role === 'readonly' && draftIsEmpty(access);
   const canSubmit = emailValid && !duplicateEmail && !submitting && (!wouldBeEmpty || emptyAck);
 
   async function handleSubmit() {
@@ -104,7 +104,9 @@ export function InviteMemberSlideOver({
           email: normalizedEmail,
           role,
           tags,
-          grants: role === 'readonly' ? grants : [],
+          grants: [],
+          access: role === 'readonly' ? draftToRows(access) : [],
+          personnel_id: role === 'readonly' ? personnelId : null,
         }),
       });
       const body = (await res.json().catch(() => null)) as
@@ -350,98 +352,52 @@ export function InviteMemberSlideOver({
               />
             </div>
 
-            {/* Initial permissions (collapsible) */}
-            <div>
-              <button
-                type="button"
-                onClick={() => setMatrixOpen((o) => !o)}
-                className="btn-transition inline-flex items-center"
-                style={{
-                  gap: 4,
-                  padding: 'var(--lp-space-1) 0',
-                  fontSize: 'var(--lp-text-sm)',
-                  fontWeight: 'var(--lp-weight-medium)',
-                  color: 'var(--lp-text)',
-                  background: 'transparent',
-                  border: 'none',
-                  cursor: 'pointer',
-                }}
-              >
-                {matrixOpen ? (
-                  <ChevronDown size={14} strokeWidth={2.4} />
-                ) : (
-                  <ChevronRight size={14} strokeWidth={2.4} />
-                )}
-                Initial permissions
-                {grants.length > 0 ? (
-                  <span
+            {/* Tour access + crew record (Nov 2026) — Members only */}
+            {role === 'readonly' ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--lp-space-3)' }}>
+                <div>
+                  <div
+                    className="lp-label-caps"
+                    style={{ fontSize: 'var(--lp-text-2xs)', color: 'var(--lp-text-secondary)', marginBottom: 'var(--lp-space-2)' }}
+                  >
+                    Crew record
+                  </div>
+                  <select
+                    aria-label="Crew record"
+                    value={personnelId ?? ''}
+                    onChange={(e) => setPersonnelId(e.target.value || null)}
                     style={{
-                      marginLeft: 6,
-                      padding: '0 6px',
-                      fontSize: 'var(--lp-text-xs)',
-                      color: 'var(--color-lp-orange)',
-                      background: 'color-mix(in srgb, var(--color-lp-orange) 12%, transparent)',
-                      borderRadius: 999,
+                      width: '100%',
+                      fontSize: 'var(--lp-text-sm)',
+                      padding: 'var(--lp-space-1) var(--lp-space-2)',
+                      background: 'var(--lp-panel)',
+                      color: 'var(--lp-text)',
+                      border: '1px solid var(--lp-border-subtle)',
+                      borderRadius: 'var(--lp-radius-md)',
                     }}
                   >
-                    {grants.length}
-                  </span>
-                ) : null}
-              </button>
-              <div
-                style={{
-                  marginTop: 4,
-                  fontSize: 'var(--lp-text-xs)',
-                  color: 'var(--lp-text-tertiary)',
-                }}
-              >
-                Optional. Grant now or after they accept. Read-only members
-                see only granted pages.
-              </div>
-              {matrixOpen ? (
-                <div style={{ marginTop: 'var(--lp-space-2)' }}>
-                  <PermissionMatrix
-                    value={grants}
-                    onChange={setGrants}
-                    disabled={matrixDisabled}
-                    onSensitiveGrantsChange={setSensitiveSelected}
-                  />
+                    <option value="">Not linked</option>
+                    {people.map((p) => (
+                      <option key={p.id} value={p.id} disabled={!!p.user_id}>
+                        {p.name}
+                        {p.email ? ` — ${p.email}` : ''}
+                        {p.user_id ? ' (has a login)' : ''}
+                      </option>
+                    ))}
+                  </select>
+                  <div style={{ marginTop: 4, fontSize: 'var(--lp-text-xs)', color: 'var(--lp-text-tertiary)' }}>
+                    Linked, they always see their own crew details, room and pay — whatever the areas below say.
+                  </div>
                 </div>
-              ) : null}
-            </div>
-
-            {/* Sensitive grants warning */}
-            {role === 'readonly' && sensitiveSelected.length > 0 ? (
-              <div
-                style={{
-                  padding: 'var(--lp-space-3)',
-                  fontSize: 'var(--lp-text-sm)',
-                  color: 'var(--lp-text)',
-                  background: 'color-mix(in srgb, var(--color-lp-orange) 6%, transparent)',
-                  border: '1px solid color-mix(in srgb, var(--color-lp-orange) 30%, transparent)',
-                  borderRadius: 'var(--lp-radius-md)',
-                }}
-              >
-                <div
-                  className="lp-label-caps"
-                  style={{
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: 'var(--lp-space-1)',
-                    fontSize: 'var(--lp-text-2xs)',
-                    color: 'var(--color-lp-orange)',
-                    marginBottom: 'var(--lp-space-1)',
-                  }}
-                >
-                  <AlertTriangle size={12} aria-hidden />
-                  Sensitive grants
+                <div>
+                  <div
+                    className="lp-label-caps"
+                    style={{ fontSize: 'var(--lp-text-2xs)', color: 'var(--lp-text-secondary)', marginBottom: 'var(--lp-space-2)' }}
+                  >
+                    Tour access
+                  </div>
+                  <TourAccessEditor value={access} onChange={setAccess} tours={tours} />
                 </div>
-                On accept, this member will see:
-                <ul style={{ marginTop: 4, marginLeft: 18, lineHeight: 1.6 }}>
-                  {sensitiveLabels.map((l) => (
-                    <li key={l}>{l}</li>
-                  ))}
-                </ul>
               </div>
             ) : null}
 

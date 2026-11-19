@@ -18,6 +18,8 @@
    ============================================ */
 
 import { createServerSupabaseClient } from '@/lib/supabase-server';
+import { redirect } from 'next/navigation';
+import { getRequestViewerAccess } from '@/lib/server/requestContext';
 /* IA Cleanup §I2 — WorkspaceTopBar now mounted by
    src/app/(app)/(workspace)/layout.tsx (the route group's
    layout). Page renders its own body content only. */
@@ -40,6 +42,10 @@ export default async function ArtistsLandingPage() {
   // No data = not signed in or no workspace: the (workspace) layout handles
   // both (redirect / <NoWorkspace>). Redirecting to /login here looped.
   if (!data) return null;
+  /* Members (tour access, Nov 2026) start on their crew view — the tours
+     they're on, phone-first — not the workspace's artist list. */
+  const viewer = await getRequestViewerAccess(null);
+  if (viewer && !viewer.manager) redirect('/crew');
 
   return (
     <>

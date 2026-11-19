@@ -26,7 +26,7 @@
 
 import { cache } from 'react';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
-import { resolveVisibleResources } from '@/lib/nav/visibleResources';
+import { getViewerAccess, type ViewerAccess } from '@/lib/permissions/tourAccess';
 
 /** THE request's Supabase client — one instance shared by every server
  *  component in the render. Sharing the instance is also what lets
@@ -126,11 +126,15 @@ export const getRequestWorkspaceName = cache(async (): Promise<string | null> =>
   return data?.name ?? null;
 });
 
-/** P-1 rail filter, once per request (membership + grants for readonly;
- *  role short-circuit for admin/manager — see resolveVisibleResources). */
-export const getRequestVisibleResources = cache(async (): Promise<string[] | null> => {
+/** The viewer's access, once per request per tour (rail + page gate). null =
+ *  unknown → nothing hidden; the database rules (293) are the gate. */
+export const getRequestViewerAccess = cache(async (tourId: string | null): Promise<ViewerAccess | null> => {
   const user = await getRequestUser();
   if (!user) return null;
   const supabase = await getRequestSupabase();
-  return resolveVisibleResources(supabase, user.id);
+  try {
+    return await getViewerAccess(supabase, user.id, tourId);
+  } catch {
+    return null;
+  }
 });

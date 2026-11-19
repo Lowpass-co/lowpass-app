@@ -27,6 +27,8 @@ import {
   type ActiveMembership,
   type GrantRow,
 } from '@/lib/permissions/server';
+import type { Area } from '@/lib/permissions/areas';
+import { accessFromRows } from '@/lib/permissions/tourAccess';
 
 export type WorkspaceAuth = {
   user: { id: string };
@@ -94,7 +96,15 @@ export type WriteAuth = WorkspaceAuth & {
 
 export async function requireWrite(
   supabase: SupabaseClient,
-  opts: { resource?: string; adminOnly?: boolean } = {},
+  opts: {
+    resource?: string;
+    adminOnly?: boolean;
+    /** Tour access (Nov 2026): a Member passes with EDIT on this area of this
+     *  tour (`my_tour_access`, the same rows the database rules read). Admins
+     *  and managers pass on role. Give both or neither. */
+    area?: Area;
+    tourId?: string | null;
+  } = {},
 ): Promise<WriteAuth | { error: NextResponse }> {
   const {
     data: { user },
@@ -115,6 +125,18 @@ export async function requireWrite(
 
   if (opts.adminOnly) {
     if (membership.role !== 'admin') return { error: forbidden };
+    return { user: { id: user.id }, workspaceId: membership.workspace_id, membership, grants: [] };
+  }
+
+  if (opts.area) {
+    if (membership.role === 'admin' || membership.role === 'manager') {
+      return { user: { id: user.id }, workspaceId: membership.workspace_id, membership, grants: [] };
+    }
+    if (!opts.tourId) return { error: forbidden };
+    const { data, error } = await supabase.rpc('my_tour_access', { p_tour_id: opts.tourId });
+    if (error) return { error: forbidden };
+    const level = accessFromRows(data as { area: string; level: string }[])[opts.area];
+    if (level !== 'edit') return { error: forbidden };
     return { user: { id: user.id }, workspaceId: membership.workspace_id, membership, grants: [] };
   }
 

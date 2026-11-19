@@ -13,6 +13,24 @@ import { NextResponse } from 'next/server';
 import { requireWrite } from '@/lib/auth/workspace-check';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { syncActualCostSafe } from '@/lib/budget/transactions';
+import { createServiceSupabaseClient } from '@/lib/supabase-server';
+import type { SupabaseClient } from '@supabase/supabase-js';
+
+/* Tour access (Nov 2026): a Member with Receipts EDIT on the receipt's tour may
+   write receipts. The line's actual_cost is a cache the server keeps; a Member
+   can't write budget lines (293), so the recompute runs as the server — only
+   for a line on the receipt's own tour. */
+async function syncClientFor(
+  supabase: SupabaseClient,
+  role: string,
+  lineId: string,
+  tourId: string,
+): Promise<SupabaseClient | null> {
+  if (role !== 'readonly') return supabase;
+  const { data: line } = await supabase.from('budget_line_items').select('tour_id').eq('id', lineId).maybeSingle();
+  if ((line as { tour_id?: string } | null)?.tour_id !== tourId) return null;
+  return createServiceSupabaseClient();
+}
 import { insertReceiptWithNumber } from '@/server/budget/fileReceipt';
 
 /** RC-5 page range as a spreadable fragment — `{}` when there isn't one. */
@@ -102,8 +120,6 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   const supabase = await createServerSupabaseClient();
-  const auth = await requireWrite(supabase);
-  if ('error' in auth) return auth.error;
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -147,6 +163,8 @@ export async function POST(request: Request) {
   if (!tour_id) {
     return NextResponse.json({ error: 'tour_id is required' }, { status: 400 });
   }
+  const auth = await requireWrite(supabase, { area: 'receipts', tourId: tour_id });
+  if ('error' in auth) return auth.error;
 
   const { data: tour } = await supabase
     .from('tours')
@@ -212,8 +230,6 @@ export async function POST(request: Request) {
 
 export async function PATCH(request: Request) {
   const supabase = await createServerSupabaseClient();
-  const auth = await requireWrite(supabase);
-  if ('error' in auth) return auth.error;
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -256,7 +272,7 @@ export async function PATCH(request: Request) {
 
   const { data: existing } = await supabase
     .from('expense_receipts')
-    .select('in_budget, linked_line_item_id, cost_tour_currency')
+    .select('tour_id, in_budget, linked_line_item_id, cost_tour_currency')
     .eq('id', id)
     .eq('workspace_id', profile.workspace_id)
     .single();
@@ -264,6 +280,8 @@ export async function PATCH(request: Request) {
   if (!existing) {
     return NextResponse.json({ error: 'Receipt not found' }, { status: 404 });
   }
+  const auth = await requireWrite(supabase, { area: 'receipts', tourId: existing.tour_id as string });
+  if ('error' in auth) return auth.error;
 
   const prevLinkedId = existing.linked_line_item_id as string | null;
   const newLinkedId = updates.linked_line_item_id !== undefined ? updates.linked_line_item_id : prevLinkedId;
@@ -311,7 +329,8 @@ export async function PATCH(request: Request) {
      joined. Numerically a no-op when things were already consistent; a repair
      when they weren't. Best-effort: never fail an edit over a recompute. */
   for (const lineId of new Set([prevLinkedId, newLinkedId].filter(Boolean) as string[])) {
-    await syncActualCostSafe(supabase, lineId, 1);
+    const syncClient = await syncClientFor(supabase, auth.membership.role, lineId, existing.tour_id as string);
+    if (syncClient) await syncActualCostSafe(syncClient, lineId, 1);
   }
 
   return NextResponse.json(data);
@@ -319,8 +338,6 @@ export async function PATCH(request: Request) {
 
 export async function DELETE(request: Request) {
   const supabase = await createServerSupabaseClient();
-  const auth = await requireWrite(supabase);
-  if ('error' in auth) return auth.error;
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -349,10 +366,16 @@ export async function DELETE(request: Request) {
 
   const { data: existing } = await supabase
     .from('expense_receipts')
-    .select('in_budget, linked_line_item_id, cost_tour_currency')
+    .select('tour_id, in_budget, linked_line_item_id, cost_tour_currency')
     .eq('id', body.id)
     .eq('workspace_id', profile.workspace_id)
     .single();
+
+  if (!existing) {
+    return NextResponse.json({ error: 'Receipt not found' }, { status: 404 });
+  }
+  const auth = await requireWrite(supabase, { area: 'receipts', tourId: existing.tour_id as string });
+  if ('error' in auth) return auth.error;
 
   const linkedLineId = existing?.linked_line_item_id ?? null;
 
@@ -386,7 +409,8 @@ export async function DELETE(request: Request) {
      a repair when they weren't. Deleting the transaction is a separate,
      explicit action on the transactions route. */
   if (linkedLineId) {
-    await syncActualCostSafe(supabase, linkedLineId, 1);
+    const syncClient = await syncClientFor(supabase, auth.membership.role, linkedLineId, existing.tour_id as string);
+    if (syncClient) await syncActualCostSafe(syncClient, linkedLineId, 1);
   }
 
   return new Response(null, { status: 204 });

@@ -16,7 +16,7 @@ import type { AdvSection } from '@/lib/advance/board';
 export async function POST(request: Request, { params }: { params: Promise<{ id: string; routingId: string }> }) {
   const { id: tourId, routingId } = await params;
   const supabase = await createServerSupabaseClient();
-  const auth = await requireWrite(supabase);
+  const auth = await requireWrite(supabase, { area: 'advance', tourId });
   if ('error' in auth) return auth.error;
   const gate = await tourGate(supabase, tourId, auth.workspaceId);
   if (gate) return gate;

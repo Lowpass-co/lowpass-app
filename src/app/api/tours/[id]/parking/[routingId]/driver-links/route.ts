@@ -43,7 +43,7 @@ export async function GET(_request: Request, { params }: Params) {
 export async function POST(request: Request, { params }: Params) {
   const { id: tourId, routingId } = await params;
   const supabase = await createServerSupabaseClient();
-  const auth = await requireWrite(supabase);
+  const auth = await requireWrite(supabase, { area: 'parking', tourId });
   if ('error' in auth) return auth.error;
   const gate = await tourGate(supabase, tourId, auth.workspaceId);
   if (gate) return gate;
@@ -61,7 +61,7 @@ export async function POST(request: Request, { params }: Params) {
 export async function DELETE(request: Request, { params }: Params) {
   const { id: tourId, routingId } = await params;
   const supabase = await createServerSupabaseClient();
-  const auth = await requireWrite(supabase);
+  const auth = await requireWrite(supabase, { area: 'parking', tourId });
   if ('error' in auth) return auth.error;
   const gate = await tourGate(supabase, tourId, auth.workspaceId);
   if (gate) return gate;

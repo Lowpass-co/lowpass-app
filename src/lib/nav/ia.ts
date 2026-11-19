@@ -1,3 +1,4 @@
+import { can, type Area, type TourAccess } from '@/lib/permissions/areas';
 /* ============================================
    LOWPASS — the information architecture, as data (S-1)
 
@@ -56,20 +57,33 @@ export interface RailItem {
   /** Extra pathname prefixes that should light this item up. */
   match?: (pathname: string, search: string) => boolean;
   /**
-   * The permission resource this item's page is gated by (P-1).
+   * Who may open this item's page (Nov 2026 permissions — design:
+   * docs/handover/PERMISSIONS_DESIGN_2026_11.md).
    *
-   * An id from RESOURCE_CATALOG — NOT a free invention. A resource id that
-   * isn't in the catalogue can never be granted through the members UI, so an
-   * item gated on one would be invisible to every readonly member forever, with
-   * nothing anyone could do about it. A test cross-checks every id here against
-   * the catalogue for exactly that reason.
+   *   an Area     → admins, managers, and Members with that area on the tour
+   *                 (`tour_access`, read through `my_tour_access`).
+   *   'manager'   → admins and managers only.
+   *   absent      → anyone who can see the scope (the tour, the artist…).
    *
-   * ABSENT MEANS UNGATED, deliberately. The catalogue has no entry for Day
-   * sheets, Income, Settlements, Assets or most of the artist library, and
-   * inventing ids to close that gap would be inventing a permission model. An
-   * item with no resource shows to everyone, which is what happens today.
+   * The rail hides what you can't open, and AppShellV3 shows "No access" in
+   * place of the page — but neither is the gate: the database is (293).
    */
-  resource?: string;
+  area?: Area | 'manager';
+}
+
+/** What the rail and the page gate need to know about the viewer. `null` =
+ *  not known (signed out, or 292 not pasted yet) → nothing is hidden. */
+export interface RailAccess {
+  manager: boolean;
+  /** This tour's areas (tour scope only; empty elsewhere). */
+  tour: TourAccess;
+}
+
+/** May this viewer open an item gated on `area`? */
+export function railAllows(access: RailAccess | null, area: RailItem['area']): boolean {
+  if (!access || !area || access.manager) return true;
+  if (area === 'manager') return false;
+  return can(access.tour, area, 'view');
 }
 
 export interface RailGroup {
@@ -126,7 +140,7 @@ const TOUR_RAIL: RailEntry[] = [
   /* Day sheets were retired in the Advance rebuild (Oct 2026, Adam): the
      show's advance is the per-day page now, and local crew calls live on it. */
   {
-    kind: 'item', id: 'advance', label: 'Advance', icon: 'Send', badge: 'advanced', resource: 'advance',
+    kind: 'item', id: 'advance', label: 'Advance', icon: 'Send', badge: 'advanced', area: 'advance',
     href: (c) => `/advance/${c.tourId}`,
     match: (p) => p.startsWith('/advance/'),
   },
@@ -135,50 +149,50 @@ const TOUR_RAIL: RailEntry[] = [
     /* Oct 2026 — ONE budget sheet (totals + commissions on top, every line
        below), after Adam's Sheets template. Summary is merged in, so old
        ?tab=summary / ?tab=reports links light this item too. */
-    kind: 'item', id: 'expenses', label: 'Budget', icon: 'Table2', badge: 'lines', resource: 'budget.line_items',
+    kind: 'item', id: 'expenses', label: 'Budget', icon: 'Table2', badge: 'lines', area: 'budget',
     href: (c) => `/budget/${c.tourId}?tab=budget`,
     match: (p, s) => budgetTab('budget')(p, s) || budgetTab('summary')(p, s) || budgetTab('reports')(p, s),
   },
   {
     /* Income and Settlements are one job — what the shows pay — so one item.
        Both pages carry an Income | Settlements switch. */
-    kind: 'item', id: 'income', label: 'Income & settlements', icon: 'TrendingUp', badge: 'unsettled',
+    kind: 'item', id: 'income', label: 'Income & settlements', icon: 'TrendingUp', badge: 'unsettled', area: 'income',
     href: (c) => `/budget/${c.tourId}?tab=income`,
     match: (p, s) => budgetTab('income')(p, s) || /^\/budget\/[^/]+\/settlement(\/|$)/.test(p),
   },
-  { kind: 'item', id: 'payroll', label: 'Payroll', icon: 'Wallet', resource: 'operations.payroll', href: (c) => `/operations/${c.tourId}/payroll` },
+  { kind: 'item', id: 'payroll', label: 'Payroll', icon: 'Wallet', area: 'payroll', href: (c) => `/operations/${c.tourId}/payroll` },
   {
-    kind: 'item', id: 'receipts', label: 'Receipts', icon: 'ReceiptText', badge: 'receiptsNeedingDetails', resource: 'budget.receipts',
+    kind: 'item', id: 'receipts', label: 'Receipts', icon: 'ReceiptText', badge: 'receiptsNeedingDetails', area: 'receipts',
     href: (c) => `/budget/${c.tourId}?tab=receipts`, match: budgetTab('receipts'),
   },
   g('Production'),
   {
-    kind: 'item', id: 'riders', label: 'Riders', icon: 'FileText', resource: 'operations.riders',
+    kind: 'item', id: 'riders', label: 'Riders', icon: 'FileText', area: 'production',
     href: (c) => `/operations/${c.tourId}/riders`,
     match: (p) => /^\/operations\/[^/]+\/riders(\/|$)/.test(p),
   },
   /* Patch is a mode of Channel list, not a page — so it has no item. */
-  { kind: 'item', id: 'channel-list', label: 'Channel list', icon: 'ListOrdered', resource: 'operations.channel_list', href: (c) => `/operations/${c.tourId}/channel-list` },
-  { kind: 'item', id: 'stage-plot', label: 'Stage plot', icon: 'Shapes', resource: 'operations.stage_plot', href: (c) => `/operations/${c.tourId}/stage-plot` },
+  { kind: 'item', id: 'channel-list', label: 'Channel list', icon: 'ListOrdered', area: 'production', href: (c) => `/operations/${c.tourId}/channel-list` },
+  { kind: 'item', id: 'stage-plot', label: 'Stage plot', icon: 'Shapes', area: 'production', href: (c) => `/operations/${c.tourId}/stage-plot` },
   /* Nov 2026 (Adam) — a separate tool, per show; the show's advance links to it.
      Matches the per-show editor too. */
   {
-    kind: 'item', id: 'parking', label: 'Parking', icon: 'ParkingSquare',
+    kind: 'item', id: 'parking', label: 'Parking', icon: 'ParkingSquare', area: 'parking',
     href: (c) => `/operations/${c.tourId}/parking`,
     match: (p) => /^\/operations\/[^/]+\/parking(\/|$)/.test(p),
   },
-  { kind: 'item', id: 'assets', label: 'Gear', icon: 'Package', badge: 'gear', href: (c) => `/operations/${c.tourId}/hire` },
+  { kind: 'item', id: 'assets', label: 'Gear', icon: 'Package', badge: 'gear', area: 'production', href: (c) => `/operations/${c.tourId}/hire` },
   g('Logistics'),
-  { kind: 'item', id: 'crew', label: 'Crew', icon: 'Users', resource: 'operations.personnel', href: (c) => `/operations/${c.tourId}/personnel` },
-  { kind: 'item', id: 'rooming', label: 'Hotels & rooming', icon: 'BedDouble', resource: 'operations.rooming', href: (c) => `/operations/${c.tourId}/rooming` },
-  { kind: 'item', id: 'travel', label: 'Travel', icon: 'Plane', href: (c) => `/operations/${c.tourId}/travel` },
-  { kind: 'item', id: 'files', label: 'Files', icon: 'FolderOpen', resource: 'operations.files', href: (c) => `/operations/${c.tourId}/files` },
+  { kind: 'item', id: 'crew', label: 'Crew', icon: 'Users', area: 'logistics', href: (c) => `/operations/${c.tourId}/personnel` },
+  { kind: 'item', id: 'rooming', label: 'Hotels & rooming', icon: 'BedDouble', area: 'logistics', href: (c) => `/operations/${c.tourId}/rooming` },
+  { kind: 'item', id: 'travel', label: 'Travel', icon: 'Plane', area: 'logistics', href: (c) => `/operations/${c.tourId}/travel` },
+  { kind: 'item', id: 'files', label: 'Files', icon: 'FolderOpen', area: 'files', href: (c) => `/operations/${c.tourId}/files` },
   g('Setup'),
   {
     /* Three pages, one item (TourSettingsTabs): Details (name, dates,
        currency, delete), Dates & routing (the old Schedule page) and Money
        (approval, overheads, commissions, exchange rates, exports). */
-    kind: 'item', id: 'tour-settings', label: 'Tour settings', icon: 'Settings2',
+    kind: 'item', id: 'tour-settings', label: 'Tour settings', icon: 'Settings2', area: 'manager',
     href: (c) => `/operations/${c.tourId}/settings`,
     match: (p, s) => /^\/operations\/[^/]+\/(settings|routing)(\/|$)/.test(p) || budgetTab('settings')(p, s),
   },
@@ -195,7 +209,7 @@ export function tourHomeHref(tourId: string): string {
 const ARTIST_RAIL: RailEntry[] = [
   g('Artist'),
   {
-    kind: 'item', id: 'overview', label: 'Overview', icon: 'LayoutDashboard', resource: 'artist.home',
+    kind: 'item', id: 'overview', label: 'Overview', icon: 'LayoutDashboard',
     href: (c) => `/artists/${c.artistId}`,
     /* Also claims Edit and the Production hub. Neither has a rail item of its
        own; both are reached from the landing, and a rail showing nothing lit
@@ -215,7 +229,7 @@ const ARTIST_RAIL: RailEntry[] = [
      Overview is the landing, and the landing is the tours list. */
   g('Library'),
   {
-    kind: 'item', id: 'riders-specs', label: 'Riders & specs', icon: 'FileText',
+    kind: 'item', id: 'riders-specs', label: 'Riders & specs', icon: 'FileText', area: 'manager',
     href: (c) => `/artists/${c.artistId}/riders`,
     // Channel lists and stage plots are grouped under this item (IA_CANONICAL).
     /* S-3b — /rider-packs/[id] lights this too. The standalone rider editor is
@@ -229,7 +243,7 @@ const ARTIST_RAIL: RailEntry[] = [
       /^\/rider-packs(\/|$)/.test(p),
   },
   /* "Files", as in the tour menu and on the Library tab (was "Documents"). */
-  { kind: 'item', id: 'documents', label: 'Files', icon: 'FolderOpen', href: (c) => `/artists/${c.artistId}/files` },
+  { kind: 'item', id: 'documents', label: 'Files', icon: 'FolderOpen', area: 'manager', href: (c) => `/artists/${c.artistId}/files` },
 ];
 
 /* ── WORKSPACE scope ──────────────────────────────────────────────────────── */
@@ -237,18 +251,18 @@ const ARTIST_RAIL: RailEntry[] = [
 const WORKSPACE_RAIL: RailEntry[] = [
   g('Workspace'),
   { kind: 'item', id: 'artists', label: 'Artists', icon: 'Music2', badge: 'artists', href: () => '/artists' },
-  { kind: 'item', id: 'personnel', label: 'People', icon: 'Users', href: () => '/personnel' },
+  { kind: 'item', id: 'personnel', label: 'People', icon: 'Users', area: 'manager', href: () => '/personnel' },
   {
     /* "Gear", as the tour menu says it (was "Equipment & rentals"). */
-    kind: 'item', id: 'equipment', label: 'Gear & rentals', icon: 'Package',
+    kind: 'item', id: 'equipment', label: 'Gear & rentals', icon: 'Package', area: 'manager',
     href: () => '/assets',
     // /equipment survives until S-3 picks a winner; both light this item.
     match: (p) => p.startsWith('/assets') || p.startsWith('/equipment'),
   },
-  { kind: 'item', id: 'venues', label: 'Venues', icon: 'MapPin', href: () => '/venues' },
+  { kind: 'item', id: 'venues', label: 'Venues', icon: 'MapPin', area: 'manager', href: () => '/venues' },
   /* Nov 2026 — advance templates are the workspace's, shared by every tour;
      they were only reachable from inside a tour. */
-  { kind: 'item', id: 'templates', label: 'Templates', icon: 'LayoutTemplate', href: () => '/templates' },
+  { kind: 'item', id: 'templates', label: 'Templates', icon: 'LayoutTemplate', area: 'manager', href: () => '/templates' },
 ];
 
 /* ── YOU scope ────────────────────────────────────────────────────────────── */
@@ -264,6 +278,9 @@ const YOU_RAIL: RailEntry[] = [
     match: (p) => /^\/settings\/?$/.test(p) || p.startsWith('/settings/ai-limits'),
   },
   { kind: 'item', id: 'team', label: 'Team & roles', icon: 'Users', href: () => '/settings/members' },
+  /* Nov 2026 — the phone view crew use (Members land there); here so admins
+     can see what their crew see. */
+  { kind: 'item', id: 'crew-view', label: 'Crew phone view', icon: 'Smartphone', href: () => '/crew' },
   { kind: 'item', id: 'bugs', label: 'Report a bug', icon: 'Flag', href: () => '/bugs' },
 ];
 
@@ -557,26 +574,14 @@ export function resolveRailView(
   pathname: string,
   search = '',
   badges: Record<string, string | number | null | undefined> = {},
-  /**
-   * P-1 — the resource ids this caller may READ, resolved server-side.
-   *
-   * `null` means "not supplied", and everything shows. That is the honest
-   * default for a caller that hasn't done the permission work, and it keeps the
-   * pre-P-1 behaviour rather than silently hiding the whole rail from anyone
-   * whose layout forgets to pass it. Fail-open on a NAV is right; the pages and
-   * RLS are what actually enforce access.
-   */
-  visibleResources: readonly string[] | null = null,
+  /** Who's looking — see RailAccess. `null` = unknown → show everything
+   *  (fail open on a NAV; the database is the gate). */
+  access: RailAccess | null = null,
 ): RailView[] {
   const activeId = activeItemFor(pathname, search);
-  const allowed = visibleResources === null ? null : new Set(visibleResources);
-
-  const permitted = railFor(ctx.scope, ctx.mode).filter((entry) => {
-    if (entry.kind === 'group') return true;
-    // No resource → ungated → always visible. See RailItem.resource.
-    if (!allowed || !entry.resource) return true;
-    return allowed.has(entry.resource);
-  });
+  const permitted = railFor(ctx.scope, ctx.mode).filter(
+    (entry) => entry.kind === 'group' || railAllows(access, entry.area),
+  );
 
   /* Drop headings the filter emptied. "Settle & pay" with nothing under it is a
      label for an absence — it tells a restricted member there is a section they
@@ -610,20 +615,12 @@ export function resolveRailView(
   });
 }
 
-/**
- * Every resource id the rails reference, deduped — what a caller needs to run
- * `canAccess` over to build the allow-list. Derived from the config so a new
- * gated item is covered the moment it's added, with nothing to remember.
- */
-export function allRailResources(): string[] {
-  const out = new Set<string>();
-  const rails: Array<[Scope, TourMode | null]> = [
-    ['tour', null], ['artist', null], ['workspace', null], ['you', null],
-  ];
-  for (const [scope, mode] of rails) {
-    for (const item of itemsFor(scope, mode)) if (item.resource) out.add(item.resource);
-  }
-  return [...out];
+/** The gate on the page at this URL: the active rail item's area. */
+export function areaForPath(pathname: string, search = ''): RailItem['area'] {
+  const id = activeItemFor(pathname, search);
+  if (!id) return undefined;
+  const ctx = resolveScope(pathname, search);
+  return itemsFor(ctx.scope, ctx.mode).find((i) => i.id === id)?.area;
 }
 
 /**

@@ -134,3 +134,40 @@ describe('P0-A — the canonical venue route', () => {
     expect(getBody).not.toContain('requireWrite');
   });
 });
+
+/* ---- Tour access (Nov 2026): requireWrite({ area, tourId }) ---- */
+import { requireWrite as requireWriteReal } from './workspace-check';
+
+function fakeClient(role: string, rpcRows: { area: string; level: string }[] | null) {
+  const chain = (row: unknown) => {
+    const q = { select: () => q, eq: () => q, in: () => q, maybeSingle: async () => ({ data: row, error: null }), single: async () => ({ data: row, error: null }), then: (r: (v: { data: unknown[]; error: null }) => unknown) => r({ data: [], error: null }) };
+    return q;
+  };
+  return {
+    auth: { getUser: async () => ({ data: { user: { id: 'u1' } } }) },
+    from: (t: string) =>
+      t === 'profiles' ? chain({ workspace_id: 'ws' }) : t === 'workspace_members' ? chain({ id: 'm1', role, is_workspace_owner: false }) : chain(null),
+    rpc: async () => (rpcRows ? { data: rpcRows, error: null } : { data: null, error: { message: 'no function' } }),
+  } as unknown as Parameters<typeof requireWriteReal>[0];
+}
+
+describe('requireWrite by tour area', () => {
+  const ok = (r: Awaited<ReturnType<typeof requireWriteReal>>) => !('error' in r);
+  it('admin and manager pass on role', async () => {
+    expect(ok(await requireWriteReal(fakeClient('admin', []), { area: 'receipts', tourId: 't1' }))).toBe(true);
+    expect(ok(await requireWriteReal(fakeClient('manager', []), { area: 'receipts', tourId: 't1' }))).toBe(true);
+  });
+  it('a member with EDIT on the area passes', async () => {
+    expect(ok(await requireWriteReal(fakeClient('readonly', [{ area: 'receipts', level: 'edit' }]), { area: 'receipts', tourId: 't1' }))).toBe(true);
+  });
+  it('VIEW does not buy a write', async () => {
+    expect(ok(await requireWriteReal(fakeClient('readonly', [{ area: 'receipts', level: 'view' }]), { area: 'receipts', tourId: 't1' }))).toBe(false);
+  });
+  it('edit on another area does not count', async () => {
+    expect(ok(await requireWriteReal(fakeClient('readonly', [{ area: 'parking', level: 'edit' }]), { area: 'receipts', tourId: 't1' }))).toBe(false);
+  });
+  it('no tour, or the database cannot answer → refused', async () => {
+    expect(ok(await requireWriteReal(fakeClient('readonly', [{ area: 'receipts', level: 'edit' }]), { area: 'receipts', tourId: null }))).toBe(false);
+    expect(ok(await requireWriteReal(fakeClient('readonly', null), { area: 'receipts', tourId: 't1' }))).toBe(false);
+  });
+});

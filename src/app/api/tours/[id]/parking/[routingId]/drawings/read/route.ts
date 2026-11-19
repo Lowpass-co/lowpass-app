@@ -52,7 +52,7 @@ export async function POST(request: Request, { params }: Params) {
   if (!process.env.ANTHROPIC_API_KEY) return NextResponse.json({ error: 'AI isn’t set up on this server.' }, { status: 503 });
   const { id: tourId, routingId } = await params;
   const supabase = await createServerSupabaseClient();
-  const auth = await requireWrite(supabase);
+  const auth = await requireWrite(supabase, { area: 'parking', tourId });
   if ('error' in auth) return auth.error;
   const gate = await tourGate(supabase, tourId, auth.workspaceId);
   if (gate) return gate;
