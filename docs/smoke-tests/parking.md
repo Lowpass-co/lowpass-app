@@ -299,9 +299,9 @@ browser key restricted to the Map Tiles API and the app's domains).**
 
 #### PRK-35 — A drag in 3D moves the map, never the planet
 
-**Do**: Open 3D at a venue, zoom right in, then click and drag a few pixels — on the ground, near the horizon, and starting on the sky. On a phone, drag with one finger.
+**Do**: Open 3D at a venue, zoom right in, then click and drag a few pixels — on the ground, on an inside drawing's floor, on a Flat in 3D area, on a vehicle, near the horizon, and starting on the sky. On a phone, drag with one finger.
 
-**Expect**: Ground drags: the spot you grabbed stays under the pointer. Near the horizon: small, steady moves, no leap. From the sky: nothing moves. You can't drag more than ~3 km from the venue. Right-drag / two fingers still turn and tilt; wheel / pinch still zoom.
+**Expect**: Ground drags (floors, flat areas and vehicles included — a drag that starts on an inside floor once did nothing): the spot you grabbed stays under the pointer. Near the horizon: small, steady moves, no leap. From the sky: nothing moves. You can't drag more than ~3 km from the venue. Right-drag / two fingers still turn and tilt; wheel / pinch still zoom.
 
 **Last verified**:
 

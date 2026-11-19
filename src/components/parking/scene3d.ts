@@ -571,8 +571,19 @@ export function orbit(
  *      (that is a pointer at the horizon, not a drag);
  *    - the camera can't be dragged more than `maxRadius` metres from the venue.
  *  Turning / tilting (right-drag, Ctrl-drag, two fingers) and zoom are Cesium's
- *  as before. Returns a cleanup. */
-export function enableGroundPan(Cesium: C, viewer: CesiumNS.Viewer, anchor: LatLng, maxRadius = 3000): () => void {
+ *  as before. Returns a cleanup.
+ *
+ *  What counts as "ground" for the grab (Nov 2026, Adam: "click and drag on
+ *  3D no longer allows navigation"): the floors of inside drawings and the
+ *  Flat-in-3D satellite patches are TRANSLUCENT rectangles (their canvases are
+ *  transparent outside the shape), and Cesium's `pickPosition` ignores the
+ *  translucent pass unless `pickTranslucentDepth` is on — so a drag that
+ *  started on a floor found no ground and did nothing, and at a venue with an
+ *  inside drawing the floor is most of the view. So translucent depth is
+ *  picked, and anything still unpicked (a transparent pixel, a gap) is caught
+ *  on the level plane at the venue's street height `ground0`. A pointer above
+ *  the horizon still grabs nothing. */
+export function enableGroundPan(Cesium: C, viewer: CesiumNS.Viewer, anchor: LatLng, ground0 = 0, maxRadius = 3000): () => void {
   const scene = viewer.scene;
   const cam = viewer.camera;
   const ctl = scene.screenSpaceCameraController;
@@ -583,15 +594,24 @@ export function enableGroundPan(Cesium: C, viewer: CesiumNS.Viewer, anchor: LatL
   ctl.maximumZoomDistance = maxRadius * 2;
 
   const venue = Cesium.Cartesian3.fromDegrees(anchor.lng, anchor.lat, 0);
+  scene.pickTranslucentDepth = true;
+  const street = Cesium.Cartesian3.fromDegrees(anchor.lng, anchor.lat, ground0);
+  const streetPlane = Cesium.Plane.fromPointNormal(street, Cesium.Ellipsoid.WGS84.geodeticSurfaceNormal(street, new Cesium.Cartesian3()));
   const handler = new Cesium.ScreenSpaceEventHandler(scene.canvas);
   let grab: { point: CesiumNS.Cartesian3; plane: CesiumNS.Plane } | null = null;
 
+  // A "hit" kilometres away is the far horizon, not something to hold.
+  const near = (p: CesiumNS.Cartesian3 | undefined): p is CesiumNS.Cartesian3 =>
+    !!p && Number.isFinite(p.x) && Cesium.Cartesian3.distance(p, venue) <= maxRadius * 1.5;
+
   handler.setInputAction((e: { position: CesiumNS.Cartesian2 }) => {
     grab = null;
-    const hit = scene.pickPositionSupported ? scene.pickPosition(e.position) : undefined;
-    if (!hit || !Number.isFinite(hit.x)) return;
-    // A "hit" kilometres away is the far horizon, not something to hold.
-    if (Cesium.Cartesian3.distance(hit, venue) > maxRadius * 1.5) return;
+    let hit: CesiumNS.Cartesian3 | undefined = scene.pickPositionSupported ? scene.pickPosition(e.position) : undefined;
+    if (!near(hit)) {
+      const ray = cam.getPickRay(e.position);
+      hit = ray ? Cesium.IntersectionTests.rayPlane(ray, streetPlane) : undefined;
+    }
+    if (!near(hit)) return;
     const normal = Cesium.Ellipsoid.WGS84.geodeticSurfaceNormal(hit, new Cesium.Cartesian3());
     grab = { point: hit, plane: Cesium.Plane.fromPointNormal(hit, normal) };
   }, Cesium.ScreenSpaceEventType.LEFT_DOWN);
