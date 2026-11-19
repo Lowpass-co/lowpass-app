@@ -17,7 +17,9 @@
 
 import { vehicleSpec, type VehicleType } from './catalogue';
 
-export type PartKind = 'body' | 'cab' | 'hood' | 'glass' | 'roof' | 'coupling' | 'mirror' | 'rib';
+/** `cabin`: a car's passenger compartment, sitting ON the lower body (3D);
+ *  `wheel`: under the body — hidden on the plan, the tyres in 3D. */
+export type PartKind = 'body' | 'cab' | 'hood' | 'glass' | 'roof' | 'coupling' | 'mirror' | 'rib' | 'cabin' | 'wheel';
 
 export interface Part {
   kind: PartKind;
@@ -133,13 +135,27 @@ export function vehicleParts(type: VehicleType | string, L: number, W: number): 
         { kind: 'mirror', f0: 0.9, f1: 1.1, w: 0.2, h: 0.6, s: -(W / 2 + 0.15) },
         { kind: 'mirror', f0: 0.9, f1: 1.1, w: 0.2, h: 0.6, s: W / 2 + 0.15 },
       ];
-    case 'car':
+    case 'car': {
+      // Nov 2026 (Adam: "more like cars, less like bricks"): wheels, a low
+      // body (bonnet + boot) and a narrower cabin on top — not one box.
+      const tyre = Math.min(0.68, L * 0.14);
+      const wheel = (at: number, side: number): Part => ({ kind: 'wheel', f0: at - tyre / 2, f1: at + tyre / 2, w: 0.24, h: 0.44, s: side * (W / 2 - 0.15) });
+      const cab0 = L * 0.3;
+      const cab1 = L * 0.8;
       return [
-        { kind: 'body', f0: 0, f1: L, w: W, h: 1, r: 0.6 },
-        { kind: 'glass', f0: L * 0.27, f1: L * 0.37, w: W * 0.8, h: 0.95, r: 0.2 },
-        { kind: 'roof', f0: L * 0.37, f1: L * 0.72, w: W * 0.78, h: 1, r: 0.25 },
-        { kind: 'glass', f0: L * 0.72, f1: L * 0.8, w: W * 0.76, h: 0.9, r: 0.2 },
+        wheel(L * 0.18, -1),
+        wheel(L * 0.18, 1),
+        wheel(L * 0.8, -1),
+        wheel(L * 0.8, 1),
+        { kind: 'body', f0: 0, f1: L, w: W, h: 0.52, r: 0.6 },
+        { kind: 'cabin', f0: cab0, f1: cab1, w: W * 0.84, h: 1, r: 0.3 },
+        // Windscreen (front face of the cabin) and the rear window.
+        { kind: 'glass', f0: cab0, f1: cab0 + L * 0.09, w: W * 0.8, h: 0.95, r: 0.2 },
+        { kind: 'glass', f0: cab1 + 0.16, f1: cab1 + 0.16 + L * 0.06, w: W * 0.76, h: 0.9, r: 0.2 },
+        { kind: 'mirror', f0: cab0 + 0.05, f1: cab0 + 0.25, w: 0.18, h: 0.62, s: -(W / 2 + 0.1) },
+        { kind: 'mirror', f0: cab0 + 0.05, f1: cab0 + 0.25, w: 0.18, h: 0.62, s: W / 2 + 0.1 },
       ];
+    }
     case 'generator':
       return [
         { kind: 'coupling', f0: 0, f1: Math.min(1, L * 0.2), w: 0.18, h: 0.2 },

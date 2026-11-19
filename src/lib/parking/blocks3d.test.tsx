@@ -17,7 +17,7 @@ describe('vehicleBlocks', () => {
         expect(b.z1).toBeGreaterThan(b.z0);
         expect(b.z1).toBeLessThanOrEqual(s.height * 1.1 + 0.2);
       }
-      const solid = blocks.filter((b) => b.kind === 'body' || b.kind === 'cab');
+      const solid = blocks.filter((b) => b.kind === 'body' || b.kind === 'cab' || b.kind === 'cabin');
       expect(Math.max(...solid.map((b) => b.z1))).toBeGreaterThan(s.height * 0.9);
     }
   });
@@ -83,5 +83,27 @@ describe('standingHeight — never on the roof', () => {
   });
   it('no samples → the fallback', () => {
     expect(standingHeight([], [], 3)).toBe(3);
+  });
+});
+
+describe('a car looks like a car in 3D (Nov 2026)', () => {
+  const car = { type: 'car', x: 0, y: 0, heading: 0, length: 5, width: 2, height: 1.5 } as const;
+  const blocks = vehicleBlocks(car);
+  it('four wheels on the ground, a low body, a cabin on top — not one brick', () => {
+    const wheels = blocks.filter((b) => b.kind === 'wheel');
+    expect(wheels).toHaveLength(4);
+    for (const w of wheels) expect(w.z0).toBe(0);
+    const body = blocks.find((b) => b.kind === 'body')!;
+    const cabin = blocks.find((b) => b.kind === 'cabin')!;
+    expect(body.z1).toBeLessThan(0.9);
+    expect(cabin.z0).toBeLessThanOrEqual(body.z1);
+    expect(cabin.z1).toBeCloseTo(1.5);
+    expect(cabin.length).toBeLessThan(body.length * 0.6);
+    expect(cabin.width).toBeLessThan(body.width);
+  });
+  it('nothing sticks out past the car but its mirrors', () => {
+    for (const b of blocks.filter((x) => x.kind !== 'mirror')) {
+      expect(Math.abs(b.at.y) + b.length / 2).toBeLessThanOrEqual(2.5 + 0.2);
+    }
   });
 });

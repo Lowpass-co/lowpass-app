@@ -343,6 +343,8 @@ const PART_PAINT: Record<PartKind, { base: boolean; shade: number; ink?: number;
   coupling: { base: false, shade: 0.9, outline: false },
   mirror: { base: false, shade: 0.9, outline: false },
   rib: { base: false, shade: 0.28, outline: false },
+  cabin: { base: true, shade: 0.16, outline: true },
+  wheel: { base: false, shade: 0.9, outline: false },
 };
 
 /** One part of a vehicle, drawn in the vehicle's own frame (metres). */
