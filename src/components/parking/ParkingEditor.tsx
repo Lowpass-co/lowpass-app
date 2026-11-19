@@ -1644,6 +1644,10 @@ function Inspector({
             <span className="pk-swatch" style={{ background: areaColour(LIVE_PALETTE, item.type), height: 10 }} aria-hidden />
             About {Math.round(polygonArea(item.points)).toLocaleString('en-GB')} m²
           </span>
+          <label className="pk-check" title="Google's 3D model includes whatever was parked when it was photographed. This cuts it away here and lays the flat satellite photo instead.">
+            <input type="checkbox" checked={!!item.flat3d} onChange={(e) => onPatch({ flat3d: e.target.checked || undefined })} {...f} />
+            Flat in 3D (hides parked vehicles in Google&apos;s model)
+          </label>
         </>
       ) : null}
 

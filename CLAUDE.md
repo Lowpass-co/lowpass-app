@@ -624,7 +624,12 @@ recreate a `_legacy/` tree: delete dead code instead of parking it.
   + 3D); the rest of the sheet is drawn like an outside drawing. 3D: the
   mesh is clipped to the inside area (`ClippingPolygonCollection`) and the
   floor sits at the street height around it + `floor`; vehicles on it stand
-  there. The PDF still draws inside drawings as the solid dark copy. Levels: an item's `floor` ?? the inside drawing it's on ??
+  there. The PDF still draws inside drawings as the solid dark copy.
+  **"Flat in 3D"** on an area (`flat3d`, Nov 2026): Google's mesh has whatever
+  was parked when it was photographed baked in — it can't be picked off, so
+  the area is clipped like an inside drawing and the 2D satellite photo
+  (`addSatellitePatch`, `tilesCovering`, ≤ 36 tiles, never stored) laid flat
+  at the street height round it; items on it stand there. Levels: an item's `floor` ?? the inside drawing it's on ??
   0 (`itemFloor`); picking a level fades the rest and new items go on it; a
   plan PDF page can print one level. Headroom (`headroomWarnings`): a
   drawing's clear height, height-limit markers (`clear`, or read from the

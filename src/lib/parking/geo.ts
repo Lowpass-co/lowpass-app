@@ -172,6 +172,25 @@ export function tileZoomFor(lat: number, ppm: number, dpr: number, tileScale: nu
 
 export const MAX_TILES = 120;
 
+/** The sharpest zoom (≤ maxZoom) whose tiles covering these ground points
+ *  number ≤ maxTiles, and those tiles. For laying the satellite photo flat in
+ *  3D over an area ("Flat in 3D"). */
+export function tilesCovering(anchor: LatLng, pts: Pt[], maxTiles: number, maxZoom = 20): { z: number; tiles: TileKey[] } {
+  const ll = pts.map((p) => toLatLng(anchor, p));
+  for (let z = maxZoom; z >= 1; z--) {
+    const t = ll.map((p) => lngLatToTile(p, z));
+    const x0 = Math.floor(Math.min(...t.map((q) => q.x)));
+    const x1 = Math.floor(Math.max(...t.map((q) => q.x)));
+    const y0 = Math.floor(Math.min(...t.map((q) => q.y)));
+    const y1 = Math.floor(Math.max(...t.map((q) => q.y)));
+    if ((x1 - x0 + 1) * (y1 - y0 + 1) > maxTiles) continue;
+    const tiles: TileKey[] = [];
+    for (let x = x0; x <= x1; x++) for (let y = y0; y <= y1; y++) tiles.push({ z, x, y });
+    return { z, tiles };
+  }
+  return { z: 1, tiles: [] };
+}
+
 /** Tiles covering a w × h viewport (any rotation), nearest-first, capped. */
 export function visibleTiles(anchor: LatLng, v: View, w: number, h: number, z: number, pad = 0): TileKey[] {
   const corners = [

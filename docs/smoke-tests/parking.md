@@ -321,6 +321,14 @@ browser key restricted to the Map Tiles API and the app's domains).**
 
 **Last verified**:
 
+#### PRK-38 — Flat in 3D hides Google's parked vehicles
+
+**Do**: Draw an area round the bus park → tick **Flat in 3D** → open 3D.
+
+**Expect**: Inside the area Google's 3D model is gone (no ghost buses, kerbs or lamp posts) and the flat satellite photo lies there at street height; your vehicles stand on it. Outside the area the 3D city is unchanged. Untick → the model comes back. Same on 3D PDF pages and driver links.
+
+**Last verified**:
+
 ## Known broken
 
 #### PRK-90 — Re-exporting makes a new file

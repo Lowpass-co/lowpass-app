@@ -30,10 +30,11 @@
    ============================================ */
 
 import type * as CesiumNS from 'cesium';
-import { dist, fmtMetres, toLatLng, toLocal, type Camera3d, type LatLng, type Pt } from '@/lib/parking/geo';
+import { dist, fmtMetres, tileRect, tilesCovering, toLatLng, toLocal, type Camera3d, type LatLng, type Pt } from '@/lib/parking/geo';
+import { getTileSession, tileUrl } from './googleTiles';
 import { areaLabel, markerSpec, vehicleSpec } from '@/lib/parking/catalogue';
 import { vehicleBlocks, type Block } from '@/lib/parking/blocks3d';
-import { vehicleCorners, type ParkingDrawing, type ParkingItem, type VehicleItem } from '@/lib/parking/model';
+import { vehicleCorners, type AreaItem, type ParkingDrawing, type ParkingItem, type VehicleItem } from '@/lib/parking/model';
 import { drawingUnder, footprint, insideAt, insideFootprint, itemFloor, itemPoint, pointInPolygon, svgMatrix } from '@/lib/parking/drawings';
 import type { PartKind } from '@/lib/parking/silhouettes';
 import { labelBox, placeLabels, type LabelBox } from '@/lib/parking/labels3d';
@@ -157,6 +158,14 @@ export async function populate(
       probes.push({ key: `street:${d.id}:${i}`, at: { x: q.x + ((q.x - c.x) / l) * 4, y: q.y + ((q.y - c.y) / l) * 4 } });
     });
   }
+  // "Flat in 3D" areas: the street height round their edge, same way.
+  const flats = tileset
+    ? o.items.filter((i): i is AreaItem => i.kind === 'area' && !!i.flat3d && i.points.length > 2 && i.floor == null)
+    : [];
+  for (const a of flats) {
+    const step = Math.max(1, Math.ceil(a.points.length / 16));
+    a.points.filter((_, i) => i % step === 0).forEach((at, i) => probes.push({ key: `flat:${a.id}:${i}`, at }));
+  }
   const heights = new Map<string, number>();
   if (tileset) {
     const carto = probes.map((pr) => {
@@ -179,15 +188,26 @@ export async function populate(
     const hs = Array.from({ length: 16 }, (_, i) => heights.get(`street:${d.id}:${i}`)).filter((h): h is number => h != null);
     street.set(d.id, hs.length ? Math.min(...hs) : ground0);
   }
-  // Inside drawings take the roof off: the mesh is clipped to their footprints.
-  if (tileset && inside.length) {
+  const flatHeight = new Map<string, number>();
+  for (const a of flats) {
+    const hs = Array.from({ length: 16 }, (_, i) => heights.get(`flat:${a.id}:${i}`)).filter((h): h is number => h != null);
+    flatHeight.set(a.id, hs.length ? Math.min(...hs) : ground0);
+  }
+  // Inside drawings take the roof off, "Flat in 3D" areas take everything off
+  // (Google's model has whatever was parked there baked in): the mesh is
+  // clipped to their outlines.
+  const cuts = [...inside.map((d) => insideFootprint(d)), ...flats.map((a) => a.points)];
+  if (tileset && cuts.length) {
     tileset.clippingPolygons = new Cesium.ClippingPolygonCollection({
-      polygons: inside.map(
-        // Only the INSIDE area loses its roof; the rest of the sheet stays the city.
-        (d) => new Cesium.ClippingPolygon({ positions: Cesium.Cartesian3.fromDegreesArray(insideFootprint(d).flatMap((q) => [ll(q).lng, ll(q).lat])) }),
-      ),
+      polygons: cuts.map((f) => new Cesium.ClippingPolygon({ positions: Cesium.Cartesian3.fromDegreesArray(f.flatMap((q) => [ll(q).lng, ll(q).lat])) })),
     });
   }
+  // …and the flat satellite photo laid where a "Flat in 3D" area was cut.
+  await Promise.all(flats.map((a) => addSatellitePatch(Cesium, viewer, o.anchor, a.points, (flatHeight.get(a.id) ?? ground0) + 0.02, o.palette.floor)));
+  const flatAt = (p: Pt): number | null => {
+    const a = flats.find((f) => pointInPolygon(p, f.points));
+    return a ? flatHeight.get(a.id) ?? ground0 : null;
+  };
   // The floors: every inside drawing's inside area (a floor colour under the
   // drawing's lines — drawn even before the lines are ready, so the cut-away
   // never shows as a hole); with no city mesh, every drawing.
@@ -198,14 +218,18 @@ export async function populate(
   /** Where an item stands: on the inside drawing under it (its street + the item's level), else `fallback`. */
   const baseFor = (it: ParkingItem, fallback: number) => {
     const under = insideAt(drawings, itemPoint(it));
-    if (!under.length) return fallback;
+    if (!under.length) return flatAt(itemPoint(it)) ?? fallback;
     const d = drawingUnder(it, drawings) ?? under[0];
     return (street.get(d.id) ?? ground0) + itemFloor(it, drawings);
   };
   /** A route / area / measure lying wholly on one inside drawing is drawn on its floor, not draped on a mesh that isn't there. */
   const floorOfShape = (it: ParkingItem, pts: Pt[]): number | null => {
     const d = drawingUnder(it, drawings);
-    if (!d) return null;
+    if (!d) {
+      // Wholly on one flat area: lie on the photo, not on the cut-away mesh.
+      const a = flats.find((f) => pts.every((q) => pointInPolygon(q, f.points)));
+      return a ? (flatHeight.get(a.id) ?? ground0) + 0.08 : null;
+    }
     return pts.every((q) => pointInPolygon(q, insideFootprint(d))) ? (street.get(d.id) ?? ground0) + itemFloor(it, drawings) + 0.08 : null;
   };
   const groundOf = (id: string, n: number) => {
@@ -352,6 +376,54 @@ function layoutLabels(Cesium: C, scene: CesiumNS.Scene, placed: PlacedLabel[]) {
   placed.forEach((p, i) => {
     const on = shown.has(String(i));
     if (p.label.show !== on) p.label.show = on;
+  });
+}
+
+/** The 2D satellite photo, laid flat over `pts` at `height` — where a "Flat
+ *  in 3D" area cut Google's model away. Tiles are fetched for this view and
+ *  never stored (Google's terms), like the plan's. No key / a tile that won't
+ *  load → the floor colour there, never a hole. Gives up after 8 s. */
+async function addSatellitePatch(Cesium: C, viewer: CesiumNS.Viewer, anchor: LatLng, pts: Pt[], height: number, floor: string) {
+  const x0 = Math.min(...pts.map((q) => q.x));
+  const x1 = Math.max(...pts.map((q) => q.x));
+  const y0 = Math.min(...pts.map((q) => q.y));
+  const y1 = Math.max(...pts.map((q) => q.y));
+  const k = Math.min(2048 / Math.max(x1 - x0, y1 - y0, 1), 10); // ≤ 2048 px, ≤ 10 px per metre
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.max(2, Math.round((x1 - x0) * k));
+  canvas.height = Math.max(2, Math.round((y1 - y0) * k));
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return;
+  const toPx = (q: Pt) => ({ x: (q.x - x0) * k, y: (y1 - q.y) * k });
+  ctx.beginPath();
+  pts.forEach((q, i) => (i ? ctx.lineTo(toPx(q).x, toPx(q).y) : ctx.moveTo(toPx(q).x, toPx(q).y)));
+  ctx.closePath();
+  ctx.clip();
+  ctx.fillStyle = floor;
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  try {
+    const session = await getTileSession();
+    const { tiles } = tilesCovering(anchor, pts, 36);
+    const drawTile = async (t: (typeof tiles)[number]) => {
+      const r = await fetch(tileUrl(session, t), { mode: 'cors' });
+      if (!r.ok) return;
+      const img = await createImageBitmap(await r.blob());
+      const rect = tileRect(anchor, t); // x east, y = −north of the tile's top
+      const tl = toPx({ x: rect.x, y: -rect.y });
+      ctx.drawImage(img, tl.x, tl.y, rect.w * k, rect.h * k);
+    };
+    await Promise.race([Promise.all(tiles.map((t) => drawTile(t).catch(() => undefined))), new Promise((res) => setTimeout(res, 8000))]);
+  } catch {
+    /* no imagery: the floor colour stays */
+  }
+  const sw = toLatLng(anchor, { x: x0, y: y0 });
+  const ne = toLatLng(anchor, { x: x1, y: y1 });
+  viewer.entities.add({
+    rectangle: {
+      coordinates: Cesium.Rectangle.fromDegrees(sw.lng, sw.lat, ne.lng, ne.lat),
+      height,
+      material: new Cesium.ImageMaterialProperty({ image: canvas, transparent: true }),
+    },
   });
 }
 
