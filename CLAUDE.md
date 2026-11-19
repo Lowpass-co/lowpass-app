@@ -610,7 +610,10 @@ recreate a `_legacy/` tree: delete dead code instead of parking it.
   are left out unless they're all there is) at Fit or a chosen 1:N; plan
   *fixed* pages keep their own centre / rotation / 1:N ("This plan view");
   3D pages keep a camera ("Add this view as a page"). Every plan page carries
-  the key + notes; the editor outlines each plan page's area. No pages saved =
+  the key + notes; the editor outlines each plan page's area. On plan pages
+  vehicles carry NUMBERED BADGES, not names (`vehicleNumbers` in print.ts — one
+  numbering per PDF, a nearest-neighbour walk so rows count along; `badgeRadii`
+  shrinks them before they touch); the key lists the numbers. The screen keeps names. No pages saved =
   `defaultPages()` (Plan + 3D). One off-screen Cesium viewer renders all 3D
   pages; a 3D failure drops only the 3D pages, with a warning.
 - **Venue drawings** (Nov 2026, Adam — migration 288, `parking_maps.drawings`):

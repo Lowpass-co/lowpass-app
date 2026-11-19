@@ -377,6 +377,14 @@ browser key restricted to the Map Tiles API and the app's domains).**
 
 **Last verified**:
 
+#### PRK-45 — PDF: vehicles are numbered, the key names them
+
+**Do**: Export a map with tight rows (a bus park, a row of trucks, cars side by side), on more than one page / level.
+
+**Expect**: On the plan pages every vehicle carries a small white numbered badge (no names on the vehicles); neighbours have consecutive numbers along a row; badges shrink rather than overlap in a tight row. The key's Vehicles list reads "7 · Truck 7 · Truck · 16.5 m" in number order (two columns past 22 vehicles), each number in the vehicle's colour. The same vehicle has the same number on every page and level. The editor on screen still shows names.
+
+**Last verified**:
+
 ## Known broken
 
 #### PRK-90 — Re-exporting makes a new file

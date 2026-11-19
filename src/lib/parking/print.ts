@@ -86,3 +86,43 @@ export function freeSpot(items: ParkingItem[], at: Pt, view: View, step = 4): Pt
   }
   return at;
 }
+
+/** The PDF's vehicle numbers (Nov 2026, Adam: names on a crowded row "really
+ *  tight" on the export). Each vehicle carries a small numbered badge and the
+ *  key lists 1 · Bus A · Tour bus · 13.5 m. ONE numbering for the whole PDF —
+ *  every page (and every level) uses the same number for the same vehicle.
+ *  Neighbours get consecutive numbers: a nearest-neighbour walk from the
+ *  north-west-most vehicle, so a row of trucks reads 7, 8, 9 … along the row. */
+export function vehicleNumbers(items: readonly ParkingItem[]): Map<string, number> {
+  const left = items.filter((i) => i.kind === 'vehicle').map((v) => ({ id: v.id, x: (v as { x: number }).x, y: (v as { y: number }).y }));
+  left.sort((a, b) => a.x - a.y - (b.x - b.y) || (a.id < b.id ? -1 : 1));
+  const out = new Map<string, number>();
+  let at = left.shift();
+  while (at) {
+    out.set(at.id, out.size + 1);
+    let best = -1;
+    let bestD = Infinity;
+    left.forEach((v, i) => {
+      const d = (v.x - at!.x) ** 2 + (v.y - at!.y) ** 2;
+      if (d < bestD || (d === bestD && v.id < left[best].id)) {
+        best = i;
+        bestD = d;
+      }
+    });
+    at = best >= 0 ? left.splice(best, 1)[0] : undefined;
+  }
+  return out;
+}
+
+/** Badge radii that don't overlap: each is at most just under half the gap to
+ *  the nearest other badge, never below `min` (readable on paper beats
+ *  touching — at that density they may just touch). Screen pixels. */
+export function badgeRadii(centres: readonly Pt[], r: number, min: number): number[] {
+  return centres.map((c, i) => {
+    let near = Infinity;
+    centres.forEach((o, j) => {
+      if (j !== i) near = Math.min(near, Math.hypot(o.x - c.x, o.y - c.y));
+    });
+    return Math.max(min, Math.min(r, near * 0.48));
+  });
+}
