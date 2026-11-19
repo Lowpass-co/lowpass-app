@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { rimRuns, wallRing, wallSegments, wallShade } from './walls3d';
+import { rimRuns, smoothTops, wallRing, wallSegments, wallShade } from './walls3d';
 
 const square = [
   { x: 0, y: 0 },
@@ -71,5 +71,20 @@ describe('rimRuns', () => {
       [0, 0],
       [20, 0],
     ]);
+  });
+});
+
+describe('smoothTops', () => {
+  it('takes out a mast: one sample far above its neighbours', () => {
+    const tops = [30, 31, 32, 95, 33, 34, 35];
+    expect(smoothTops(tops)[3]).toBe(33);
+  });
+  it('keeps a real change of roof height (many samples)', () => {
+    const tops = [10, 10, 10, 10, 30, 30, 30, 30];
+    expect(smoothTops(tops)).toEqual([10, 10, 10, 10, 30, 30, 30, 30]);
+  });
+  it('fills an unsampled point from its neighbours, round the ring', () => {
+    expect(smoothTops([null, 20, 20, 20, 20])[0]).toBe(20);
+    expect(smoothTops([null, null, null])).toEqual([null, null, null]);
   });
 });

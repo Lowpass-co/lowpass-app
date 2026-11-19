@@ -59,6 +59,27 @@ export function wallShade(a: Pt, b: Pt, anticlockwise: boolean): number {
   return Math.round((0.775 + 0.225 * lit) * 1000) / 1000;
 }
 
+/** The roof heights along the ring with spikes taken out: each is the median
+ *  of itself and its neighbours (`reach` either side, round the ring). Google's
+ *  model has masts and cables over roofs — at the O2 one sample landed on a
+ *  mast and the wall rose 60 m up it (Nov 2026). A thin thing over the edge is
+ *  one to three samples (≤ 8 m apart); a real roof is many. Unsampled points
+ *  (null) take their neighbours' median. */
+export function smoothTops(tops: readonly (number | null)[], reach = 3): (number | null)[] {
+  const n = tops.length;
+  return tops.map((_, i) => {
+    const near: number[] = [];
+    for (let k = -reach; k <= reach; k++) {
+      const v = tops[(((i + k) % n) + n) % n];
+      if (v != null) near.push(v);
+    }
+    if (!near.length) return null;
+    near.sort((x, y) => x - y);
+    const m = near.length >> 1;
+    return near.length % 2 ? near[m] : (near[m - 1] + near[m]) / 2;
+  });
+}
+
 export interface WallSegment {
   a: Pt;
   b: Pt;
