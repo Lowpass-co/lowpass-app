@@ -35,6 +35,7 @@ import { getTileSession, tileUrl } from './googleTiles';
 import { areaLabel, markerSpec, vehicleSpec } from '@/lib/parking/catalogue';
 import { ringAround, standingHeight, vehicleBlocks, type Block } from '@/lib/parking/blocks3d';
 import { vehicleCorners, type AreaItem, type ParkingDrawing, type ParkingItem, type VehicleItem } from '@/lib/parking/model';
+import { wallRing, wallSegments, type WallSegment } from '@/lib/parking/walls3d';
 import { drawingsIn3d, drawingUnder, footprint, insideAt, insideFootprint, itemFloor, itemPoint, pointInPolygon, svgMatrix } from '@/lib/parking/drawings';
 import type { PartKind } from '@/lib/parking/silhouettes';
 import { labelBox, placeLabels, type LabelBox } from '@/lib/parking/labels3d';
@@ -170,6 +171,15 @@ export async function populate(
       probes.push({ key: `street:${d.id}:${i}`, at: { x: q.x + ((q.x - c.x) / l) * 4, y: q.y + ((q.y - c.y) / l) * 4 } });
     });
   }
+  // The roof height along each shown inside drawing's cut edge: its walls'
+  // tops (walls3d.ts). Sampled before the cut, so the roof is still there.
+  const rings = new Map<string, Pt[]>();
+  for (const d of inside) {
+    if (d.hidden) continue;
+    const ring = wallRing(insideFootprint(d));
+    rings.set(d.id, ring);
+    ring.forEach((at, i) => probes.push({ key: `wall:${d.id}:${i}`, at }));
+  }
   // "Flat in 3D" areas: the street height round their edge, same way.
   const flats = tileset
     ? o.items.filter((i): i is AreaItem => i.kind === 'area' && !!i.flat3d && i.points.length > 2 && i.floor == null)
@@ -226,6 +236,15 @@ export async function populate(
   for (const d of shown) {
     if (tileset && !d.inside) continue;
     addFloor(Cesium, viewer, o.anchor, d, o.floors?.get(d.id) ?? null, (d.inside ? street.get(d.id) ?? ground0 : ground0) + (d.inside ? d.floor : 0) + 0.03, o.palette.floor);
+  }
+  // Walls on the cut edge, floor to roof, so the cut-away reads as a building
+  // with its roof lifted off rather than a hole in the world.
+  for (const d of shown) {
+    const ring = rings.get(d.id);
+    if (!ring) continue;
+    const bottom = (street.get(d.id) ?? ground0) + d.floor;
+    const tops = ring.map((_, i) => heights.get(`wall:${d.id}:${i}`) ?? null);
+    for (const w of wallSegments(ring, tops, bottom)) addWall(Cesium, viewer, o.anchor, w, o.palette.wall);
   }
   /** Where an item stands: on the inside drawing under it (its street + the item's level), else `fallback`. */
   const baseFor = (it: ParkingItem, fallback: number) => {
@@ -433,6 +452,42 @@ async function addSatellitePatch(Cesium: C, viewer: CesiumNS.Viewer, anchor: Lat
       coordinates: Cesium.Rectangle.fromDegrees(sw.lng, sw.lat, ne.lng, ne.lat),
       height,
       material: new Cesium.ImageMaterialProperty({ image: canvas, transparent: true }),
+    },
+  });
+}
+
+/** A wall's face: lighter at the top, darker at the floor (the light falls
+ *  off into the room). One small canvas, shared; the tone comes from `color`. */
+let wallFace: HTMLCanvasElement | null = null;
+function wallGradient(): HTMLCanvasElement {
+  if (wallFace) return wallFace;
+  const c = document.createElement('canvas');
+  c.width = 2;
+  c.height = 64;
+  const ctx = c.getContext('2d');
+  if (ctx) {
+    const g = ctx.createLinearGradient(0, 0, 0, 64);
+    g.addColorStop(0, 'rgb(255,255,255)');
+    g.addColorStop(1, 'rgb(140,140,140)');
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, 2, 64);
+  }
+  wallFace = c;
+  return c;
+}
+
+/** One wall from `w.bottom` up to the roof, toned by the way it faces. */
+function addWall(Cesium: C, viewer: CesiumNS.Viewer, anchor: LatLng, w: WallSegment, colour: string) {
+  const a = toLatLng(anchor, w.a);
+  const b = toLatLng(anchor, w.b);
+  const base = Cesium.Color.fromCssColorString(colour);
+  const tone = new Cesium.Color(base.red * w.shade, base.green * w.shade, base.blue * w.shade, 1);
+  viewer.entities.add({
+    wall: {
+      positions: Cesium.Cartesian3.fromDegreesArray([a.lng, a.lat, b.lng, b.lat]),
+      minimumHeights: [w.bottom, w.bottom],
+      maximumHeights: [w.topA, w.topB],
+      material: new Cesium.ImageMaterialProperty({ image: wallGradient(), color: tone, transparent: false }),
     },
   });
 }

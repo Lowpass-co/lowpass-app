@@ -369,6 +369,14 @@ browser key restricted to the Map Tiles API and the app's domains).**
 
 **Last verified**:
 
+#### PRK-44 — The inside cut-away has walls
+
+**Do**: Show an inside drawing under a roof (the O2) → 3D; orbit round it.
+
+**Expect**: Grey walls stand on the cut edge from the floor up to the roof, lighter at the top and darker at the floor, each face its own tone (north-west faces lightest) — it reads as a building with the roof lifted off, not a hole in the world. No wall where the outline crosses open street. Hide the drawing → walls go with the cut. Same on a 3D PDF page.
+
+**Last verified**:
+
 ## Known broken
 
 #### PRK-90 — Re-exporting makes a new file
