@@ -373,7 +373,7 @@ browser key restricted to the Map Tiles API and the app's domains).**
 
 **Do**: Show an inside drawing under a roof (the O2) → 3D; orbit round it.
 
-**Expect**: Grey walls stand on the cut edge from the floor up to the roof, lighter at the top and darker at the floor, each face its own tone (north-west faces lightest) — it reads as a building with the roof lifted off, not a hole in the world. No wall where the outline crosses open street. Hide the drawing → walls go with the cut. Same on a 3D PDF page.
+**Expect**: Light, see-through grey walls stand on the cut edge from the floor up to the roof (clearer at the top, more solid at the floor; the same at any time of day), never running up a mast or cable, each face its own tone (north-west faces lightest) — it reads as a building with the roof lifted off, not a hole in the world. A thin light rim runs along the wall tops where the roof was cut. No wall (and no rim) where the outline crosses open street. Hide the drawing → walls go with the cut. Same on a 3D PDF page.
 
 **Last verified**:
 

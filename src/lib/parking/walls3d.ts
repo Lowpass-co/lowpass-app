@@ -59,6 +59,27 @@ export function wallShade(a: Pt, b: Pt, anticlockwise: boolean): number {
   return Math.round((0.775 + 0.225 * lit) * 1000) / 1000;
 }
 
+/** The roof heights along the ring with spikes taken out: each is the median
+ *  of itself and its neighbours (`reach` either side, round the ring). Google's
+ *  model has masts and cables over roofs — at the O2 one sample landed on a
+ *  mast and the wall rose 60 m up it (Nov 2026). A thin thing over the edge is
+ *  one to three samples (≤ 8 m apart); a real roof is many. Unsampled points
+ *  (null) take their neighbours' median. */
+export function smoothTops(tops: readonly (number | null)[], reach = 3): (number | null)[] {
+  const n = tops.length;
+  return tops.map((_, i) => {
+    const near: number[] = [];
+    for (let k = -reach; k <= reach; k++) {
+      const v = tops[(((i + k) % n) + n) % n];
+      if (v != null) near.push(v);
+    }
+    if (!near.length) return null;
+    near.sort((x, y) => x - y);
+    const m = near.length >> 1;
+    return near.length % 2 ? near[m] : (near[m - 1] + near[m]) / 2;
+  });
+}
+
 export interface WallSegment {
   a: Pt;
   b: Pt;
@@ -87,4 +108,35 @@ export function wallSegments(ring: readonly Pt[], tops: readonly (number | null)
     out.push({ a: ring[i], b: ring[j], topA: Math.max(ta, bottom), topB: Math.max(tb, bottom), bottom, shade: wallShade(ring[i], ring[j], ccw) });
   }
   return out;
+}
+
+/** The rim: a thin line along the wall tops, where the cut roof meets the
+ *  wall, so the cut reads as deliberate rather than a ragged edge of Google's
+ *  model (Nov 2026, Adam). One run per unbroken stretch of wall — an edge over
+ *  open street (no wall) breaks it. Each point is [east, north, height]. */
+export function rimRuns(segments: readonly WallSegment[]): [number, number, number][][] {
+  const runs: [number, number, number][][] = [];
+  let run: [number, number, number][] = [];
+  let last: WallSegment | null = null;
+  for (const w of segments) {
+    const joins = last && last.b.x === w.a.x && last.b.y === w.a.y;
+    if (!joins) {
+      if (run.length > 1) runs.push(run);
+      run = [[w.a.x, w.a.y, w.topA]];
+    }
+    run.push([w.b.x, w.b.y, w.topB]);
+    last = w;
+  }
+  if (run.length > 1) runs.push(run);
+  // A ring walled all the way round: the last run ends where the first starts — join them.
+  if (runs.length > 1) {
+    const first = runs[0];
+    const tail = runs[runs.length - 1];
+    const end = tail[tail.length - 1];
+    if (end[0] === first[0][0] && end[1] === first[0][1]) {
+      runs[0] = [...tail, ...first.slice(1)];
+      runs.pop();
+    }
+  }
+  return runs;
 }

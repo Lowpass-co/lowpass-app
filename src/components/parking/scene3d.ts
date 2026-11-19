@@ -35,7 +35,7 @@ import { getTileSession, tileUrl } from './googleTiles';
 import { areaLabel, markerSpec, vehicleSpec } from '@/lib/parking/catalogue';
 import { ringAround, standingHeight, vehicleBlocks, type Block } from '@/lib/parking/blocks3d';
 import { vehicleCorners, type AreaItem, type ParkingDrawing, type ParkingItem, type VehicleItem } from '@/lib/parking/model';
-import { wallRing, wallSegments, type WallSegment } from '@/lib/parking/walls3d';
+import { rimRuns, smoothTops, wallRing, wallSegments, type WallSegment } from '@/lib/parking/walls3d';
 import { drawingsIn3d, drawingUnder, footprint, insideAt, insideFootprint, itemFloor, itemPoint, pointInPolygon, svgMatrix } from '@/lib/parking/drawings';
 import type { PartKind } from '@/lib/parking/silhouettes';
 import { labelBox, placeLabels, type LabelBox } from '@/lib/parking/labels3d';
@@ -243,8 +243,24 @@ export async function populate(
     const ring = rings.get(d.id);
     if (!ring) continue;
     const bottom = (street.get(d.id) ?? ground0) + d.floor;
-    const tops = ring.map((_, i) => heights.get(`wall:${d.id}:${i}`) ?? null);
-    for (const w of wallSegments(ring, tops, bottom)) addWall(Cesium, viewer, o.anchor, w, o.palette.wall);
+    // Smoothed: a mast or cable over the edge mustn't pull a wall up it.
+    const tops = smoothTops(ring.map((_, i) => heights.get(`wall:${d.id}:${i}`) ?? null));
+    const walls = wallSegments(ring, tops, bottom);
+    for (const w of walls) addWall(Cesium, viewer, o.anchor, w, o.palette.wall);
+    // The rim: a thin light line along the wall tops, where the roof was cut.
+    for (const run of rimRuns(walls)) {
+      viewer.entities.add({
+        polyline: {
+          positions: Cesium.Cartesian3.fromDegreesArrayHeights(run.flatMap(([x, y, h]) => {
+            const g = ll({ x, y });
+            return [g.lng, g.lat, h + 0.05];
+          })),
+          width: 2,
+          arcType: Cesium.ArcType.NONE,
+          material: Cesium.Color.fromCssColorString(o.palette.rim),
+        },
+      });
+    }
   }
   /** Where an item stands: on the inside drawing under it (its street + the item's level), else `fallback`. */
   const baseFor = (it: ParkingItem, fallback: number) => {
@@ -456,8 +472,11 @@ async function addSatellitePatch(Cesium: C, viewer: CesiumNS.Viewer, anchor: Lat
   });
 }
 
-/** A wall's face: lighter at the top, darker at the floor (the light falls
- *  off into the room). One small canvas, shared; the tone comes from `color`. */
+/** A wall's face: see-through, most at the top (where the rim marks the cut)
+ *  and least at the floor, so the walls read as the building's edge without
+ *  boxing the floor in (Nov 2026, Adam: "a little less dark, a little more
+ *  transparent … very blocky"). One small canvas, shared; the tone comes
+ *  from the material's colour. */
 let wallFace: HTMLCanvasElement | null = null;
 function wallGradient(): HTMLCanvasElement {
   if (wallFace) return wallFace;
@@ -467,8 +486,8 @@ function wallGradient(): HTMLCanvasElement {
   const ctx = c.getContext('2d');
   if (ctx) {
     const g = ctx.createLinearGradient(0, 0, 0, 64);
-    g.addColorStop(0, 'rgb(255,255,255)');
-    g.addColorStop(1, 'rgb(140,140,140)');
+    g.addColorStop(0, 'rgba(255,255,255,0.3)');
+    g.addColorStop(1, 'rgba(225,225,225,0.72)');
     ctx.fillStyle = g;
     ctx.fillRect(0, 0, 2, 64);
   }
@@ -476,20 +495,37 @@ function wallGradient(): HTMLCanvasElement {
   return c;
 }
 
-/** One wall from `w.bottom` up to the roof, toned by the way it faces. */
+/** One wall from `w.bottom` up to the roof, toned by the way it faces.
+ *  UNLIT (flat): an entity wall is lit by the sun at the clock's time, so on
+ *  a winter afternoon in London every wall facing away from it went near
+ *  black. The facing tone (`w.shade`) is the only shading. */
 function addWall(Cesium: C, viewer: CesiumNS.Viewer, anchor: LatLng, w: WallSegment, colour: string) {
   const a = toLatLng(anchor, w.a);
   const b = toLatLng(anchor, w.b);
   const base = Cesium.Color.fromCssColorString(colour);
-  const tone = new Cesium.Color(base.red * w.shade, base.green * w.shade, base.blue * w.shade, 1);
-  viewer.entities.add({
-    wall: {
-      positions: Cesium.Cartesian3.fromDegreesArray([a.lng, a.lat, b.lng, b.lat]),
-      minimumHeights: [w.bottom, w.bottom],
-      maximumHeights: [w.topA, w.topB],
-      material: new Cesium.ImageMaterialProperty({ image: wallGradient(), color: tone, transparent: false }),
-    },
-  });
+  // Alpha just under 1 keeps the material in the translucent pass (the
+  // gradient carries the real see-through).
+  const tone = new Cesium.Color(base.red * w.shade, base.green * w.shade, base.blue * w.shade, 0.99);
+  viewer.scene.primitives.add(
+    new Cesium.Primitive({
+      geometryInstances: new Cesium.GeometryInstance({
+        geometry: new Cesium.WallGeometry({
+          positions: Cesium.Cartesian3.fromDegreesArray([a.lng, a.lat, b.lng, b.lat]),
+          minimumHeights: [w.bottom, w.bottom],
+          maximumHeights: [w.topA, w.topB],
+          vertexFormat: Cesium.MaterialAppearance.MaterialSupport.TEXTURED.vertexFormat,
+        }),
+      }),
+      appearance: new Cesium.MaterialAppearance({
+        material: Cesium.Material.fromType('Image', { image: wallGradient(), color: tone }),
+        materialSupport: Cesium.MaterialAppearance.MaterialSupport.TEXTURED,
+        flat: true,
+        faceForward: true,
+        translucent: true,
+      }),
+      asynchronous: false,
+    }),
+  );
 }
 
 /** A drawing laid flat at `height`: baked north-up into a canvas (so the
