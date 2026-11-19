@@ -33,7 +33,7 @@ import type * as CesiumNS from 'cesium';
 import { dist, fmtMetres, tileRect, tilesCovering, toLatLng, toLocal, type Camera3d, type LatLng, type Pt } from '@/lib/parking/geo';
 import { getTileSession, tileUrl } from './googleTiles';
 import { areaLabel, markerSpec, vehicleSpec } from '@/lib/parking/catalogue';
-import { vehicleBlocks, type Block } from '@/lib/parking/blocks3d';
+import { ringAround, standingHeight, vehicleBlocks, type Block } from '@/lib/parking/blocks3d';
 import { vehicleCorners, type AreaItem, type ParkingDrawing, type ParkingItem, type VehicleItem } from '@/lib/parking/model';
 import { drawingUnder, footprint, insideAt, insideFootprint, itemFloor, itemPoint, pointInPolygon, svgMatrix } from '@/lib/parking/drawings';
 import type { PartKind } from '@/lib/parking/silhouettes';
@@ -142,7 +142,11 @@ export async function populate(
 
   // One batch of height samples: each vehicle's centre + corners, each marker, the anchor.
   const probes: { key: string; at: Pt }[] = [{ key: 'anchor', at: { x: 0, y: 0 } }];
-  for (const v of vehicles) [{ x: v.x, y: v.y }, ...vehicleCorners(v)].forEach((at, i) => probes.push({ key: `${v.id}:${i}`, at }));
+  for (const v of vehicles) {
+    [{ x: v.x, y: v.y }, ...vehicleCorners(v)].forEach((at, i) => probes.push({ key: `${v.id}:${i}`, at }));
+    // The ground round it: tells a canopy over the vehicle from the street (standingHeight).
+    ringAround(v, Math.max(8, v.length * 0.6)).forEach((at, i) => probes.push({ key: `${v.id}:ring:${i}`, at }));
+  }
   for (const i of o.items) if (i.kind === 'marker') probes.push({ key: i.id, at: { x: i.x, y: i.y } });
   // The street around each inside drawing: its corners and edge middles, 4 m out.
   const inside = tileset ? drawings.filter((d) => d.inside) : [];
@@ -232,10 +236,6 @@ export async function populate(
     }
     return pts.every((q) => pointInPolygon(q, insideFootprint(d))) ? (street.get(d.id) ?? ground0) + itemFloor(it, drawings) + 0.08 : null;
   };
-  const groundOf = (id: string, n: number) => {
-    const hs = Array.from({ length: n }, (_, i) => heights.get(`${id}:${i}`)).filter((h): h is number => h != null);
-    return hs.length ? Math.min(...hs) : ground0;
-  };
 
   const ink = Cesium.Color.fromCssColorString(o.palette.ink);
   const halo = Cesium.Color.fromCssColorString(o.palette.halo);
@@ -266,7 +266,9 @@ export async function populate(
   const onGround = tileset ? Cesium.ClassificationType.CESIUM_3D_TILE : Cesium.ClassificationType.TERRAIN;
 
   for (const v of vehicles) {
-    const g = baseFor(v, groundOf(v.id, 5));
+    const own = Array.from({ length: 5 }, (_, i) => heights.get(`${v.id}:${i}`)).filter((h): h is number => h != null);
+    const ring = Array.from({ length: 8 }, (_, i) => heights.get(`${v.id}:ring:${i}`)).filter((h): h is number => h != null);
+    const g = baseFor(v, standingHeight(own, ring, ground0));
     const base = vehicleColour(o.palette, v);
     for (const b of vehicleBlocks(v)) addBlock(Cesium, viewer, o.anchor, b, g, blockColour(Cesium, o.palette, base, b.kind), halo);
     const top = ll({ x: v.x, y: v.y });
