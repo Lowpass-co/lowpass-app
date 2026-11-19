@@ -19,7 +19,7 @@
 
 import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
-import { ArrowLeft, ChevronDown, ChevronUp, Compass, Copy, Download, Minus, Navigation, Plus, Redo2, RotateCcw, RotateCw, Route as RouteIcon, Ruler, Pentagon, Trash2, Undo2, X } from 'lucide-react';
+import { ArrowLeft, ChevronDown, ChevronUp, Compass, Copy, Download, Keyboard, Minus, Navigation, Plus, Redo2, RotateCcw, RotateCw, Route as RouteIcon, Ruler, Pentagon, Trash2, Undo2, X } from 'lucide-react';
 import { useToast } from '@/components/ui/Toast';
 import { SaveStatus } from '@/components/forms/SaveStatus';
 import type { SaveStatus as SaveStatusKind } from '@/lib/forms/useAutoSave';
@@ -39,7 +39,7 @@ import {
   type Pt,
   type View,
 } from '@/lib/parking/geo';
-import { AREAS, MARKERS, PAINTS, VEHICLES, areaLabel, markerSpec, vehicleSpec, type AreaType, type MarkerType, type PaintId, type VehicleType } from '@/lib/parking/catalogue';
+import { AREAS, MARKERS, PAINTS, VEHICLES, VEHICLE_TILES, areaLabel, markerSpec, regionFor, vehicleSpec, type AreaType, type VehicleRegion, type MarkerType, type PaintId, type VehicleType } from '@/lib/parking/catalogue';
 import { pathLength, type ParkingDrawing, type ParkingItem } from '@/lib/parking/model';
 import { drawableKind, footprint, headroomWarnings, itemFloor, levelLabel, levelsOf, shiftDrawings, svgMatrix, toSource } from '@/lib/parking/drawings';
 import type { DrawingFile, VenueReuse } from '@/server/parking/maps';
@@ -107,6 +107,10 @@ export function ParkingEditor({ show, tourName, initial, canEdit }: ParkingEdito
   const [box, setBox] = useState<{ a: Pt; b: Pt } | null>(null);
   const [tool, setTool] = useState<Tool>({ kind: 'select' });
   const [areaType, setAreaType] = useState<AreaType>('crew');
+  /* The panel's tabs (Nov 2026, Adam): Add · Drawings · Share. A selection
+     replaces them with its edit view; Done comes back to the same tab. */
+  const [tab, setTab] = useState<'add' | 'drawings' | 'share'>(canEdit ? 'add' : 'drawings');
+  const [region, setRegion] = useState<VehicleRegion>(() => regionFor(initial?.anchor ?? show.venue.coords ?? null));
   const [draft, setDraft] = useState<Draft | null>(null);
   const [size, setSize] = useState({ w: 0, h: 0 });
   const [dragging, setDragging] = useState(false);
@@ -834,40 +838,36 @@ export function ParkingEditor({ show, tourName, initial, canEdit }: ParkingEdito
   return (
     <div className="pk-page">
       <aside className="pk-panel" aria-label="Parking map tools">
+        {/* Header: where you are, saved?, Export (the thing you do most). */}
         <div className="pk-head">
           <Link href={backHref} className="adv-link" style={{ fontSize: 'var(--lp-text-xs)' }}>
             <ArrowLeft size={13} aria-hidden /> All shows
           </Link>
-          <h1 className="lp-page-title">Parking</h1>
-          <span style={{ fontSize: 'var(--lp-text-sm)', fontWeight: 'var(--lp-weight-semibold)' }}>{venueName}</span>
+          <div className="pk-head-row">
+            <h1 className="pk-title">{venueName}</h1>
+            {canEdit ? <SaveStatus status={status} lastSavedAt={savedAt} errorMessage={saveError} onRetry={() => void save()} /> : <span className="pk-muted">View only</span>}
+          </div>
           <span className="pk-muted">
-            {dateLabel}
+            Parking · {dateLabel}
             {show.venue.city ? ` · ${show.venue.city}` : ''} ·{' '}
             <Link href={advanceHref} className="adv-link">
               Advance
             </Link>
           </span>
-          <div className="adv-row-flex" style={{ gap: 'var(--lp-space-2)', marginTop: 'var(--lp-space-2)', flexWrap: 'wrap' }}>
-            {canEdit ? <SaveStatus status={status} lastSavedAt={savedAt} errorMessage={saveError} onRetry={() => void save()} /> : <span className="pk-muted">View only</span>}
-            <button type="button" className="adv-btn adv-btn-primary adv-btn-sm" onClick={() => void doExport()} disabled={exporting} style={{ marginLeft: 'auto' }}>
-              <Download size={14} aria-hidden /> {exporting ? 'Making PDF…' : 'Export PDF'}
-            </button>
-          </div>
-          <PagesPanel
-            pages={pages}
-            autoScale={autoScale}
-            canEdit={canEdit}
-            mode={mode}
-            onChange={setPages}
-            onShow={showPage}
-            onAddPlan={() => setPages(addPlanPage(pages, viewRef.current, sizeRef.current))}
-            levels={levelOptions}
-          />
-          {pdf ? <span className="pk-muted">Last PDF {pdf.exportedAt ? new Date(pdf.exportedAt).toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short' }) : ''} · in Files › Parking maps</span> : null}
+          <button type="button" className="adv-btn adv-btn-primary adv-btn-sm" onClick={() => void doExport()} disabled={exporting} style={{ marginTop: 'var(--lp-space-1)' }}>
+            <Download size={14} aria-hidden /> {exporting ? 'Making PDF…' : 'Export PDF'}
+          </button>
         </div>
 
-        {canEdit ? (
-          <>
+        {canEdit && (sel || group.length) ? (
+          /* Something picked: its edit view replaces the tabs; Done goes back. */
+          <div className="pk-selview">
+            <div className="pk-head-row">
+              <span className="pk-muted">Selected</span>
+              <button type="button" className="adv-link" onClick={() => setSelected([])}>
+                Done
+              </button>
+            </div>
             {sel ? (
               <Inspector
                 item={sel}
@@ -890,7 +890,7 @@ export function ParkingEditor({ show, tourName, initial, canEdit }: ParkingEdito
                   }
                 }}
               />
-            ) : group.length ? (
+            ) : (
               <GroupPanel
                 items={group}
                 onTurn={turnSelected}
@@ -899,67 +899,105 @@ export function ParkingEditor({ show, tourName, initial, canEdit }: ParkingEdito
                 onDelete={deleteSelected}
                 onClear={() => setSelected([])}
               />
-            ) : (
-              <p className="pk-muted" style={{ margin: 0 }}>
-                Click anything on the map to edit it. ⌘/Ctrl- or Shift-click to pick several; Shift-drag a box; ⌘A picks everything. Drag to move; drag the white knob to turn a vehicle (Shift = free). Arrow keys nudge 10 cm (Shift 1 m); [ and ] turn 5° (Shift 45°) — several turn as one block. ⌘Z undoes.
-              </p>
             )}
-
-            <section className="pk-sec">
-              <h3>Vehicles · true size</h3>
-              {VEHICLES.map((v) => (
-                <button key={v.type} type="button" className="pk-add" onClick={() => placeVehicle(v.type)}>
-                  <span className="pk-swatch" style={{ background: roleColour(LIVE_PALETTE, v.role) }} aria-hidden />
-                  {v.label}
-                  <span className="pk-dims">{v.length} × {v.width}</span>
+          </div>
+        ) : (
+          <>
+            <div className="pk-tabs" role="tablist" aria-label="Panel">
+              {(canEdit ? (['add', 'drawings', 'share'] as const) : (['drawings', 'share'] as const)).map((t) => (
+                <button key={t} type="button" role="tab" aria-selected={tab === t} className="pk-tab" onClick={() => setTab(t)}>
+                  {t === 'add' ? 'Add' : t === 'drawings' ? 'Drawings' : 'Share'}
                 </button>
               ))}
-            </section>
+            </div>
 
-            <section className="pk-sec">
-              <h3>Markers</h3>
-              <div className="pk-grid2">
-                {MARKERS.map((m) => {
-                  const Icon = MARKER_ICON[m.type];
-                  return (
-                    <button key={m.type} type="button" className="pk-tool" onClick={() => placeMarker(m.type)} style={{ justifyContent: 'flex-start', padding: '0 var(--lp-space-2)' }}>
-                      <Icon size={14} aria-hidden /> {m.label}
+            {tab === 'add' && canEdit ? (
+              <>
+                <section className="pk-sec">
+                  <div className="pk-head-row">
+                    <h3>Vehicles · true size</h3>
+                    <div className="pk-seg" role="radiogroup" aria-label="Vehicle sizes">
+                      {(['eu', 'us'] as const).map((r) => (
+                        <button key={r} type="button" role="radio" aria-checked={region === r} onClick={() => setRegion(r)}>
+                          {r === 'eu' ? 'UK / EU' : 'US'}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="pk-grid2">
+                    {VEHICLE_TILES[region].map((t) => {
+                      const v = vehicleSpec(t.type)!;
+                      return (
+                        <button key={t.type} type="button" className="pk-tile" onClick={() => placeVehicle(t.type)} title={v.label} aria-label={`${v.label}, ${v.length} × ${v.width} m`}>
+                          <span className="pk-tile-name">
+                            <span className="pk-swatch pk-swatch-sm" style={{ background: roleColour(LIVE_PALETTE, v.role) }} aria-hidden />
+                            {t.label}
+                          </span>
+                          <span className="pk-dims">
+                            {v.length} × {v.width} m
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </section>
+
+                <section className="pk-sec">
+                  <h3>Markers</h3>
+                  <div className="pk-grid4">
+                    {MARKERS.map((m) => {
+                      const Icon = MARKER_ICON[m.type];
+                      return (
+                        <button key={m.type} type="button" className="pk-tile pk-tile-icon" onClick={() => placeMarker(m.type)} title={m.label}>
+                          <Icon size={16} aria-hidden />
+                          <span>{m.label}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </section>
+
+                <section className="pk-sec">
+                  <h3>Draw</h3>
+                  <div className="pk-grid3">
+                    <button type="button" className="pk-tile pk-tile-icon" aria-pressed={tool.kind === 'draw' && tool.shape === 'route' && !tool.insideFor} onClick={() => startDraw('route')}>
+                      <RouteIcon size={16} aria-hidden />
+                      <span>Route</span>
                     </button>
-                  );
-                })}
-              </div>
-            </section>
+                    <button type="button" className="pk-tile pk-tile-icon" aria-pressed={tool.kind === 'draw' && tool.shape === 'area' && !tool.insideFor} onClick={() => startDraw('area')}>
+                      <Pentagon size={16} aria-hidden />
+                      <span>Area</span>
+                    </button>
+                    <button type="button" className="pk-tile pk-tile-icon" aria-pressed={tool.kind === 'draw' && tool.shape === 'measure'} onClick={() => startDraw('measure')}>
+                      <Ruler size={16} aria-hidden />
+                      <span>Measure</span>
+                    </button>
+                  </div>
+                  {tool.kind === 'draw' && tool.shape === 'area' && !tool.insideFor ? (
+                    <label className="pk-field">
+                      New area is
+                      <select className="adv-field" value={areaType} onChange={(e) => setAreaType(e.target.value as AreaType)}>
+                        {AREAS.map((a) => (
+                          <option key={a.type} value={a.type}>{a.label}</option>
+                        ))}
+                      </select>
+                    </label>
+                  ) : null}
+                </section>
 
-            <section className="pk-sec">
-              <h3>Draw</h3>
-              <div className="pk-grid3">
-                <button type="button" className="pk-tool" aria-pressed={tool.kind === 'draw' && tool.shape === 'route'} onClick={() => startDraw('route')}>
-                  <RouteIcon size={14} aria-hidden /> Route
-                </button>
-                <button type="button" className="pk-tool" aria-pressed={tool.kind === 'draw' && tool.shape === 'area'} onClick={() => startDraw('area')}>
-                  <Pentagon size={14} aria-hidden /> Area
-                </button>
-                <button type="button" className="pk-tool" aria-pressed={tool.kind === 'draw' && tool.shape === 'measure'} onClick={() => startDraw('measure')}>
-                  <Ruler size={14} aria-hidden /> Measure
-                </button>
-              </div>
-              {tool.kind === 'draw' && tool.shape === 'area' ? (
-                <label className="pk-field">
-                  New area is
-                  <select className="adv-field" value={areaType} onChange={(e) => setAreaType(e.target.value as AreaType)}>
-                    {AREAS.map((a) => (
-                      <option key={a.type} value={a.type}>{a.label}</option>
-                    ))}
-                  </select>
-                </label>
-              ) : null}
-            </section>
+                <details className="pk-shortcuts">
+                  <summary>
+                    <Keyboard size={13} aria-hidden /> Shortcuts
+                  </summary>
+                  <p className="pk-muted">
+                    Click anything on the map to edit it. ⌘/Ctrl- or Shift-click to pick several; Shift-drag a box; ⌘A picks everything. Drag to move; drag the white knob to turn a vehicle (Shift = free). Arrow keys nudge 10 cm (Shift 1 m); [ and ] turn 5° (Shift 45°) — several turn as one block. ⌘Z undoes.
+                  </p>
+                </details>
+              </>
+            ) : null}
 
-          </>
-        ) : sel ? (
-          <Inspector item={sel} anchor={anchor} readOnly onPatch={() => {}} onFocus={() => {}} onBlur={() => {}} onDelete={() => {}} onDuplicate={() => {}} />
-        ) : null}
-
+            {tab === 'drawings' ? (
+              <>
         <DrawingsPanel
           drawings={drawings}
           canEdit={canEdit}
@@ -996,8 +1034,26 @@ export function ParkingEditor({ show, tourName, initial, canEdit }: ParkingEdito
           onShow={showDrawing}
           onOpenFiles={() => void loadDrawingFiles()}
         />
+              </>
+            ) : null}
 
-        {canEdit ? (
+            {tab === 'share' ? (
+              <>
+                <section className="pk-sec">
+          <PagesPanel
+            pages={pages}
+            autoScale={autoScale}
+            canEdit={canEdit}
+            mode={mode}
+            onChange={setPages}
+            onShow={showPage}
+            onAddPlan={() => setPages(addPlanPage(pages, viewRef.current, sizeRef.current))}
+            levels={levelOptions}
+          />
+                  {pdf ? <span className="pk-muted">Last PDF {pdf.exportedAt ? new Date(pdf.exportedAt).toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short' }) : ''} · in Files › Parking maps</span> : null}
+                </section>
+
+                {canEdit ? (
           <DriverLinksPanel
             base={base}
             venueName={venueName}
@@ -1009,27 +1065,35 @@ export function ParkingEditor({ show, tourName, initial, canEdit }: ParkingEdito
               await save();
             }}
           />
-        ) : null}
+                ) : null}
 
-        <section className="pk-sec">
-          <h3>Notes on the PDF</h3>
-          <textarea
-            className="adv-field"
-            style={{ height: 'auto', minHeight: 96, padding: 'var(--lp-space-2) var(--lp-space-3)', lineHeight: 'var(--lp-leading-normal)' }}
-            value={notes}
-            readOnly={!canEdit}
-            placeholder="e.g. Buses not before 08:00. Call security on arrival."
-            onChange={(e) => {
-              touch();
-              setNotes(e.target.value);
-            }}
-            maxLength={4000}
-          />
-        </section>
+                <section className="pk-sec">
+                  <h3>Notes on the PDF</h3>
+                  <textarea
+                    className="adv-field"
+                    style={{ height: 'auto', minHeight: 96, padding: 'var(--lp-space-2) var(--lp-space-3)', lineHeight: 'var(--lp-leading-normal)' }}
+                    value={notes}
+                    readOnly={!canEdit}
+                    placeholder="Buses not before 08:00. Call security on arrival."
+                    onChange={(e) => {
+                      touch();
+                      setNotes(e.target.value);
+                    }}
+                    maxLength={4000}
+                  />
+                </section>
 
-        <p className="pk-muted" style={{ margin: 0 }}>
-          Pinned to {venueName} · {anchor.lat.toFixed(5)}, {anchor.lng.toFixed(5)}. Sizes are true: {counts.vehicles ? `${counts.vehicles} vehicle${counts.vehicles === 1 ? '' : 's'} drawn at their real length and width.` : 'vehicles are drawn at their real length and width.'}
-        </p>
+                <p className="pk-muted" style={{ margin: 0 }}>
+                  Pinned to {venueName} · {anchor.lat.toFixed(5)}, {anchor.lng.toFixed(5)}. Sizes are true: {counts.vehicles ? `${counts.vehicles} vehicle${counts.vehicles === 1 ? '' : 's'} drawn at their real length and width.` : 'vehicles are drawn at their real length and width.'}
+                </p>
+              </>
+            ) : null}
+
+            {!canEdit && sel ? (
+              <Inspector item={sel} anchor={anchor} readOnly onPatch={() => {}} onFocus={() => {}} onBlur={() => {}} onDelete={() => {}} onDuplicate={() => {}} />
+            ) : null}
+          </>
+        )}
       </aside>
 
       <div

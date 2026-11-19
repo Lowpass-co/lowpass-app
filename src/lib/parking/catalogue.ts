@@ -46,6 +46,36 @@ export const VEHICLES: readonly VehicleSpec[] = [
 
 export const vehicleSpec = (t: string): VehicleSpec | undefined => VEHICLES.find((v) => v.type === t);
 
+/* The editor's Add tab (Nov 2026, Adam): a UK / EU | US switch, and one tile
+   per kind of vehicle in that region's sizes — seven tiles, not eleven rows. */
+export type VehicleRegion = 'eu' | 'us';
+export const VEHICLE_TILES: Record<VehicleRegion, { type: VehicleType; label: string }[]> = {
+  eu: [
+    { type: 'bus_eu', label: 'Tour bus' },
+    { type: 'bus_eu_trailer', label: 'Bus + trailer' },
+    { type: 'truck_eu', label: 'Truck (artic)' },
+    { type: 'splitter', label: 'Splitter + trailer' },
+    { type: 'sprinter', label: 'Sprinter' },
+    { type: 'car', label: 'Car / runner' },
+    { type: 'generator', label: 'Generator' },
+  ],
+  us: [
+    { type: 'bus_us', label: 'Tour bus 45 ft' },
+    { type: 'bus_us_trailer', label: 'Bus + trailer' },
+    { type: 'truck_us', label: 'Truck 53 ft' },
+    { type: 'splitter', label: 'Splitter + trailer' },
+    { type: 'sprinter', label: 'Sprinter' },
+    { type: 'car', label: 'Car / runner' },
+    { type: 'generator', label: 'Generator' },
+  ],
+};
+
+/** The switch's starting side: US sizes in North America, else UK / EU. */
+export function regionFor(at: { lat: number; lng: number } | null): VehicleRegion {
+  if (!at) return 'eu';
+  return at.lng < -50 && at.lng > -170 && at.lat > 10 ? 'us' : 'eu';
+}
+
 /** Paints a vehicle can be given instead of its type's colour (Nov 2026,
  *  Adam: "add colours to the vehicles") — e.g. band bus vs crew bus. One
  *  list; each is a `--lp-map-paint-<id>` token. */

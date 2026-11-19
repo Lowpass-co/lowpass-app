@@ -568,6 +568,11 @@ recreate a `_legacy/` tree: delete dead code instead of parking it.
   the same component, so the editor and paper can't disagree.
 - Saves are optimistic on `version` (409 → "Load theirs / Keep mine"); opening
   writes nothing.
+- **The panel** (Nov 2026, Adam): header (venue, date, save, Export PDF) then
+  tabs **Add · Drawings · Share**; a selection's edit view replaces the tabs
+  (Done returns). Add's vehicles are `VEHICLE_TILES[region]` (catalogue.ts) —
+  a UK / EU | US switch, `regionFor()` the default; every vehicle type must be
+  on one side (tested). 3D controls stay on the map.
 - **Selection is a list of ids** (Nov 2026, Adam): ⌘/Ctrl- or Shift-click
   toggles, Shift-drag boxes (`itemsInBox`), ⌘A takes all. Several move, nudge,
   delete, duplicate and colour together; they TURN AS ONE BLOCK (`turnItems`,

@@ -3,7 +3,7 @@
 import { describe, expect, it } from 'vitest';
 import { PRINT_FRAME_MM, PRINT_MIN_WIDTH_M, freeSpot, itemPoints, printFrame } from './print';
 import { vehicleParts } from './silhouettes';
-import { VEHICLES, vehicleSpec } from './catalogue';
+import { VEHICLES, VEHICLE_TILES, regionFor, vehicleSpec } from './catalogue';
 import { addVehicle } from './edit';
 import { parseMapBody, type ParkingItem } from './model';
 import type { View } from './geo';
@@ -141,5 +141,22 @@ describe('sprinter, no trailer (Nov 2026)', () => {
     const parts = vehicleParts('sprinter', 7.4, 2.02);
     expect(parts.some((p) => p.kind === 'coupling')).toBe(false);
     expect(Math.max(...parts.map((p) => p.f1))).toBeCloseTo(7.4);
+  });
+});
+
+describe('Add tab vehicle tiles (Nov 2026)', () => {
+  it('both regions offer the same seven kinds, every one a real vehicle', () => {
+    for (const r of ['eu', 'us'] as const) {
+      expect(VEHICLE_TILES[r]).toHaveLength(7);
+      for (const t of VEHICLE_TILES[r]) expect(vehicleSpec(t.type), t.type).toBeTruthy();
+    }
+    // Every vehicle type is reachable from one side or the other.
+    const reachable = new Set([...VEHICLE_TILES.eu, ...VEHICLE_TILES.us].map((t) => t.type));
+    for (const v of VEHICLES) expect(reachable.has(v.type), v.type).toBe(true);
+  });
+  it('the switch starts on US sizes in North America', () => {
+    expect(regionFor({ lat: 36.16, lng: -86.78 })).toBe('us'); // Nashville
+    expect(regionFor({ lat: 51.5, lng: 0 })).toBe('eu'); // the O2
+    expect(regionFor(null)).toBe('eu');
   });
 });
