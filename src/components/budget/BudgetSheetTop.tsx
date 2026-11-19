@@ -1,20 +1,24 @@
 'use client';
 
 /* ============================================
-   LOWPASS — <BudgetSheetTop> (Oct 2026, after Adam's SUMMARY tab)
+   LOWPASS — <BudgetSheetTop> (Oct 2026; redrawn Nov 2026, Adam)
 
-   The top of the budget sheet, laid out like the Google Sheets template:
+   ONE panel above the grid, in the tour Overview's style (light panel,
+   hairline rows — budgetSheet.css):
 
-     ┌ INCOME · proposed │ TOTAL EXPENSES · proposed │ NET · proposed ┐  ← bottom line first
-     └ actual so far     │ actual so far             │ actual so far  ┘
-     ┌ TOTALS ─────── % ─ PROPOSED ─ ACTUAL ┐  ┌ COMMISSIONS ─ % ─ OF ─ PROPOSED ┐
-     │ one row per section                   │  │ Management / Agency / Legal …    │
-     │ Commissions                           │  │ + Add commission        TOTAL    │
-     │ Accountancy    [ 0 %]                 │  └──────────────────────────────────┘
-     │ Insurance      [ 0 %]   (% boxes in   │
-     │ Contingency    [ 2 %]    one column)  │
-     │ TOTAL EXPENSES · Income · NET         │
-     └───────────────────────────────────────┘
+     Income · Costs · Net          ← proposed big, actual so far under each
+     ─────────────────────────────
+     Where it goes                 ← one row per section: proposed, spent, a
+                                     spend bar; a click scrolls the grid to it
+     ─────────────────────────────
+     Commissions · 3 ……  £18,240 ▾ ← FOLDED: set once a tour, so a row that
+     Overheads · 2% …… £3,040 ▾      opens its editor in place (Adam: "big
+     Income · show, merch … ▾        left, commission big right ain't great")
+     Deposits owed back (if any)
+
+   Nothing was taken away: every figure and every input of the old two-table
+   layout is still here, behind its row. Income / expenses / net are shown
+   ONCE (they used to repeat under the totals table too).
 
    WHERE THINGS ARE TYPED. Overhead percentages and commissions are entered
    HERE, next to the totals they change — not in Tour settings, and not as
@@ -42,7 +46,8 @@
    ============================================ */
 
 import { Fragment, useMemo, useState } from 'react';
-import type { KeyboardEvent } from 'react';
+import type { KeyboardEvent, ReactNode } from 'react';
+import './budgetSheet.css';
 import { useRouter } from 'next/navigation';
 import { ChevronDown, Plus, X } from 'lucide-react';
 import {
@@ -357,21 +362,22 @@ export function BudgetSheetTop({
     })();
   };
 
-  // Oct 2026 — Adam: "the accountancy, insurance etc figures are out of line".
-  // Every row is one fixed height and every % box sits in its own column, so
-  // nothing shifts with the label's length. The bottom line leads (headline
-  // band); the totals table is the wide column; commissions — set once and
-  // rarely touched — sit narrower on the right. No tabs: changing a % should
-  // move the totals in view, not on another tab.
+  // Inner editor tables (inside the folds): one fixed row height, every % box
+  // in its own column, so nothing shifts with a label's length (Oct 2026).
   const num = 'px-3 text-right tabular-nums whitespace-nowrap';
   const lbl = 'px-3 text-lp-text whitespace-nowrap';
   const pctCell = 'px-2 text-right';
   const tr = 'h-9 border-t border-lp-border/60';
-  const head = 'h-9 px-3 text-left font-bold uppercase tracking-wide';
-  const band = { background: 'var(--lp-sheet-band-bg)', color: 'var(--lp-sheet-band-fg)', fontSize: 'var(--lp-text-xs)' } as const;
+  const head = 'bs-th h-8 px-3 text-left';
   const totalRow = 'h-10 border-t border-lp-border font-semibold';
-  const cell = { fontSize: 'var(--lp-text-base)' } as const;
+  const cell = { fontSize: 'var(--lp-text-sm)' } as const;
   const negative = (n: number) => (n < 0 ? 'var(--color-lp-error)' : undefined);
+  const [open, setOpen] = useState<Record<'commissions' | 'overheads' | 'income', boolean>>({
+    commissions: false,
+    overheads: false,
+    income: false,
+  });
+  const flip = (k: keyof typeof open) => setOpen((o) => ({ ...o, [k]: !o[k] }));
 
   const figures: Array<{ id: string; label: string; v: { projected: number; actual: number } }> = [
     { id: 'income', label: 'Income', v: pnl.grossIncome },
@@ -404,218 +410,126 @@ export function BudgetSheetTop({
       : []),
   ];
 
-  return (
-    <div className="space-y-4" data-testid="budget-sheet-top">
-      {/* ── The bottom line ─────────────────────────────────── */}
-      <section
-        aria-label="Bottom line"
-        className="grid grid-cols-3 overflow-hidden rounded-lg"
-        style={{ background: 'var(--lp-sheet-band-bg)', color: 'var(--lp-sheet-band-fg)' }}
+  const overheadSummary =
+    OVERHEADS.filter((o) => Math.abs(pnl[o.key].projected) > 0.004)
+      .map((o) =>
+        pnl.mode[o.key] === 'flat'
+          ? `${o.label} ${money(pnl[o.key].projected, ccy)}`
+          : `${o.label} ${toPctBox(Number(settings[`${o.key}_pct`]) || 0)}%`,
+      )
+      .join(' · ') || 'None set';
+  const overheadTotal = {
+    projected: OVERHEADS.reduce((t, o) => t + pnl[o.key].projected, 0) + pnl.cogs.projected,
+    actual: OVERHEADS.reduce((t, o) => t + pnl[o.key].actual, 0) + pnl.cogs.actual,
+  };
+  const commissionSummary = rows.length
+    ? rows.map((r) => `${r.label} ${toPctBox(r.percentage)}%`).join(' · ')
+    : 'None yet';
+  const incomeSummary = incomeParts
+    .filter((p) => nonZero(p.v))
+    .map((p) => p.label.replace(/ income$/, ''))
+    .join(' · ') || 'No income yet';
+
+  /** Scroll the grid to a section (grouped by section; otherwise a no-op). */
+  const goToSection = (id: string) => {
+    const uid = id === '__uncat__' ? 'ungrouped' : id;
+    const el = document.querySelector<HTMLElement>(`#gr-sections > .section[data-uid="${CSS.escape(uid)}"]`);
+    if (!el) return;
+    el.classList.add('bs-scroll-target');
+    el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
+
+  const fold = (
+    key: keyof typeof open,
+    label: string,
+    summary: string,
+    v: { projected: number; actual: number },
+    body: ReactNode,
+  ) => (
+    <div className="bs-fold" data-testid={`sheet-fold-${key}`}>
+      <button
+        type="button"
+        className="bs-fold-row"
+        aria-expanded={open[key]}
+        onClick={() => flip(key)}
       >
-        {figures.map((f, i) => (
-          <div
-            key={f.id}
-            data-testid={`sheet-headline-${f.id}`}
-            className="flex flex-col gap-0.5 px-5 py-3"
-            style={i > 0 ? { borderLeft: '1px solid color-mix(in srgb, var(--lp-sheet-band-fg) 18%, transparent)' } : undefined}
-          >
-            <span className="font-bold uppercase tracking-wide" style={{ fontSize: 'var(--lp-text-xs)', opacity: 0.7 }}>
-              {f.label} <span className="font-normal normal-case tracking-normal">· proposed</span>
-            </span>
+        <span className="bs-fold-name">{label}</span>
+        <span className="bs-fold-summary">{summary}</span>
+        <span className="bs-fold-money">
+          <span>{money(v.projected, ccy)}</span>
+          <span className="bs-sub">{money(v.actual, ccy)} so far</span>
+        </span>
+        <ChevronDown className={`bs-chev${open[key] ? ' is-open' : ''}`} aria-hidden />
+      </button>
+      {open[key] ? <div className="bs-fold-body">{body}</div> : null}
+    </div>
+  );
+
+  return (
+    <section className="bs-panel" aria-label="Budget totals" data-testid="budget-sheet-top">
+      {/* ── The bottom line, once ─────────────────────────── */}
+      <div className="bs-figures" aria-label="Bottom line">
+        {figures.map((f) => (
+          <div key={f.id} className="bs-fig" data-testid={`sheet-headline-${f.id}`}>
+            <span className="bs-label">{f.label}</span>
             <span
-              className="font-extrabold tabular-nums"
-              style={{ fontSize: 'var(--lp-text-2xl)', lineHeight: 1.15, color: f.id === 'net' ? negative(f.v.projected) : undefined }}
+              className="bs-big"
+              data-testid={f.id === 'expenses' ? 'sheet-total-expenses' : f.id === 'net' ? 'sheet-net' : undefined}
+              style={{ color: f.id === 'net' ? negative(f.v.projected) : undefined }}
             >
               {money(f.v.projected, ccy)}
             </span>
-            <span className="tabular-nums" style={{ fontSize: 'var(--lp-text-sm)', opacity: 0.75 }}>
-              Actual so far {money(f.v.actual, ccy)}
-            </span>
+            <span className="bs-sub">{money(f.v.actual, ccy)} actual so far</span>
           </div>
         ))}
-      </section>
+      </div>
 
-      <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
-        {/* ── Totals ─────────────────────────────────────────── */}
-        <section className="overflow-hidden rounded-lg border border-lp-border bg-lp-surface" aria-label="Budget totals">
-          <table className="w-full table-fixed border-collapse" style={cell}>
-            <colgroup>
-              <col />
-              <col style={{ width: 84 }} />
-              <col style={{ width: 136 }} />
-              <col style={{ width: 136 }} />
-            </colgroup>
-            <thead>
-              <tr style={band}>
-                <th className={head}>Totals</th>
-                <th className={`${head} text-right`}>%</th>
-                <th className={`${head} text-right`}>Proposed</th>
-                <th className={`${head} text-right`}>Actual</th>
-              </tr>
-            </thead>
-            <tbody>
-              {sectionRows.map((r) => (
-                <tr key={r.id} className={tr}>
-                  <td className={lbl}>{r.name}</td>
-                  <td />
-                  <td className={num}>{money(r.projected, ccy)}</td>
-                  <td className={num}>{money(r.actual, ccy)}</td>
-                </tr>
-              ))}
-              <tr className={tr}>
-                <td className={lbl}>Commissions</td>
-                <td />{/* each commission has its own % in the Commissions table */}
-                <td className={num}>{money(pnl.commissions.projected, ccy)}</td>
-                <td className={num}>{money(pnl.commissions.actual, ccy)}</td>
-              </tr>
-              {OVERHEADS.map((o) => {
-                const flat = pnl.mode[o.key] === 'flat';
-                const typedActual = settings[`${o.key}_actual_amount`];
-                return (
-                  <tr key={o.key} className={tr} data-testid={`sheet-overhead-${o.key}`}>
-                    <td className={lbl}>
-                      <span>{o.label}</span>
-                      {!readOnly ? (
-                        <button
-                          type="button"
-                          onClick={() =>
-                            saveSettings({ [`${o.key}_mode`]: flat ? 'pct' : 'flat' }, o.label.toLowerCase())
-                          }
-                          aria-label={flat ? `${o.label}: use a percentage` : `${o.label}: use a fixed amount`}
-                          className="ml-2 rounded px-1 text-lp-text-tertiary hover:text-lp-text"
-                          style={{ fontSize: 'var(--lp-text-xs)' }}
-                        >
-                          {flat ? 'use %' : 'fixed amount'}
-                        </button>
-                      ) : null}
-                    </td>
-                    <td className={pctCell}>
-                      {flat ? (
-                        <span className="text-lp-text-tertiary" style={{ fontSize: 'var(--lp-text-sm)' }}>fixed</span>
-                      ) : (
-                        <PctInput
-                          label={o.label}
-                          value={Number(settings[`${o.key}_pct`]) || 0}
-                          disabled={readOnly}
-                          onCommit={(f) => saveOverhead(o.key, f)}
-                        />
-                      )}
-                    </td>
-                    <td className={flat && !readOnly ? 'px-2' : num}>
-                      {flat && !readOnly ? (
-                        <MoneyInput
-                          label={`${o.label} fixed amount`}
-                          value={settings[`${o.key}_flat_amount`] != null ? Number(settings[`${o.key}_flat_amount`]) : null}
-                          placeholder={money(0, ccy)}
-                          onCommit={(v) => saveSettings({ [`${o.key}_flat_amount`]: v }, `${o.label.toLowerCase()} amount`)}
-                        />
-                      ) : (
-                        money(pnl[o.key].projected, ccy)
-                      )}
-                    </td>
-                    <td
-                      className={readOnly ? num : 'px-2'}
-                      title={
-                        pnl.actualOverridden[o.key]
-                          ? 'Typed actual (the real invoice). Clear it to use the calculation.'
-                          : 'Calculated. Type the real invoice to replace it.'
-                      }
-                    >
-                      {readOnly ? (
-                        money(pnl[o.key].actual, ccy)
-                      ) : (
-                        <MoneyInput
-                          label={`${o.label} actual`}
-                          value={typedActual != null ? Number(typedActual) : null}
-                          placeholder={money(pnl[o.key].actual, ccy)}
-                          onCommit={(v) => saveSettings({ [`${o.key}_actual_amount`]: v }, `${o.label.toLowerCase()} actual`)}
-                        />
-                      )}
-                    </td>
-                  </tr>
-                );
-              })}
-              {pnl.cogs.projected !== 0 || pnl.cogs.actual !== 0 ? (
-                <tr className={tr}>
-                  <td className={lbl}>Merch cost of goods</td>
-                  <td />
-                  <td className={num}>{money(pnl.cogs.projected, ccy)}</td>
-                  <td className={num}>{money(pnl.cogs.actual, ccy)}</td>
-                </tr>
-              ) : null}
-              <tr className={totalRow} data-testid="sheet-total-expenses">
-                <td className={lbl}>Total expenses</td>
-                <td />
-                <td className={num}>{money(pnl.totalExpenses.projected, ccy)}</td>
-                <td className={num}>{money(pnl.totalExpenses.actual, ccy)}</td>
-              </tr>
-              {incomeParts.map((r) => (
-                <tr key={r.id} className={tr} data-testid={`sheet-income-${r.id}`} title={r.title}>
-                  <td className={`${lbl} pl-6 text-lp-text-secondary`} style={{ fontSize: 'var(--lp-text-sm)' }}>
-                    {r.label}
-                    {r.id === 'other' && !hasIncomeSection && !readOnly ? (
-                      <button
-                        type="button"
-                        onClick={() => void addOtherIncome()}
-                        disabled={busy}
-                        className="ml-2 inline-flex items-center gap-0.5 rounded px-1 text-lp-text-tertiary hover:text-lp-text disabled:opacity-50"
-                        style={{ fontSize: 'var(--lp-text-xs)' }}
-                      >
-                        <Plus className="h-3 w-3" /> Add
-                      </button>
-                    ) : null}
-                  </td>
-                  <td />
-                  <td className={`${num} text-lp-text-secondary`} style={{ fontSize: 'var(--lp-text-sm)' }}>{money(r.v.projected, ccy)}</td>
-                  <td className={`${num} text-lp-text-secondary`} style={{ fontSize: 'var(--lp-text-sm)' }}>{money(r.v.actual, ccy)}</td>
-                </tr>
-              ))}
-              <tr className={tr}>
-                <td className={`${lbl} text-lp-text-secondary`}>Income</td>
-                <td />
-                <td className={`${num} text-lp-text-secondary`}>{money(pnl.grossIncome.projected, ccy)}</td>
-                <td className={`${num} text-lp-text-secondary`}>{money(pnl.grossIncome.actual, ccy)}</td>
-              </tr>
-              <tr className={totalRow} data-testid="sheet-net" style={{ fontSize: 'var(--lp-text-md)' }}>
-                <td className={lbl}>Net</td>
-                <td />
-                {(['projected', 'actual'] as const).map((k) => (
-                  <td key={k} className={num} style={{ color: negative(pnl.net[k]) ?? 'var(--lp-text)' }}>
-                    {money(pnl.net[k], ccy)}
-                  </td>
-                ))}
-              </tr>
-              {depositRows.map((r) => (
-                <tr key={r.id} className={tr} data-testid={`sheet-deposits-${r.id}`} title={r.title}>
-                  <td className={`${lbl} text-lp-text-secondary`}>{r.label}</td>
-                  <td />
-                  <td className={`${num} text-lp-text-secondary`}>{money(r.v.projected, ccy)}</td>
-                  <td className={`${num} text-lp-text-secondary`}>{money(r.v.actual, ccy)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          {pnl.fxMarginPct > 0 ? (
-            <p className="border-t border-lp-border/60 px-3 py-2 text-lp-text-tertiary" style={{ fontSize: 'var(--lp-text-xs)' }}>
-              Projected foreign-currency amounts include a {+(pnl.fxMarginPct * 100).toFixed(2)}% bank margin
-              (Tour settings). Actuals use the rate locked or paid on each line.
-            </p>
-          ) : null}
-        </section>
+      {/* ── Where it goes ─────────────────────────────────── */}
+      {sectionRows.length ? (
+        <div className="bs-block">
+          <p className="bs-label">Where it goes</p>
+          <ul className="bs-sections">
+            {sectionRows.map((r) => {
+              const pct = r.projected > 0 ? Math.min(1, r.actual / r.projected) : r.actual > 0 ? 1 : 0;
+              const over = r.actual > r.projected + 0.004;
+              return (
+                <li key={r.id}>
+                  <button
+                    type="button"
+                    className="bs-sec"
+                    data-testid={`sheet-section-${r.id}`}
+                    onClick={() => goToSection(r.id)}
+                    title={`Show ${r.name} in the grid`}
+                  >
+                    <span className="bs-sec-name">{r.name}</span>
+                    <span className="bs-sec-money">
+                      <span className={`bs-sec-spent${over ? ' is-over' : ''}`}>{money(r.actual, ccy)} spent of </span>
+                      {money(r.projected, ccy)}
+                    </span>
+                    <span className="bs-bar" aria-hidden>
+                      <span className={`bs-bar-fill${over ? ' is-over' : ''}`} style={{ width: `${Math.round(pct * 100)}%` }} />
+                    </span>
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      ) : null}
 
-        {/* ── Commissions ────────────────────────────────────── */}
-        <section className="overflow-hidden rounded-lg border border-lp-border bg-lp-surface" aria-label="Commissions">
+      {/* ── Commissions (folded) ──────────────────────────── */}
+      {fold('commissions', 'Commissions', commissionSummary, pnl.commissions, (
           <table className="w-full table-fixed border-collapse" style={cell}>
             <colgroup>
               <col />
               <col style={{ width: 76 }} />
-              <col style={{ width: 104 }} />
-              <col style={{ width: 112 }} />
+              <col style={{ width: 160 }} />
+              <col style={{ width: 120 }} />
               <col style={{ width: 36 }} />
             </colgroup>
             <thead>
-              <tr style={band}>
-                <th className={head}>Commissions</th>
+              <tr>
+                <th className={head}>Name</th>
                 <th className={`${head} text-right`}>%</th>
                 <th className={head}>Of</th>
                 <th className={`${head} text-right`}>Proposed</th>
@@ -625,12 +539,12 @@ export function BudgetSheetTop({
             <tbody>
               {rows.length === 0 ? (
                 <tr className={tr}>
-                  <td colSpan={5} className="px-3 text-lp-text-tertiary" style={{ fontSize: 'var(--lp-text-sm)' }}>
+                  <td colSpan={5} className="px-3 text-lp-text-tertiary">
                     None yet — management, agency, legal or merch.
                   </td>
                 </tr>
-              ) : (
-                rows.map((r) => {
+              ) : null}
+              {rows.map((r) => {
                   const c = commByid.get(r.id);
                   const summary = commissionBaseSummary(r.basis_components, r.basis, r.basis_pre_tax);
                   const ticked = new Set(r.basis_components ?? []);
@@ -737,8 +651,7 @@ export function BudgetSheetTop({
                     ) : null}
                     </Fragment>
                   );
-                })
-              )}
+                })}
               <tr className={totalRow}>
                 <td className="px-2" colSpan={3}>
                   {!readOnly ? (
@@ -757,8 +670,162 @@ export function BudgetSheetTop({
               </tr>
             </tbody>
           </table>
-        </section>
-      </div>
-    </div>
+      ))}
+
+      {/* ── Overheads (folded) ────────────────────────────── */}
+      {fold('overheads', 'Overheads', overheadSummary, overheadTotal, (
+          <table className="w-full table-fixed border-collapse" style={cell}>
+            <colgroup>
+              <col />
+              <col style={{ width: 84 }} />
+              <col style={{ width: 136 }} />
+              <col style={{ width: 136 }} />
+            </colgroup>
+            <thead>
+              <tr>
+                <th className={head}>Overhead</th>
+                <th className={`${head} text-right`}>%</th>
+                <th className={`${head} text-right`}>Proposed</th>
+                <th className={`${head} text-right`}>Actual</th>
+              </tr>
+            </thead>
+            <tbody>
+              {OVERHEADS.map((o) => {
+                const flat = pnl.mode[o.key] === 'flat';
+                const typedActual = settings[`${o.key}_actual_amount`];
+                return (
+                  <tr key={o.key} className={tr} data-testid={`sheet-overhead-${o.key}`}>
+                    <td className={lbl}>
+                      <span>{o.label}</span>
+                      {!readOnly ? (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            saveSettings({ [`${o.key}_mode`]: flat ? 'pct' : 'flat' }, o.label.toLowerCase())
+                          }
+                          aria-label={flat ? `${o.label}: use a percentage` : `${o.label}: use a fixed amount`}
+                          className="ml-2 rounded px-1 text-lp-text-tertiary hover:text-lp-text"
+                          style={{ fontSize: 'var(--lp-text-xs)' }}
+                        >
+                          {flat ? 'use %' : 'fixed amount'}
+                        </button>
+                      ) : null}
+                    </td>
+                    <td className={pctCell}>
+                      {flat ? (
+                        <span className="text-lp-text-tertiary" style={{ fontSize: 'var(--lp-text-sm)' }}>fixed</span>
+                      ) : (
+                        <PctInput
+                          label={o.label}
+                          value={Number(settings[`${o.key}_pct`]) || 0}
+                          disabled={readOnly}
+                          onCommit={(f) => saveOverhead(o.key, f)}
+                        />
+                      )}
+                    </td>
+                    <td className={flat && !readOnly ? 'px-2' : num}>
+                      {flat && !readOnly ? (
+                        <MoneyInput
+                          label={`${o.label} fixed amount`}
+                          value={settings[`${o.key}_flat_amount`] != null ? Number(settings[`${o.key}_flat_amount`]) : null}
+                          placeholder={money(0, ccy)}
+                          onCommit={(v) => saveSettings({ [`${o.key}_flat_amount`]: v }, `${o.label.toLowerCase()} amount`)}
+                        />
+                      ) : (
+                        money(pnl[o.key].projected, ccy)
+                      )}
+                    </td>
+                    <td
+                      className={readOnly ? num : 'px-2'}
+                      title={
+                        pnl.actualOverridden[o.key]
+                          ? 'Typed actual (the real invoice). Clear it to use the calculation.'
+                          : 'Calculated. Type the real invoice to replace it.'
+                      }
+                    >
+                      {readOnly ? (
+                        money(pnl[o.key].actual, ccy)
+                      ) : (
+                        <MoneyInput
+                          label={`${o.label} actual`}
+                          value={typedActual != null ? Number(typedActual) : null}
+                          placeholder={money(pnl[o.key].actual, ccy)}
+                          onCommit={(v) => saveSettings({ [`${o.key}_actual_amount`]: v }, `${o.label.toLowerCase()} actual`)}
+                        />
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+              {pnl.cogs.projected !== 0 || pnl.cogs.actual !== 0 ? (
+                <tr className={tr}>
+                  <td className={lbl}>Merch cost of goods</td>
+                  <td />
+                  <td className={num}>{money(pnl.cogs.projected, ccy)}</td>
+                  <td className={num}>{money(pnl.cogs.actual, ccy)}</td>
+                </tr>
+              ) : null}
+            </tbody>
+          </table>
+      ))}
+
+      {/* ── Income, broken down (folded) ──────────────────── */}
+      {fold('income', 'Income', incomeSummary, pnl.grossIncome, (
+          <table className="w-full table-fixed border-collapse" style={cell}>
+            <colgroup>
+              <col />
+              <col style={{ width: 136 }} />
+              <col style={{ width: 136 }} />
+            </colgroup>
+            <thead>
+              <tr>
+                <th className={head}>Source</th>
+                <th className={`${head} text-right`}>Proposed</th>
+                <th className={`${head} text-right`}>Actual</th>
+              </tr>
+            </thead>
+            <tbody>
+              {incomeParts.map((r) => (
+                <tr key={r.id} className={tr} data-testid={`sheet-income-${r.id}`} title={r.title}>
+                  <td className={lbl}>
+                    {r.label}
+                    {r.id === 'other' && !hasIncomeSection && !readOnly ? (
+                      <button
+                        type="button"
+                        onClick={() => void addOtherIncome()}
+                        disabled={busy}
+                        className="ml-2 inline-flex items-center gap-0.5 rounded px-1 text-lp-text-tertiary hover:text-lp-text disabled:opacity-50"
+                        style={{ fontSize: 'var(--lp-text-xs)' }}
+                      >
+                        <Plus className="h-3 w-3" /> Add
+                      </button>
+                    ) : null}
+                  </td>
+                  <td className={num}>{money(r.v.projected, ccy)}</td>
+                  <td className={num}>{money(r.v.actual, ccy)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+      ))}
+
+      {/* ── Deposits: outside costs, shown only when there are any ── */}
+      {depositRows.map((r) => (
+        <div key={r.id} className="bs-plain" data-testid={`sheet-deposits-${r.id}`} title={r.title}>
+          <span className="bs-fold-name">{r.label}</span>
+          <span className="bs-fold-money">
+            <span>{money(r.v.projected, ccy)}</span>
+            <span className="bs-sub">{money(r.v.actual, ccy)} so far</span>
+          </span>
+        </div>
+      ))}
+
+      {pnl.fxMarginPct > 0 ? (
+        <p className="bs-note">
+          Projected foreign-currency amounts include a {+(pnl.fxMarginPct * 100).toFixed(2)}% bank margin
+          (Tour settings). Actuals use the rate locked or paid on each line.
+        </p>
+      ) : null}
+    </section>
   );
 }

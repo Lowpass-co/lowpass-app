@@ -30,7 +30,12 @@ import { loadTourSettlementWalks } from '@/lib/settlement/loadWalk';
 import { expectedOf } from '@/lib/income/showMoney';
 import { BudgetEmptyState } from '@/components/budget/BudgetEmptyState';
 import { BudgetSettingsTab } from '@/components/budget/BudgetSettingsTab';
-import { ReceiptDropPanel } from '@/components/budget/receipts/ReceiptDropPanel';
+import {
+  AddReceiptsButton,
+  BudgetReceiptDrop,
+  ReceiptDropActivity,
+  ReceiptsNeedDetailsLink,
+} from '@/components/budget/receipts/ReceiptDropPanel';
 import { ReceiptsBank } from '@/components/budget/receipts/ReceiptsBank';
 import { loadTourReceipts } from '@/lib/budget/loadReceipts';
 // The tabs live on the MONEY RAIL (ia.ts) since S-2b; the page only needs
@@ -100,7 +105,7 @@ const TAB_HEADER: Record<string, { title: string; subtitle: string }> = {
   budget: {
     title: 'Budget',
     subtitle:
-      'Totals, overheads and commissions at the top — type percentages straight in. Every line below: type planned costs in Estimate; actuals fill in from receipts. Lines marked Auto come from Payroll, Hotels, Travel or Gear — change them there.',
+      'Totals at the top — open Commissions or Overheads to change them. Every line below: type planned costs in Estimate; actuals fill in from receipts. Lines marked Auto come from Payroll, Hotels, Travel or Gear — change them there.',
   },
   income: {
     title: 'Income & settlements',
@@ -316,6 +321,12 @@ export default async function BudgetTourPage({
      (no proposal statuses) would count every proposed receipt as needing
      details, and the badge would cry wolf on work already queued. */
   const receiptsNeedingDetails = receipts.filter((r) => r.state === 'needs_details').length;
+  /** Budget lines a receipt can be filed against (drop proposals + the bank). */
+  const receiptLineOptions = lines.map((l) => ({
+    id: l.id,
+    label: l.label ?? '',
+    section: (l as { section?: string | null }).section ?? null,
+  }));
 
   /* Versioning (B1) — the proposed shown is the ACTIVE VERSION's snapshot, not
      the legacy budget_line_items.proposed_cost column (kept write-through one
@@ -479,7 +490,7 @@ export default async function BudgetTourPage({
           viewedVersionId={viewed?.id ?? null}
           canApprove={canApprove}
           fxRates={fxRates}
-          showMeter
+          showMeter={tab !== 'budget'}
         />
         <DerivedRefreshBanner failed={derivedFailed} detail={derived.errors[0]} />
         <FxMissingRateBanner
@@ -496,6 +507,12 @@ export default async function BudgetTourPage({
 
         {/* Phase 0 — content top matches the section rhythm so the grid isn't
             jammed under the sticky band/burn/phase stack. */}
+        <BudgetReceiptDrop
+          enabled={tab === 'budget' && (lines.length > 0 || sections.length > 0)}
+          tourId={tourId}
+          tourCurrency={tourCurrency}
+          lineItems={receiptLineOptions}
+        >
         <div className="space-y-6 px-4 pt-6">
           {/* Oct 2026 — every tab says what it is and where to type. The
               budget used to open straight onto a grid with no title. */}
@@ -506,10 +523,16 @@ export default async function BudgetTourPage({
               actions={
                 tab === 'settings' ? (
                   <TourSettingsTabs tourId={tourId} active="money" />
+                ) : tab === 'budget' && (lines.length > 0 || sections.length > 0) ? (
+                  <>
+                    <ReceiptsNeedDetailsLink tourId={tourId} count={receiptsNeedingDetails} />
+                    <AddReceiptsButton />
+                  </>
                 ) : undefined
               }
             />
           ) : null}
+          {tab === 'budget' && (lines.length > 0 || sections.length > 0) ? <ReceiptDropActivity /> : null}
           {tab === 'budget' && dataHealth ? (
             <DataHealthBanner items={dataHealth.items} total={dataHealth.total} />
           ) : null}
@@ -560,20 +583,6 @@ export default async function BudgetTourPage({
                   trackPhases={trackPhases}
                   rateFacts={rateFacts}
                 />
-                {/* RQ-2 — the ONE drop zone. The modal "Receipt Inbox" that used
-                    to sit below is retired: two surfaces with different upload
-                    limits (10 MB there, none here) meant the same file was
-                    accepted by one and refused by the other. Everything it did
-                    now lives on ?tab=receipts, including the ⌘K deep link. */}
-                <ReceiptDropPanel
-                  tourId={tourId}
-                  tourCurrency={tourCurrency}
-                  lineItems={lines.map((l) => ({
-                    id: l.id,
-                    label: l.label ?? '',
-                    section: (l as { section?: string | null }).section ?? null,
-                  }))}
-                />
               </>
             )
           ) : null}
@@ -583,11 +592,7 @@ export default async function BudgetTourPage({
               tourId={tourId}
               tourCurrency={tourCurrency}
               receipts={receipts}
-              lines={lines.map((l) => ({
-                id: l.id,
-                label: l.label ?? '',
-                section: (l as { section?: string | null }).section ?? null,
-              }))}
+              lines={receiptLineOptions}
             />
           ) : null}
 
@@ -632,6 +637,7 @@ export default async function BudgetTourPage({
             />
           ) : null}
         </div>
+        </BudgetReceiptDrop>
 
         <MobileBudgetBanner />
     </div>

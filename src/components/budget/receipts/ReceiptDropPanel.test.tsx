@@ -53,7 +53,7 @@ vi.mock('@/components/budget/useReceiptScan', async () => {
   };
 });
 
-import { ReceiptDropPanel } from './ReceiptDropPanel';
+import { ReceiptDropPanel, ReceiptDropProvider, ReceiptDropActivity, AddReceiptsButton } from './ReceiptDropPanel';
 
 function imageFile(name: string): File {
   return new File([new Uint8Array([1, 2, 3])], name, { type: 'image/jpeg' });
@@ -103,5 +103,49 @@ describe('RC-1 — the drop zone', () => {
     await waitFor(() => expect(calls).toContain('ocr'));
     expect(calls).not.toContain('createTransaction');
     expect(calls).not.toContain('linkTransaction');
+  });
+});
+
+/* Nov 2026 (budget page redraw) — the drop box left the bottom of the page. A
+   file dropped ANYWHERE on the budget is a receipt; one dropped on a grid row
+   is that row's (the row prevents default) and must not upload twice. */
+describe('drop anywhere', () => {
+  it('a file dropped on the page (not the button) is saved', async () => {
+    render(
+      <ReceiptDropProvider tourId="t1" tourCurrency="GBP">
+        <div data-testid="elsewhere">the grid</div>
+        <ReceiptDropActivity />
+      </ReceiptDropProvider>,
+    );
+    expect(screen.queryByRole('region', { name: 'Receipts' })).toBeNull(); // idle: nothing shown
+    fireEvent.drop(screen.getByTestId('elsewhere'), { dataTransfer: { files: [imageFile('a.jpg')], types: ['Files'] } });
+    await waitFor(() => expect(screen.getAllByTestId('receipt-drop-item').length).toBe(1));
+    await waitFor(() => expect(calls.filter((c) => c === 'createReceipt').length).toBe(1));
+  });
+
+  it('a drop something below already took (a grid row) is left alone', async () => {
+    render(
+      <ReceiptDropProvider tourId="t1" tourCurrency="GBP">
+        <div data-testid="row" onDrop={(e) => e.preventDefault()}>a line</div>
+        <ReceiptDropActivity />
+      </ReceiptDropProvider>,
+    );
+    fireEvent.drop(screen.getByTestId('row'), { dataTransfer: { files: [imageFile('a.jpg')], types: ['Files'] } });
+    await new Promise((r) => setTimeout(r, 50));
+    expect(screen.queryAllByTestId('receipt-drop-item').length).toBe(0);
+    expect(calls).not.toContain('createReceipt');
+  });
+
+  it('the button takes a drop exactly once', async () => {
+    render(
+      <ReceiptDropProvider tourId="t1" tourCurrency="GBP">
+        <AddReceiptsButton />
+        <ReceiptDropActivity />
+      </ReceiptDropProvider>,
+    );
+    drop([imageFile('a.jpg')]);
+    await waitFor(() => expect(calls.filter((c) => c === 'createReceipt').length).toBe(1));
+    await new Promise((r) => setTimeout(r, 50));
+    expect(calls.filter((c) => c === 'createReceipt').length).toBe(1);
   });
 });

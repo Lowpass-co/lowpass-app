@@ -2182,9 +2182,10 @@ test tour only. ✅ = passed live; ⚙ = covered by vitest, not live-run.
   "Captured on phone" note, no money until applied.
 
 #### BUD-MR-08 — the header meter shows real spend
-- **Do:** Open Expenses on a tour with actuals but no "paid" statuses.
+- **Do:** Open Income or Receipts on a tour with actuals but no "paid" statuses.
 - **Expect:** "£X spent" equals the grid's `act` total; Remaining = budget −
-  spent; the row never overlaps the buttons on its right.
+  spent; the row never overlaps the buttons on its right. (Nov 2026: the
+  Budget tab hides the meter — its summary panel shows the same figures.)
 
 #### BUD-MR-09 — FX: a foreign receipt converts into the line's currency ⚙
 #### BUD-MR-10 — an approved budget's baseline never moves ⚙
@@ -2265,8 +2266,32 @@ test tour only. ✅ = passed live; ⚙ = covered by vitest, not live-run.
 
 - [ ] **BUD-SHEET-10 — Readable.** Grid text is a step larger (14px at the
   default density); section names bold; the open-line ↗ button is grey at
-  rest and turns orange on row hover. The Totals and Commissions tables sit
-  under black title bands and Net is larger.
+  rest and turns orange on row hover. (The Totals / Commissions tables and
+  their black title bands were replaced by one panel — see BUD-PAGE-01.)
+
+## Budget page — one panel (Nov 2026, Adam)
+
+- [ ] **BUD-PAGE-01 — One summary panel.** Budget tab: under the title, ONE
+  light panel — Income · Total expenses · Net (proposed large, "actual so far"
+  under each), then "Where it goes", then folded rows Commissions · Overheads ·
+  Income. No black bands, no tables side by side, and income / expenses / net
+  appear once (not again lower down, not in the toolbar).
+- [ ] **BUD-PAGE-02 — Where it goes.** One row per section: name, "£X spent of
+  £Y", a thin bar. A section over budget is red. Click a row → the grid
+  scrolls to that section (grouped by section).
+- [ ] **BUD-PAGE-03 — Folded rows open in place.** Commissions shows its names
+  and % ("Management 20% · Agency 10%") and total; click → the commission
+  editor opens right there (name, %, Of…, add / remove). Overheads the same
+  (%, fixed amount, typed actual). Income opens the breakdown (+ Add other
+  income). Changing a % moves Total expenses / Net at once.
+- [ ] **BUD-PAGE-04 — Receipts at the top.** "N receipts need details ›" and
+  an orange **Add receipts** button sit on the title line; there is no drop box
+  under the grid. Click → file picker. Progress and "Propose N receipts"
+  appear under the title while adding, and nothing shows when idle.
+- [ ] **BUD-PAGE-05 — Drop anywhere.** Drag a receipt over the budget → a
+  "Drop to add receipts" hint at the bottom. Drop it anywhere (not on a line)
+  → it's added once. Drop it ON a grid line → it attaches to that line, and is
+  NOT also added as a loose receipt.
 
 ## Live exchange rates (Oct 2026)
 

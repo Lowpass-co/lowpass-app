@@ -1,0 +1,226 @@
+/* <BudgetSheetTop> — one panel, rows split by hairlines (Nov 2026).
+   Same family as the tour Overview (tour-overview/overview.css). */
+
+.bs-panel {
+  container-type: inline-size;
+  border: 1px solid var(--lp-border);
+  border-radius: var(--lp-radius-lg);
+  background: var(--lp-surface);
+  padding: var(--lp-space-4) var(--lp-space-5);
+}
+
+.bs-label {
+  margin: 0;
+  font-size: var(--lp-text-xs);
+  color: var(--lp-text-tertiary);
+}
+.bs-sub {
+  font-size: var(--lp-text-xs);
+  color: var(--lp-text-tertiary);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Income · Total expenses · Net ─────────────────────── */
+.bs-figures {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--lp-space-4);
+}
+.bs-fig {
+  display: flex;
+  flex-direction: column;
+  gap: var(--lp-space-1);
+  min-width: 0;
+}
+.bs-big {
+  font-size: var(--lp-text-2xl);
+  font-weight: var(--lp-weight-semibold);
+  line-height: var(--lp-leading-tight);
+  color: var(--color-lp-text);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ── Where it goes ─────────────────────────────────────── */
+.bs-block {
+  margin-top: var(--lp-space-4);
+  padding-top: var(--lp-space-4);
+  border-top: 1px solid var(--lp-border);
+}
+.bs-sections {
+  list-style: none;
+  margin: var(--lp-space-2) 0 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  column-gap: var(--lp-space-8);
+}
+@container (min-width: 720px) {
+  .bs-sections {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@container (min-width: 1100px) {
+  .bs-sections {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+.bs-sec {
+  width: 100%;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas:
+    'name money'
+    'bar bar';
+  align-items: center;
+  column-gap: var(--lp-space-3);
+  row-gap: var(--lp-space-1);
+  padding: var(--lp-space-2) 0;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+}
+.bs-sec:hover .bs-sec-name {
+  color: var(--lp-orange);
+}
+.bs-sec-name {
+  grid-area: name;
+  font-size: var(--lp-text-sm);
+  color: var(--color-lp-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.bs-sec-money {
+  grid-area: money;
+  font-size: var(--lp-text-sm);
+  font-weight: var(--lp-weight-medium);
+  color: var(--color-lp-text);
+  font-variant-numeric: tabular-nums;
+}
+.bs-sec-spent {
+  font-weight: var(--lp-weight-regular);
+  font-size: var(--lp-text-xs);
+  color: var(--lp-text-tertiary);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.bs-sec-spent.is-over {
+  color: var(--color-lp-error);
+}
+.bs-bar {
+  grid-area: bar;
+  display: block;
+  height: var(--lp-space-1);
+  border-radius: var(--lp-radius-full);
+  background: var(--lp-border);
+  overflow: hidden;
+}
+.bs-bar-fill {
+  display: block;
+  height: 100%;
+  border-radius: var(--lp-radius-full);
+  background: var(--color-lp-text-secondary);
+}
+.bs-bar-fill.is-over {
+  background: var(--color-lp-error);
+}
+
+/* ── Folded rows: Commissions · Overheads · Income ─────── */
+.bs-fold,
+.bs-plain {
+  border-top: 1px solid var(--lp-border);
+}
+.bs-figures + .bs-fold,
+.bs-block + .bs-fold {
+  margin-top: var(--lp-space-4);
+}
+.bs-fold-row,
+.bs-plain {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: var(--lp-space-3);
+  padding: var(--lp-space-3) 0;
+  border-left: 0;
+  border-right: 0;
+  border-bottom: 0;
+  background: transparent;
+  text-align: left;
+  font: inherit;
+}
+.bs-fold-row {
+  border-top: 0;
+  cursor: pointer;
+}
+.bs-fold-name {
+  font-size: var(--lp-text-sm);
+  font-weight: var(--lp-weight-medium);
+  color: var(--color-lp-text);
+  white-space: nowrap;
+}
+.bs-fold-summary {
+  flex: 1;
+  min-width: 0;
+  font-size: var(--lp-text-sm);
+  color: var(--lp-text-tertiary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.bs-plain .bs-fold-name {
+  flex: 1;
+}
+.bs-fold-money {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  font-size: var(--lp-text-sm);
+  color: var(--color-lp-text);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.bs-chev {
+  width: var(--lp-space-4);
+  height: var(--lp-space-4);
+  flex-shrink: 0;
+  color: var(--lp-text-tertiary);
+  transition: transform 150ms ease;
+}
+.bs-chev.is-open {
+  transform: rotate(180deg);
+}
+.bs-fold-body {
+  padding-bottom: var(--lp-space-3);
+}
+.bs-th {
+  font-size: var(--lp-text-xs);
+  font-weight: var(--lp-weight-regular);
+  color: var(--lp-text-tertiary);
+}
+
+.bs-note {
+  margin: 0;
+  padding-top: var(--lp-space-3);
+  border-top: 1px solid var(--lp-border);
+  font-size: var(--lp-text-xs);
+  color: var(--lp-text-tertiary);
+}
+
+/* A section scrolled to from "Where it goes" clears the sticky budget bar. */
+.bs-scroll-target {
+  scroll-margin-top: var(--lp-space-16);
+}
+
+@container (max-width: 560px) {
+  .bs-figures {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .bs-fold-summary {
+    display: none;
+  }
+}

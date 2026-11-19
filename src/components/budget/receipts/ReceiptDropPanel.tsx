@@ -1,5 +1,20 @@
 /* ============================================
-   LOWPASS — <ReceiptDropPanel> (RC-1)
+   LOWPASS — receipt drop (RC-1; budget page redraw, Nov 2026)
+
+   Nov 2026 (Adam): the drop box sat BELOW the whole grid, and a file dropped
+   anywhere else on the page was swallowed. Now three pieces share one queue:
+
+     <ReceiptDropProvider>  owns the queue + the window drop listener: a file
+                            dropped ANYWHERE on the budget is taken, unless
+                            something under it (a grid row) already took it
+                            (`defaultPrevented`) — so row drops still attach
+                            to that row and never upload twice.
+     <AddReceiptsButton>    the title-line button (click = browse, drop = add).
+     <ReceiptDropActivity>  progress + proposals, under the title — only while
+                            there is something to show.
+
+   <ReceiptDropPanel> is the three together (tests, and any page that wants
+   the old single block).
 
    Adam: "make it obvious so you can open it and drag in your receipts and it
    will save". So: a PERSISTENT drop target on the Expenses view, not a hidden
@@ -19,9 +34,11 @@
 
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import type { ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
-import { Upload, FileWarning, Check, Loader2, ScanLine } from 'lucide-react';
+import { Upload, FileWarning, Check, Loader2, ScanLine, ChevronRight } from 'lucide-react';
+import './receiptDrop.css';
 import { useReceiptDropQueue, BATCH_OCR_CAP, type DropItem } from './useReceiptDropQueue';
 import {
   ReceiptProposalQueue,
@@ -48,23 +65,54 @@ function StatusIcon({ status }: { status: DropItem['status'] }) {
   return <FileWarning className="h-3.5 w-3.5" style={{ color: 'var(--color-lp-warning)' }} />;
 }
 
-export function ReceiptDropPanel({
+interface DropCtx {
+  tourId: string;
+  items: DropItem[];
+  counts: ReturnType<typeof useReceiptDropQueue>['counts'];
+  busy: boolean;
+  dragging: boolean;
+  addFiles: (files: File[]) => void;
+  clear: () => void;
+  browse: () => void;
+  scanned: DropItem[];
+  readyToPropose: boolean;
+  proposing: boolean;
+  propose: () => Promise<void>;
+  batchId: string | null;
+  proposals: QueueProposal[];
+  lineItems: QueueLineOption[];
+  previewByReceiptId: Record<string, string>;
+  finish: () => void;
+}
+
+const Ctx = createContext<DropCtx | null>(null);
+function useDrop(): DropCtx {
+  const c = useContext(Ctx);
+  if (!c) throw new Error('Receipt drop pieces must sit inside <ReceiptDropProvider>');
+  return c;
+}
+
+const hasFiles = (e: { dataTransfer: DataTransfer | null }) =>
+  Array.from(e.dataTransfer?.types ?? []).includes('Files');
+
+export function ReceiptDropProvider({
   tourId,
   tourCurrency,
   lineItems = [],
+  children,
 }: {
   tourId: string;
   tourCurrency: string;
   /** Budget lines the proposal queue offers as link targets. */
   lineItems?: QueueLineOption[];
+  children: ReactNode;
 }) {
-  const { items, counts, busy, addFiles, clear } = useReceiptDropQueue(tourId, tourCurrency);
+  const { items, counts, busy, addFiles: enqueue, clear } = useReceiptDropQueue(tourId, tourCurrency);
   const [dragging, setDragging] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const router = useRouter();
 
-  /* RC-3 — once a drop finishes scanning, stage PROPOSALS. This is the only
-     bridge between RC-1's pipeline and RC-2's engine, and it still writes no
+  /* RC-3 — once a drop finishes scanning, stage PROPOSALS. Still writes no
      money: the proposals route only stages rows for review. */
   const [batchId, setBatchId] = useState<string | null>(null);
   const [proposals, setProposals] = useState<QueueProposal[]>([]);
@@ -79,6 +127,10 @@ export function ReceiptDropPanel({
     return m;
   }, [items]);
 
+  const addFiles = useCallback((files: File[]) => {
+    if (files.length) void enqueue(files);
+  }, [enqueue]);
+
   const propose = useCallback(async () => {
     setProposing(true);
     try {
@@ -90,10 +142,7 @@ export function ReceiptDropPanel({
           receipts: scanned.map((i) => ({ receiptId: i.receiptId, ocr: i.ocr })),
         }),
       });
-      const j = (await res.json().catch(() => ({}))) as {
-        batchId?: string;
-        proposals?: QueueProposal[];
-      };
+      const j = (await res.json().catch(() => ({}))) as { batchId?: string; proposals?: QueueProposal[] };
       if (res.ok && j.batchId) {
         setBatchId(j.batchId);
         setProposals(j.proposals ?? []);
@@ -103,12 +152,21 @@ export function ReceiptDropPanel({
     }
   }, [tourId, scanned]);
 
-  /* Page-level drag awareness — dragging a file ANYWHERE over the budget lights
-     the zone. dragenter/leave fire per-element, so count depth rather than
-     toggling, otherwise crossing a child element flickers the highlight off. */
+  const finish = useCallback(() => {
+    // The grid reads server state; a refresh shows the moved actuals.
+    setBatchId(null);
+    setProposals([]);
+    clear();
+    router.refresh();
+  }, [clear, router]);
+
+  /* Page-level drag. dragenter/leave fire per element, so count depth rather
+     than toggling, or crossing a child flickers the hint off. A drop that
+     nothing below took (not defaultPrevented) is a receipt drop. */
   const depth = useRef(0);
+  const addRef = useRef(addFiles);
+  addRef.current = addFiles;
   useEffect(() => {
-    const hasFiles = (e: DragEvent) => Array.from(e.dataTransfer?.types ?? []).includes('Files');
     const onEnter = (e: DragEvent) => {
       if (!hasFiles(e)) return;
       depth.current += 1;
@@ -124,10 +182,11 @@ export function ReceiptDropPanel({
     };
     const onDropAnywhere = (e: DragEvent) => {
       if (!hasFiles(e)) return;
-      // Outside the zone: swallow it so the browser doesn't navigate to the file.
-      e.preventDefault();
       depth.current = 0;
       setDragging(false);
+      if (e.defaultPrevented) return; // a grid row (or the button) already took it
+      e.preventDefault(); // never let the browser navigate to the file
+      addRef.current(Array.from(e.dataTransfer?.files ?? []));
     };
     window.addEventListener('dragenter', onEnter);
     window.addEventListener('dragleave', onLeave);
@@ -141,98 +200,16 @@ export function ReceiptDropPanel({
     };
   }, []);
 
-  const onDrop = useCallback(
-    (e: React.DragEvent) => {
-      e.preventDefault();
-      e.stopPropagation();
-      depth.current = 0;
-      setDragging(false);
-      const files = Array.from(e.dataTransfer?.files ?? []);
-      if (files.length) void addFiles(files);
-    },
-    [addFiles],
-  );
+  const value: DropCtx = {
+    tourId, items, counts, busy, dragging, addFiles, clear,
+    browse: () => inputRef.current?.click(),
+    scanned, readyToPropose, proposing, propose, batchId, proposals, lineItems,
+    previewByReceiptId, finish,
+  };
 
   return (
-    <section
-      aria-label="Receipts"
-      style={{
-        border: '1px solid var(--lp-border)',
-        borderRadius: 'var(--lp-radius-lg)',
-        background: 'var(--lp-surface)',
-        padding: 'var(--lp-space-4)',
-      }}
-    >
-      <header className="flex flex-wrap items-baseline" style={{ gap: 10, marginBottom: 'var(--lp-space-3)' }}>
-        <h2 className="lp-label-caps" style={{ margin: 0, fontSize: 'var(--lp-text-2xs)', color: 'var(--lp-text-tertiary)' }}>
-          Receipts
-        </h2>
-        {/* RQ-6 — the way OUT of this panel. A receipt that fails to scan used to
-            vanish from the user's view; now every one of them is one click away,
-            named, on a tab that also says how many need attention. */}
-        <a
-          data-testid="receipt-bank-link"
-          href={`/budget/${tourId}?tab=receipts`}
-          style={{ fontSize: 'var(--lp-text-2xs)', color: 'var(--lp-text-secondary)', textDecoration: 'underline' }}
-        >
-          See all receipts
-        </a>
-        {counts.total > 0 ? (
-          <span className="lp-mono" style={{ fontSize: '12.5px', color: 'var(--lp-text-secondary)' }}>
-            {counts.saved}/{counts.total} saved
-            {counts.proposed ? ` · ${counts.proposed} read` : ''}
-            {counts.manual ? ` · ${counts.manual} need details` : ''}
-            {counts.failed ? ` · ${counts.failed} failed` : ''}
-          </span>
-        ) : null}
-        {counts.total > 0 && !busy ? (
-          <button
-            type="button"
-            onClick={clear}
-            style={{
-              marginLeft: 'auto',
-              border: 0,
-              background: 'transparent',
-              cursor: 'pointer',
-              fontSize: 'var(--lp-text-xs)',
-              color: 'var(--lp-text-tertiary)',
-            }}
-          >
-            Clear list
-          </button>
-        ) : null}
-      </header>
-
-      {/* The drop target. A real button so keyboard + click-to-browse work. */}
-      <button
-        type="button"
-        data-testid="receipt-drop-zone"
-        onClick={() => inputRef.current?.click()}
-        onDrop={onDrop}
-        onDragOver={(e) => e.preventDefault()}
-        className="btn-transition w-full"
-        style={{
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          gap: 6,
-          padding: 'var(--lp-space-6) var(--lp-space-4)',
-          borderRadius: 'var(--lp-radius-lg)',
-          border: `2px dashed ${dragging ? 'var(--lp-orange)' : 'var(--lp-border-strong)'}`,
-          background: dragging ? 'color-mix(in srgb, var(--lp-orange) 6%, transparent)' : 'var(--lp-panel)',
-          cursor: 'pointer',
-          textAlign: 'center',
-        }}
-      >
-        <Upload className="h-5 w-5" style={{ color: dragging ? 'var(--lp-orange)' : 'var(--lp-text-tertiary)' }} />
-        <span style={{ fontSize: 'var(--lp-text-sm)', fontWeight: 'var(--lp-weight-semibold)', color: 'var(--lp-text)' }}>
-          Drop receipts here — photos or PDFs — we&apos;ll read them and propose lines
-        </span>
-        <span style={{ fontSize: 'var(--lp-text-xs)', color: 'var(--lp-text-tertiary)' }}>
-          or click to browse · nothing is added to the budget without your approval
-        </span>
-      </button>
-
+    <Ctx.Provider value={value}>
+      {children}
       <input
         ref={inputRef}
         type="file"
@@ -241,68 +218,98 @@ export function ReceiptDropPanel({
         aria-label="Choose receipt files"
         style={{ display: 'none' }}
         onChange={(e) => {
-          const files = Array.from(e.target.files ?? []);
-          if (files.length) void addFiles(files);
+          addFiles(Array.from(e.target.files ?? []));
           e.target.value = ''; // let the same file be re-picked
         }}
       />
+      {/* The hint never blocks: pointer-events off, so a drop still lands on
+          the row under it (attach there) or on the page (new receipt). */}
+      {dragging ? (
+        <div className="rd-hint" role="status" data-testid="receipt-drop-hint">
+          <Upload className="h-4 w-4" aria-hidden />
+          Drop to add receipts — or onto a line to attach it there
+        </div>
+      ) : null}
+    </Ctx.Provider>
+  );
+}
+
+/** "Add receipts" — the page's one orange button. Click = browse; a drop on it
+ *  is taken here (the window listener sees defaultPrevented and skips it). */
+export function AddReceiptsButton() {
+  const d = useDrop();
+  return (
+    <button
+      type="button"
+      data-testid="receipt-drop-zone"
+      className={`rd-add${d.dragging ? ' is-dragging' : ''}`}
+      onClick={d.browse}
+      onDragOver={(e) => { if (hasFiles(e)) e.preventDefault(); }}
+      onDrop={(e) => {
+        if (!hasFiles(e)) return;
+        e.preventDefault();
+        d.addFiles(Array.from(e.dataTransfer?.files ?? []));
+      }}
+      title="Photos or PDFs — we read them and propose lines. Nothing is added to the budget without your approval."
+    >
+      <Upload className="h-4 w-4" aria-hidden />
+      Add receipts
+    </button>
+  );
+}
+
+/** "N need details" beside the button — the way to the receipts bank. */
+export function ReceiptsNeedDetailsLink({ tourId, count }: { tourId: string; count: number }) {
+  return (
+    <a data-testid="receipt-bank-link" className="rd-need" href={`/budget/${tourId}?tab=receipts`}>
+      {count > 0 ? `${count} receipt${count === 1 ? '' : 's'} need details` : 'All receipts'}
+      <ChevronRight className="h-3.5 w-3.5" aria-hidden />
+    </a>
+  );
+}
+
+/** Progress + proposals, under the title. Nothing renders while idle. */
+export function ReceiptDropActivity() {
+  const d = useDrop();
+  const { counts, items } = d;
+  if (items.length === 0 && !d.batchId) return null;
+  return (
+    <section aria-label="Receipts" className="rd-panel">
+      <header className="rd-panel-head">
+        <span className="rd-label">Adding receipts</span>
+        {counts.total > 0 ? (
+          <span className="rd-counts">
+            {counts.saved}/{counts.total} saved
+            {counts.proposed ? ` · ${counts.proposed} read` : ''}
+            {counts.manual ? ` · ${counts.manual} need details` : ''}
+            {counts.failed ? ` · ${counts.failed} failed` : ''}
+          </span>
+        ) : null}
+        {counts.total > 0 && !d.busy ? (
+          <button type="button" className="rd-clear" onClick={d.clear}>Clear list</button>
+        ) : null}
+      </header>
 
       {items.length > 0 ? (
-        <ul
-          aria-live="polite"
-          style={{ listStyle: 'none', margin: 'var(--lp-space-3) 0 0', padding: 0, display: 'grid', gap: 6 }}
-        >
+        <ul aria-live="polite" className="rd-list">
           {items.map((it) => (
-            <li
-              key={it.key}
-              data-testid="receipt-drop-item"
-              style={{
-                display: 'grid',
-                gridTemplateColumns: '34px minmax(0,1fr) auto',
-                alignItems: 'center',
-                gap: 10,
-                padding: '6px 8px',
-                borderRadius: 'var(--lp-radius-md)',
-                background: 'var(--lp-panel)',
-              }}
-            >
+            <li key={it.key} data-testid="receipt-drop-item" className="rd-item">
               {it.previewUrl ? (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={it.previewUrl}
-                  alt=""
-                  style={{ width: 34, height: 34, objectFit: 'cover', borderRadius: 'var(--lp-radius-sm)' }}
-                />
+                <img src={it.previewUrl} alt="" className="rd-thumb" />
               ) : (
-                <span
-                  aria-hidden
-                  style={{
-                    width: 34,
-                    height: 34,
-                    display: 'grid',
-                    placeItems: 'center',
-                    borderRadius: 'var(--lp-radius-sm)',
-                    background: 'var(--lp-surface)',
-                  }}
-                >
-                  <ScanLine className="h-3.5 w-3.5" style={{ color: 'var(--lp-text-tertiary)' }} />
+                <span aria-hidden className="rd-thumb rd-thumb-empty">
+                  <ScanLine className="h-3.5 w-3.5" />
                 </span>
               )}
-              <span style={{ minWidth: 0 }}>
-                <span
-                  className="truncate"
-                  style={{ display: 'block', fontSize: 'var(--lp-text-sm)', color: 'var(--lp-text)' }}
-                >
+              <span className="rd-name">
+                <span className="truncate">
                   {it.receiptNumber ? `${it.receiptNumber} · ` : ''}
                   {it.fileName}
                 </span>
-                {it.note ? (
-                  <span style={{ display: 'block', fontSize: 'var(--lp-text-2xs)', color: 'var(--lp-text-tertiary)' }}>
-                    {it.note}
-                  </span>
-                ) : null}
+                {it.note ? <span className="rd-note">{it.note}</span> : null}
               </span>
-              <span className="flex items-center" style={{ gap: 6, fontSize: 'var(--lp-text-xs)', color: 'var(--lp-text-secondary)' }}>
+              <span className="rd-status">
                 <StatusIcon status={it.status} />
                 {STATUS_LABEL[it.status]}
               </span>
@@ -311,49 +318,66 @@ export function ReceiptDropPanel({
         </ul>
       ) : null}
 
-      {readyToPropose ? (
+      {d.readyToPropose ? (
         <button
           type="button"
           data-testid="receipt-propose"
-          onClick={() => void propose()}
-          disabled={proposing}
-          className="btn-transition"
-          style={{
-            marginTop: 'var(--lp-space-3)',
-            padding: '8px 16px',
-            borderRadius: 'var(--lp-radius-md)',
-            border: '1px solid var(--lp-orange)',
-            background: 'var(--lp-orange)',
-            color: '#fff',
-            fontSize: 'var(--lp-text-sm)',
-            fontWeight: 'var(--lp-weight-semibold)',
-            cursor: proposing ? 'wait' : 'pointer',
-          }}
+          onClick={() => void d.propose()}
+          disabled={d.proposing}
+          className="rd-propose"
         >
-          {proposing ? 'Reading the budget…' : `Propose ${scanned.length} receipt${scanned.length === 1 ? '' : 's'}`}
+          {d.proposing ? 'Reading the budget…' : `Propose ${d.scanned.length} receipt${d.scanned.length === 1 ? '' : 's'}`}
         </button>
       ) : null}
 
-      {batchId ? (
+      {d.batchId ? (
         <ReceiptProposalQueue
-          batchId={batchId}
-          proposals={proposals}
-          lines={lineItems}
-          previewByReceiptId={previewByReceiptId}
-          onApplied={() => {
-            // The grid reads server state; a refresh shows the moved actuals.
-            setBatchId(null);
-            setProposals([]);
-            clear();
-            router.refresh();
-          }}
+          batchId={d.batchId}
+          proposals={d.proposals}
+          lines={d.lineItems}
+          previewByReceiptId={d.previewByReceiptId}
+          onApplied={d.finish}
         />
       ) : null}
 
-      <p style={{ marginTop: 'var(--lp-space-2)', fontSize: 'var(--lp-text-2xs)', color: 'var(--lp-text-tertiary)' }}>
+      <p className="rd-foot">
         Receipts are saved before they&apos;re read, so a failed scan never loses one. Up to{' '}
         {BATCH_OCR_CAP} per drop are scanned automatically.
       </p>
     </section>
+  );
+}
+
+/** The budget page's wrapper: the provider while the budget tab shows a sheet,
+ *  plain children otherwise (no window drop listener on other tabs). */
+export function BudgetReceiptDrop({
+  enabled,
+  children,
+  ...props
+}: {
+  enabled: boolean;
+  tourId: string;
+  tourCurrency: string;
+  lineItems?: QueueLineOption[];
+  children: ReactNode;
+}) {
+  if (!enabled) return <>{children}</>;
+  return <ReceiptDropProvider {...props}>{children}</ReceiptDropProvider>;
+}
+
+/** The three together — the old single block. */
+export function ReceiptDropPanel(props: {
+  tourId: string;
+  tourCurrency: string;
+  lineItems?: QueueLineOption[];
+}) {
+  return (
+    <ReceiptDropProvider {...props}>
+      <div className="flex flex-wrap items-center gap-2">
+        <ReceiptsNeedDetailsLink tourId={props.tourId} count={0} />
+        <AddReceiptsButton />
+      </div>
+      <ReceiptDropActivity />
+    </ReceiptDropProvider>
   );
 }
