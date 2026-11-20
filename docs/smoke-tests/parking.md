@@ -417,6 +417,14 @@ browser key restricted to the Map Tiles API and the app's domains).**
 
 **Last verified**:
 
+#### PRK-50 — A route into a cut-away lies on the floor in 3D
+
+**Do**: On a map with an inside drawing (roof cut away), draw a route from a bus outside to a door inside. Open 3D and look from the side.
+
+**Expect**: Outside, the route lies on the street; at the building edge it carries straight on along the inside floor, at floor height, to its arrowhead — it never climbs the walls or runs along the roof edge. One arrowhead, at the end. Same over a "Flat in 3D" area.
+
+**Last verified**:
+
 ## Known broken
 
 #### PRK-90 — Re-exporting makes a new file
