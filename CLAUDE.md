@@ -299,6 +299,11 @@ recreate a `_legacy/` tree: delete dead code instead of parking it.
   rows Commissions · Overheads · Income that open their editors in place.
   Don't bring back the side-by-side Totals / Commissions tables or repeat the
   bottom line (the toolbar meter is hidden on this tab for that reason).
+- **Other income is typed in the summary** (Income fold: one row per source —
+  name, proposed, actual, Commission tick, remove; **+ Add income** makes the
+  tour's one `kind: 'income'` section on first use). The GRID IS COSTS ONLY:
+  the page passes it lines without `isIncomeRow` and sections without the
+  income kind — don't put income back in the grid (Nov 2026, Adam).
 - The Budget tab has NO title block (the rail says Budget). Receipts on the
   budget: "N need details" + **Add receipts** in the toolbar band
   (`BudgetContextBand` `actions`); progress under the band (`ReceiptDropProvider` / `AddReceiptsButton` /

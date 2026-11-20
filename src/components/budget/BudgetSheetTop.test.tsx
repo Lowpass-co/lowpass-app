@@ -196,13 +196,80 @@ describe('<BudgetSheetTop>', () => {
     expect(hotels.textContent).toContain('of £1,000.00');
   });
 
-  it('offers to add an Other income section when the tour has none', async () => {
-    fetchMock.mockResolvedValue(new Response('{"id":"s9"}', { status: 200 }));
+  /* Nov 2026 (Adam): "it added an 'other income' line to the summary but
+     isn't editable" — Other income is now typed right here. */
+  it('Add income makes the section (first time) and a line, ready to name', async () => {
+    fetchMock
+      .mockResolvedValueOnce(new Response('{"id":"s9"}', { status: 200 }))
+      .mockResolvedValueOnce(new Response('{"id":"i9","label":"New income","proposed_cost":0,"actual_cost":0,"currency":"GBP","section_id":"s9"}', { status: 200 }));
     mount();
-    fireEvent.click(within(screen.getByTestId('sheet-income-other')).getByRole('button', { name: /Add/ }));
+    expect(screen.queryByTestId('sheet-income-other')).toBeNull(); // nothing yet
+    fireEvent.click(screen.getByRole('button', { name: /Add income/ }));
+    await waitFor(() => expect(screen.getAllByTestId('sheet-other-income-line').length).toBe(1));
+    const [u1, i1] = fetchMock.mock.calls[0];
+    expect(u1).toBe('/api/budget/sections');
+    expect(JSON.parse((i1 as RequestInit).body as string)).toEqual({ tour_id: 't', name: 'Other income', kind: 'income' });
+    const [u2, i2] = fetchMock.mock.calls[1];
+    expect(u2).toBe('/api/budget/line-items');
+    expect(JSON.parse((i2 as RequestInit).body as string)).toMatchObject({ section_id: 's9', section: 'income', label: 'New income' });
+    expect(document.activeElement).toBe(screen.getByLabelText('Income name'));
+    expect(screen.getByTestId('sheet-income-other')).toBeTruthy();
+  });
+
+  it('an existing Other income section is reused, not made again', async () => {
+    fetchMock.mockResolvedValueOnce(new Response('{"id":"i9","label":"New income","proposed_cost":0,"actual_cost":0}', { status: 200 }));
+    mount({ sections: [...sections, { id: 's9', name: 'Other income', kind: 'income', sort_order: 9 } as unknown as BudgetSection] });
+    fireEvent.click(screen.getByRole('button', { name: /Add income/ }));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    expect(fetchMock.mock.calls[0][0]).toBe('/api/budget/line-items');
+  });
+
+  const buyOn = { id: 'i1', section_id: 's9', section: 'income', label: 'Support buy-on', proposed_cost: 2000, actual_cost: 0, currency: null } as unknown as BudgetLineItem;
+
+  it('typing an amount saves it and moves Income at once', async () => {
+    mount({ lines: [...lines, buyOn] });
+    expect(screen.getByTestId('sheet-headline-income').textContent).toContain('£8,000.00'); // 5,000 + 1,000 + 2,000
+    const box = screen.getByLabelText('Support buy-on proposed');
+    fireEvent.change(box, { target: { value: '3000' } });
+    fireEvent.blur(box);
+    expect(screen.getByTestId('sheet-headline-income').textContent).toContain('£9,000.00');
     await waitFor(() => expect(fetchMock).toHaveBeenCalled());
     const [url, init] = fetchMock.mock.calls[0];
-    expect(url).toBe('/api/budget/sections');
-    expect(JSON.parse((init as RequestInit).body as string)).toEqual({ tour_id: 't', name: 'Other income', kind: 'income' });
+    expect(url).toBe('/api/budget/line-items');
+    expect((init as RequestInit).method).toBe('PATCH');
+    expect(JSON.parse((init as RequestInit).body as string)).toEqual({ id: 'i1', proposed_cost: 3000 });
+  });
+
+  it('a typed actual is kept as typed (override), and the name saves', async () => {
+    mount({ lines: [...lines, buyOn] });
+    const act = screen.getByLabelText('Support buy-on actual');
+    fireEvent.change(act, { target: { value: '1500' } });
+    fireEvent.blur(act);
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    expect(JSON.parse((fetchMock.mock.calls[0][1] as RequestInit).body as string)).toEqual({ id: 'i1', actual_cost: 1500, actual_cost_override: true });
+    const name = screen.getByLabelText('Income name');
+    fireEvent.change(name, { target: { value: 'Sponsor' } });
+    fireEvent.blur(name);
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    expect(JSON.parse((fetchMock.mock.calls[1][1] as RequestInit).body as string)).toEqual({ id: 'i1', label: 'Sponsor' });
+  });
+
+  it('remove asks first, then deletes; a failed save puts the figure back', async () => {
+    mount({ lines: [...lines, buyOn] });
+    fireEvent.click(screen.getByRole('button', { name: 'Remove Support buy-on' }));
+    expect(fetchMock).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'Remove' }));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalled());
+    expect(fetchMock.mock.calls[0][0]).toBe('/api/budget/line-items?ids=i1');
+    expect(screen.queryAllByTestId('sheet-other-income-line').length).toBe(0);
+  });
+
+  it('a refused save restores the old amount', async () => {
+    fetchMock.mockResolvedValue(new Response('{"error":"This budget is approved & locked."}', { status: 423 }));
+    mount({ lines: [...lines, buyOn] });
+    const box = screen.getByLabelText('Support buy-on proposed');
+    fireEvent.change(box, { target: { value: '3000' } });
+    fireEvent.blur(box);
+    await waitFor(() => expect(screen.getByTestId('sheet-headline-income').textContent).toContain('£8,000.00'));
   });
 });

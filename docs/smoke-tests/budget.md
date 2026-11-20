@@ -2285,6 +2285,13 @@ test tour only. ✅ = passed live; ⚙ = covered by vitest, not live-run.
   editor opens right there (name, %, Of…, add / remove). Overheads the same
   (%, fixed amount, typed actual). Income opens the breakdown (+ Add other
   income). Changing a % moves Total expenses / Net at once.
+- [ ] **BUD-PAGE-06 — Other income is typed in the summary.** Open Income →
+  **+ Add income**: a row appears with its name selected — type "Support
+  buy-on", tab to Proposed, type an amount; Income and Net move at once and the
+  figure is there after a reload. Actual can be typed too; "Commission" unticked
+  leaves it out of commissions that take a share of Other income. × asks
+  "Remove" before deleting. The grid has NO Other income section or income
+  lines (it's costs only), and receipts can't be filed against income.
 - [ ] **BUD-PAGE-04 — Receipts at the top.** "N receipts need details ›" and
   an orange **Add receipts** button sit in the toolbar band, left of the
   density / currency / Workbook / Export controls; there is no drop box
