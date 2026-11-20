@@ -288,9 +288,19 @@ recreate a `_legacy/` tree: delete dead code instead of parking it.
 
 ### Budget sheet — one page (Oct 2026, Adam's Sheets template)
 
-- `/budget/[tourId]?tab=budget` is THE budget: `<BudgetSheetTop>` (totals per
-  section + overhead % typed in place + commissions table) above the grid.
-  The Summary card dashboard is DELETED; `?tab=summary|reports` resolve to
+- `/budget/[tourId]?tab=budget` is THE budget: `<BudgetSheetTop>` above the
+  grid — since Nov 2026 (Adam) ONE light panel in the tour Overview's style
+  (`budgetSheet.css`): Income · Total expenses · Net once, "Where it goes"
+  (per section: spent of proposed + bar, click scrolls the grid), then FOLDED
+  rows Commissions · Overheads · Income that open their editors in place.
+  Don't bring back the side-by-side Totals / Commissions tables or repeat the
+  bottom line (the toolbar meter is hidden on this tab for that reason).
+- Receipts on the budget: "N need details" + **Add receipts** on the title
+  line; progress under it (`ReceiptDropProvider` / `AddReceiptsButton` /
+  `ReceiptDropActivity`). A file dropped ANYWHERE on the page is a receipt
+  unless a grid row took it (`defaultPrevented`) — never re-add a drop box
+  under the grid, and never let a row drop upload twice (tested).
+- The Summary card dashboard is DELETED; `?tab=summary|reports` resolve to
   `budget`. Sheet figures are `computeBudgetPnl` recomputed client-side;
   section rows are `sheetTotalsBySection` (Σ pinned to `baseExpenses` by test).
 - Salary / per-diem rows carry READ-ONLY rate columns from

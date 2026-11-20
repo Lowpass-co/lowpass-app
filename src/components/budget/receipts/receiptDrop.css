@@ -1,0 +1,150 @@
+/* Receipt drop — title-line button, activity panel, drag hint (Nov 2026). */
+
+.rd-add {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--lp-space-1);
+  padding: var(--lp-space-2) var(--lp-space-4);
+  font-size: var(--lp-text-sm);
+  font-weight: var(--lp-weight-semibold);
+  color: var(--lp-text-inverse);
+  background: var(--lp-orange);
+  border: 0;
+  border-radius: var(--lp-radius-md);
+  cursor: pointer;
+}
+.rd-add:hover {
+  background: var(--lp-orange-hover);
+}
+.rd-add.is-dragging {
+  box-shadow: var(--lp-shadow-focus-ring);
+}
+
+.rd-need {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--lp-space-1);
+  font-size: var(--lp-text-sm);
+  color: var(--color-lp-text-secondary);
+  text-decoration: none;
+}
+.rd-need:hover {
+  color: var(--color-lp-text);
+}
+
+.rd-panel {
+  border: 1px solid var(--lp-border);
+  border-radius: var(--lp-radius-lg);
+  background: var(--lp-surface);
+  padding: var(--lp-space-4) var(--lp-space-5);
+}
+.rd-panel-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--lp-space-3);
+  margin-bottom: var(--lp-space-3);
+}
+.rd-label {
+  font-size: var(--lp-text-xs);
+  color: var(--lp-text-tertiary);
+}
+.rd-counts {
+  font-family: var(--lp-font-numeric);
+  font-size: var(--lp-text-xs);
+  color: var(--color-lp-text-secondary);
+}
+.rd-clear {
+  margin-left: auto;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  font-size: var(--lp-text-xs);
+  color: var(--lp-text-tertiary);
+}
+.rd-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.rd-item {
+  display: grid;
+  grid-template-columns: var(--lp-space-8) minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--lp-space-3);
+  padding: var(--lp-space-2) 0;
+}
+.rd-item + .rd-item {
+  border-top: 1px solid var(--lp-border);
+}
+.rd-thumb {
+  width: var(--lp-space-8);
+  height: var(--lp-space-8);
+  object-fit: cover;
+  border-radius: var(--lp-radius-sm);
+}
+.rd-thumb-empty {
+  display: grid;
+  place-items: center;
+  background: var(--lp-panel);
+  color: var(--lp-text-tertiary);
+}
+.rd-name {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  font-size: var(--lp-text-sm);
+  color: var(--color-lp-text);
+}
+.rd-note {
+  font-size: var(--lp-text-2xs);
+  color: var(--lp-text-tertiary);
+}
+.rd-status {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--lp-space-1);
+  font-size: var(--lp-text-xs);
+  color: var(--color-lp-text-secondary);
+}
+.rd-propose {
+  margin-top: var(--lp-space-3);
+  padding: var(--lp-space-2) var(--lp-space-4);
+  border: 0;
+  border-radius: var(--lp-radius-md);
+  background: var(--lp-orange);
+  color: var(--lp-text-inverse);
+  font-size: var(--lp-text-sm);
+  font-weight: var(--lp-weight-semibold);
+  cursor: pointer;
+}
+.rd-propose:disabled {
+  cursor: wait;
+  opacity: 0.7;
+}
+.rd-foot {
+  margin: var(--lp-space-3) 0 0;
+  font-size: var(--lp-text-2xs);
+  color: var(--lp-text-tertiary);
+}
+
+/* While a file is dragged over the page. Never takes the drop. */
+.rd-hint {
+  position: fixed;
+  left: 50%;
+  bottom: var(--lp-space-8);
+  transform: translateX(-50%);
+  z-index: var(--lp-z-toast);
+  pointer-events: none;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--lp-space-2);
+  padding: var(--lp-space-3) var(--lp-space-5);
+  border: 2px dashed var(--lp-orange);
+  border-radius: var(--lp-radius-full);
+  background: var(--lp-surface);
+  box-shadow: var(--lp-shadow-lg);
+  font-size: var(--lp-text-sm);
+  font-weight: var(--lp-weight-semibold);
+  color: var(--color-lp-text);
+}

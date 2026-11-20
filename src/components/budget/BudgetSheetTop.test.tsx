@@ -1,5 +1,5 @@
 /* ============================================
-   LOWPASS — the budget sheet's top block (Oct 2026)
+   LOWPASS — the budget sheet's top block (Oct 2026; folded rows Nov 2026)
 
    Pins: section totals and the P&L lines render; typing an overhead % or a
    commission % recalculates on the spot AND saves to the same rows Tour
@@ -21,8 +21,13 @@ const lines = [
 ] as unknown as BudgetLineItem[];
 const income = [{ pre_tax_guarantee: 5000, withholding_pct: 0, merch_income: 1000 }];
 
-function mount(extra: Partial<Parameters<typeof BudgetSheetTop>[0]> = {}) {
-  return render(
+/** The editors live behind folded rows (Nov 2026 redraw). */
+function open(...folds: Array<'commissions' | 'overheads' | 'income'>) {
+  for (const f of folds) fireEvent.click(within(screen.getByTestId(`sheet-fold-${f}`)).getAllByRole('button')[0]);
+}
+
+function mount(extra: Partial<Parameters<typeof BudgetSheetTop>[0]> = {}, folds: Array<'commissions' | 'overheads' | 'income'> = ['commissions', 'overheads', 'income']) {
+  const r = render(
     <BudgetSheetTop
       tourId="t"
       tourCurrency="GBP"
@@ -35,6 +40,8 @@ function mount(extra: Partial<Parameters<typeof BudgetSheetTop>[0]> = {}) {
       {...extra}
     />,
   );
+  open(...folds);
+  return r;
 }
 
 describe('money()', () => {
@@ -56,9 +63,37 @@ describe('<BudgetSheetTop>', () => {
   it('one row per section, then the overheads, total and net', () => {
     mount();
     const totals = screen.getByRole('region', { name: 'Budget totals' });
-    for (const label of ['Salaries', 'Hotels', 'Commissions', 'Accountancy', 'Insurance', 'Contingency', 'Total expenses', 'Income', 'Net']) {
+    for (const label of ['Salaries', 'Hotels', 'Commissions', 'Accountancy', 'Insurance', 'Contingency', 'Total expenses', 'Net']) {
       expect(within(totals).getByText(label)).toBeTruthy();
     }
+    // Income is the headline figure AND the folded breakdown row.
+    expect(within(totals).getAllByText('Income').length).toBe(2);
+  });
+
+  it('commissions, overheads and income start folded — one row each', () => {
+    mount({}, []);
+    for (const f of ['commissions', 'overheads', 'income']) {
+      const row = within(screen.getByTestId(`sheet-fold-${f}`)).getAllByRole('button')[0];
+      expect(row.getAttribute('aria-expanded')).toBe('false');
+    }
+    expect(screen.queryByTestId('sheet-commission-row')).toBeNull();
+    expect(screen.queryByLabelText('Insurance percentage')).toBeNull();
+    // The folded row still says what is inside.
+    expect(within(screen.getByTestId('sheet-fold-commissions')).getByText('Merch 20%')).toBeTruthy();
+    expect(within(screen.getByTestId('sheet-fold-overheads')).getByText('Contingency 2%')).toBeTruthy();
+  });
+
+  it('income, expenses and net each show once', () => {
+    mount();
+    expect(screen.getAllByTestId('sheet-total-expenses').length).toBe(1);
+    expect(screen.getAllByTestId('sheet-net').length).toBe(1);
+  });
+
+  it('a section row shows proposed, spent and a spend bar', () => {
+    mount({}, []);
+    const salaries = screen.getByTestId('sheet-section-s1');
+    expect(salaries.textContent).toContain('Salaries£500.00 spent of £1,000.00');
+    expect((salaries.querySelector('.bs-bar-fill') as HTMLElement).style.width).toBe('50%');
   });
 
   it('the merch commission shows its own row with its amount', () => {
@@ -153,10 +188,12 @@ describe('<BudgetSheetTop>', () => {
     mount({ lines: withDeposit });
     expect(within(screen.getByTestId('sheet-income-show')).getByText('£5,000.00')).toBeTruthy();
     expect(within(screen.getByTestId('sheet-income-merch')).getByText('£1,000.00')).toBeTruthy();
-    expect(within(screen.getByTestId('sheet-deposits-owed')).getAllByText('£3,500.00').length).toBe(2);
+    const owed = screen.getByTestId('sheet-deposits-owed');
+    expect(within(owed).getByText('£3,500.00')).toBeTruthy();
+    expect(within(owed).getByText('£3,500.00 so far')).toBeTruthy();
     // Hotels stays £1,000 proposed — the deposit is not a cost.
-    const hotels = screen.getByText('Hotels').closest('tr')!;
-    expect(within(hotels).getByText('£1,000.00')).toBeTruthy();
+    const hotels = screen.getByTestId('sheet-section-s2');
+    expect(hotels.textContent).toContain('of £1,000.00');
   });
 
   it('offers to add an Other income section when the tour has none', async () => {
