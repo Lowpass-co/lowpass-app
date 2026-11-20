@@ -7,10 +7,11 @@
    for the overhead plan. Google Photorealistic 3D Tiles (same Map Tiles API
    key as the satellite) rendered by CesiumJS, with the drawing on top:
 
-     · vehicles — true-size blocks from blocks3d.ts (the overhead plan's parts,
-       lifted to their real heights), at the ground height sampled from the
-       mesh: the LOWEST of the vehicle's centre and corners, so a tree over a
-       bus doesn't lift it onto the canopy
+     · vehicles — true-size models from models3d.ts (a Skyliner, a Prevost,
+       a cab-over artic, a Sprinter …), all in ONE primitive with their shading
+       baked in (unlit — the same at any time of day), at the ground height
+       sampled from the mesh: the LOWEST of the vehicle's centre and corners,
+       so a tree over a bus doesn't lift it onto the canopy
      · routes, areas, measurements — draped on the ground
      · markers and vehicle names — labels that stay readable through roofs,
        laid out each frame (labels3d.ts): nearest first, a label that would
@@ -33,11 +34,12 @@ import type * as CesiumNS from 'cesium';
 import { dist, fmtMetres, tileRect, tilesCovering, toLatLng, toLocal, type Camera3d, type LatLng, type Pt } from '@/lib/parking/geo';
 import { getTileSession, tileUrl } from './googleTiles';
 import { areaLabel, markerSpec, vehicleSpec } from '@/lib/parking/catalogue';
-import { ringAround, standingHeight, vehicleBlocks, type Block } from '@/lib/parking/blocks3d';
+import { ringAround, standingHeight } from '@/lib/parking/blocks3d';
+import { meshToLocal, vehicleMesh } from '@/lib/parking/models3d';
+import { bakeColours, hexRgb, tint, type Mat, type V3 } from '@/lib/parking/mesh3d';
 import { vehicleCorners, type AreaItem, type ParkingDrawing, type ParkingItem, type VehicleItem } from '@/lib/parking/model';
 import { rimRuns, smoothTops, wallRing, wallSegments, type WallSegment } from '@/lib/parking/walls3d';
 import { drawingsIn3d, drawingUnder, footprint, insideAt, insideFootprint, itemFloor, itemPoint, pointInPolygon, svgMatrix } from '@/lib/parking/drawings';
-import type { PartKind } from '@/lib/parking/silhouettes';
 import { labelBox, placeLabels, type LabelBox } from '@/lib/parking/labels3d';
 import { splitRoute } from '@/lib/parking/routes3d';
 import { areaColour, vehicleColour, type Palette } from './palette';
@@ -98,30 +100,6 @@ export interface Scene3d {
 
 const rad = (d: number) => (d * Math.PI) / 180;
 const deg = (r: number) => (r * 180) / Math.PI;
-
-function blockColour(Cesium: C, p: Palette, base: string, kind: PartKind): CesiumNS.Color {
-  const body = Cesium.Color.fromCssColorString(base);
-  switch (kind) {
-    case 'cab':
-      return body.darken(0.3, new Cesium.Color());
-    case 'cabin':
-      return body.darken(0.22, new Cesium.Color());
-    case 'wheel':
-      return Cesium.Color.fromCssColorString(p.halo);
-    case 'hood':
-      return body.darken(0.18, new Cesium.Color());
-    case 'roof':
-      return body.brighten(0.35, new Cesium.Color());
-    case 'plate':
-      return Cesium.Color.fromCssColorString(p.halo).brighten(0.45, new Cesium.Color());
-    case 'glass':
-    case 'mirror':
-    case 'coupling':
-      return Cesium.Color.fromCssColorString(p.halo);
-    default:
-      return body;
-  }
-}
 
 /** Add the tiles and the drawing to a viewer. Resolves once ground heights are known. */
 export async function populate(
@@ -284,7 +262,6 @@ export async function populate(
   };
 
   const ink = Cesium.Color.fromCssColorString(o.palette.ink);
-  const halo = Cesium.Color.fromCssColorString(o.palette.halo);
   // Labels: one collection, small and quiet (a translucent chip, name only —
   // sizes are in the vehicle list / the PDF key), laid out every frame so
   // they never stack (see layoutLabels).
@@ -311,14 +288,24 @@ export async function populate(
   };
   const onGround = tileset ? Cesium.ClassificationType.CESIUM_3D_TILE : Cesium.ClassificationType.TERRAIN;
 
+  const vehicleInstances: CesiumNS.GeometryInstance[] = [];
   for (const v of vehicles) {
     const own = Array.from({ length: 5 }, (_, i) => heights.get(`${v.id}:${i}`)).filter((h): h is number => h != null);
     const ring = Array.from({ length: 8 }, (_, i) => heights.get(`${v.id}:ring:${i}`)).filter((h): h is number => h != null);
     const g = baseFor(v, standingHeight(own, ring, ground0));
-    const base = vehicleColour(o.palette, v);
-    for (const b of vehicleBlocks(v)) addBlock(Cesium, viewer, o.anchor, b, g, blockColour(Cesium, o.palette, base, b.kind), halo);
+    vehicleInstances.push(vehicleInstance(Cesium, o.anchor, v, g, o.palette));
     const top = ll({ x: v.x, y: v.y });
     addLabel(Cesium.Cartesian3.fromDegrees(top.lng, top.lat, g + v.height + 0.6), v.label || vehicleSpec(v.type)?.short || 'Vehicle', 13);
+  }
+  if (vehicleInstances.length) {
+    viewer.scene.primitives.add(
+      new Cesium.Primitive({
+        geometryInstances: vehicleInstances,
+        // Flat: the shading is baked into each corner's colour (bakeColours).
+        appearance: new Cesium.PerInstanceColorAppearance({ flat: true, translucent: false }),
+        asynchronous: false,
+      }),
+    );
   }
 
   for (const i of o.items) {
@@ -602,21 +589,38 @@ function addFloor(Cesium: C, viewer: CesiumNS.Viewer, anchor: LatLng, d: Parking
   });
 }
 
-function addBlock(Cesium: C, viewer: CesiumNS.Viewer, anchor: LatLng, b: Block, ground: number, colour: CesiumNS.Color, outline: CesiumNS.Color) {
-  const g = toLatLng(anchor, b.at);
-  const position = Cesium.Cartesian3.fromDegrees(g.lng, g.lat, ground + (b.z0 + b.z1) / 2);
-  // Cesium's heading is from EAST, clockwise; ours is a compass bearing from north.
-  const orientation = Cesium.Transforms.headingPitchRollQuaternion(position, new Cesium.HeadingPitchRoll(rad(b.heading - 90), 0, 0));
-  const solid = b.kind === 'body' || b.kind === 'cab' || b.kind === 'hood' || b.kind === 'cabin';
-  viewer.entities.add({
-    position,
-    orientation,
-    box: {
-      dimensions: new Cesium.Cartesian3(b.length, b.width, Math.max(0.02, b.z1 - b.z0)),
-      material: colour,
-      outline: solid,
-      outlineColor: outline,
-    },
+/** A vehicle's model as one geometry instance: positions in metres east /
+ *  north / up of its centre on the ground, colours baked per corner. */
+function vehicleInstance(Cesium: C, anchor: LatLng, v: VehicleItem, ground: number, p: Palette): CesiumNS.GeometryInstance {
+  const mesh = vehicleMesh(v);
+  const body = hexRgb(vehicleColour(p, v));
+  const fixed: Record<Exclude<Mat, 'body' | 'shade' | 'pale'>, V3> = {
+    glass: hexRgb(p.glass),
+    tyre: hexRgb(p.tyre),
+    metal: hexRgb(p.metal),
+    trim: hexRgb(p.trim),
+    lamp: hexRgb(p.lamp),
+    tail: hexRgb(p.tail),
+    amber: hexRgb(p.amber),
+  };
+  const colourOf = (m: Mat): V3 => (m === 'body' ? body : m === 'shade' ? tint(body, -0.22) : m === 'pale' ? tint(body, 0.4) : fixed[m]);
+  const colours = bakeColours(mesh, v.heading, colourOf);
+  const positions = meshToLocal(mesh.pos, v);
+  const n = positions.length / 3;
+  const indices = new Uint32Array(n);
+  for (let i = 0; i < n; i++) indices[i] = i;
+  const at = toLatLng(anchor, { x: v.x, y: v.y });
+  return new Cesium.GeometryInstance({
+    geometry: new Cesium.Geometry({
+      attributes: {
+        position: new Cesium.GeometryAttribute({ componentDatatype: Cesium.ComponentDatatype.DOUBLE, componentsPerAttribute: 3, values: positions }),
+        color: new Cesium.GeometryAttribute({ componentDatatype: Cesium.ComponentDatatype.UNSIGNED_BYTE, componentsPerAttribute: 4, normalize: true, values: colours }),
+      } as unknown as CesiumNS.GeometryAttributes,
+      indices,
+      primitiveType: Cesium.PrimitiveType.TRIANGLES,
+      boundingSphere: Cesium.BoundingSphere.fromVertices(Array.from(positions)),
+    }),
+    modelMatrix: Cesium.Transforms.eastNorthUpToFixedFrame(Cesium.Cartesian3.fromDegrees(at.lng, at.lat, ground)),
   });
 }
 

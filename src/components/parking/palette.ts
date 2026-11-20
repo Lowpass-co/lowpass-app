@@ -26,6 +26,14 @@ export const PALETTE_KEYS = [
   'floor',
   'wall',
   'rim',
+  // 3D vehicles (models3d.ts): the parts that aren't the vehicle's colour.
+  'glass',
+  'tyre',
+  'metal',
+  'trim',
+  'lamp',
+  'tail',
+  'amber',
   ...PAINTS.map((p) => `paint-${p.id}` as const),
 ] as const;
 
