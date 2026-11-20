@@ -27,6 +27,7 @@ import {
   type TransactionFacts,
 } from '@/lib/budget/receiptMatch';
 import { flightFacts, matchTicket, splitAmount, type FlightFacts } from '@/lib/budget/ticketMatch';
+import type { HotelLine } from '@/lib/budget/hotelMatch';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
@@ -108,7 +109,7 @@ export async function POST(request: Request): Promise<NextResponse> {
     const lines: BudgetLineFacts[] = (lineRows ?? []).map((l) => ({
       id: l.id as string,
       sectionId: (l.section_id as string | null) ?? null,
-      sectionName: (l.section as string | null) ?? null,
+      sectionName: (l.section as string | null) ?? null, // replaced by the real section's name below
       label: (l.label as string | null) ?? '',
       category: (l.category as string | null) ?? null,
       estimate: (l.proposed_cost as number | null) ?? null,
@@ -153,6 +154,33 @@ export async function POST(request: Request): Promise<NextResponse> {
       id: s.id as string,
       name: (s.name as string | null) ?? '',
     }));
+    // A line's section NAME is its real section's (the old `section` text is a
+    // legacy tag — 'hotels', null — not what the grid groups by).
+    const sectionNameById = new Map(sections.map((x) => [x.id, x.name]));
+    for (const l of lines) if (l.sectionId) l.sectionName = sectionNameById.get(l.sectionId) ?? l.sectionName;
+
+    /* Nov 2026 — hotel bills attach to the hotel's automatic line (Rooming).
+       Only the hotels that HAVE a line can be matched. */
+    const hotelLineByHotel = new Map<string, string>();
+    for (const l of lineRows ?? []) {
+      if (l.source_entity_type === 'hotel_booking' && l.source_entity_id) hotelLineByHotel.set(l.source_entity_id as string, l.id as string);
+    }
+    const { data: hotelRows } = hotelLineByHotel.size
+      ? await supabase
+          .from('hotels')
+          .select('id, name, city, check_in_at, check_out_at')
+          .eq('tour_id', tourId)
+          .eq('workspace_id', workspaceId)
+      : { data: [] as Array<Record<string, unknown>> };
+    const hotels: HotelLine[] = (hotelRows ?? [])
+      .filter((h) => hotelLineByHotel.has(h.id as string))
+      .map((h) => ({
+        lineId: hotelLineByHotel.get(h.id as string) as string,
+        name: String(h.name ?? 'Hotel'),
+        city: (h.city as string | null) ?? null,
+        checkIn: h.check_in_at ? String(h.check_in_at).slice(0, 10) : null,
+        checkOut: h.check_out_at ? String(h.check_out_at).slice(0, 10) : null,
+      }));
 
     /* Oct 2026 — airline tickets go to the flight they paid for. A flight is
        one person's ticket for one leg, and its money lives on its derived
@@ -213,6 +241,7 @@ export async function POST(request: Request): Promise<NextResponse> {
         tourStart: tour.start_date as string | null,
         tourEnd: tour.end_date as string | null,
         sections,
+        hotels,
       });
       return [{
         workspace_id: workspaceId,
