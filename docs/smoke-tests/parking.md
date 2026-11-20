@@ -389,7 +389,7 @@ browser key restricted to the Map Tiles API and the app's domains).**
 
 **Do**: Open a map that has never had its PDF pages changed → Share: the pages are Plan · Street map · 3D. Export. On another map, Share → **+ Street map**.
 
-**Expect**: The Street map page is Google's street map (roads and their names), 1:2,500, centred on the parking, your vehicles / routes / markers on top, no venue drawings; credit "Google Maps · <map data>" and footer "Map: Google Maps". The key and Get there column as on the plan. No map key set up → the page prints on the grid and the PDF still comes out.
+**Expect**: The Street map page is Google's street map (roads and their names), 1:1,000 (about 196 m across), centred on the parking, your vehicles / routes / markers on top, no venue drawings; credit "Google Maps · <map data>" and footer "Map: Google Maps". The key and Get there column as on the plan. No map key set up → the page prints on the grid and the PDF still comes out.
 
 **Last verified**:
 
@@ -454,6 +454,22 @@ browser key restricted to the Map Tiles API and the app's domains).**
 **Do**: Put one of every vehicle on a map (both regions). Open 3D; look from the front three-quarter, from behind and from overhead. Paint one white.
 
 **Expect**: Each reads at a glance — EU bus: double-deck, two glazed decks with a painted band, rabbit-ear mirrors, three axles; US bus: raked screen, low driver's window, front lounge glass, satellite dome; EU artic: flat-fronted cab-over with grille + tri-axle trailer; US truck: long hood, chrome grille + bumper + tanks, stacks, sleeper, tandem trailer with skirts; Sprinter / Vito / Luton / box truck / Bandwagon / car / generator as named. Tyres touch the ground, nothing floats, sizes match the plan, trailer and box roofs are paler than their cabs. They look the same at any time of day. The PDF's 3D page shows the same models.
+
+**Last verified**:
+
+#### PRK-55 — No label sits on another on the PDF / driver map
+
+**Do**: Park four cars nose to tail beside a FIRE LANE area and two no-go areas, with a Load-in door marker by them. Export the PDF (Plan + Street map); open a driver link.
+
+**Expect**: No vehicle name, number badge, area name or marker name crosses another, a vehicle or a marker icon — on any page, at any scale. Where an area's or marker's name has no clear room it's left off the map (the key beside it still lists it); when there's room the area name sits inside its area and the marker's name moves to whichever side of the icon is free.
+
+**Last verified**:
+
+#### PRK-56 — In 3D an area's name lies on the ground
+
+**Do**: Same map; open 3D and orbit / tilt.
+
+**Expect**: "FIRE LANE" / "No-go area" are painted flat inside their areas along the long side, white with a dark edge, reading left to right — not floating chips. Vehicle and marker names are still small floating chips.
 
 **Last verified**:
 

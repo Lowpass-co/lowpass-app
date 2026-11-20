@@ -680,7 +680,7 @@ recreate a `_legacy/` tree: delete dead code instead of parking it.
   `defaultPages()` (Plan + Street map + 3D). A plan page with `base: 'street'`
   prints Google's ROADMAP tiles (its own session, `getTileSession('roadmap')`,
   credit from the viewport call) instead of the photo, without venue drawings —
-  "+ Street map" adds one at 1:2,500. One off-screen Cesium viewer renders all 3D
+  "+ Street map" adds one at 1:1,000 (`STREET_SCALE`; was 1:2,500 — Adam: "way tighter"; pages saved before keep their scale). **Every label on paper is laid out together** (Nov 2026, Adam): vehicle names first (`layoutNames`), then area names (spots INSIDE the area, `areaLabelSpots`) and marker names (any side of the icon, `markerLabelSpots`) through `layoutExtras` — none may cross a vehicle, badge, name tag, marker icon or another label; one with no clear spot is left off (the key lists it). Paper / driver map only (`numbers`); the editor draws labels in place. In 3D an area's name is PAINTED ON THE GROUND (`floorText.ts`: along its long side, sized to fit, reading west → east; a flat decal at the lowest sampled height + 0.12 m), never a floating chip. One off-screen Cesium viewer renders all 3D
   pages; a 3D failure drops only the 3D pages, with a warning.
 - **Venue drawings** (Nov 2026, Adam — migration 288, `parking_maps.drawings`):
   a venue's PDF / JPG from tour Files (or linked to the venue), laid on the map

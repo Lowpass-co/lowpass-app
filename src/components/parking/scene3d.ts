@@ -42,6 +42,7 @@ import { rimRuns, smoothTops, wallRing, wallSegments, type WallSegment } from '@
 import { drawingsIn3d, drawingUnder, footprint, insideAt, insideFootprint, itemFloor, itemPoint, pointInPolygon, svgMatrix } from '@/lib/parking/drawings';
 import { labelBox, placeLabels, type LabelBox } from '@/lib/parking/labels3d';
 import { splitRoute } from '@/lib/parking/routes3d';
+import { floorText, floorTextBounds, type FloorText } from '@/lib/parking/floorText';
 import { areaColour, vehicleColour, type Palette } from './palette';
 import type { CesiumModule } from './loadCesium';
 
@@ -138,6 +139,13 @@ export async function populate(
     ringAround(v, Math.max(8, v.length * 0.6)).forEach((at, i) => probes.push({ key: `${v.id}:ring:${i}`, at }));
   }
   for (const i of o.items) if (i.kind === 'marker') probes.push({ key: i.id, at: { x: i.x, y: i.y } });
+  // An area's name is painted on its ground: sample its centre and corners
+  // (the lowest wins, like a vehicle's — a car baked into the mesh isn't the floor).
+  for (const i of o.items) {
+    if (i.kind !== 'area' || i.flat3d || i.points.length < 3) continue;
+    const c = { x: i.points.reduce((s, p) => s + p.x, 0) / i.points.length, y: i.points.reduce((s, p) => s + p.y, 0) / i.points.length };
+    [c, ...i.points.slice(0, 8)].forEach((at, k) => probes.push({ key: `area:${i.id}:${k}`, at }));
+  }
   // The street around each inside drawing: its corners and edge middles, 4 m out.
   const inside = tileset ? drawings.filter((d) => d.inside) : [];
   for (const d of inside) {
@@ -349,7 +357,6 @@ export async function populate(
     } else if (i.kind === 'area' && i.points.length > 2 && !i.flat3d) {
       // A Flat-in-3D area is the flattening itself (the photo patch) — no tint, no title.
       const c = Cesium.Color.fromCssColorString(areaColour(o.palette, i.type));
-      const mid = ll({ x: i.points.reduce((s, p) => s + p.x, 0) / i.points.length, y: i.points.reduce((s, p) => s + p.y, 0) / i.points.length });
       const fh = floorOfShape(i, i.points);
       viewer.entities.add({
         polygon: {
@@ -358,7 +365,15 @@ export async function populate(
           ...(fh == null ? { classificationType: onGround } : { height: fh }),
         },
       });
-      addLabel(Cesium.Cartesian3.fromDegrees(mid.lng, mid.lat, (fh ?? ground0) + 2), i.label || areaLabel(i.type), 12);
+      // The name lies ON the ground, like a road marking (Adam: "area labels
+      // are floating, not on the floor").
+      const name = i.label || areaLabel(i.type);
+      const ft = floorText(i.points, name);
+      if (ft) {
+        const samples = Array.from({ length: Math.min(8, i.points.length) + 1 }, (_, k) => heights.get(`area:${i.id}:${k}`)).filter((h): h is number => h != null);
+        const h = fh ?? (samples.length ? Math.min(...samples) : ground0);
+        addFloorText(Cesium, viewer, o.anchor, ft, name, h + 0.12, o.palette);
+      }
     } else if (i.kind === 'measure') {
       const a = ll(i.a);
       const b = ll(i.b);
@@ -621,6 +636,41 @@ function vehicleInstance(Cesium: C, anchor: LatLng, v: VehicleItem, ground: numb
       boundingSphere: Cesium.BoundingSphere.fromVertices(Array.from(positions)),
     }),
     modelMatrix: Cesium.Transforms.eastNorthUpToFixedFrame(Cesium.Cartesian3.fromDegrees(at.lng, at.lat, ground)),
+  });
+}
+
+/** An area's name painted flat on the ground (floorText.ts): baked into a
+ *  north-up canvas, turned along the area, laid as a rectangle at `height`. */
+function addFloorText(Cesium: C, viewer: CesiumNS.Viewer, anchor: LatLng, t: FloorText, text: string, height: number, p: Palette) {
+  const [x0, y0, x1, y1] = floorTextBounds(t);
+  const k = Math.min(72 / t.height, 2048 / Math.max(x1 - x0, y1 - y0)); // px per metre
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.max(2, Math.round((x1 - x0) * k));
+  canvas.height = Math.max(2, Math.round((y1 - y0) * k));
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return;
+  const px = t.height * k;
+  ctx.translate((t.at.x - x0) * k, (y1 - t.at.y) * k);
+  ctx.rotate(-Math.atan2(t.u.y, t.u.x)); // canvas y runs south
+  ctx.font = `800 ${px}px system-ui, sans-serif`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  const w = ctx.measureText(text).width;
+  if (w > t.length * k) ctx.scale((t.length * k) / w, 1);
+  ctx.lineJoin = 'round';
+  ctx.lineWidth = px * 0.16;
+  ctx.strokeStyle = p.halo;
+  ctx.strokeText(text, 0, 0);
+  ctx.fillStyle = p.ink;
+  ctx.fillText(text, 0, 0);
+  const sw = toLatLng(anchor, { x: x0, y: y0 });
+  const ne = toLatLng(anchor, { x: x1, y: y1 });
+  viewer.entities.add({
+    rectangle: {
+      coordinates: Cesium.Rectangle.fromDegrees(sw.lng, sw.lat, ne.lng, ne.lat),
+      height,
+      material: new Cesium.ImageMaterialProperty({ image: canvas, transparent: true }),
+    },
   });
 }
 
