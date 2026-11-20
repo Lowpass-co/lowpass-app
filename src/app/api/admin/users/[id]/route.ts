@@ -1,11 +1,15 @@
 /* ============================================
    LOWPASS — /api/admin/users/[id] (Sprint 9 §10)
 
-   DELETE — cascade-delete a user via Supabase Auth admin.
-            Profile + all workspace_members + permission_grants
-            cascade via existing FKs. Site-admin only.
+   DELETE — delete a user via Supabase Auth admin. Site-admin only.
+            Their memberships cascade; anything they MADE stays, with its
+            "made by" blank (migration 295 — before it, those columns had no
+            delete rule and every delete failed). The profile row is removed
+            here: nothing ties it to the auth account.
 
-   Cannot delete yourself — guard at the route layer.
+   Refused for yourself, and for anyone who OWNS a workspace (Adam, Nov
+   2026: "always refuse") — delete their workspace first (Admin ›
+   Workspaces: archive, then delete).
    ============================================ */
 
 import { NextResponse } from 'next/server';
@@ -51,10 +55,29 @@ export async function DELETE(
     .maybeSingle();
 
   const admin = createServiceSupabaseAdminClient();
+
+  // An owner can't go while their workspace exists (archived counts).
+  const { data: owned } = await admin.from('workspaces').select('name').eq('owner_id', targetUserId);
+  const ownedNames = ((owned ?? []) as Array<{ name: string | null }>).map((w) => w.name || 'Untitled workspace');
+  if (ownedNames.length) {
+    return NextResponse.json(
+      {
+        error: `${targetProfile?.email ?? 'This user'} owns ${ownedNames.length === 1 ? 'a workspace' : `${ownedNames.length} workspaces`} (${ownedNames.join(', ')}). Delete ${ownedNames.length === 1 ? 'it' : 'them'} first — Admin › Workspaces: archive, then delete.`,
+        code: 'OWNS_WORKSPACE',
+      },
+      { status: 409 },
+    );
+  }
+
   const { error: delErr } = await admin.auth.admin.deleteUser(targetUserId);
   if (delErr) {
-    return NextResponse.json({ error: delErr.message }, { status: 500 });
+    // "Database error deleting user" = something still points at them with no
+    // delete rule — migration 295 (pasted?) clears those.
+    const hint = /database error/i.test(delErr.message) ? ' — a table still points at this user. Has migration 295 been pasted?' : '';
+    return NextResponse.json({ error: `${delErr.message}${hint}` }, { status: 500 });
   }
+  // Nothing ties the profile to the auth account, so remove it here.
+  await admin.from('profiles').delete().eq('id', targetUserId);
 
   // Audit log — workspace_id is NULL because user delete is a
   // platform-level action; the audit_log row carries the actor

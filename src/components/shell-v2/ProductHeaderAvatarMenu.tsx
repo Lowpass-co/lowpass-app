@@ -94,9 +94,10 @@ export function ProductHeaderAvatarMenu({
   return (
     <div className="flex items-center" style={{ gap: 'var(--lp-space-2)' }}>
       {isSiteAdmin ? (
-        <span
+        <Link
+          href="/admin"
           className="lp-label-caps"
-          title="You have site admin access — visible across all workspaces"
+          title="Site admin — open the admin pages"
           style={{
             flexShrink: 0,
             padding: '2px 8px',
@@ -106,10 +107,11 @@ export function ProductHeaderAvatarMenu({
             background: 'var(--lp-bg-tertiary)',
             border: '1px solid var(--lp-border-subtle)',
             borderRadius: 999,
+            textDecoration: 'none',
           }}
         >
           Admin
-        </span>
+        </Link>
       ) : null}
       <div className="relative" ref={wrapperRef}>
         <button

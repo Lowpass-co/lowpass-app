@@ -4,7 +4,9 @@
    LOWPASS — WorkspacesListClient (Sprint 9 §10)
 
    Site-admin Workspaces tab. Lists every workspace with
-   member + tour counts. [⋯] menu: Rename, Archive (soft-delete).
+   member + tour counts. [⋯] menu: Rename, Archive (soft-delete), and —
+   for an ARCHIVED workspace only — Delete permanently (type its name;
+   migration 295's admin_delete_workspace + its stored files).
    "Include archived" toggle.
    ============================================ */
 
@@ -48,6 +50,7 @@ export function WorkspacesListClient() {
   const [menuOpenFor, setMenuOpenFor] = useState<string | null>(null);
   const [renameTarget, setRenameTarget] = useState<WorkspaceRow | null>(null);
   const [archiveTarget, setArchiveTarget] = useState<WorkspaceRow | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<WorkspaceRow | null>(null);
 
   const fetchList = useCallback(
     async (replace: boolean) => {
@@ -87,6 +90,23 @@ export function WorkspacesListClient() {
     const next = offset + PAGE_SIZE;
     setOffset(next);
     void fetchList(false);
+  }
+
+  async function handleDelete() {
+    if (!deleteTarget) return;
+    const res = await fetch(`/api/admin/workspaces/${deleteTarget.id}/delete`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ confirm_name: deleteTarget.name }),
+    });
+    const body = (await res.json().catch(() => null)) as { error?: string; files_removed?: number; files_left?: number | null } | null;
+    if (!res.ok) throw new Error(body?.error ?? `Delete failed (${res.status})`);
+    const removed = body?.files_removed ?? 0;
+    const left = body?.files_left;
+    const files = left === null ? " — its stored files couldn't be checked" : left ? ` — ${left} stored file${left === 1 ? '' : 's'} couldn't be removed` : '';
+    showToast(`Deleted ${deleteTarget.name}. ${removed} stored file${removed === 1 ? '' : 's'} removed${files}.`);
+    setRows((prev) => prev.filter((r) => r.id !== deleteTarget.id));
+    setDeleteTarget(null);
   }
 
   async function handleArchive() {
@@ -301,6 +321,10 @@ export function WorkspacesListClient() {
                       setMenuOpenFor(null);
                       setArchiveTarget(w);
                     }}
+                    onDelete={() => {
+                      setMenuOpenFor(null);
+                      setDeleteTarget(w);
+                    }}
                   />
                 </td>
               </tr>
@@ -353,6 +377,15 @@ export function WorkspacesListClient() {
         onClose={() => setArchiveTarget(null)}
         onConfirm={handleArchive}
       />
+
+      <DeleteConfirmationModal
+        open={!!deleteTarget}
+        itemName={deleteTarget ? deleteTarget.name : ''}
+        confirmWord={deleteTarget?.name}
+        description={`Permanently deletes this workspace and everything in it — ${deleteTarget?.tour_count ?? 0} tour${deleteTarget?.tour_count === 1 ? '' : 's'}, budgets, advances, files, parking maps — and its stored files. It can't be undone. Its ${deleteTarget?.member_count ?? 0} member${deleteTarget?.member_count === 1 ? '' : 's'} keep their accounts.`}
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={handleDelete}
+      />
     </div>
   );
 }
@@ -364,6 +397,7 @@ interface RowMenuProps {
   onClose: () => void;
   onRename: () => void;
   onArchive: () => void;
+  onDelete: () => void;
 }
 
 function RowMenu({
@@ -373,6 +407,7 @@ function RowMenu({
   onClose,
   onRename,
   onArchive,
+  onDelete,
 }: RowMenuProps) {
   useEffect(() => {
     if (!open) return;
@@ -436,6 +471,12 @@ function RowMenu({
           >
             {workspace.archived_at ? 'Already archived' : 'Archive'}
           </MenuItem>
+          {/* Delete only once archived — two steps, so nothing live goes by accident. */}
+          {workspace.archived_at ? (
+            <MenuItem onClick={onDelete} destructive>
+              Delete permanently…
+            </MenuItem>
+          ) : null}
         </div>
       ) : null}
     </div>

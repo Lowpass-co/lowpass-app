@@ -144,6 +144,7 @@ const UNGUARDED: Record<string, string> = {
   '/admin/users/[id]/reset-password': /* POST */ 'PERMANENT — site-admin. requireSiteAdmin.',
   '/admin/users/[id]/suspend': /* POST */ 'PERMANENT — site-admin. requireSiteAdmin.',
   '/admin/workspaces/[id]': /* DELETE,PATCH */ 'PERMANENT — site-admin. requireSiteAdmin.',
+  '/admin/workspaces/[id]/delete': /* POST */ 'PERMANENT — site-admin. requireSiteAdmin, and the database function it calls (admin_delete_workspace, migration 295) checks site admin again, needs the workspace ARCHIVED and its name typed exactly.',
   '/admins': /* POST */ 'PERMANENT — site-admin. getUserAndAdminStatus plus an is_site_admin check.',
   '/admins/[id]': /* DELETE */ 'PERMANENT — site-admin. getUserAndAdminStatus plus an is_site_admin check.',
   '/ai/preferences': /* PATCH */ 'PERMANENT — self-scoped POST. A member editing their own AI preferences row.',

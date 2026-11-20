@@ -212,6 +212,42 @@ own secret checks (e.g. `CRON_SECRET`).
 **Last verified**:
 
 
+#### AUTH-23 — The Admin chip opens the admin pages
+
+**Do**: As a site admin, click the orange "Admin" chip in the top bar.
+
+**Expect**: `/admin` opens. Non-admins have no chip.
+
+**Last verified**:
+
+
+#### AUTH-24 — Site admin deletes a user (after 295)
+
+**Do**: Admin › Users → ⋯ → Delete on a test user who has added a flight or a receipt but owns no workspace.
+
+**Expect**: They're gone from the list and can't sign in. The flight / receipt stays on its tour. Before 295 is pasted this fails with "…Has migration 295 been pasted?".
+
+**Last verified**:
+
+
+#### AUTH-25 — A workspace owner can't be deleted
+
+**Do**: Admin › Users → Delete on a user who owns a workspace (any new sign-up does).
+
+**Expect**: Refused: "<name> owns a workspace (<workspace>). Delete it first — Admin › Workspaces: archive, then delete." Nothing is deleted.
+
+**Last verified**:
+
+
+#### AUTH-26 — Site admin deletes a workspace: archive, then type its name
+
+**Do**: Admin › Workspaces → ⋯ on a live workspace (no Delete offered) → Archive. Tick "Include archived" → ⋯ → Delete permanently… → type the name wrong, then right.
+
+**Expect**: Delete stays disabled until the name matches exactly. Then the row goes; a toast says how many tours / members and stored files went. Its members still sign in (they land in another workspace they belong to, or on "No workspace"). Then AUTH-25's owner can be deleted.
+
+**Last verified**:
+
+
 ## Known broken
 
 #### AUTH-04 — Login globe not yet deduped onto AuthShell
