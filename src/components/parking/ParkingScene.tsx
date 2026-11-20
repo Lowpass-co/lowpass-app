@@ -16,7 +16,7 @@ import { useId, type PointerEvent as ReactPointerEvent, type ReactNode } from 'r
 import { DoorOpen, PlugZap, Fence, ArrowUpFromLine, Droplet, Trash2, ShieldCheck, StickyNote, type LucideIcon } from 'lucide-react';
 import { bearing, dist, fmtMetres, niceLength, project, sceneTransform, unproject, type Pt, type View } from '@/lib/parking/geo';
 import { markerSpec, vehicleSpec, areaLabel, type MarkerType } from '@/lib/parking/catalogue';
-import { pathLength, vehicleCorners, type ParkingItem, type VehicleItem } from '@/lib/parking/model';
+import { pathLength, rearClearCorners, vehicleCorners, type ParkingItem, type VehicleItem } from '@/lib/parking/model';
 import { vehicleParts, type Part, type PartKind } from '@/lib/parking/silhouettes';
 import { areaColour, vehicleColour, type Palette } from './palette';
 import { badgeRadii, insideName, layoutNames, type NameSpot } from '@/lib/parking/print';
@@ -170,6 +170,21 @@ export function ParkingScene({
         {routes.map((r) => (r.kind === 'route' ? <RoutePath key={r.id} points={r.points.map(P)} p={p} ls={ls} selected={isSel(r.id)} label={r.label} onDown={dn(r)} cursor={live ? cursor : undefined} halo={halo} /> : null))}
 
         {vehicles.map((v) => {
+          const clear = rearClearCorners(v);
+          if (!clear) return null;
+          return (
+            <polygon
+              key={`rear-${v.id}`}
+              points={clear.map((q) => { const s = P(q); return `${s.x.toFixed(2)},${s.y.toFixed(2)}`; }).join(' ')}
+              fill={`url(#${uid}-rear)`}
+              stroke={p['area-no-go']}
+              strokeWidth={1.5 * ls}
+              pointerEvents="none"
+            />
+          );
+        })}
+
+        {vehicles.map((v) => {
           const spec = vehicleSpec(v.type);
           const fill = vehicleColour(p, v);
           const body = vehicleCorners(v).map(P);
@@ -278,6 +293,13 @@ export function ParkingScene({
       style={{ display: 'block', touchAction: 'none', userSelect: 'none' }}
       fontFamily={fontFamily}
     >
+      <defs>
+        {/* The keep-clear box behind a ramp / tail lift / van doors: red hatching. */}
+        <pattern id={`${uid}-rear`} patternUnits="userSpaceOnUse" width={7 * ls} height={7 * ls} patternTransform="rotate(45)">
+          <rect width={7 * ls} height={7 * ls} fill={p['area-no-go']} fillOpacity={0.12} />
+          <line x1={0} y1={0} x2={0} y2={7 * ls} stroke={p['area-no-go']} strokeWidth={2.4 * ls} />
+        </pattern>
+      </defs>
       <rect width={width} height={height} fill={p.blank} onPointerDown={onBackgroundDown} />
       <g transform={sceneTransform(view, width, height)} pointerEvents="none">
         {tiles.map((t) => (
@@ -364,6 +386,8 @@ function NumberBadges({
   const size = 9 * ls;
   const nameOf = (v: VehicleItem) => v.label || vehicleSpec(v.type)?.short || 'Vehicle';
   const bodies = shown.map((v) => vehicleCorners(v).map(P));
+  // A name never sits on a keep-clear box either.
+  const clears = shown.flatMap((v) => { const c = rearClearCorners(v); return c ? [c.map(P)] : []; });
   // A badge as an octagon round its circle (a square's corners stuck out past a turned car's side).
   const badges = centres.map((c, i) => Array.from({ length: 8 }, (_, k) => ({ x: c.x + Math.cos((k * Math.PI) / 4) * radii[i] * 1.08, y: c.y + Math.sin((k * Math.PI) / 4) * radii[i] * 1.08 })));
   const spots: NameSpot[] = shown.map((v, i) => {
@@ -386,7 +410,7 @@ function NumberBadges({
   });
   const tags = layoutNames(
     spots.filter((_, i) => !inside[i]),
-    [...bodies, ...badges],
+    [...bodies, ...clears, ...badges],
     bounds,
     1.5 * ls,
   );

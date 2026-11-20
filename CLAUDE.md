@@ -611,7 +611,11 @@ recreate a `_legacy/` tree: delete dead code instead of parking it.
   (Done returns). Add's vehicles are `VEHICLE_TILES[region]` (catalogue.ts) —
   a UK / EU | US switch, `regionFor()` the default; every vehicle type must be
   on one side (tested). Sizes are typical figures, noted at each spec (Bandwagon from
-  BandWagon RV Rentals: 38 ft, 59 ft with trailer, allow 66 ft kerb for the ramp). 3D controls stay on the map. Right-click on the plan =
+  BandWagon RV Rentals: 38 ft, 59 ft with trailer, allow 66 ft kerb for the ramp). Ramps / tail lifts / van doors get a red HATCHED
+  keep-clear box behind the tail (`VehicleSpec.rear` → `rearClearCorners`, model.ts;
+  per vehicle `rearClear: false` turns it off, the toggle sits under Colour). Plan,
+  PDF (fit pages frame it, names avoid it, key line) and driver map — not 3D. Trucks
+  have none (doors open flush — Adam). 3D controls stay on the map. Right-click on the plan =
   `<MapContextMenu>` (never the browser's; it only lays out the editor's own
   actions); Draw › **Flatten 3D** draws an area born `flat3d`.
 - **Selection is a list of ids** (Nov 2026, Adam): ⌘/Ctrl- or Shift-click

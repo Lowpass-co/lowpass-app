@@ -26,6 +26,10 @@ export interface VehicleSpec {
   /** A towed trailer at the rear, drawn as its own section behind a drawbar
    *  gap. `length` above is the WHOLE rig, nose to trailer tail. */
   trailer?: { length: number; gap: number };
+  /** Ground to keep clear behind the tail when the back is opened — a trailer's
+   *  drop-down ramp, a tail lift, van doors. Drawn as a red hatched box
+   *  (`rearClearCorners`, model.ts). Trucks have none: their doors open flush. */
+  rear?: { length: number; what: string };
 }
 
 export const VEHICLES: readonly VehicleSpec[] = [
@@ -33,11 +37,11 @@ export const VEHICLES: readonly VehicleSpec[] = [
   /* Nov 2026 (Adam: "a trailer option for UK and US bus"). 18.75 m is the UK
      maximum for a vehicle towing a trailer; the trailer is a typical enclosed
      luggage / backline trailer. Check the bus company's figures. */
-  { type: 'bus_eu_trailer', label: 'Tour bus + trailer, EU / UK', short: 'Bus', length: 18.75, width: 2.55, height: 4.0, role: 'bus', trailer: { length: 4.3, gap: 1.0 } },
+  { type: 'bus_eu_trailer', label: 'Tour bus + trailer, EU / UK', short: 'Bus', length: 18.75, width: 2.55, height: 4.0, role: 'bus', trailer: { length: 4.3, gap: 1.0 }, rear: { length: 2.0, what: 'Tail lift / ramp' } },
   { type: 'bus_us', label: 'Tour bus, US (45 ft)', short: 'Bus', length: 13.7, width: 2.6, height: 3.7, role: 'bus' },
   /* 45 ft coach + ~14 ft enclosed trailer + drawbar ≈ 19 m (US states commonly
      allow 65 ft combined). */
-  { type: 'bus_us_trailer', label: 'Tour bus + trailer, US', short: 'Bus', length: 19, width: 2.6, height: 3.7, role: 'bus', trailer: { length: 4.3, gap: 1.0 } },
+  { type: 'bus_us_trailer', label: 'Tour bus + trailer, US', short: 'Bus', length: 19, width: 2.6, height: 3.7, role: 'bus', trailer: { length: 4.3, gap: 1.0 }, rear: { length: 2.1, what: 'Ramp door' } },
   { type: 'truck_eu', label: 'Truck, EU (artic)', short: 'Truck', length: 16.5, width: 2.55, height: 4.0, role: 'truck' },
   { type: 'truck_us', label: 'Truck, US (53 ft)', short: 'Truck', length: 22, width: 2.6, height: 4.1, role: 'truck' },
   /* Nov 2026 (Adam: "EU/UK truck cabs without trailer, and then trailers
@@ -48,21 +52,30 @@ export const VEHICLES: readonly VehicleSpec[] = [
   /* "Box trucks in the UK and US" — UK: a Luton van (Adam), the 3.5 t
      Transit / Sprinter box with the peak over the cab: ≈ 6.9 m × 2.2 m (box)
      × 3.3 m. US: a 26 ft box truck, ≈ 34 ft overall, 102" wide, ≈ 12 ft 6 in. */
-  { type: 'luton', label: 'Luton van (3.5 t), UK', short: 'Luton', length: 6.9, width: 2.2, height: 3.3, role: 'van' },
+  { type: 'luton', label: 'Luton van (3.5 t), UK', short: 'Luton', length: 6.9, width: 2.2, height: 3.3, role: 'van', rear: { length: 1.6, what: 'Tail lift' } },
   { type: 'box_us', label: 'Box truck, US (26 ft)', short: 'Box truck', length: 10.4, width: 2.6, height: 3.8, role: 'truck' },
+  /* Rear clearances (`rear`, Nov 2026 — Adam: "a hashed red box behind for the
+     drop distance"): BandWagon says allow 66 ft kerb for 59 ft rigs → 7 ft
+     (2.1 m) for the ramp; US enclosed-trailer ramp doors are 69–78 in tall, so
+     a 2.1 m drop for bus trailers too. EU bus trailers carry a tail lift or
+     ramp — 2.0 m is typical, not a maker figure. Luton tail-lift platforms
+     are 1.3–1.6 m deep (Dhollandia / Anteo / Zepro sheets). Sprinter barn
+     doors: 1,555 mm opening, two leaves ≈ 0.8 m swing. Vito tailgate ≈ 1.0 m
+     (estimate from its 1.26 m opening). Splitter trailer doors ≈ 0.8 m
+     (estimate). Turn it off per vehicle in the editor. */
   /* "Bandwagon / Pullman / Yoda coach" — the US mid-level sleeper on a
      Freightliner cab. BandWagon RV Rentals (FAQ, Nov 2026): 38 ft long, 8.5 ft
      wide, 13 ft high; with one of their 8 × 16 ft trailers, 59 ft overall.
      (Street parking: they say allow 66 ft for the drop-down ramp/door.) */
   { type: 'bandwagon', label: 'Bandwagon / Pullman (38 ft), US', short: 'Bandwagon', length: 11.6, width: 2.6, height: 3.96, role: 'bus' },
-  { type: 'bandwagon_trailer', label: 'Bandwagon / Pullman + trailer, US', short: 'Bandwagon', length: 18.0, width: 2.6, height: 3.96, role: 'bus', trailer: { length: 5.5, gap: 0.9 } },
-  { type: 'splitter', label: 'Splitter van + trailer', short: 'Van', length: 12, width: 2.1, height: 2.8, role: 'van' },
+  { type: 'bandwagon_trailer', label: 'Bandwagon / Pullman + trailer, US', short: 'Bandwagon', length: 18.0, width: 2.6, height: 3.96, role: 'bus', trailer: { length: 5.5, gap: 0.9 }, rear: { length: 2.1, what: 'Ramp door' } },
+  { type: 'splitter', label: 'Splitter van + trailer', short: 'Van', length: 12, width: 2.1, height: 2.8, role: 'van', rear: { length: 0.8, what: 'Trailer doors' } },
   /* Nov 2026 (Adam: "a sprinter without trailer"). Mercedes Sprinter extra-
      long wheelbase, high roof: 7.37 m × 2.02 m (body, mirrors folded) × 2.8 m. */
-  { type: 'sprinter', label: 'Sprinter / splitter van, no trailer', short: 'Van', length: 7.4, width: 2.02, height: 2.8, role: 'van' },
+  { type: 'sprinter', label: 'Sprinter / splitter van, no trailer', short: 'Van', length: 7.4, width: 2.02, height: 2.8, role: 'van', rear: { length: 0.8, what: 'Rear doors' } },
   /* "In the UK add Mercedes Vito too". Vito Tourer extra-long: 5.37 m ×
      1.93 m (body, mirrors folded) × 1.91 m. */
-  { type: 'vito', label: 'Mercedes Vito (extra long)', short: 'Vito', length: 5.4, width: 1.93, height: 1.91, role: 'van' },
+  { type: 'vito', label: 'Mercedes Vito (extra long)', short: 'Vito', length: 5.4, width: 1.93, height: 1.91, role: 'van', rear: { length: 1.0, what: 'Tailgate' } },
   { type: 'car', label: 'Car / runner', short: 'Car', length: 5, width: 2, height: 1.5, role: 'car' },
   { type: 'generator', label: 'Generator', short: 'Generator', length: 6, width: 2.5, height: 2.6, role: 'power' },
 ];

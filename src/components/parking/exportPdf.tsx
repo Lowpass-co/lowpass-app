@@ -35,7 +35,7 @@ import {
   type View,
 } from '@/lib/parking/geo';
 import { areaLabel, markerSpec, vehicleSpec } from '@/lib/parking/catalogue';
-import { pathLength, type ParkingDrawing, type ParkingItem } from '@/lib/parking/model';
+import { pathLength, rearClearCorners, type ParkingDrawing, type ParkingItem } from '@/lib/parking/model';
 import { itemFloor } from '@/lib/parking/drawings';
 import { onLevel } from './drawingLayers';
 import { ParkingScene } from './ParkingScene';
@@ -575,6 +575,7 @@ function drawKey(
       bottom = Math.max(bottom, ry);
     });
     y = bottom + 3.6;
+    if (list.some((v) => rearClearCorners(v))) row(palette['area-no-go'], 'Red hatching: keep clear', 'Ramp, tail lift or rear doors open here');
     line(2);
   }
   if (markers.length) {

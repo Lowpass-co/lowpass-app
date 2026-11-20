@@ -12,7 +12,7 @@
    parking_maps.items.
    ============================================ */
 
-import { MARKERS, VEHICLES, AREAS, PAINTS, type AreaType, type MarkerType, type PaintId, type VehicleType } from './catalogue';
+import { MARKERS, VEHICLES, AREAS, PAINTS, vehicleSpec, type AreaType, type MarkerType, type PaintId, type VehicleType } from './catalogue';
 import { PRINT_SCALES, normDeg, type Camera3d, type LatLng, type Pt, type View } from './geo';
 import type { PdfPage, PrintScale } from './pages';
 
@@ -31,6 +31,9 @@ export interface VehicleItem {
   colour?: PaintId;
   /** Level (floor height, m, relative to the street); absent = the level it's drawn on (drawings.ts). */
   floor?: number;
+  /** The red "keep clear" box behind (ramp / tail lift / doors). Absent = shown
+   *  when the type has one (`VehicleSpec.rear`); false = turned off. */
+  rearClear?: boolean;
 }
 
 export interface MarkerItem {
@@ -241,6 +244,7 @@ export function parseItem(raw: unknown): ParkingItem {
         height: num(o.height, 'Height', LIMITS.minSize, LIMITS.maxHeight),
         ...(o.colour == null || o.colour === '' ? {} : { colour: paint(o.colour) }),
         ...floorOf(o),
+        ...(typeof o.rearClear === 'boolean' ? { rearClear: o.rearClear } : {}),
       };
     }
     case 'marker': {
@@ -471,6 +475,28 @@ export function vehicleCorners(v: Pick<VehicleItem, 'x' | 'y' | 'heading' | 'len
   const hw = v.width / 2;
   const at = (f: number, s: number): Pt => ({ x: v.x + fx * f + rx * s, y: v.y + fy * f + ry * s });
   return [at(hl, -hw), at(hl, hw), at(-hl, hw), at(-hl, -hw)];
+}
+
+/** What this vehicle needs kept clear behind it, or null (none for its type, or turned off). */
+export function rearClearance(v: Pick<VehicleItem, 'type' | 'rearClear'>): { length: number; what: string } | null {
+  if (v.rearClear === false) return null;
+  return vehicleSpec(v.type)?.rear ?? null;
+}
+
+/** The keep-clear box behind the tail, ground frame (same corner order as
+ *  `vehicleCorners`: tail-left, tail-right, far-right, far-left), or null. */
+export function rearClearCorners(v: Pick<VehicleItem, 'type' | 'rearClear' | 'x' | 'y' | 'heading' | 'length' | 'width'>): Pt[] | null {
+  const rear = rearClearance(v);
+  if (!rear) return null;
+  const r = (v.heading * Math.PI) / 180;
+  const fx = Math.sin(r);
+  const fy = Math.cos(r);
+  const rx = Math.cos(r);
+  const ry = -Math.sin(r);
+  const tail = -v.length / 2;
+  const hw = v.width / 2;
+  const at = (f: number, s: number): Pt => ({ x: v.x + fx * f + rx * s, y: v.y + fy * f + ry * s });
+  return [at(tail, -hw), at(tail, hw), at(tail - rear.length, hw), at(tail - rear.length, -hw)];
 }
 
 /** "Bus 3" — the next free number for a vehicle prefix. */
