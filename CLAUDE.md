@@ -515,6 +515,17 @@ recreate a `_legacy/` tree: delete dead code instead of parking it.
 - **Sign-up is by code only** (Admin › Beta codes, `/auth/beta-signup`); public
   sign-up is OFF in Supabase. Invite links work as codes for their email.
 - **Members land on `/crew`** (phone-first: shows, advance info, parking, files).
+- **Deleting users and workspaces** (site admin, Nov 2026, Adam — migration 295):
+  a workspace is ARCHIVED first, then "Delete permanently…" (shown only on
+  archived rows) with its name typed; `admin_delete_workspace()` checks all of
+  that in the database, cascades the tours, keeps every member's account, and
+  the route then removes its stored files (`admin_workspace_storage_objects` —
+  any path with the workspace id as a folder). A user who OWNS a workspace is
+  always refused (409 `OWNS_WORKSPACE`); delete the workspace first. 295 turned
+  every "who made this" column pointing at a user / profile into ON DELETE SET
+  NULL (the old no-action rules are why user delete failed), so the work they
+  added stays. `profiles` has no FK to `auth.users` — the route deletes the
+  profile row itself. A new column referencing a user must say ON DELETE.
 - Plan + as-built: `docs/handover/PERMISSIONS_DESIGN_2026_11.md`. DB tests:
   `database/tests/` (PGlite).
 

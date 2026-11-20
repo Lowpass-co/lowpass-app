@@ -12,6 +12,7 @@ export function DeleteConfirmationModal({
   onConfirm,
   onDeleted,
   description,
+  confirmWord,
 }: {
   open: boolean;
   itemName: string;
@@ -21,6 +22,8 @@ export function DeleteConfirmationModal({
   onDeleted?: () => void;
   /** Optional extra line (e.g. "This will not delete tours associated with this artist.") */
   description?: string;
+  /** Type this exactly instead of DELETE (e.g. a workspace's name). */
+  confirmWord?: string;
 }) {
   const [confirmInput, setConfirmInput] = useState('');
   const [deleting, setDeleting] = useState(false);
@@ -28,7 +31,8 @@ export function DeleteConfirmationModal({
   const [shake, setShake] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const canConfirm = confirmInput.trim().toUpperCase() === CONFIRM_WORD;
+  const word = confirmWord ?? CONFIRM_WORD;
+  const canConfirm = confirmWord != null ? confirmInput.trim() === confirmWord.trim() : confirmInput.trim().toUpperCase() === CONFIRM_WORD;
 
   useEffect(() => {
     if (open) {
@@ -79,7 +83,7 @@ export function DeleteConfirmationModal({
         <h3 className="text-lg font-semibold text-lp-text">Delete {itemName}?</h3>
         <p className="mt-2 text-sm text-lp-text-secondary">This action cannot be undone.</p>
         {description && <p className="mt-1 text-sm text-lp-text-secondary">{description}</p>}
-        <p className="mt-3 text-sm font-medium text-lp-text">Type DELETE to confirm</p>
+        <p className="mt-3 text-sm font-medium text-lp-text">Type {word} to confirm</p>
         <input
           ref={inputRef}
           type="text"
@@ -92,7 +96,7 @@ export function DeleteConfirmationModal({
             if (e.key === 'Enter') handleConfirm();
             if (e.key === 'Escape') onClose();
           }}
-          placeholder="Type DELETE to confirm"
+          placeholder={`Type ${word} to confirm`}
           disabled={deleting}
           className="mt-2 w-full rounded-xl border border-lp-border bg-lp-surface px-3 py-2.5 text-sm text-lp-text placeholder:text-lp-text-tertiary focus:border-lp-orange focus:outline-none focus:ring-2 focus:ring-lp-orange/20 disabled:opacity-50"
           autoComplete="off"
