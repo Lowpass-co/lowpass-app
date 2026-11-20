@@ -2271,7 +2271,8 @@ test tour only. ✅ = passed live; ⚙ = covered by vitest, not live-run.
 
 ## Budget page — one panel (Nov 2026, Adam)
 
-- [ ] **BUD-PAGE-01 — One summary panel.** Budget tab: under the title, ONE
+- [ ] **BUD-PAGE-01 — One summary panel.** Budget tab: the title stands alone
+  (no instruction paragraph under it — Adam: it read as filler); under it, ONE
   light panel — Income · Total expenses · Net (proposed large, "actual so far"
   under each), then "Where it goes", then folded rows Commissions · Overheads ·
   Income. No black bands, no tables side by side, and income / expenses / net

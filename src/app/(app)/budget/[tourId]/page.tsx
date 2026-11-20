@@ -101,11 +101,12 @@ export async function generateMetadata({
 }
 
 /** Title + one line of "what goes here" per tab, in the sidebar's words. */
-const TAB_HEADER: Record<string, { title: string; subtitle: string }> = {
+// Nov 2026 (Adam): the Budget tab carries no instruction paragraph under its
+// title — it read as filler ("cheap and AI generated"). The page explains
+// itself: folded rows say what's inside, Auto lines are tagged in the grid.
+const TAB_HEADER: Record<string, { title: string; subtitle?: string }> = {
   budget: {
     title: 'Budget',
-    subtitle:
-      'Totals at the top — open Commissions or Overheads to change them. Every line below: type planned costs in Estimate; actuals fill in from receipts. Lines marked Auto come from Payroll, Hotels, Travel or Gear — change them there.',
   },
   income: {
     title: 'Income & settlements',
