@@ -112,6 +112,8 @@ function blockColour(Cesium: C, p: Palette, base: string, kind: PartKind): Cesiu
       return body.darken(0.18, new Cesium.Color());
     case 'roof':
       return body.brighten(0.35, new Cesium.Color());
+    case 'plate':
+      return Cesium.Color.fromCssColorString(p.halo).brighten(0.45, new Cesium.Color());
     case 'glass':
     case 'mirror':
     case 'coupling':

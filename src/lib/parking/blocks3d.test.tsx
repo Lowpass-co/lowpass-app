@@ -3,6 +3,7 @@
 import { describe, expect, it } from 'vitest';
 import { standingHeight, vehicleBlocks } from './blocks3d';
 import { VEHICLES } from './catalogue';
+import { vehicleParts } from './silhouettes';
 import { vehicleCorners, parseView, ParkingInputError } from './model';
 
 const bus = { type: 'bus_eu_trailer', x: 10, y: -4, heading: 62, length: 18.75, width: 2.55, height: 4 } as const;
@@ -104,6 +105,31 @@ describe('a car looks like a car in 3D (Nov 2026)', () => {
   it('nothing sticks out past the car but its mirrors', () => {
     for (const b of blocks.filter((x) => x.kind !== 'mirror')) {
       expect(Math.abs(b.at.y) + b.length / 2).toBeLessThanOrEqual(2.5 + 0.2);
+    }
+  });
+});
+
+describe('nothing floats (Adam, Nov 2026: "something floating above the cab only")', () => {
+  it('a roof unit only ever sits on top of a body, cab or cabin part', () => {
+    for (const v of VEHICLES) {
+      const parts = vehicleParts(v.type, v.length, v.width);
+      const under = parts.filter((p) => p.kind === 'body' || p.kind === 'cab' || p.kind === 'cabin');
+      for (const r of parts.filter((p) => p.kind === 'roof')) {
+        const mid = (r.f0 + r.f1) / 2;
+        expect(under.some((u) => u.f0 <= mid && mid <= u.f1), `${v.type}: roof unit over nothing`).toBe(true);
+      }
+    }
+  });
+  it("a tractor's fifth wheel sits at coupling height (47 in ≈ 1.2 m), on its chassis, over tyres", () => {
+    for (const t of ['tractor_eu', 'tractor_us'] as const) {
+      const s = VEHICLES.find((v) => v.type === t)!;
+      const blocks = vehicleBlocks({ type: t, x: 0, y: 0, heading: 0, length: s.length, width: s.width, height: s.height });
+      const plate = blocks.find((b) => b.kind === 'plate')!;
+      const chassis = blocks.find((b) => b.kind === 'coupling')!;
+      expect(plate.z1).toBeGreaterThan(1.0);
+      expect(plate.z1).toBeLessThan(1.4);
+      expect(plate.z0).toBeLessThanOrEqual(chassis.z1 + 0.01);
+      expect(blocks.filter((b) => b.kind === 'wheel').length).toBeGreaterThanOrEqual(4);
     }
   });
 });

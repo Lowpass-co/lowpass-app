@@ -30,6 +30,9 @@ export interface Block {
   z1: number;
 }
 
+/** Top of a tractor's fifth wheel, metres (47 in — US trailer spec sheets). */
+const FIFTH_WHEEL_M = 1.2;
+
 /** Ground clearance under a body, metres. */
 const CLEARANCE = 0.3;
 
@@ -79,6 +82,14 @@ export function vehicleBlocks(v: Pick<VehicleItem, 'type' | 'x' | 'y' | 'heading
       case 'coupling':
         z1 = Math.max(0.6, p.h * H);
         z0 = z1 - 0.25;
+        break;
+      case 'plate':
+        // The fifth wheel: a slab on the chassis, top at coupling height —
+        // never on the roof (it once was: "something floating above the cab").
+        // Fixed, not a share of the height: coupling height is a standard
+        // (47 in ≈ 1.2 m), whatever the cab's roof.
+        z1 = FIFTH_WHEEL_M;
+        z0 = FIFTH_WHEEL_M - 0.2;
         break;
       case 'rib':
         continue; // paint detail; too thin to model

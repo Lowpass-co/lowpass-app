@@ -16,7 +16,7 @@ describe('which vehicles get one', () => {
   it('bus trailers, the Bandwagon trailer and vans; never a truck or a lone tractor/trailer', () => {
     const has = VEHICLES.filter((v) => v.rear).map((v) => v.type).sort();
     expect(has).toEqual(['bandwagon_trailer', 'bus_eu_trailer', 'bus_us_trailer', 'luton', 'splitter', 'sprinter', 'vito']);
-    for (const t of ['truck_eu', 'truck_us', 'box_us', 'tractor_eu', 'trailer_eu']) expect(vehicleSpec(t)?.rear).toBeUndefined();
+    for (const t of ['truck_eu', 'truck_us', 'box_us', 'tractor_eu', 'trailer_eu', 'tractor_us', 'trailer_us']) expect(vehicleSpec(t)?.rear).toBeUndefined();
   });
   it('BandWagon: 66 ft kerb for a 59 ft rig → 7 ft ≈ 2.1 m', () => {
     expect(vehicleSpec('bandwagon_trailer')!.rear!.length).toBeCloseTo(((66 - 59) * 0.3048), 1);

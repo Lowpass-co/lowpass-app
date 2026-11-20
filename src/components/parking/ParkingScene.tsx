@@ -495,6 +495,7 @@ const PART_PAINT: Record<PartKind, { base: boolean; shade: number; ink?: number;
   rib: { base: false, shade: 0.28, outline: false },
   cabin: { base: true, shade: 0.16, outline: true },
   wheel: { base: false, shade: 0.9, outline: false },
+  plate: { base: false, shade: 0, ink: 0.38, outline: false },
 };
 
 /** One part of a vehicle, drawn in the vehicle's own frame (metres). */

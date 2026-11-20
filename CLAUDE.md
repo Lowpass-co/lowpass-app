@@ -615,7 +615,10 @@ recreate a `_legacy/` tree: delete dead code instead of parking it.
   keep-clear box behind the tail (`VehicleSpec.rear` → `rearClearCorners`, model.ts;
   per vehicle `rearClear: false` turns it off, the toggle sits under Colour). Plan,
   PDF (fit pages frame it, names avoid it, key line) and driver map — not 3D. Trucks
-  have none (doors open flush — Adam). 3D controls stay on the map. Right-click on the plan =
+  have none (doors open flush — Adam). Cab-only / trailer-only on BOTH sides
+  (tractor_eu/us, trailer_eu/us). A fifth wheel is part kind `plate` (fixed 1.2 m
+  top in 3D, `FIFTH_WHEEL_M`) — never `roof`, which 3D stacks ON the roof (it
+  floated over the cab once; a test now requires every roof unit to sit on a body). 3D controls stay on the map. Right-click on the plan =
   `<MapContextMenu>` (never the browser's; it only lays out the editor's own
   actions); Draw › **Flatten 3D** draws an area born `flat3d`.
 - **Selection is a list of ids** (Nov 2026, Adam): ⌘/Ctrl- or Shift-click
