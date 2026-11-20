@@ -449,6 +449,14 @@ browser key restricted to the Map Tiles API and the app's domains).**
 
 **Last verified**:
 
+#### PRK-54 — 3D vehicles are recognisable models, true size
+
+**Do**: Put one of every vehicle on a map (both regions). Open 3D; look from the front three-quarter, from behind and from overhead. Paint one white.
+
+**Expect**: Each reads at a glance — EU bus: double-deck, two glazed decks with a painted band, rabbit-ear mirrors, three axles; US bus: raked screen, low driver's window, front lounge glass, satellite dome; EU artic: flat-fronted cab-over with grille + tri-axle trailer; US truck: long hood, chrome grille + bumper + tanks, stacks, sleeper, tandem trailer with skirts; Sprinter / Vito / Luton / box truck / Bandwagon / car / generator as named. Tyres touch the ground, nothing floats, sizes match the plan, trailer and box roofs are paler than their cabs. They look the same at any time of day. The PDF's 3D page shows the same models.
+
+**Last verified**:
+
 ## Known broken
 
 #### PRK-90 — Re-exporting makes a new file
