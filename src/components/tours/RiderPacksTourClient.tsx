@@ -180,7 +180,6 @@ export function RiderPacksTourClient({
       <div className="flex items-start justify-between gap-4">
         <div>
           <h1 className="lp-page-title text-lp-text">Riders</h1>
-          <p className="mt-1 text-sm text-lp-text-secondary">Open a pack to edit the full canvas.</p>
           {/* A#9 — path from tour Production to the artist-level masters. */}
           <Link
             href={`/artists/${artistId}/riders`}

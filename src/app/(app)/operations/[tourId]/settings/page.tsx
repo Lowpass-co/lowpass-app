@@ -55,7 +55,6 @@ export default async function TourSettingsDetailsPage({ params }: { params: Prom
     <div className="space-y-6 px-4 pt-6" style={{ paddingBottom: 'var(--lp-space-8)' }}>
       <PageHeader
         title="Tour settings"
-        subtitle="The tour’s name, dates and currency. Days and venues are under Dates & routing; approval, overheads and exchange rates under Money."
         actions={<TourSettingsTabs tourId={tourId} active="details" />}
       />
       <TourDetailsPanel

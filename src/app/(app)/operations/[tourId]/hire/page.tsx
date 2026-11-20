@@ -17,7 +17,6 @@ export default async function OperationsTourHirePage({ params }: { params: Promi
     <div className="mx-auto max-w-6xl space-y-4 px-4 pt-6">
       <PageHeader
         title="Gear"
-        subtitle="Gear and hire for this tour. Hire costs go into the budget automatically."
       />
       <GearLibraryClient tourId={tourId} />
     </div>

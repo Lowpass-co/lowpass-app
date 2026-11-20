@@ -84,3 +84,9 @@ When a test currently fails, add:
 - `docs/handover/CC_*.md` — sprint prompts often reference these IDs
   when scoping followups (e.g. ADV-65/66/67/68 in the parity
   followups).
+
+## No instruction copy (Nov 2026)
+
+On any product page, a title stands alone — no how-to paragraph under it
+(counts / dates are fine). If a smoke test needs to say where something is
+typed, the test says it, not the page.

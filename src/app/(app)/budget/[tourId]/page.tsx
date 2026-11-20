@@ -101,24 +101,13 @@ export async function generateMetadata({
 }
 
 /** Title + one line of "what goes here" per tab, in the sidebar's words. */
-const TAB_HEADER: Record<string, { title: string; subtitle: string }> = {
-  budget: {
-    title: 'Budget',
-    subtitle:
-      'Totals at the top — open Commissions or Overheads to change them. Every line below: type planned costs in Estimate; actuals fill in from receipts. Lines marked Auto come from Payroll, Hotels, Travel or Gear — change them there.',
-  },
-  income: {
-    title: 'Income & settlements',
-    subtitle: 'Pick a show: its deal is what it should pay (Expected); settle it with what it actually paid on the night (Actual).',
-  },
-  receipts: {
-    title: 'Receipts',
-    subtitle: 'Drop in receipts, add the missing details, then apply each one to a budget line.',
-  },
-  settings: {
-    title: 'Tour settings',
-    subtitle: 'Money: approval, commissions, overheads, exchange rates and exports.',
-  },
+// Nov 2026 (Adam): no instruction paragraphs under titles ("looks AI"), and
+// the Budget tab has no title block at all — the rail already says Budget;
+// its receipt actions sit in the toolbar band.
+const TAB_HEADER: Record<string, { title: string }> = {
+  income: { title: 'Income & settlements' },
+  receipts: { title: 'Receipts' },
+  settings: { title: 'Tour settings' },
 };
 
 export default async function BudgetTourPage({
@@ -482,6 +471,12 @@ export default async function BudgetTourPage({
             money display — D-preflight #4), density and export. The separate
             <BudgetBurnBar> row is gone; the meter rides inside the band. The
             Receipts badge lives on the rail item (ShellV3Mount). */}
+        <BudgetReceiptDrop
+          enabled={tab === 'budget' && (lines.length > 0 || sections.length > 0)}
+          tourId={tourId}
+          tourCurrency={tourCurrency}
+          lineItems={receiptLineOptions}
+        >
         <BudgetContextBand
           tourCurrency={tourCurrency}
           lines={lines}
@@ -491,6 +486,14 @@ export default async function BudgetTourPage({
           canApprove={canApprove}
           fxRates={fxRates}
           showMeter={tab !== 'budget'}
+          actions={
+            tab === 'budget' && (lines.length > 0 || sections.length > 0) ? (
+              <>
+                <ReceiptsNeedDetailsLink tourId={tourId} count={receiptsNeedingDetails} />
+                <AddReceiptsButton />
+              </>
+            ) : undefined
+          }
         />
         <DerivedRefreshBanner failed={derivedFailed} detail={derived.errors[0]} />
         <FxMissingRateBanner
@@ -507,29 +510,11 @@ export default async function BudgetTourPage({
 
         {/* Phase 0 — content top matches the section rhythm so the grid isn't
             jammed under the sticky band/burn/phase stack. */}
-        <BudgetReceiptDrop
-          enabled={tab === 'budget' && (lines.length > 0 || sections.length > 0)}
-          tourId={tourId}
-          tourCurrency={tourCurrency}
-          lineItems={receiptLineOptions}
-        >
         <div className="space-y-6 px-4 pt-6">
-          {/* Oct 2026 — every tab says what it is and where to type. The
-              budget used to open straight onto a grid with no title. */}
           {TAB_HEADER[tab] ? (
             <PageHeader
               title={TAB_HEADER[tab].title}
-              subtitle={TAB_HEADER[tab].subtitle}
-              actions={
-                tab === 'settings' ? (
-                  <TourSettingsTabs tourId={tourId} active="money" />
-                ) : tab === 'budget' && (lines.length > 0 || sections.length > 0) ? (
-                  <>
-                    <ReceiptsNeedDetailsLink tourId={tourId} count={receiptsNeedingDetails} />
-                    <AddReceiptsButton />
-                  </>
-                ) : undefined
-              }
+              actions={tab === 'settings' ? <TourSettingsTabs tourId={tourId} active="money" /> : undefined}
             />
           ) : null}
           {tab === 'budget' && (lines.length > 0 || sections.length > 0) ? <ReceiptDropActivity /> : null}

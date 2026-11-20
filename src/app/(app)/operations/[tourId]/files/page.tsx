@@ -43,7 +43,6 @@ export default async function OperationsTourFilesPage({ params }: { params: Prom
       <FilesCanvas
         initial={files}
         uploadScope={{ type: 'tour', id: tour.id }}
-        subtitle="Consolidated uploads for this tour. Drag files here or use Upload; organise them into folders."
       />
     </div>
   );

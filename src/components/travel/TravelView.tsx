@@ -208,7 +208,6 @@ export function TravelView({ tourId, tourCurrency, crewNames }: TravelViewProps)
     <div className="mx-auto w-full max-w-[1200px] space-y-5 px-6 pb-10 pt-6">
       <PageHeader
         title="Travel"
-        subtitle="Every flight on this tour. A flight's cost goes into the budget automatically."
         actions={
           !adding ? (
             <Button variant="primary" leadingIcon={<Plus className="h-4 w-4" />} onClick={() => setAdding(true)}>

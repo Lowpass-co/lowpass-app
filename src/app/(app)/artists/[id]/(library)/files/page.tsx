@@ -51,7 +51,6 @@ export default async function ArtistFilesPage({ params }: PageProps) {
         initial={files}
         uploadScope={{ type: 'artist', id: artist.id }}
         title={`${artist.name} — Files`}
-        subtitle="Artist-level documents. Drag files here or use Upload; organise them into folders."
       />
     </div>
   );

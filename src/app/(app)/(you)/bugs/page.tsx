@@ -22,7 +22,6 @@ export default async function BugReportsPage() {
       {/* UX Audit 2026 — uniform page chrome via <PageHeader>. */}
       <PageHeader
         title="Bug Reports"
-        subtitle="Triage, assign, and resolve reported issues. Click a row to see full details."
         className="mb-4"
       />
       <BugReportsClient />

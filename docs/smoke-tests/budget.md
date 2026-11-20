@@ -2271,7 +2271,8 @@ test tour only. ✅ = passed live; ⚙ = covered by vitest, not live-run.
 
 ## Budget page — one panel (Nov 2026, Adam)
 
-- [ ] **BUD-PAGE-01 — One summary panel.** Budget tab: under the title, ONE
+- [ ] **BUD-PAGE-01 — One summary panel.** Budget tab: no title block and no
+  instruction text; under the toolbar (and any review banner), ONE
   light panel — Income · Total expenses · Net (proposed large, "actual so far"
   under each), then "Where it goes", then folded rows Commissions · Overheads ·
   Income. No black bands, no tables side by side, and income / expenses / net
@@ -2285,9 +2286,10 @@ test tour only. ✅ = passed live; ⚙ = covered by vitest, not live-run.
   (%, fixed amount, typed actual). Income opens the breakdown (+ Add other
   income). Changing a % moves Total expenses / Net at once.
 - [ ] **BUD-PAGE-04 — Receipts at the top.** "N receipts need details ›" and
-  an orange **Add receipts** button sit on the title line; there is no drop box
+  an orange **Add receipts** button sit in the toolbar band, left of the
+  density / currency / Workbook / Export controls; there is no drop box
   under the grid. Click → file picker. Progress and "Propose N receipts"
-  appear under the title while adding, and nothing shows when idle.
+  appear under the toolbar while adding, and nothing shows when idle.
 - [ ] **BUD-PAGE-05 — Drop anywhere.** Drag a receipt over the budget → a
   "Drop to add receipts" hint at the bottom. Drop it anywhere (not on a line)
   → it's added once. Drop it ON a grid line → it attaches to that line, and is

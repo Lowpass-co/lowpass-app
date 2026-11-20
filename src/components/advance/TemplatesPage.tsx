@@ -164,7 +164,6 @@ export function TemplatesPage({ tourId, initial }: { tourId: string | null; init
           </Link>
         ) : null}
         <h1 className="lp-page-title" style={{ margin: tourId ? '6px 0 0' : 0 }}>Templates</h1>
-        <p className="adv-sub">Shared across all your tours. Every new day gets the template for its day type; you can still change any single day.</p>
       </div>
 
       <div className="adv-cols" style={{ alignItems: 'flex-start' }}>

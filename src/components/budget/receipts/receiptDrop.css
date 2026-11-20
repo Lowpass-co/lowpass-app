@@ -4,7 +4,7 @@
   display: inline-flex;
   align-items: center;
   gap: var(--lp-space-1);
-  padding: var(--lp-space-2) var(--lp-space-4);
+  padding: var(--lp-space-1) var(--lp-space-3);
   font-size: var(--lp-text-sm);
   font-weight: var(--lp-weight-semibold);
   color: var(--lp-text-inverse);
