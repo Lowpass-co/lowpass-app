@@ -52,13 +52,14 @@ export interface SectionResolution {
    name a tour manager would recognise. Kept SMALL and specific on purpose — a
    sprawling table becomes its own source of wrong answers, and the fuzzy pass
    already covers near-spellings. */
-const ALIASES: Array<{ terms: string[]; section: string }> = [
+const ALIASES: Array<{ terms: string[]; section: string; also?: string[] }> = [
   { terms: ['catering', 'food', 'meals', 'hospitality', 'rider food', 'buyout'], section: 'Catering' },
   { terms: ['fuel', 'gas', 'petrol', 'diesel'], section: 'Fuel' },
   { terms: ['parking', 'tolls', 'toll', 'taxi', 'cab', 'rideshare', 'uber', 'transport', 'transportation', 'ground'], section: 'Transport' },
-  { terms: ['hotel', 'lodging', 'accommodation', 'accomodation', 'room', 'rooms'], section: 'Hotels' },
+  // Adam's own budgets say Accommodation (the templates say Hotels) — either is the hotel section.
+  { terms: ['hotel', 'hotels', 'lodging', 'accommodation', 'accomodation', 'room', 'rooms'], section: 'Hotels', also: ['Accommodation', 'Lodging'] },
   { terms: ['per diem', 'perdiem', 'per diems'], section: 'Per Diems' },
-  { terms: ['flight', 'flights', 'airfare', 'baggage', 'excess baggage'], section: 'Travel' },
+  { terms: ['flight', 'flights', 'airfare', 'baggage', 'excess baggage'], section: 'Travel', also: ['Flights', 'Transport'] },
   { terms: ['production', 'backline', 'gear', 'equipment', 'rental', 'hire'], section: 'Production' },
   { terms: ['freight', 'shipping', 'cartage', 'courier'], section: 'Freight' },
   { terms: ['crew', 'labour', 'labor', 'runner', 'local crew'], section: 'Crew' },
@@ -146,10 +147,11 @@ export function resolveSection(
   // 2. alias — extractor vocabulary → tour-manager vocabulary
   const alias = aliasFor(cat);
   if (alias) {
+    const names = [alias, ...(ALIASES.find((a) => a.section === alias)?.also ?? [])];
     const hit =
-      named.find((s) => norm(s.name) === norm(alias)) ??
-      named.find((s) => wordsContain(s.name, alias)) ??
-      named.find((s) => nameSimilarity(s.name, alias) >= FUZZY_THRESHOLD);
+      names.map((n) => named.find((s) => norm(s.name) === norm(n))).find(Boolean) ??
+      names.map((n) => named.find((s) => wordsContain(s.name, n))).find(Boolean) ??
+      named.find((s) => names.some((n) => nameSimilarity(s.name, n) >= FUZZY_THRESHOLD));
     if (hit) {
       return {
         sectionId: hit.id,

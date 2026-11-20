@@ -56,6 +56,7 @@ export interface ReceiptFacts {
 }
 
 import { resolveSection, type SectionOption } from './receiptSection';
+import { matchHotel, type HotelLine } from './hotelMatch';
 
 /** A budget line as the matcher needs it. */
 export interface BudgetLineFacts {
@@ -219,6 +220,9 @@ export function proposeForReceipt(
        to one instead of being dropped in Uncategorised. Defaults to the sections
        implied by `lines` when not supplied, so existing callers keep working. */
     sections?: SectionOption[];
+    /** Nov 2026 — the tour's hotels in Rooming, each with its automatic budget
+     *  line. A hotel bill attaches to its hotel's line (hotelMatch.ts). */
+    hotels?: HotelLine[];
   } = {},
 ): ReceiptProposal {
   const { tourStart = null, tourEnd = null, fallbackSectionName = 'Uncategorised' } = opts;
@@ -230,6 +234,26 @@ export function proposeForReceipt(
         dup.paidAt ? ` on ${dup.paidAt.slice(0, 10)}` : ''
       }`
     : null;
+
+  const baseValue0 = {
+    vendor: receipt.vendor,
+    date: receipt.date,
+    amount: receipt.total_amount,
+    currency: receipt.currency,
+  };
+  const hotel = matchHotel(receipt, opts.hotels ?? []);
+  if (hotel) {
+    return {
+      target: 'receipt_txn',
+      lineItemId: hotel.lineId,
+      reason: `Hotel — ${hotel.reason}`,
+      score: hotel.score,
+      dupOf,
+      dupReason,
+      defaultAccept: dupOf === null,
+      value: baseValue0,
+    };
+  }
 
   const scored = lines
     .map((l) => scoreLine(receipt, l, tourStart, tourEnd))

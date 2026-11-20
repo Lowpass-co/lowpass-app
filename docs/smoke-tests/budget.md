@@ -2292,6 +2292,13 @@ test tour only. ✅ = passed live; ⚙ = covered by vitest, not live-run.
   leaves it out of commissions that take a share of Other income. × asks
   "Remove" before deleting. The grid has NO Other income section or income
   lines (it's costs only), and receipts can't be filed against income.
+- [ ] **BUD-PAGE-08 — Hotel receipts go to the hotel.** With a hotel in Rooming
+  (dates set), drop its bill (vendor = the hotel's name, or any hotel bill dated
+  during that stay): the proposal says "Hotel — the hotel in Rooming: <name>"
+  and applying it adds the amount as an actual on that hotel's automatic line —
+  no new line. A hotel bill with no hotel in Rooming makes a new line in your
+  Hotels / Accommodation section, never Uncategorised. Typing a section name in
+  review files the line there (an unknown name makes that section).
 - [ ] **BUD-PAGE-07 — Columns resize like a spreadsheet.** Drag a column
   edge (Item, Vendor, Estimate…) narrower than its longest text: it goes down to
   a sliver and the text clips with "…". Reload: the widths are kept. More ›

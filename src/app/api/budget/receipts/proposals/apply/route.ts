@@ -24,6 +24,7 @@
 import { NextResponse } from 'next/server';
 import { requireWrite } from '@/lib/auth/workspace-check';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
+import { resolveSection } from '@/lib/budget/receiptSection';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
@@ -34,6 +35,7 @@ interface ProposalValue {
   amount: number | null;
   currency: string | null;
   label?: string;
+  sectionId?: string | null;
   sectionName?: string | null;
   /** RQ-7 — the named section doesn't exist yet; create it before the line. */
   createSection?: boolean;
@@ -86,6 +88,17 @@ export async function POST(request: Request): Promise<NextResponse> {
       .eq('batch_id', batchId)
       .eq('workspace_id', workspaceId);
 
+    // The tour's sections, so every new line lands in a real one (section_id).
+    const { data: sectionRows } = await supabase
+      .from('budget_sections')
+      .select('id, name')
+      .eq('tour_id', batch.tour_id)
+      .eq('workspace_id', workspaceId);
+    const sections: Array<{ id: string; name: string }> = (sectionRows ?? []).map((x) => ({
+      id: x.id as string,
+      name: (x.name as string | null) ?? '',
+    }));
+
     const origin = new URL(request.url).origin;
     const cookie = request.headers.get('cookie') ?? '';
     const now = new Date().toISOString();
@@ -123,17 +136,35 @@ export async function POST(request: Request): Promise<NextResponse> {
 
       let lineItemId = v.lineItemId ?? null;
 
-      /* RQ-7 — the proposal may ask for a SECTION that doesn't exist yet, rather
-         than having quietly resolved to Uncategorised. Create it first, through
-         the existing sections route, so the new line has somewhere real to live.
-         Best-effort: if the section can't be created we still make the line, and
-         it lands under the proposed name the way it would have before. */
-      if (row.target === 'receipt_line' && v.createSection && v.sectionName) {
-        await fetch(`${origin}/api/budget/sections`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', cookie },
-          body: JSON.stringify({ tour_id: batch.tour_id, name: v.sectionName }),
-        }).catch(() => {});
+      /* Nov 2026 (Adam: "said they were hotels and they flowed into
+         uncategorised") — the line was created with only the section NAME (a
+         legacy text tag), never section_id, which is what the grid groups by.
+         Every new line now lands in a real section: the proposal's own id when
+         the reviewer kept that name, else the section the (edited) name
+         resolves to, else a new one made here (RQ-7) and its id used. */
+      let sectionId: string | null = null;
+      if (row.target === 'receipt_line') {
+        const wanted = (v.sectionName ?? '').trim();
+        const known = v.sectionId ? sections.find((x) => x.id === v.sectionId) : undefined;
+        if (known && (!wanted || known.name.trim().toLowerCase() === wanted.toLowerCase())) {
+          sectionId = known.id;
+        } else if (wanted && wanted.toLowerCase() !== 'uncategorised') {
+          const r = resolveSection(wanted, sections);
+          if (r.sectionId) {
+            sectionId = r.sectionId;
+          } else {
+            const res = await fetch(`${origin}/api/budget/sections`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', cookie },
+              body: JSON.stringify({ tour_id: batch.tour_id, name: r.sectionName }),
+            }).catch(() => null);
+            const made = res && res.ok ? ((await res.json().catch(() => null)) as { id?: string; name?: string } | null) : null;
+            if (made?.id) {
+              sectionId = made.id;
+              sections.push({ id: made.id, name: made.name ?? r.sectionName }); // the next receipt reuses it
+            }
+          }
+        }
       }
 
       // (b) create the line first — at actual_cost 0. The TRANSACTION moves the
@@ -146,7 +177,7 @@ export async function POST(request: Request): Promise<NextResponse> {
             tour_id: batch.tour_id,
             label: v.label ?? vendorName,
             category: v.sectionName ?? 'Uncategorised',
-            section: v.sectionName ?? 'Uncategorised',
+            section_id: sectionId,
             proposed_cost: amount,
             actual_cost: 0,
             currency: v.currency ?? undefined,

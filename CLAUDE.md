@@ -310,6 +310,11 @@ recreate a `_legacy/` tree: delete dead code instead of parking it.
   `ReceiptDropActivity`). A file dropped ANYWHERE on the page is a receipt
   unless a grid row took it (`defaultPrevented`) — never re-add a drop box
   under the grid, and never let a row drop upload twice (tested).
+- **Receipts land in real sections** (Nov 2026, Adam): a hotel bill attaches
+  to its hotel's automatic line (`matchHotel`, src/lib/budget/hotelMatch.ts —
+  by name, else by date inside exactly one stay); the apply route ALWAYS sends
+  `section_id` for a new line (the old code sent only the name → Uncategorised).
+  Hotels ≡ Accommodation in `receiptSection` aliases.
 - The Summary card dashboard is DELETED; `?tab=summary|reports` resolve to
   `budget`. Sheet figures are `computeBudgetPnl` recomputed client-side;
   section rows are `sheetTotalsBySection` (Σ pinned to `baseExpenses` by test).
