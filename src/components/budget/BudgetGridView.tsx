@@ -775,6 +775,7 @@ export function BudgetGridView({
         </div>
       ) : null}
       <Grid
+        widthsKey="lp-grid-widths:budget"
         // re-init when the line/section COUNT changes; cell edits don't change
         // counts, so the grid keeps its session state. Counted on allLines (the
         // server rows + the optimistic adds / deletes), not `lines`: keyed on

@@ -2299,6 +2299,10 @@ test tour only. ✅ = passed live; ⚙ = covered by vitest, not live-run.
   no new line. A hotel bill with no hotel in Rooming makes a new line in your
   Hotels / Accommodation section, never Uncategorised. Typing a section name in
   review files the line there (an unknown name makes that section).
+- [ ] **BUD-PAGE-07 — Columns resize like a spreadsheet.** Drag a column
+  edge (Item, Vendor, Estimate…) narrower than its longest text: it goes down to
+  a sliver and the text clips with "…". Reload: the widths are kept. More ›
+  Reset column widths puts them back. Same on Hotels & rooming.
 - [ ] **BUD-PAGE-04 — Receipts at the top.** "N receipts need details ›" and
   an orange **Add receipts** button sit in the toolbar band, left of the
   density / currency / Workbook / Export controls; there is no drop box
