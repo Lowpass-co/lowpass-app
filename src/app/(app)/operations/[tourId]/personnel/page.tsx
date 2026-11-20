@@ -179,9 +179,6 @@ function ManagerSurface({
         <h1 className="lp-page-title" style={{ margin: 0, color: 'var(--lp-text)' }}>
           Crew
         </h1>
-        <p style={{ margin: '4px 0 0', fontSize: 'var(--lp-text-sm)', color: 'var(--lp-text-secondary)' }}>
-          Who is on this tour, their roles and dates. Rates and per diems are set on Payroll.
-        </p>
       </header>
       <PersonnelManagerClient
         tourId={tourId}

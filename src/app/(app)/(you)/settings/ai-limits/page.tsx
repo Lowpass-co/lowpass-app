@@ -127,7 +127,6 @@ export default async function AiLimitsPage() {
       <div className="mx-auto w-full max-w-3xl" style={{ padding: 'var(--lp-space-4)' }}>
         <PageHeader
           title="AI limits"
-          subtitle="Budgets + per-user caps for AI features."
           className="mb-6"
         />
 

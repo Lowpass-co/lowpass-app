@@ -32,6 +32,7 @@ import type { FxRateMap } from '@/lib/budget/fxRates';
 import { VersionSelector } from './versioning/VersionSelector';
 import type { BudgetVersionVm } from './versioning/versionApi';
 import type { BudgetLineItem } from '@/types';
+import type { ReactNode } from 'react';
 
 interface BudgetContextBandProps {
   tourCurrency: string;
@@ -46,6 +47,8 @@ interface BudgetContextBandProps {
   /** False on the Summary tab — its dashboard owns the money display there
    *  (D-preflight #4), so the band shows controls with a plain spacer. */
   showMeter?: boolean;
+  /** The page's own actions, at the right of the band (Budget tab: receipts). */
+  actions?: ReactNode;
 }
 
 export function BudgetContextBand({
@@ -57,6 +60,7 @@ export function BudgetContextBand({
   canApprove,
   fxRates,
   showMeter = true,
+  actions,
 }: BudgetContextBandProps) {
   return (
     <div
@@ -80,6 +84,8 @@ export function BudgetContextBand({
       ) : (
         <div className="min-w-0 flex-1" aria-hidden />
       )}
+
+      {actions ? <div className="flex shrink-0 items-center gap-3">{actions}</div> : null}
 
       <div className="flex shrink-0 items-center gap-2">
         {/* App-wide density preference (`lowpass:density`) — same toggle every

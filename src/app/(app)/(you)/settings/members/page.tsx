@@ -74,7 +74,6 @@ export default async function SettingsMembersPage() {
       >
       <PageHeader
         title={workspaceName || 'Workspace'}
-        subtitle="Manage who can see and edit data in this workspace."
         className="mb-4"
       />
 

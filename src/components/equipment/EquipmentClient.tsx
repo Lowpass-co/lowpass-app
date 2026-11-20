@@ -66,7 +66,6 @@ function EquipmentClientBody({
           every other workspace page. */}
       <PageHeader
         title="Rental jobs"
-        subtitle="Job bookings — inventory now lives in Assets"
         actions={<EquipmentDensityToggle />}
         className="w-full shrink-0"
       />

@@ -79,7 +79,6 @@ export default async function VenuesPage() {
     <div className="mx-auto max-w-5xl p-6">
       <PageHeader
         title="Venues"
-        subtitle="Your routing's venue library. Edits to a venue flow through to upcoming shows; past shows keep their snapshot."
       />
       <div className="mt-6">
         <VenueLibraryClient venues={venues} canEdit={isSiteAdmin} />

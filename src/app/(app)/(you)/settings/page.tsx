@@ -27,7 +27,6 @@ export default async function SettingsPage() {
         {/* UX Audit 2026 — uniform page chrome via <PageHeader>. */}
         <PageHeader
           title="Settings"
-          subtitle="Workspace settings, roles, and permissions."
           className="mb-6"
         />
 

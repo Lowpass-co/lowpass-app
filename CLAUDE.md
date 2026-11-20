@@ -144,6 +144,10 @@ is non-nullable, so an unbuilt page cannot be added to the nav; build the page
 first. Page titles match the rail labels (Schedule, Crew, Hotels & rooming,
 Travel, Gear, …), use `.lp-page-title` (sans, title case, `--lp-text-2xl`) with
 no per-page fontSize, and never repeat the tour name (the top bar shows it).
+**No instruction paragraphs under page titles** (Nov 2026, Adam: "that looks
+AI"). A title stands alone; a line under it is only for FACTS (counts, dates —
+e.g. Advance's "12 shows · 3 to review"), never how-to copy. Admin pages,
+empty states and genuine blocked-state messages are exempt.
 
 **Adding a new surface:** add/extend a rail item in
 `src/lib/nav/ia.ts` (that is the ONLY place nav strings live), put
@@ -300,8 +304,9 @@ recreate a `_legacy/` tree: delete dead code instead of parking it.
   tour's one `kind: 'income'` section on first use). The GRID IS COSTS ONLY:
   the page passes it lines without `isIncomeRow` and sections without the
   income kind — don't put income back in the grid (Nov 2026, Adam).
-- Receipts on the budget: "N need details" + **Add receipts** on the title
-  line; progress under it (`ReceiptDropProvider` / `AddReceiptsButton` /
+- The Budget tab has NO title block (the rail says Budget). Receipts on the
+  budget: "N need details" + **Add receipts** in the toolbar band
+  (`BudgetContextBand` `actions`); progress under the band (`ReceiptDropProvider` / `AddReceiptsButton` /
   `ReceiptDropActivity`). A file dropped ANYWHERE on the page is a receipt
   unless a grid row took it (`defaultPrevented`) — never re-add a drop box
   under the grid, and never let a row drop upload twice (tested).
