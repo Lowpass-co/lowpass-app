@@ -184,7 +184,9 @@ function coachEU(b: MeshBuilder, L: number, W: number, H: number): void {
   // back axles the glass sweeps up from the lower windows into the upper band,
   // its front edge raked back as it rises. The silver swoosh on the photo is
   // livery and isn't drawn.
-  const stair = L - 3.3 * k - 0.45;
+  // It starts over the LAST lower-deck window (Adam: "it's forward, over
+  // that last window").
+  const stair = lower.length ? lower[lower.length - 1][0] : L - 3.3 * k - 0.45;
   for (const side of [-1, 1]) {
     sidePoly(b, side * (hw + 0.004), [[stair, lowT - 0.04], [L - 0.85, lowT - 0.04], [L - 0.85, upS + 0.04], [stair + 0.75, upS + 0.04]], 'glass');
   }
