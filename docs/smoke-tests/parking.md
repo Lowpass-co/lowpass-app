@@ -425,6 +425,14 @@ browser key restricted to the Map Tiles API and the app's domains).**
 
 **Last verified**:
 
+#### PRK-51 — More vehicles: cab only, trailer only, Luton, box truck, Bandwagon, Vito
+
+**Do**: Open a parking map → Add. On UK / EU, place Truck cab only, Trailer only, Luton van and Vito. Switch to US and place Box truck 26 ft, Bandwagon and Bandwagon + trailer. Select each and read its size; open 3D; export a PDF.
+
+**Expect**: Sizes: cab 6.0 × 2.55 m, trailer 13.6 × 2.55 m, Luton 6.9 × 2.2 m, Vito 5.4 × 1.93 m, box truck 10.4 × 2.6 m, Bandwagon 11.6 × 2.6 m (38 ft), Bandwagon + trailer 18.0 m (59 ft). The cab shows no trailer; the trailer shows no cab; the Luton's box sits over its cab. Each stands at its true height in 3D and is named on the PDF and in its key.
+
+**Last verified**:
+
 ## Known broken
 
 #### PRK-90 — Re-exporting makes a new file

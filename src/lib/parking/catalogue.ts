@@ -7,7 +7,11 @@
    the bus / truck company's spec sheet.
    ============================================ */
 
-export type VehicleType = 'bus_us' | 'bus_us_trailer' | 'bus_eu' | 'bus_eu_trailer' | 'truck_us' | 'truck_eu' | 'splitter' | 'sprinter' | 'car' | 'generator';
+export type VehicleType =
+  | 'bus_us' | 'bus_us_trailer' | 'bus_eu' | 'bus_eu_trailer'
+  | 'truck_us' | 'truck_eu' | 'tractor_eu' | 'trailer_eu'
+  | 'luton' | 'box_us' | 'bandwagon' | 'bandwagon_trailer'
+  | 'splitter' | 'sprinter' | 'vito' | 'car' | 'generator';
 
 export interface VehicleSpec {
   type: VehicleType;
@@ -36,10 +40,29 @@ export const VEHICLES: readonly VehicleSpec[] = [
   { type: 'bus_us_trailer', label: 'Tour bus + trailer, US', short: 'Bus', length: 19, width: 2.6, height: 3.7, role: 'bus', trailer: { length: 4.3, gap: 1.0 } },
   { type: 'truck_eu', label: 'Truck, EU (artic)', short: 'Truck', length: 16.5, width: 2.55, height: 4.0, role: 'truck' },
   { type: 'truck_us', label: 'Truck, US (53 ft)', short: 'Truck', length: 22, width: 2.6, height: 4.1, role: 'truck' },
+  /* Nov 2026 (Adam: "EU/UK truck cabs without trailer, and then trailers
+     without cabs"). A 4×2 tractor unit (DAF XF / Volvo FH class) ≈ 6.0 m, and
+     the standard 13.6 m box semi-trailer on its own. Typical figures. */
+  { type: 'tractor_eu', label: 'Truck cab only (tractor unit), EU / UK', short: 'Cab', length: 6.0, width: 2.55, height: 3.9, role: 'truck' },
+  { type: 'trailer_eu', label: 'Trailer only (13.6 m), EU / UK', short: 'Trailer', length: 13.6, width: 2.55, height: 4.0, role: 'truck' },
+  /* "Box trucks in the UK and US" — UK: a Luton van (Adam), the 3.5 t
+     Transit / Sprinter box with the peak over the cab: ≈ 6.9 m × 2.2 m (box)
+     × 3.3 m. US: a 26 ft box truck, ≈ 34 ft overall, 102" wide, ≈ 12 ft 6 in. */
+  { type: 'luton', label: 'Luton van (3.5 t), UK', short: 'Luton', length: 6.9, width: 2.2, height: 3.3, role: 'van' },
+  { type: 'box_us', label: 'Box truck, US (26 ft)', short: 'Box truck', length: 10.4, width: 2.6, height: 3.8, role: 'truck' },
+  /* "Bandwagon / Pullman / Yoda coach" — the US mid-level sleeper on a
+     Freightliner cab. BandWagon RV Rentals (FAQ, Nov 2026): 38 ft long, 8.5 ft
+     wide, 13 ft high; with one of their 8 × 16 ft trailers, 59 ft overall.
+     (Street parking: they say allow 66 ft for the drop-down ramp/door.) */
+  { type: 'bandwagon', label: 'Bandwagon / Pullman (38 ft), US', short: 'Bandwagon', length: 11.6, width: 2.6, height: 3.96, role: 'bus' },
+  { type: 'bandwagon_trailer', label: 'Bandwagon / Pullman + trailer, US', short: 'Bandwagon', length: 18.0, width: 2.6, height: 3.96, role: 'bus', trailer: { length: 5.5, gap: 0.9 } },
   { type: 'splitter', label: 'Splitter van + trailer', short: 'Van', length: 12, width: 2.1, height: 2.8, role: 'van' },
   /* Nov 2026 (Adam: "a sprinter without trailer"). Mercedes Sprinter extra-
      long wheelbase, high roof: 7.37 m × 2.02 m (body, mirrors folded) × 2.8 m. */
   { type: 'sprinter', label: 'Sprinter / splitter van, no trailer', short: 'Van', length: 7.4, width: 2.02, height: 2.8, role: 'van' },
+  /* "In the UK add Mercedes Vito too". Vito Tourer extra-long: 5.37 m ×
+     1.93 m (body, mirrors folded) × 1.91 m. */
+  { type: 'vito', label: 'Mercedes Vito (extra long)', short: 'Vito', length: 5.4, width: 1.93, height: 1.91, role: 'van' },
   { type: 'car', label: 'Car / runner', short: 'Car', length: 5, width: 2, height: 1.5, role: 'car' },
   { type: 'generator', label: 'Generator', short: 'Generator', length: 6, width: 2.5, height: 2.6, role: 'power' },
 ];
@@ -47,22 +70,29 @@ export const VEHICLES: readonly VehicleSpec[] = [
 export const vehicleSpec = (t: string): VehicleSpec | undefined => VEHICLES.find((v) => v.type === t);
 
 /* The editor's Add tab (Nov 2026, Adam): a UK / EU | US switch, and one tile
-   per kind of vehicle in that region's sizes — seven tiles, not eleven rows. */
+   per kind of vehicle in that region's sizes. */
 export type VehicleRegion = 'eu' | 'us';
 export const VEHICLE_TILES: Record<VehicleRegion, { type: VehicleType; label: string }[]> = {
   eu: [
     { type: 'bus_eu', label: 'Tour bus' },
     { type: 'bus_eu_trailer', label: 'Bus + trailer' },
     { type: 'truck_eu', label: 'Truck (artic)' },
+    { type: 'tractor_eu', label: 'Truck cab only' },
+    { type: 'trailer_eu', label: 'Trailer only' },
+    { type: 'luton', label: 'Luton van' },
     { type: 'splitter', label: 'Splitter + trailer' },
     { type: 'sprinter', label: 'Sprinter' },
+    { type: 'vito', label: 'Vito' },
     { type: 'car', label: 'Car / runner' },
     { type: 'generator', label: 'Generator' },
   ],
   us: [
     { type: 'bus_us', label: 'Tour bus 45 ft' },
     { type: 'bus_us_trailer', label: 'Bus + trailer' },
+    { type: 'bandwagon', label: 'Bandwagon' },
+    { type: 'bandwagon_trailer', label: 'Bandwagon + trailer' },
     { type: 'truck_us', label: 'Truck 53 ft' },
+    { type: 'box_us', label: 'Box truck 26 ft' },
     { type: 'splitter', label: 'Splitter + trailer' },
     { type: 'sprinter', label: 'Sprinter' },
     { type: 'car', label: 'Car / runner' },
