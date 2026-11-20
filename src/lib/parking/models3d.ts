@@ -180,11 +180,11 @@ function coachEU(b: MeshBuilder, L: number, W: number, H: number): void {
       },
     },
   );
-  // The stair window behind the door: the upper band sweeps down to the
-  // lower deck (Setra S 531 DT / Skyliner) — glass over the painted band,
-  // its back edge raked.
-  const stair0 = door[1] + 0.12;
-  sidePoly(b, hw + 0.004, [[stair0, lowS + 0.02], [stair0 + 0.9, lowS + 0.02], [stair0 + 2.3, upS + 0.02], [stair0, upS + 0.02]], 'glass');
+  // The stair window: the upper band sweeps down to the lower deck across the
+  // painted band, on the door side.
+  // Over the front wheel, both edges leaning FORWARD going up (Setra S 531 DT:
+  // the painted band's front end is raked that way).
+  sidePoly(b, hw + 0.004, [[fa + 0.2, lowT - 0.02], [fa + 1.7, lowT - 0.02], [fa + 1.0, upS + 0.02], [fa - 0.5, upS + 0.02]], 'glass');
   // Roof: air-con pod, hatches.
   roundBox(b, L * 0.36, L * 0.62, 0, hw * 0.72, roof - 0.02, H, 0.08, 'pale');
   topPanel(b, roof + 0.004, L * 0.18, L * 0.18 + 0.7, -0.35, 0.35, 'trim');
@@ -220,10 +220,13 @@ function coachUS(b: MeshBuilder, L: number, W: number, H: number): void {
   const drvS = 0.31 * H; // driver's window (lower)
   const paxS = 0.47 * H; // passenger deck (floor 1.6 m)
   const winT = roof - 0.48;
-  const front = panes(fa + 0.75, Math.min(L * 0.46, fd - 1.5), 1.25, 0.1);
+  const front = panes(fa + 0.62, Math.min(L * 0.46, fd - 1.5), 1.6, 0.12);
   const rear = panes(fd - 1.3 - 2.2 * k, fd - 1.0, 1.05, 0.1);
-  const driver: [number, number] = [0.55, fa + 0.55];
-  const door: [number, number] = [fa + 0.75, fa + 1.5];
+  // Prevost (Adam's photo): the entrance door is on the RIGHT, AHEAD of the
+  // front wheel; the driver's window is opposite it on the left.
+  const driver: [number, number] = [0.5, fa - 0.55];
+  const door: [number, number] = [0.5, fa - 0.62];
+  const bays = 1.15; // stainless baggage-bay band below this
   loft(
     b,
     [
@@ -238,17 +241,17 @@ function coachUS(b: MeshBuilder, L: number, W: number, H: number): void {
     ],
     {
       segs: 5,
-      zBreaks: [0.7, drvS, paxS, winT],
+      zBreaks: [0.7, bays, drvS, paxS, winT],
       fBreaks: [...edges(front), ...edges(rear), ...driver, ...door],
       paint: (q) => {
-        if (isFront(q)) return q.z < 0.7 ? 'trim' : q.z > 1.5 && q.z < roof - 0.12 ? 'glass' : 'body';
+        if (isFront(q)) return q.z < 0.7 ? 'metal' : q.z > 1.5 && q.z < roof - 0.12 ? 'glass' : 'body';
         if (isBack(q)) return 'body';
         if (isSide(q)) {
-          if (inZ(q, drvS, winT) && q.f > driver[0] && q.f < driver[1]) return 'glass';
-          if (q.s > 0 && q.f > door[0] && q.f < door[1] && q.z > 0.45 && q.z < winT) return 'glass';
-          if (inZ(q, paxS, winT) && inF(q, q.s > 0 ? front.filter(([a]) => a > door[1]) : front)) return 'glass';
+          if (q.s < 0 && inZ(q, drvS, winT) && q.f > driver[0] && q.f < driver[1]) return 'glass';
+          if (q.s > 0 && q.f > door[0] && q.f < door[1] && inZ(q, bays, winT)) return 'glass';
+          if (inZ(q, paxS, winT) && inF(q, front)) return 'glass';
           if (inZ(q, paxS, winT) && inF(q, rear)) return 'glass';
-          if (q.z < 0.42) return 'shade';
+          if (q.z < bays && q.f > 0.4) return 'metal';
         }
         return 'body';
       },
@@ -264,12 +267,15 @@ function coachUS(b: MeshBuilder, L: number, W: number, H: number): void {
   for (const side of [-1, 1]) {
     endPanel(b, -0.004, -1, side * (hw - 0.98), side * (hw - 0.48), 0.78, 0.98, 'lamp');
     endPanel(b, L + 0.004, 1, side * (hw - 0.55), side * (hw - 0.3), 0.85, 1.7, 'tail');
-    // Luggage-bay doors between the axles.
-    for (let f = fa + 1.6; f < fd - 0.8; f += 1.25) sidePanel(b, side * (hw + 0.005), f, f + 0.03, 0.36, paxS - 0.1, 'trim');
+    // Stainless baggage-bay doors between the axles, a rub strip on top.
+    for (let f = fa + 1.4; f < fd - 0.8; f += 1.25) sidePanel(b, side * (hw + 0.005), f, f + 0.025, 0.38, bays - 0.04, 'trim');
+    sidePanel(b, side * (hw + 0.005), 0.4, L - 0.3, bays - 0.03, bays, 'trim');
     // Engine-bay louvres.
     for (let i = 0; i < 6; i++) sidePanel(b, side * (hw + 0.005), ft + 0.65, L - 0.3, 0.75 + i * 0.1, 0.79 + i * 0.1, 'trim');
   }
   endPanel(b, L + 0.004, 1, -(hw - 0.7), hw - 0.7, 0.55, 1.45, 'trim');
+  sidePanel(b, hw + 0.006, door[0] - 0.03, door[0], 0.42, winT, 'trim');
+  sidePanel(b, hw + 0.006, door[1], door[1] + 0.03, 0.42, winT, 'trim');
   for (const [f, dual] of [[fa, false], [fd, true], [ft, false]] as const) {
     arch(b, hw, f, tyre, 0.3);
     wheels(b, { f, r: tyre, outer: hw + 0.004, width: dual ? 0.6 : 0.33, dual });
