@@ -18,8 +18,9 @@
 import { vehicleSpec, type VehicleType } from './catalogue';
 
 /** `cabin`: a car's passenger compartment, sitting ON the lower body (3D);
- *  `wheel`: under the body — hidden on the plan, the tyres in 3D. */
-export type PartKind = 'body' | 'cab' | 'hood' | 'glass' | 'roof' | 'coupling' | 'mirror' | 'rib' | 'cabin' | 'wheel';
+ *  `wheel`: under the body — hidden on the plan, the tyres in 3D.
+ *  `plate`: a tractor's fifth wheel — on the chassis, at coupling height (47 in). */
+export type PartKind = 'body' | 'cab' | 'hood' | 'glass' | 'roof' | 'coupling' | 'mirror' | 'rib' | 'cabin' | 'wheel' | 'plate';
 
 export interface Part {
   kind: PartKind;
@@ -75,6 +76,11 @@ function towed(L: number, W: number, trailerLen: number, gap: number, front: (en
     { kind: 'coupling', f0: hitch - 0.2, f1: tStart + 0.2, w: 0.18, h: 0.25 },
     ...boxTrailer(tStart, L, W * 0.92, false),
   ];
+}
+
+/** Tyre pairs (both sides) at these distances from the nose — 1 m truck tyres. */
+function tyres(axles: number[], W: number): Part[] {
+  return axles.flatMap((at) => [-1, 1].map((side): Part => ({ kind: 'wheel', f0: at - 0.5, f1: at + 0.5, w: 0.3, h: 0.26, s: side * (W / 2 - 0.2) })));
 }
 
 /** A cab-over truck cab, nose at 0, `len` long (EU tractors, UK box lorries). */
@@ -157,16 +163,35 @@ export function vehicleParts(type: VehicleType | string, L: number, W: number): 
       ];
     }
     case 'tractor_eu': {
-      // Cab, then the chassis with the fifth-wheel plate — no trailer.
+      // Cab-over, then the bare chassis with the fifth wheel — no trailer.
+      // 4×2: front axle under the cab, drive axle under the plate.
       const cab = clamp(2.3, 1.5, L * 0.5);
-      const plate = Math.max(cab + 0.3, L - 2.2);
+      const drive = Math.max(cab + 0.8, L - 0.95);
+      const plate = Math.max(cab + 0.3, drive - 0.8);
       return [
+        ...tyres([clamp(1.4, 0.6, cab - 0.3), drive], W),
+        { kind: 'coupling', f0: cab, f1: L, w: W * 0.55, h: 0.27 },
+        { kind: 'plate', f0: plate, f1: Math.min(L, plate + 1.2), w: W * 0.7, h: 0.31, r: 0.5 },
         ...cabOver(cab, W),
-        { kind: 'coupling', f0: cab, f1: L, w: W * 0.55, h: 0.3 },
-        { kind: 'roof', f0: plate, f1: Math.min(L, plate + 1.4), w: W * 0.7, h: 0.34, r: 0.5 },
+      ];
+    }
+    case 'tractor_us': {
+      // Conventional sleeper (Cascadia class), 6×4: hood, cab, sleeper, chassis,
+      // tandem drive axles under the fifth wheel.
+      const front = conventional(W, 2.3, 1.9);
+      const sleeperEnd = Math.min(L - 1.5, front.end + 1.9);
+      const rear = Math.max(sleeperEnd + 0.8, L - 1.15);
+      const plate = Math.max(sleeperEnd + 0.2, rear - 1.3);
+      return [
+        ...tyres([1.0, rear - 1.32, rear], W),
+        { kind: 'coupling', f0: sleeperEnd, f1: L, w: W * 0.55, h: 0.27 },
+        { kind: 'plate', f0: plate, f1: Math.min(L, plate + 1.2), w: W * 0.7, h: 0.31, r: 0.5 },
+        ...front.parts,
+        { kind: 'cab', f0: front.end, f1: sleeperEnd, w: W, h: 0.92, r: 0.2 },
       ];
     }
     case 'trailer_eu':
+    case 'trailer_us':
       // The box on its own; a short kingpin stub where the tractor couples.
       return [
         { kind: 'coupling', f0: 0, f1: Math.min(0.6, L * 0.1), w: 0.3, h: 0.3 },

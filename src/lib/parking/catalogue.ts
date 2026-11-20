@@ -9,7 +9,7 @@
 
 export type VehicleType =
   | 'bus_us' | 'bus_us_trailer' | 'bus_eu' | 'bus_eu_trailer'
-  | 'truck_us' | 'truck_eu' | 'tractor_eu' | 'trailer_eu'
+  | 'truck_us' | 'truck_eu' | 'tractor_eu' | 'trailer_eu' | 'tractor_us' | 'trailer_us'
   | 'luton' | 'box_us' | 'bandwagon' | 'bandwagon_trailer'
   | 'splitter' | 'sprinter' | 'vito' | 'car' | 'generator';
 
@@ -49,6 +49,12 @@ export const VEHICLES: readonly VehicleSpec[] = [
      the standard 13.6 m box semi-trailer on its own. Typical figures. */
   { type: 'tractor_eu', label: 'Truck cab only (tractor unit), EU / UK', short: 'Cab', length: 6.0, width: 2.55, height: 3.9, role: 'truck' },
   { type: 'trailer_eu', label: 'Trailer only (13.6 m), EU / UK', short: 'Trailer', length: 13.6, width: 2.55, height: 4.0, role: 'truck' },
+  /* US (Adam, Nov 2026: "cab / trailer on the USA side too"): a sleeper
+     tractor (Cascadia 126, 72 in raised roof: 227–235 in wheelbase listed) ≈
+     27 ft overall — an estimate from the wheelbase; and the 53 ft dry van,
+     53 ft × 102 in × 13 ft 6 in (Wabash / Hyundai Translead sheets). */
+  { type: 'tractor_us', label: 'Truck cab only (sleeper tractor), US', short: 'Cab', length: 8.3, width: 2.6, height: 4.1, role: 'truck' },
+  { type: 'trailer_us', label: 'Trailer only (53 ft), US', short: 'Trailer', length: 16.15, width: 2.6, height: 4.11, role: 'truck' },
   /* "Box trucks in the UK and US" — UK: a Luton van (Adam), the 3.5 t
      Transit / Sprinter box with the peak over the cab: ≈ 6.9 m × 2.2 m (box)
      × 3.3 m. US: a 26 ft box truck, ≈ 34 ft overall, 102" wide, ≈ 12 ft 6 in. */
@@ -105,6 +111,8 @@ export const VEHICLE_TILES: Record<VehicleRegion, { type: VehicleType; label: st
     { type: 'bandwagon', label: 'Bandwagon' },
     { type: 'bandwagon_trailer', label: 'Bandwagon + trailer' },
     { type: 'truck_us', label: 'Truck 53 ft' },
+    { type: 'tractor_us', label: 'Truck cab only' },
+    { type: 'trailer_us', label: 'Trailer only' },
     { type: 'box_us', label: 'Box truck 26 ft' },
     { type: 'splitter', label: 'Splitter + trailer' },
     { type: 'sprinter', label: 'Sprinter' },

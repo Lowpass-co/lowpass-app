@@ -615,7 +615,8 @@ recreate a `_legacy/` tree: delete dead code instead of parking it.
   keep-clear box behind the tail (`VehicleSpec.rear` → `rearClearCorners`, model.ts;
   per vehicle `rearClear: false` turns it off, the toggle sits under Colour). Plan,
   PDF (fit pages frame it, names avoid it, key line) and driver map — not 3D. Trucks
-  have none (doors open flush — Adam). 3D controls stay on the map. Right-click on the plan =
+  have none (doors open flush — Adam). Cab-only / trailer-only on BOTH sides
+  (tractor_eu/us, trailer_eu/us). A fifth wheel is part kind `plate` on the plan. 3D controls stay on the map. Right-click on the plan =
   `<MapContextMenu>` (never the browser's; it only lays out the editor's own
   actions); Draw › **Flatten 3D** draws an area born `flat3d`.
 - **Selection is a list of ids** (Nov 2026, Adam): ⌘/Ctrl- or Shift-click
@@ -640,9 +641,21 @@ recreate a `_legacy/` tree: delete dead code instead of parking it.
   runtime from `/cesium`** — copied from `node_modules` by
   `scripts/copy-cesium.mjs` (postinstall + prebuild; `public/cesium` is
   gitignored, excluded from the auth proxy matcher and from lint). Never
-  import Cesium as a value in app code — `import type` only. Vehicles are
-  `vehicleBlocks()` (`src/lib/parking/blocks3d.ts`): the plan's silhouette
-  parts lifted to true heights, standing at the LOWEST mesh height under the
+  import Cesium as a value in app code — `import type` only. **Vehicles are
+  MODELS** (Nov 2026, Adam: "recognisable at a glance"): `vehicleMesh()`
+  (`src/lib/parking/models3d.ts`) builds each type from its real schematic
+  (Skyliner, Prevost H3-45, cab-over / long-hood tractors, 53 ft + 13.6 m
+  semis, Sprinter L4, Vito, Luton, rental box truck, BandWagon, …) with the
+  kit in `mesh3d.ts` (lofted hulls, wheels, decals), always at the item's TRUE
+  L × W × H (tested: bounds = size, tyres on the ground, nothing above a
+  tractor's 1.2 m fifth wheel, `FIFTH_WHEEL_M`). Pure — no Cesium. scene3d
+  uploads ALL vehicles as ONE `Primitive` with per-corner colours baked by
+  `bakeColours` (UNLIT, like the walls: the same at any time of day); part
+  colours are `--lp-map-glass/-tyre/-metal/-trim/-lamp/-tail/-amber`, the rest
+  the vehicle's colour (`shade` / `pale` tints; box and trailer ROOFS are pale
+  so a cab reads apart from its box from above). A new vehicle type needs a
+  builder there, or it falls back to a plain true-size box. The plan still
+  draws `silhouettes.ts`. Vehicles stand at the LOWEST mesh height under the
   vehicle (so a tree doesn't lift a bus) — unless that is > 2.5 m above a ring
   round it, i.e. a canopy: then the ring's lowest (`standingHeight`). Camera: right-drag / Ctrl-drag turn + tilt (Cesium's default had right-drag zoom); touch: two fingers twist / slide to turn / tilt — PINCH must stay in `tiltEventTypes` as well as zoom (once missing: phones were zoom-only); labels are name only and laid out per frame by `placeLabels` (labels3d.ts, nearest first, none touching); plus ↺ ↻ ⌃ ⌄ and a north compass that `orbit()` around the screen-centre ground point. 3D is look-only; a 3D PDF page
   keeps its camera (validated by `parseCamera3d`; see PDF pages below). No sky

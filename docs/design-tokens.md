@@ -329,6 +329,7 @@ Drawn on satellite imagery, so they do **not** switch with the theme: the backgr
 | `--lp-map-floor` | The floor of an inside drawing's inside area — plan and 3D (the drawing's lines sit on it) |
 | `--lp-map-wall` | 3D only: the walls standing on an inside drawing's cut edge, floor to roof (toned by the way each faces) |
 | `--lp-map-rim` | 3D only: the thin line along the wall tops, where an inside drawing's roof was cut |
+| `--lp-map-glass` / `-tyre` / `-metal` / `-trim` / `-lamp` / `-tail` / `-amber` | 3D only: vehicle parts that aren't the vehicle's colour — windows, tyres, rims / chrome / fifth wheel, bumpers / grilles / chassis, headlamps, rear lamps, side markers (models3d.ts) |
 | `--lp-map-paint-*` (orange, red, yellow, green, teal, blue, purple, pink, white, black) | A vehicle's chosen colour (`PAINTS`); unset → its role colour |
 
 The PDF export resolves these to literal colours with `getComputedStyle` (an SVG drawn into a canvas cannot read CSS variables) — `src/components/parking/palette.ts`.
