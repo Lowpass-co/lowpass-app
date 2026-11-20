@@ -58,6 +58,7 @@ import {
   type PnlSettingsInput,
 } from '@/lib/budget/computeBudgetPnl';
 import { sheetTotalsBySection } from '@/lib/budget/sheetTotals';
+import { isIncomeRow } from '@/lib/budget/income-rows';
 import type { FxRateMap } from '@/lib/budget/fxRates';
 import { formatCurrency } from '@/lib/utils';
 import { useToast } from '@/components/ui/Toast';
@@ -230,6 +231,45 @@ function MoneyInput({
   );
 }
 
+/** A name box: commits on blur / Enter; Escape abandons; blank is refused. */
+function TextInput({
+  value,
+  onCommit,
+  label,
+  disabled,
+  autoFocus,
+}: {
+  value: string;
+  onCommit: (v: string) => void;
+  label: string;
+  disabled?: boolean;
+  autoFocus?: boolean;
+}) {
+  const [draft, setDraft] = useState<string | null>(null);
+  const commit = () => {
+    if (draft === null) return;
+    const t = draft.trim();
+    setDraft(null);
+    if (t && t !== value) onCommit(t);
+  };
+  return (
+    <input
+      aria-label={label}
+      disabled={disabled}
+      autoFocus={autoFocus}
+      value={draft ?? value}
+      onFocus={(e) => e.target.select()}
+      onChange={(e) => setDraft(e.target.value)}
+      onBlur={commit}
+      onKeyDown={(e: KeyboardEvent<HTMLInputElement>) => {
+        if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
+        if (e.key === 'Escape') setDraft(null);
+      }}
+      className="h-7 w-full min-w-0 rounded border border-transparent bg-transparent px-1 text-lp-text outline-none hover:border-lp-border focus:border-lp-orange disabled:opacity-60"
+    />
+  );
+}
+
 export function BudgetSheetTop({
   tourId,
   tourCurrency,
@@ -250,15 +290,30 @@ export function BudgetSheetTop({
   /** The commission whose base editor is open (one at a time). */
   const [baseOpen, setBaseOpen] = useState<string | null>(null);
 
+  /* Other income is typed HERE (Nov 2026, Adam: "shouldn't I be able to edit
+     it there?") — its lines live in the tour's Other income section, which the
+     grid no longer shows. Edits apply at once (overlay), then save. */
+  const [incomeEdits, setIncomeEdits] = useState<Record<string, Partial<BudgetLineItem>>>({});
+  const [addedIncome, setAddedIncome] = useState<BudgetLineItem[]>([]);
+  const [removedIncome, setRemovedIncome] = useState<Set<string>>(() => new Set());
+  const [confirmRemove, setConfirmRemove] = useState<string | null>(null);
+  const [justAdded, setJustAdded] = useState<string | null>(null);
+  const effLines = useMemo(() => {
+    const known = new Set(lines.map((l) => l.id));
+    return [...lines, ...addedIncome.filter((l) => !known.has(l.id))]
+      .filter((l) => !removedIncome.has(l.id))
+      .map((l) => (incomeEdits[l.id] ? ({ ...l, ...incomeEdits[l.id] } as BudgetLineItem) : l));
+  }, [lines, addedIncome, removedIncome, incomeEdits]);
+  const incomeLines = useMemo(() => effLines.filter((l) => isIncomeRow(l)), [effLines]);
+
   const pnl = useMemo(
-    () => computeBudgetPnl({ lines, income, commissions: rows, settings, tourCurrency: ccy, fxRates }),
-    [lines, income, rows, settings, ccy, fxRates],
+    () => computeBudgetPnl({ lines: effLines, income, commissions: rows, settings, tourCurrency: ccy, fxRates }),
+    [effLines, income, rows, settings, ccy, fxRates],
   );
   const sectionRows = useMemo(
-    () => sheetTotalsBySection(lines, sections, ccy, fxRates, pnl.fxMarginPct),
-    [lines, sections, ccy, fxRates, pnl.fxMarginPct],
+    () => sheetTotalsBySection(effLines, sections, ccy, fxRates, pnl.fxMarginPct),
+    [effLines, sections, ccy, fxRates, pnl.fxMarginPct],
   );
-  const hasIncomeSection = sections.some((s) => s.kind === 'income');
   const commByid = useMemo(() => new Map(pnl.commissionRows.map((c) => [c.id, c])), [pnl.commissionRows]);
 
   /** Optimistic settings save — the same row Tour settings writes. */
@@ -284,24 +339,87 @@ export function BudgetSheetTop({
   };
   const saveOverhead = (key: Overhead, fraction: number) => saveSettings({ [`${key}_pct`]: fraction }, key);
 
-  const addOtherIncome = async () => {
+  /** The tour's Other income section — made on the first add (one per tour). */
+  const incomeSectionId = async (): Promise<string> => {
+    const have = sections.find((x) => x.kind === 'income');
+    if (have) return have.id;
+    const res = await fetch('/api/budget/sections', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tour_id: tourId, name: 'Other income', kind: 'income' }),
+    });
+    const j = (await res.json().catch(() => null)) as { id?: string; error?: string } | null;
+    if (!res.ok || !j?.id) throw new Error(j?.error || `Could not add Other income (${res.status})`);
+    return j.id;
+  };
+
+  const addIncomeLine = async () => {
     setBusy(true);
     try {
-      const res = await fetch('/api/budget/sections', {
+      const section_id = await incomeSectionId();
+      const res = await fetch('/api/budget/line-items', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tour_id: tourId, name: 'Other income', kind: 'income' }),
+        body: JSON.stringify({
+          tour_id: tourId,
+          category: 'income',
+          label: 'New income',
+          section_id,
+          section: 'income',
+          proposed_cost: 0,
+          currency: ccy,
+        }),
       });
-      if (!res.ok) {
-        const j = (await res.json().catch(() => null)) as { error?: string } | null;
-        throw new Error(j?.error || `Could not add Other income (${res.status})`);
-      }
-      showToast('Other income added — add its lines in the grid below', 'success');
+      const j = (await res.json().catch(() => null)) as (BudgetLineItem & { error?: string }) | null;
+      if (!res.ok || !j?.id) throw new Error(j?.error || `Could not add income (${res.status})`);
+      setAddedIncome((a) => [...a, { ...j, section: 'income' }]);
+      setJustAdded(j.id);
       router.refresh();
     } catch (err) {
       showToast(err instanceof Error ? err.message : 'Add failed', 'error');
     } finally {
       setBusy(false);
+    }
+  };
+
+  const saveIncomeLine = (id: string, patch: Partial<BudgetLineItem>) => {
+    const before = incomeEdits[id];
+    setIncomeEdits((e) => ({ ...e, [id]: { ...e[id], ...patch } }));
+    void (async () => {
+      try {
+        const res = await fetch('/api/budget/line-items', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id, ...patch }),
+        });
+        if (!res.ok) {
+          const j = (await res.json().catch(() => null)) as { error?: string } | null;
+          throw new Error(j?.error || `Save failed (${res.status})`);
+        }
+      } catch (err) {
+        setIncomeEdits((e) => ({ ...e, [id]: before ?? {} }));
+        showToast(err instanceof Error ? err.message : 'Save failed', 'error');
+      }
+    })();
+  };
+
+  const removeIncomeLine = async (id: string) => {
+    setConfirmRemove(null);
+    setRemovedIncome((r) => new Set(r).add(id));
+    try {
+      const res = await fetch(`/api/budget/line-items?ids=${encodeURIComponent(id)}`, { method: 'DELETE' });
+      if (!res.ok) {
+        const j = (await res.json().catch(() => null)) as { error?: string } | null;
+        throw new Error(j?.error || `Remove failed (${res.status})`);
+      }
+      router.refresh();
+    } catch (err) {
+      setRemovedIncome((r) => {
+        const n = new Set(r);
+        n.delete(id);
+        return n;
+      });
+      showToast(err instanceof Error ? err.message : 'Remove failed', 'error');
     }
   };
 
@@ -397,8 +515,8 @@ export function BudgetSheetTop({
     },
     ...(nonZero(pnl.incomeBreakdown.merch) ? [{ id: 'merch', label: 'Merch income', v: pnl.incomeBreakdown.merch }] : []),
     ...(nonZero(pnl.incomeBreakdown.vip) ? [{ id: 'vip', label: 'VIP income', v: pnl.incomeBreakdown.vip }] : []),
-    ...(hasIncomeSection || nonZero(pnl.incomeBreakdown.other) || !readOnly
-      ? [{ id: 'other', label: 'Other income', v: pnl.incomeBreakdown.other, title: 'Support buy-ons, sponsorship — the Other income section in the grid' }]
+    ...(incomeLines.length || nonZero(pnl.incomeBreakdown.other)
+      ? [{ id: 'other', label: 'Other income', v: pnl.incomeBreakdown.other, title: 'Support buy-ons, sponsorship — typed below' }]
       : []),
   ];
   const depositRows: Array<{ id: string; label: string; v: { projected: number; actual: number }; title: string }> = [
@@ -776,35 +894,116 @@ export function BudgetSheetTop({
               <col />
               <col style={{ width: 136 }} />
               <col style={{ width: 136 }} />
+              <col style={{ width: 96 }} />
+              <col style={{ width: 36 }} />
             </colgroup>
             <thead>
               <tr>
                 <th className={head}>Source</th>
                 <th className={`${head} text-right`}>Proposed</th>
                 <th className={`${head} text-right`}>Actual</th>
+                <th className={head} />
+                <th className={head} aria-label="Remove" />
               </tr>
             </thead>
             <tbody>
               {incomeParts.map((r) => (
                 <tr key={r.id} className={tr} data-testid={`sheet-income-${r.id}`} title={r.title}>
-                  <td className={lbl}>
-                    {r.label}
-                    {r.id === 'other' && !hasIncomeSection && !readOnly ? (
-                      <button
-                        type="button"
-                        onClick={() => void addOtherIncome()}
-                        disabled={busy}
-                        className="ml-2 inline-flex items-center gap-0.5 rounded px-1 text-lp-text-tertiary hover:text-lp-text disabled:opacity-50"
-                        style={{ fontSize: 'var(--lp-text-xs)' }}
-                      >
-                        <Plus className="h-3 w-3" /> Add
-                      </button>
-                    ) : null}
-                  </td>
+                  <td className={lbl}>{r.label}</td>
                   <td className={num}>{money(r.v.projected, ccy)}</td>
                   <td className={num}>{money(r.v.actual, ccy)}</td>
+                  <td />
+                  <td />
                 </tr>
               ))}
+              {/* Other income, typed in place: one row per source. */}
+              {incomeLines.map((l) => {
+                const foreign = (l.currency || ccy).toUpperCase() !== ccy;
+                return (
+                  <tr key={l.id} className={tr} data-testid="sheet-other-income-line">
+                    <td className="pl-6 pr-3">
+                      <span className="flex items-center gap-1">
+                        <TextInput
+                          label="Income name"
+                          value={l.label ?? ''}
+                          autoFocus={justAdded === l.id}
+                          disabled={readOnly}
+                          onCommit={(v) => saveIncomeLine(l.id, { label: v })}
+                        />
+                        {foreign ? <span className="text-lp-text-tertiary">{(l.currency || '').toUpperCase()}</span> : null}
+                      </span>
+                    </td>
+                    <td className="px-2">
+                      <MoneyInput
+                        label={`${l.label || 'Income'} proposed`}
+                        value={Number(l.proposed_cost) || 0}
+                        disabled={readOnly}
+                        onCommit={(v) => saveIncomeLine(l.id, { proposed_cost: v ?? 0 })}
+                      />
+                    </td>
+                    <td className="px-2">
+                      <MoneyInput
+                        label={`${l.label || 'Income'} actual`}
+                        value={Number(l.actual_cost) ? Number(l.actual_cost) : null}
+                        placeholder="—"
+                        disabled={readOnly}
+                        onCommit={(v) => saveIncomeLine(l.id, { actual_cost: v ?? 0, actual_cost_override: v != null })}
+                      />
+                    </td>
+                    <td className="px-2">
+                      <label
+                        className="inline-flex items-center gap-1 text-lp-text-tertiary"
+                        style={{ fontSize: 'var(--lp-text-xs)' }}
+                        title="Counts towards commissions that take a share of Other income"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={l.income_commissionable !== false}
+                          disabled={readOnly}
+                          onChange={(e) => saveIncomeLine(l.id, { income_commissionable: e.target.checked })}
+                        />
+                        Commission
+                      </label>
+                    </td>
+                    <td className="px-1 text-right">
+                      {readOnly ? null : confirmRemove === l.id ? (
+                        <button
+                          type="button"
+                          onClick={() => void removeIncomeLine(l.id)}
+                          className="rounded px-1 font-medium"
+                          style={{ fontSize: 'var(--lp-text-xs)', color: 'var(--color-lp-error)' }}
+                        >
+                          Remove
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          aria-label={`Remove ${l.label || 'income'}`}
+                          onClick={() => setConfirmRemove(l.id)}
+                          className="rounded p-1 text-lp-text-tertiary hover:text-lp-text"
+                        >
+                          <X className="h-3.5 w-3.5" />
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+              {!readOnly ? (
+                <tr className="h-10 border-t border-lp-border">
+                  <td className="px-2" colSpan={5}>
+                    <button
+                      type="button"
+                      onClick={() => void addIncomeLine()}
+                      disabled={busy}
+                      className="inline-flex items-center gap-1 rounded px-1 py-0.5 font-medium text-lp-text-secondary hover:text-lp-text disabled:opacity-50"
+                    >
+                      <Plus className="h-3.5 w-3.5" /> Add income
+                      <span className="font-normal text-lp-text-tertiary">— support buy-on, sponsorship…</span>
+                    </button>
+                  </td>
+                </tr>
+              ) : null}
             </tbody>
           </table>
       ))}

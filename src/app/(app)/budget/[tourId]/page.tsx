@@ -30,6 +30,7 @@ import { loadTourSettlementWalks } from '@/lib/settlement/loadWalk';
 import { expectedOf } from '@/lib/income/showMoney';
 import { BudgetEmptyState } from '@/components/budget/BudgetEmptyState';
 import { BudgetSettingsTab } from '@/components/budget/BudgetSettingsTab';
+import { isIncomeRow } from '@/lib/budget/income-rows';
 import {
   AddReceiptsButton,
   BudgetReceiptDrop,
@@ -321,8 +322,10 @@ export default async function BudgetTourPage({
      (no proposal statuses) would count every proposed receipt as needing
      details, and the badge would cry wolf on work already queued. */
   const receiptsNeedingDetails = receipts.filter((r) => r.state === 'needs_details').length;
+  const gridLines = lines.filter((l) => !isIncomeRow(l));
+  const gridSections = sections.filter((x) => x.kind !== 'income');
   /** Budget lines a receipt can be filed against (drop proposals + the bank). */
-  const receiptLineOptions = lines.map((l) => ({
+  const receiptLineOptions = gridLines.map((l) => ({
     id: l.id,
     label: l.label ?? '',
     section: (l as { section?: string | null }).section ?? null,
@@ -564,8 +567,11 @@ export default async function BudgetTourPage({
                     view. The Receipt Inbox that lived in Classic's receiptSlot
                     is ported here so it survives the retirement. */}
                 <BudgetGridView
-                  lines={lines}
-                  sections={sections}
+                  /* Other income is typed in the summary's Income row (Nov
+                     2026, Adam) — the grid is costs only, so its section and
+                     lines stay out of it. */
+                  lines={gridLines}
+                  sections={gridSections}
                   tourCurrency={tourCurrency}
                   tourId={tourId}
                   versionLocked={versionLocked}
