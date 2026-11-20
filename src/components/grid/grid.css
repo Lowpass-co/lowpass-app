@@ -78,6 +78,19 @@
   width: 100%;
   min-width: max-content;
 }
+/* Nov 2026 (Adam): "can't resize columns smaller than the longest text … it
+   should work like Google Sheets". With the inner sized to max-content, the
+   item column's 1fr track grew to its longest text and nothing could shrink
+   it. A cell's content must never size its column — the column's width does —
+   so every cell on the --cols grid is contained inline: text clips with an
+   ellipsis, exactly like a spreadsheet. */
+.lp-grid .gridhead > *,
+.lp-grid .sec-head > *,
+.lp-grid .row > *,
+.lp-grid .gr-foot > * {
+  min-width: 0;
+  contain: inline-size;
+}
 
 /* ---- header ---- */
 .lp-grid .gridhead {

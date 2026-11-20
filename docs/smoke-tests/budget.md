@@ -2292,6 +2292,10 @@ test tour only. ✅ = passed live; ⚙ = covered by vitest, not live-run.
   leaves it out of commissions that take a share of Other income. × asks
   "Remove" before deleting. The grid has NO Other income section or income
   lines (it's costs only), and receipts can't be filed against income.
+- [ ] **BUD-PAGE-07 — Columns resize like a spreadsheet.** Drag a column
+  edge (Item, Vendor, Estimate…) narrower than its longest text: it goes down to
+  a sliver and the text clips with "…". Reload: the widths are kept. More ›
+  Reset column widths puts them back. Same on Hotels & rooming.
 - [ ] **BUD-PAGE-04 — Receipts at the top.** "N receipts need details ›" and
   an orange **Add receipts** button sit in the toolbar band, left of the
   density / currency / Workbook / Export controls; there is no drop box

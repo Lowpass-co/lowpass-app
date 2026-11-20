@@ -67,6 +67,9 @@ import {
    to "see" fresh data. exhaustive-deps would force noise that hides nothing. */
 /* eslint-disable react-hooks/exhaustive-deps */
 
+/** The narrowest a dragged column can go — content clips, like a spreadsheet. */
+const MIN_COL_WIDTH = 28;
+
 /** Imperative handle for the portaled drag overlays (resize ghost +
  *  reorder insertion line). State-driven so they can't be hidden by any
  *  cascade; only the tiny overlay re-renders on pointermove, not the grid. */
@@ -192,6 +195,9 @@ export interface GridProps {
       mount. The `idx` + `referenceCols` columns are never hideable. Default
       undefined → no persistence (every other grid unchanged). */
   columnPrefsKey?: string;
+  /** localStorage key for column WIDTHS (Nov 2026). Set it and a dragged width
+   *  sticks across reloads, like a spreadsheet; Reset column widths clears it. */
+  widthsKey?: string;
   /** #28 — per-cell manual override of a COMPUTED (read-only) output cell.
       Opt-in. For a column listed in `cols`: when `isOverridden(uid,col)` is true
       the cell ignores its column `ro` (becomes editable) and shows a distinct ✎
@@ -291,6 +297,7 @@ export const Grid = forwardRef<GridHandle, GridProps>(function Grid({
   referenceCols,
   onFileDropToRow,
   columnPrefsKey,
+  widthsKey,
   cellOverride,
   groupModes,
 }: GridProps, ref) {
@@ -930,23 +937,59 @@ export const Grid = forwardRef<GridHandle, GridProps>(function Grid({
     render();
   };
 
+  /* ---- column widths: kept per grid (widthsKey), like a spreadsheet ---- */
+  const saveWidths = useCallback(() => {
+    if (!widthsKey || typeof window === 'undefined') return;
+    try {
+      const changed: Record<string, number> = {};
+      for (const c of colsRef.current) {
+        const w = widthsRef.current[c.id];
+        if (w != null && w !== c.w) changed[c.id] = Math.round(w);
+      }
+      if (Object.keys(changed).length) window.localStorage.setItem(widthsKey, JSON.stringify(changed));
+      else window.localStorage.removeItem(widthsKey);
+    } catch {
+      /* storage unavailable — widths just don't stick */
+    }
+  }, [widthsKey]);
+  useEffect(() => {
+    if (!widthsKey || typeof window === 'undefined') return;
+    let saved: Record<string, unknown>;
+    try {
+      saved = JSON.parse(window.localStorage.getItem(widthsKey) ?? '{}') as Record<string, unknown>;
+    } catch {
+      return;
+    }
+    let changed = false;
+    for (const c of colsRef.current) {
+      const w = Number(saved[c.id]);
+      if (Number.isFinite(w) && w >= MIN_COL_WIDTH && w <= 2000) {
+        widthsRef.current[c.id] = w;
+        changed = true;
+      }
+    }
+    if (changed) render();
+  }, [widthsKey, render]);
+
   /* ---- column resize ---- */
   const onResizeMove = useCallback((e: PointerEvent) => {
     const rz = rzRef.current;
     if (!rz) return;
     const col = colDef(colsRef.current, rz.key);
     if (!col) return;
-    widthsRef.current[rz.key] = Math.max(col.min, rz.w + (e.clientX - rz.x));
+    // Like a spreadsheet: any width down to a sliver (the content clips).
+    widthsRef.current[rz.key] = Math.max(MIN_COL_WIDTH, rz.w + (e.clientX - rz.x));
     rootRef.current?.style.setProperty('--cols', template(colsRef.current, widthsRef.current));
     overlayRef.current?.setGhost(e.clientX);
   }, []);
   const endResize = useCallback(() => {
+    if (rzRef.current) saveWidths();
     rzRef.current = null;
     overlayRef.current?.setGhost(null);
     rootRef.current?.querySelectorAll('.grip.drag').forEach((g) => g.classList.remove('drag'));
     document.removeEventListener('pointermove', onResizeMove);
     render();
-  }, [onResizeMove, render]);
+  }, [onResizeMove, render, saveWidths]);
   const startResize = useCallback(
     (e: React.PointerEvent, key: string) => {
       e.stopPropagation();
@@ -1483,6 +1526,7 @@ export const Grid = forwardRef<GridHandle, GridProps>(function Grid({
   const resetWidths = () => {
     pushUndo();
     cols().forEach((c) => (widthsRef.current[c.id] = c.w));
+    saveWidths();
     render();
   };
   const toggleGroup = () => {
