@@ -109,14 +109,6 @@ function pillarMirrors(b: MeshBuilder, hw: number, zTop: number, f: number): voi
   }
 }
 
-/** A flat polygon on a SIDE (s = ±at), facing out — convex, (f, z) points. */
-function sidePoly(b: MeshBuilder, at: number, pts: [number, number][], m: 'glass' | 'trim' | 'body'): void {
-  const side = Math.sign(at) || 1;
-  for (let i = 1; i + 1 < pts.length; i++) {
-    b.tri([pts[0][0], at, pts[0][1]], [pts[i][0], at, pts[i][1]], [pts[i + 1][0], at, pts[i + 1][1]], m, [0, side, 0]);
-  }
-}
-
 /** Door mirrors on arms (vans, trucks): head at f0..f1, z0..z1, out to hw + out. */
 function doorMirrors(b: MeshBuilder, hw: number, f0: number, f1: number, z0: number, z1: number, out: number): void {
   for (const side of [-1, 1]) {
@@ -180,11 +172,6 @@ function coachEU(b: MeshBuilder, L: number, W: number, H: number): void {
       },
     },
   );
-  // The stair window: the upper band sweeps down to the lower deck across the
-  // painted band, on the door side.
-  // Over the front wheel, both edges leaning FORWARD going up (Setra S 531 DT:
-  // the painted band's front end is raked that way).
-  sidePoly(b, hw + 0.004, [[fa + 0.2, lowT - 0.02], [fa + 1.7, lowT - 0.02], [fa + 1.0, upS + 0.02], [fa - 0.5, upS + 0.02]], 'glass');
   // Roof: air-con pod, hatches.
   roundBox(b, L * 0.36, L * 0.62, 0, hw * 0.72, roof - 0.02, H, 0.08, 'pale');
   topPanel(b, roof + 0.004, L * 0.18, L * 0.18 + 0.7, -0.35, 0.35, 'trim');
