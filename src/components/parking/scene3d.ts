@@ -39,6 +39,7 @@ import { rimRuns, smoothTops, wallRing, wallSegments, type WallSegment } from '@
 import { drawingsIn3d, drawingUnder, footprint, insideAt, insideFootprint, itemFloor, itemPoint, pointInPolygon, svgMatrix } from '@/lib/parking/drawings';
 import type { PartKind } from '@/lib/parking/silhouettes';
 import { labelBox, placeLabels, type LabelBox } from '@/lib/parking/labels3d';
+import { splitRoute } from '@/lib/parking/routes3d';
 import { areaColour, vehicleColour, type Palette } from './palette';
 import type { CesiumModule } from './loadCesium';
 
@@ -320,18 +321,41 @@ export async function populate(
 
   for (const i of o.items) {
     if (i.kind === 'route' && i.points.length > 1) {
-      const fh = floorOfShape(i, i.points);
-      viewer.entities.add({
-        polyline: {
-          positions:
-            fh == null
-              ? Cesium.Cartesian3.fromDegreesArray(i.points.flatMap((p) => [ll(p).lng, ll(p).lat]))
-              : Cesium.Cartesian3.fromDegreesArrayHeights(i.points.flatMap((p) => [ll(p).lng, ll(p).lat, fh])),
-          clampToGround: fh == null,
-          ...(fh == null ? { classificationType: onGround } : {}),
-          width: 9,
-          material: new Cesium.PolylineArrowMaterialProperty(Cesium.Color.fromCssColorString(o.palette.route)),
-        },
+      // Split where the route crosses onto an inside floor or a flat photo
+      // patch: those runs lie at that floor's height; only open-street runs
+      // drape on the mesh (draped over a cut-away, a line climbs the walls).
+      const zoneHeight = new Map<string, number>();
+      const zoneAt = (p: Pt): string | null => {
+        const under = insideAt(drawings, p);
+        if (under.length) {
+          const d = (i.floor != null ? under.find((u) => u.floor === i.floor) : null) ?? under[0];
+          const key = `d:${d.id}`;
+          zoneHeight.set(key, (street.get(d.id) ?? ground0) + (i.floor ?? d.floor) + 0.08);
+          return key;
+        }
+        const a = flats.find((f) => pointInPolygon(p, f.points));
+        if (a) {
+          zoneHeight.set(`f:${a.id}`, (flatHeight.get(a.id) ?? ground0) + 0.08);
+          return `f:${a.id}`;
+        }
+        return null;
+      };
+      const runs = splitRoute(i.points, zoneAt);
+      const colour = Cesium.Color.fromCssColorString(o.palette.route);
+      runs.forEach((run, k) => {
+        const h = run.zone == null ? null : zoneHeight.get(run.zone) ?? ground0;
+        viewer.entities.add({
+          polyline: {
+            positions:
+              h == null
+                ? Cesium.Cartesian3.fromDegreesArray(run.points.flatMap((p) => [ll(p).lng, ll(p).lat]))
+                : Cesium.Cartesian3.fromDegreesArrayHeights(run.points.flatMap((p) => [ll(p).lng, ll(p).lat, h])),
+            ...(h == null ? { clampToGround: true, classificationType: onGround } : { arcType: Cesium.ArcType.NONE }),
+            width: 9,
+            // One arrowhead, at the route's end.
+            material: k === runs.length - 1 ? new Cesium.PolylineArrowMaterialProperty(colour) : colour,
+          },
+        });
       });
     } else if (i.kind === 'area' && i.points.length > 2 && !i.flat3d) {
       // A Flat-in-3D area is the flattening itself (the photo patch) — no tint, no title.

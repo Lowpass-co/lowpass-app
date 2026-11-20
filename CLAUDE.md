@@ -670,6 +670,10 @@ recreate a `_legacy/` tree: delete dead code instead of parking it.
   mesh is clipped to the inside area (`ClippingPolygonCollection`) and the
   floor sits at the street height around it + `floor`; vehicles on it stand
   there. The PDF still draws inside drawings as the solid dark copy.
+  Routes in 3D are split where they cross onto an inside floor or a flat
+  area (`splitRoute`, routes3d.ts): those runs lie at that floor's height,
+  only open-street runs drape on the mesh (draped over a cut-away, a line
+  climbs the walls), one arrowhead on the last run.
   **"Flat in 3D"** on an area (`flat3d`, Nov 2026): Google's mesh has whatever
   was parked when it was photographed baked in — it can't be picked off, so
   the area is clipped like an inside drawing and the 2D satellite photo
