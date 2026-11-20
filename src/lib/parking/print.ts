@@ -267,6 +267,93 @@ export function layoutNames(
   return out;
 }
 
+/** Another label on paper — an area's name, a marker's name (Nov 2026, Adam:
+ *  "still got labelling issues on exports"). Vehicle names are placed FIRST;
+ *  each of these then takes the first of its `candidates` (centres, in order of
+ *  preference) where its box is on the page and crosses nothing already there
+ *  — vehicles, badges, name tags, marker icons, labels placed before it. With
+ *  no clear spot it's left OFF the map: the key beside the map lists every
+ *  area and marker, so a label is never lost, only never stacked. */
+export interface ExtraLabel {
+  id: string;
+  w: number;
+  h: number;
+  candidates: Pt[];
+}
+
+export function layoutExtras(
+  extras: readonly ExtraLabel[],
+  obstacles: readonly (readonly Pt[])[],
+  bounds: { w: number; h: number },
+): Map<string, Pt> {
+  const placed: Pt[][] = [];
+  const out = new Map<string, Pt>();
+  const inside = (r: Pt[]) => r.every((q) => q.x >= 0 && q.y >= 0 && q.x <= bounds.w && q.y <= bounds.h);
+  for (const e of extras) {
+    for (const c of e.candidates) {
+      const r = rectAt(c, 0, e.w, e.h);
+      if (!inside(r) || obstacles.some((o) => convexOverlap(r, o)) || placed.some((o) => convexOverlap(r, o))) continue;
+      placed.push(r);
+      out.set(e.id, c);
+      break;
+    }
+  }
+  return out;
+}
+
+/** The rectangles the name tags took (to keep other labels off them). */
+export function nameTagRects(places: ReadonlyMap<string, NamePlace>, spots: readonly NameSpot[]): Pt[][] {
+  const out: Pt[][] = [];
+  for (const s of spots) {
+    const p = places.get(s.id);
+    if (p) out.push(rectAt(p.at, p.angle, s.w, s.h));
+  }
+  return out;
+}
+
+/** Where an area's name may sit: its centre, then further along its longest
+ *  side both ways — every candidate inside the area itself. Screen pixels. */
+export function areaLabelSpots(poly: readonly Pt[]): Pt[] {
+  const c = { x: poly.reduce((a, q) => a + q.x, 0) / poly.length, y: poly.reduce((a, q) => a + q.y, 0) / poly.length };
+  let best = { dx: 1, dy: 0, len: 0 };
+  for (let i = 0; i < poly.length; i++) {
+    const a = poly[i];
+    const b = poly[(i + 1) % poly.length];
+    const len = Math.hypot(b.x - a.x, b.y - a.y);
+    if (len > best.len) best = { dx: (b.x - a.x) / len, dy: (b.y - a.y) / len, len };
+  }
+  const out = [c];
+  for (const f of [0.18, 0.3, 0.4]) for (const sgn of [1, -1]) out.push({ x: c.x + best.dx * best.len * f * sgn, y: c.y + best.dy * best.len * f * sgn });
+  // Then anywhere else inside it: a grid over its bounds, nearest the centre first.
+  const xs = poly.map((q) => q.x);
+  const ys = poly.map((q) => q.y);
+  const [x0, x1, y0, y1] = [Math.min(...xs), Math.max(...xs), Math.min(...ys), Math.max(...ys)];
+  const grid: Pt[] = [];
+  for (let i = 1; i < 8; i++) for (let j = 1; j < 5; j++) grid.push({ x: x0 + ((x1 - x0) * i) / 8, y: y0 + ((y1 - y0) * j) / 5 });
+  grid.sort((a, b) => Math.hypot(a.x - c.x, a.y - c.y) - Math.hypot(b.x - c.x, b.y - c.y));
+  return [...out, ...grid].filter((q) => pointInPoly(q, poly));
+}
+
+function pointInPoly(p: Pt, poly: readonly Pt[]): boolean {
+  let inside = false;
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    const a = poly[i];
+    const b = poly[j];
+    if (a.y > p.y !== b.y > p.y && p.x < ((b.x - a.x) * (p.y - a.y)) / (b.y - a.y) + a.x) inside = !inside;
+  }
+  return inside;
+}
+
+/** Where a marker's name may sit: right of its icon, left, below, above. */
+export function markerLabelSpots(icon: Pt, r: number, w: number, h: number, gap: number): Pt[] {
+  return [
+    { x: icon.x + r + gap + w / 2, y: icon.y },
+    { x: icon.x - r - gap - w / 2, y: icon.y },
+    { x: icon.x, y: icon.y + r + gap + h / 2 },
+    { x: icon.x, y: icon.y - r - gap - h / 2 },
+  ];
+}
+
 /** A name written INSIDE the vehicle, beside its badge, once the vehicle is
  *  big enough on screen (Nov 2026, Adam: on the driver link "they should still
  *  show labels on zoom, not just numbers"). Along the axis, in the half on one

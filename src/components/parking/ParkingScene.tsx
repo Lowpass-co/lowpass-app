@@ -16,10 +16,10 @@ import { useId, type PointerEvent as ReactPointerEvent, type ReactNode } from 'r
 import { DoorOpen, PlugZap, Fence, ArrowUpFromLine, Droplet, Trash2, ShieldCheck, StickyNote, type LucideIcon } from 'lucide-react';
 import { bearing, dist, fmtMetres, niceLength, project, sceneTransform, unproject, type Pt, type View } from '@/lib/parking/geo';
 import { markerSpec, vehicleSpec, areaLabel, type MarkerType } from '@/lib/parking/catalogue';
-import { pathLength, rearClearCorners, vehicleCorners, type ParkingItem, type VehicleItem } from '@/lib/parking/model';
+import { pathLength, rearClearCorners, vehicleCorners, type AreaItem, type MarkerItem, type ParkingItem, type VehicleItem } from '@/lib/parking/model';
 import { vehicleParts, type Part, type PartKind } from '@/lib/parking/silhouettes';
 import { areaColour, vehicleColour, type Palette } from './palette';
-import { badgeRadii, insideName, layoutNames, type NameSpot } from '@/lib/parking/print';
+import { areaLabelSpots, badgeRadii, insideName, layoutExtras, layoutNames, markerLabelSpots, nameTagRects, rectAt, type ExtraLabel, type NameSpot } from '@/lib/parking/print';
 
 export interface SceneTile {
   id: string;
@@ -162,7 +162,8 @@ export function ParkingScene({
                 style={{ cursor: live ? cursor : undefined }}
               />
               {isSel(a.id) ? <polygon points={pts(a.points)} fill="none" stroke={p.select} strokeWidth={2} strokeDasharray="4 3" pointerEvents="none" /> : null}
-              {a.flat3d ? null : <Label x={centre.x} y={centre.y} ls={ls} p={p} halo={halo} text={a.label || areaLabel(a.type)} />}
+              {/* On paper the name is placed with every other label (PrintLabels). */}
+              {a.flat3d || numbers ? null : <Label x={centre.x} y={centre.y} ls={ls} p={p} halo={halo} text={a.label || areaLabel(a.type)} />}
             </g>
           );
         })}
@@ -267,10 +268,12 @@ export function ParkingScene({
             <g key={m.id} onPointerDown={dn(m)} style={{ cursor: live ? cursor : undefined }}>
               <circle cx={s.x} cy={s.y} r={r} fill={p.chip} stroke={isSel(m.id) ? p.select : p.ink} strokeWidth={(isSel(m.id) ? 2.5 : 1.5) * ls} />
               <Icon x={s.x - r * 0.62} y={s.y - r * 0.62} width={r * 1.24} height={r * 1.24} color={p.ink} strokeWidth={2} />
-              <text x={tx} textAnchor={anchor} y={s.y + (m.detail ? -1 * ls : 4 * ls)} fontSize={12 * ls} fontWeight={600} fill={p.ink} style={halo}>
-                {name}
-              </text>
-              {m.detail ? (
+              {numbers ? null : (
+                <text x={tx} textAnchor={anchor} y={s.y + (m.detail ? -1 * ls : 4 * ls)} fontSize={12 * ls} fontWeight={600} fill={p.ink} style={halo}>
+                  {name}
+                </text>
+              )}
+              {m.detail && !numbers ? (
                 <text x={tx} textAnchor={anchor} y={s.y + 12 * ls} fontSize={10.5 * ls} fill={p.ink} style={halo}>
                   {m.detail}
                 </text>
@@ -279,7 +282,7 @@ export function ParkingScene({
           );
         })}
 
-        {numbers ? <NumberBadges vehicles={vehicles} numbers={numbers} P={P} p={p} ls={ls} halo={halo} bounds={{ w: width, h: height }} /> : null}
+        {numbers ? <NumberBadges vehicles={vehicles} areas={areas.filter((a): a is AreaItem => a.kind === 'area')} markers={markers.filter((m): m is MarkerItem => m.kind === 'marker')} numbers={numbers} P={P} p={p} ls={ls} halo={halo} bounds={{ w: width, h: height }} /> : null}
       </>
     );
   };
@@ -365,6 +368,8 @@ export function ParkingScene({
  *  Drawn over everything so a neighbour's body never hides it. */
 function NumberBadges({
   vehicles,
+  areas,
+  markers,
   numbers,
   P,
   p,
@@ -373,6 +378,8 @@ function NumberBadges({
   bounds,
 }: {
   vehicles: VehicleItem[];
+  areas: AreaItem[];
+  markers: MarkerItem[];
   numbers: ReadonlyMap<string, number>;
   P: (pt: Pt) => Pt;
   p: Palette;
@@ -408,12 +415,38 @@ function NumberBadges({
     const a = (spots[i].angle * Math.PI) / 180;
     return { x: centres[i].x + Math.cos(a) * fit.offset, y: centres[i].y + Math.sin(a) * fit.offset, size: fit.size };
   });
-  const tags = layoutNames(
-    spots.filter((_, i) => !inside[i]),
-    [...bodies, ...clears, ...badges],
-    bounds,
-    1.5 * ls,
-  );
+  // Marker icons are in the way of every label (octagons round their circles).
+  const iconR = 13 * ls;
+  const icons = markers.map((m) => {
+    const c = P(m);
+    return Array.from({ length: 8 }, (_, k) => ({ x: c.x + Math.cos((k * Math.PI) / 4) * iconR * 1.08, y: c.y + Math.sin((k * Math.PI) / 4) * iconR * 1.08 }));
+  });
+  const named = spots.filter((_, i) => !inside[i]);
+  const tags = layoutNames(named, [...bodies, ...clears, ...badges, ...icons], bounds, 1.5 * ls);
+  // Then every other name, each where it crosses nothing, else left to the
+  // key. Areas first: an area's name must sit INSIDE it, while a marker's can
+  // take any side of its icon — so the marker gives way.
+  const markerText = (m: MarkerItem) => m.label || markerSpec(m.type)?.label || '';
+  const extras: ExtraLabel[] = [
+    ...areas.map((a) => {
+      const text = a.label || areaLabel(a.type);
+      const w = text.length * 12 * 0.62 * ls + 6 * ls;
+      return { id: a.id, w, h: 16 * ls, candidates: areaLabelSpots(a.points.map(P)) };
+    }),
+    ...markers.map((m) => {
+      const name = markerText(m);
+      const w = Math.max(name.length * 12 * 0.6, m.detail.length * 10.5 * 0.56) * ls + 4 * ls;
+      const h = (m.detail ? 28 : 16) * ls;
+      return { id: m.id, w, h, candidates: markerLabelSpots(P(m), iconR, w, h, 4 * ls) };
+    }),
+  ];
+  const insideBoxes = shown.flatMap((v, i) => {
+    const ins = inside[i];
+    if (!ins) return [];
+    const w = nameOf(v).length * ins.size * 0.6;
+    return [rectAt(ins, spots[i].angle, w, ins.size * 1.3)];
+  });
+  const extraAt = layoutExtras(extras, [...bodies, ...clears, ...badges, ...icons, ...nameTagRects(tags, named), ...insideBoxes], bounds);
   return (
     <g pointerEvents="none">
       {/* Leader lines first, under every tag and badge. */}
@@ -462,6 +495,26 @@ function NumberBadges({
             ) : null}
           </g>
         );
+      })}
+      {markers.map((m) => {
+        const c = extraAt.get(m.id);
+        if (!c) return null;
+        return (
+          <g key={`ml-${m.id}`}>
+            <text x={c.x} y={c.y + (m.detail ? -2 * ls : 4 * ls)} textAnchor="middle" fontSize={12 * ls} fontWeight={600} fill={p.ink} style={halo}>
+              {markerText(m)}
+            </text>
+            {m.detail ? (
+              <text x={c.x} y={c.y + 11 * ls} textAnchor="middle" fontSize={10.5 * ls} fill={p.ink} style={halo}>
+                {m.detail}
+              </text>
+            ) : null}
+          </g>
+        );
+      })}
+      {areas.map((a) => {
+        const c = extraAt.get(a.id);
+        return c ? <Label key={`al-${a.id}`} x={c.x} y={c.y} ls={ls} p={p} halo={halo} text={a.label || areaLabel(a.type)} /> : null;
       })}
     </g>
   );

@@ -7,7 +7,7 @@
      plan, fit    frames the whole drawing at the most detailed scale that
                   fits ('auto') or a chosen 1:N; prints at the editor's rotation
      plan, fixed  a view you added: its own centre, rotation and 1:N — e.g. a
-                  route overview at 1:2,500 beside a close-up at 1:500
+                  route overview at 1:1,000 beside a close-up at 1:500
      3d           a camera you added in 3D (null = the default view)
 
    Stored on the map's `view.pages` (jsonb, validated by parsePages). A map
@@ -32,8 +32,9 @@ export type PdfPage = PlanFitPage | PlanFixedPage | Page3d;
 export const MAX_PAGES = LIMITS.pages;
 export const PAGE_TITLE_MAX = LIMITS.pageTitle;
 
-/** A street map wide enough to see the roads in: 1:2,500 (~490 m across the frame). */
-export const STREET_SCALE: PrintScale = 2500;
+/** A street map: 1:1,000 (~196 m across the frame) — the block and the streets
+ *  round it, named (Nov 2026, Adam: 1:2,500 "could be way tighter"). */
+export const STREET_SCALE: PrintScale = 1000;
 
 export function defaultPages(cam3d?: Camera3d): PdfPage[] {
   return [
@@ -97,7 +98,7 @@ export function addCloseUpPage(pages: PdfPage[], selected: ParkingItem[], view: 
   return [...pages, page];
 }
 
-/** A street-map page framing the parking at 1:2,500. */
+/** A street-map page framing the parking at STREET_SCALE. */
 export function addStreetPage(pages: PdfPage[]): PdfPage[] {
   if (pages.length >= MAX_PAGES) return pages;
   return [...pages, { id: newId(), kind: 'plan', title: nextTitle(pages, 'Street map'), fit: true, scale: STREET_SCALE, base: 'street' }];
