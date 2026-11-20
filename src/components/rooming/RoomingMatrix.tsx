@@ -197,6 +197,7 @@ export function RoomingMatrix({
       ) : null}
 
       <Grid
+        widthsKey="lp-grid-widths:rooming"
         key={`rooming:${tourId}:${people.length}:${nights.length}`}
         initialColumns={columns}
         initialData={data}
