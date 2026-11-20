@@ -81,12 +81,39 @@ function panes(a: number, b: number, pane: number, gap: number): [number, number
 
 const edges = (runs: [number, number][]) => runs.flatMap(([a, b]) => [a, b]);
 
-/** Rabbit-ear mirrors: arms from the roof front, heads hanging ahead of the screen. */
-function rabbitEars(b: MeshBuilder, hw: number, H: number): void {
+/** Rabbit-ear mirrors (EU coaches): an arm rising off the roof's front
+ *  corner, arching forward and down to a head hanging just ahead of the
+ *  screen corner. Every piece touches the next, and the arm starts ON the
+ *  roof — so nothing floats (Adam: "mirrors don't connect"). */
+function rabbitEars(b: MeshBuilder, hw: number, roof: number, H: number): void {
   for (const side of [-1, 1]) {
-    const s = side * (hw + 0.06);
-    beam(b, [0.42, side * (hw - 0.15), H - 0.42], [0.1, s, H - 0.62], 0.05, 0.05, 'trim');
-    box(b, 0.06, 0.14, Math.min(s, s + side * 0.16), Math.max(s, s + side * 0.16), H - 1.25, H - 0.62, 'trim');
+    const foot: [number, number, number] = [0.75, side * (hw - 0.3), roof - 0.01];
+    const apex: [number, number, number] = [0.28, side * (hw - 0.02), Math.min(H, roof + 0.1)];
+    const drop: [number, number, number] = [0.06, side * (hw + 0.08), roof - 0.45];
+    beam(b, foot, apex, 0.06, 0.05, 'trim');
+    beam(b, apex, drop, 0.06, 0.05, 'trim');
+    const s0 = side * (hw + 0.02);
+    const s1 = side * (hw + 0.2);
+    box(b, 0.02, 0.12, Math.min(s0, s1), Math.max(s0, s1), roof - 1.1, roof - 0.43, (n) => (n[0] > 0.5 ? 'glass' : 'trim'));
+  }
+}
+
+/** Coach side mirrors on the front pillars (Prevost): a short arm out of the
+ *  corner at the top of the screen, a big chrome head below it. */
+function pillarMirrors(b: MeshBuilder, hw: number, zTop: number, f: number): void {
+  for (const side of [-1, 1]) {
+    const s0 = side * (hw + 0.1);
+    const s1 = side * (hw + 0.3);
+    beam(b, [f + 0.08, side * (hw - 0.03), zTop], [f, side * (hw + 0.2), zTop], 0.05, 0.05, 'trim');
+    box(b, f - 0.06, f + 0.06, Math.min(s0, s1), Math.max(s0, s1), zTop - 0.62, zTop, (n) => (n[0] > 0.5 ? 'glass' : 'metal'));
+  }
+}
+
+/** A flat polygon on a SIDE (s = ±at), facing out — convex, (f, z) points. */
+function sidePoly(b: MeshBuilder, at: number, pts: [number, number][], m: 'glass' | 'trim' | 'body'): void {
+  const side = Math.sign(at) || 1;
+  for (let i = 1; i + 1 < pts.length; i++) {
+    b.tri([pts[0][0], at, pts[0][1]], [pts[i][0], at, pts[i][1]], [pts[i + 1][0], at, pts[i + 1][1]], m, [0, side, 0]);
   }
 }
 
@@ -119,7 +146,8 @@ function coachEU(b: MeshBuilder, L: number, W: number, H: number): void {
   const ft = (2.69 + 6.7 + 1.47) * k;
   const tyre = clamp(0.54, 0.3, H * 0.15);
   const lower = panes(0.55, L - 3.3 * k, 1.75, 0.1);
-  const upper = panes(0.6, L - 0.85, 1.7, 0.1);
+  // Upper deck: ONE continuous band, as on a Setra / Skyliner nightliner.
+  const upper: [number, number][] = [[0.6, L - 0.85]];
   const door: [number, number] = [0.95, 1.95];
   loft(
     b,
@@ -152,11 +180,16 @@ function coachEU(b: MeshBuilder, L: number, W: number, H: number): void {
       },
     },
   );
+  // The stair window behind the door: the upper band sweeps down to the
+  // lower deck (Setra S 531 DT / Skyliner) — glass over the painted band,
+  // its back edge raked.
+  const stair0 = door[1] + 0.12;
+  sidePoly(b, hw + 0.004, [[stair0, lowS + 0.02], [stair0 + 0.9, lowS + 0.02], [stair0 + 2.3, upS + 0.02], [stair0, upS + 0.02]], 'glass');
   // Roof: air-con pod, hatches.
   roundBox(b, L * 0.36, L * 0.62, 0, hw * 0.72, roof - 0.02, H, 0.08, 'pale');
   topPanel(b, roof + 0.004, L * 0.18, L * 0.18 + 0.7, -0.35, 0.35, 'trim');
   topPanel(b, roof + 0.004, L * 0.75, L * 0.75 + 0.7, -0.35, 0.35, 'trim');
-  rabbitEars(b, hw, roof);
+  rabbitEars(b, hw, roof, H);
   // Front: lamps; back: tail lamps, engine grille.
   for (const side of [-1, 1]) {
     endPanel(b, -0.004, -1, side * (hw - 0.92), side * (hw - 0.5), 0.66, 0.84, 'lamp');
@@ -189,24 +222,26 @@ function coachUS(b: MeshBuilder, L: number, W: number, H: number): void {
   const winT = roof - 0.48;
   const front = panes(fa + 0.75, Math.min(L * 0.46, fd - 1.5), 1.25, 0.1);
   const rear = panes(fd - 1.3 - 2.2 * k, fd - 1.0, 1.05, 0.1);
-  const driver: [number, number] = [0.95, fa + 0.55];
+  const driver: [number, number] = [0.55, fa + 0.55];
   const door: [number, number] = [fa + 0.75, fa + 1.5];
   loft(
     b,
     [
-      { f: 0, z0: 0.45, z1: 1.25, hw: hw - 0.32, rt: 0.2, rb: 0.1 },
-      { f: 0.12, z0: 0.32, z1: 1.55, hw: hw - 0.1, rt: 0.25, rb: 0.1 },
-      { f: 0.9, z0: 0.3, z1: roof - 0.28, hw, rt: 0.45, rb: 0.08 },
-      { f: 1.35, z0: 0.3, z1: roof, hw, rt: 0.42, rb: 0.08 },
-      { f: L - 0.35, z0: 0.3, z1: roof, hw, rt: 0.42, rb: 0.08 },
-      { f: L, z0: 0.45, z1: roof - 0.3, hw: hw - 0.12, rt: 0.35, rb: 0.1 },
+      // Prevost H3 / X3: a squared front — the bumper nearly full width, the
+      // screen leaning back only a few degrees, square roof edges.
+      { f: 0, z0: 0.45, z1: 1.15, hw: hw - 0.12, rt: 0.08, rb: 0.08 },
+      { f: 0.1, z0: 0.32, z1: 1.45, hw: hw - 0.04, rt: 0.12, rb: 0.08 },
+      { f: 0.3, z0: 0.3, z1: roof - 0.22, hw, rt: 0.22, rb: 0.08 },
+      { f: 0.5, z0: 0.3, z1: roof, hw, rt: 0.24, rb: 0.08 },
+      { f: L - 0.3, z0: 0.3, z1: roof, hw, rt: 0.24, rb: 0.08 },
+      { f: L, z0: 0.45, z1: roof - 0.22, hw: hw - 0.08, rt: 0.2, rb: 0.1 },
     ],
     {
       segs: 5,
       zBreaks: [0.7, drvS, paxS, winT],
-      fBreaks: [...edges(front), ...edges(rear), ...driver, ...door, 1.35],
+      fBreaks: [...edges(front), ...edges(rear), ...driver, ...door],
       paint: (q) => {
-        if (isFront(q)) return q.z < 0.7 ? 'trim' : q.z > 1.5 ? 'glass' : 'body';
+        if (isFront(q)) return q.z < 0.7 ? 'trim' : q.z > 1.5 && q.z < roof - 0.12 ? 'glass' : 'body';
         if (isBack(q)) return 'body';
         if (isSide(q)) {
           if (inZ(q, drvS, winT) && q.f > driver[0] && q.f < driver[1]) return 'glass';
@@ -219,11 +254,13 @@ function coachUS(b: MeshBuilder, L: number, W: number, H: number): void {
       },
     },
   );
+  // The two-piece screen's centre post.
+  beam(b, [0.085, 0, 1.5], [0.275, 0, roof - 0.27], 0.05, 0.04, 'trim');
   // A satellite dome and two hatches: the entertainer roof.
   roundBox(b, L * 0.2, L * 0.2 + 0.9, 0, 0.42, roof - 0.02, H, 0.2, 'pale');
   topPanel(b, roof + 0.004, L * 0.45, L * 0.45 + 0.75, -0.38, 0.38, 'trim');
   topPanel(b, roof + 0.004, L * 0.7, L * 0.7 + 0.75, -0.38, 0.38, 'trim');
-  rabbitEars(b, hw, roof);
+  pillarMirrors(b, hw, roof - 1.05, 0.32);
   for (const side of [-1, 1]) {
     endPanel(b, -0.004, -1, side * (hw - 0.98), side * (hw - 0.48), 0.78, 0.98, 'lamp');
     endPanel(b, L + 0.004, 1, side * (hw - 0.55), side * (hw - 0.3), 0.85, 1.7, 'tail');
