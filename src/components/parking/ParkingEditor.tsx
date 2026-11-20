@@ -1686,6 +1686,18 @@ function Inspector({
               ))}
             </div>
           </div>
+          {vehicleSpec(item.type)?.rear ? (
+            <label className="pk-check">
+              <input
+                type="checkbox"
+                checked={item.rearClear !== false}
+                disabled={readOnly}
+                // Absent = on (the type's default), so turning it back on clears the flag.
+                onChange={(e) => onChangeNow({ rearClear: e.target.checked ? undefined : false } as Partial<ParkingItem>)}
+              />
+              Keep clear behind · {vehicleSpec(item.type)!.rear!.what} {fmtMetres(vehicleSpec(item.type)!.rear!.length)}
+            </label>
+          ) : null}
           <div className="pk-grid3">
             {(['length', 'width', 'height'] as const).map((k) => (
               <label key={k} className="pk-field">

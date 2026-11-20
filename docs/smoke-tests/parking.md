@@ -425,6 +425,22 @@ browser key restricted to the Map Tiles API and the app's domains).**
 
 **Last verified**:
 
+#### PRK-51 — More vehicles: cab only, trailer only, Luton, box truck, Bandwagon, Vito
+
+**Do**: Open a parking map → Add. On UK / EU, place Truck cab only, Trailer only, Luton van and Vito. Switch to US and place Box truck 26 ft, Bandwagon and Bandwagon + trailer. Select each and read its size; open 3D; export a PDF.
+
+**Expect**: Sizes: cab 6.0 × 2.55 m, trailer 13.6 × 2.55 m, Luton 6.9 × 2.2 m, Vito 5.4 × 1.93 m, box truck 10.4 × 2.6 m, Bandwagon 11.6 × 2.6 m (38 ft), Bandwagon + trailer 18.0 m (59 ft). The cab shows no trailer; the trailer shows no cab; the Luton's box sits over its cab. Each stands at its true height in 3D and is named on the PDF and in its key.
+
+**Last verified**:
+
+#### PRK-52 — Red hatched keep-clear box behind ramps, tail lifts and van doors
+
+**Do**: Place a Bus + trailer (UK / EU and US), a Bandwagon + trailer, a Luton, a Sprinter, a Vito and a Splitter + trailer, plus a Truck (artic). Select the Sprinter; under Colour untick "Keep clear behind". Export a PDF; open a driver link.
+
+**Expect**: Each of the first six has a red hatched box behind its tail, as wide as the vehicle: Bandwagon / US bus trailer 2.1 m, EU bus trailer 2.0 m, Luton 1.6 m, Vito 1.0 m, Sprinter / splitter 0.8 m. The truck has none. Unticked, the Sprinter's box goes and stays gone after reload; ticked, it comes back. The box turns with the vehicle, shows on the PDF and the driver map, a fit page frames it, no name tag sits on it, and the key says "Red hatching: keep clear". Not drawn in 3D.
+
+**Last verified**:
+
 ## Known broken
 
 #### PRK-90 — Re-exporting makes a new file

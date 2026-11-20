@@ -77,6 +77,44 @@ function towed(L: number, W: number, trailerLen: number, gap: number, front: (en
   ];
 }
 
+/** A cab-over truck cab, nose at 0, `len` long (EU tractors, UK box lorries). */
+function cabOver(len: number, W: number): Part[] {
+  return [
+    { kind: 'cab', f0: 0, f1: len, w: W, h: 0.95, r: 0.25 },
+    { kind: 'glass', f0: 0.1, f1: 0.55, w: W * 0.86, h: 0.9, r: 0.15 },
+    { kind: 'mirror', f0: 0.3, f1: 0.55, w: 0.22, h: 0.7, s: -(W / 2 + 0.2) },
+    { kind: 'mirror', f0: 0.3, f1: 0.55, w: 0.22, h: 0.7, s: W / 2 + 0.2 },
+  ];
+}
+
+/** A US conventional front — hood, then cab (and sleeper) — nose at 0. Returns
+ *  the parts and where the cab ends. */
+function conventional(W: number, hood: number, cab: number): { parts: Part[]; end: number } {
+  return {
+    end: hood + cab,
+    parts: [
+      { kind: 'hood', f0: 0, f1: hood, w: W * 0.82, h: 0.5, r: 0.35 },
+      { kind: 'cab', f0: hood, f1: hood + cab, w: W, h: 0.85, r: 0.2 },
+      { kind: 'glass', f0: hood + 0.05, f1: hood + 0.55, w: W * 0.84, h: 0.8, r: 0.12 },
+      { kind: 'mirror', f0: hood + 0.15, f1: hood + 0.4, w: 0.22, h: 0.65, s: -(W / 2 + 0.25) },
+      { kind: 'mirror', f0: hood + 0.15, f1: hood + 0.4, w: 0.22, h: 0.65, s: W / 2 + 0.25 },
+    ],
+  };
+}
+
+/** The Bandwagon / Pullman: a Freightliner hood and sleeper cab, then the
+ *  full-height living box to `end`. */
+function bandwagonParts(end: number, W: number): Part[] {
+  const front = conventional(W, 2.0, 2.4);
+  const box0 = Math.min(front.end + 0.1, end - 1);
+  const len = end - box0;
+  return [
+    ...front.parts,
+    { kind: 'body', f0: box0, f1: end, w: W, h: 1, r: 0.3 },
+    ...(len > 4 ? [{ kind: 'roof' as const, f0: box0 + len * 0.3, f1: box0 + len * 0.3 + 1.6, w: W * 0.6, h: 1.04, r: 0.2 }] : []),
+  ];
+}
+
 /** The parts of a vehicle of this type at this size. */
 export function vehicleParts(type: VehicleType | string, L: number, W: number): Part[] {
   const spec = vehicleSpec(type);
@@ -118,6 +156,55 @@ export function vehicleParts(type: VehicleType | string, L: number, W: number): 
         ...boxTrailer(Math.min(tStart, L - 2), L, W, true),
       ];
     }
+    case 'tractor_eu': {
+      // Cab, then the chassis with the fifth-wheel plate — no trailer.
+      const cab = clamp(2.3, 1.5, L * 0.5);
+      const plate = Math.max(cab + 0.3, L - 2.2);
+      return [
+        ...cabOver(cab, W),
+        { kind: 'coupling', f0: cab, f1: L, w: W * 0.55, h: 0.3 },
+        { kind: 'roof', f0: plate, f1: Math.min(L, plate + 1.4), w: W * 0.7, h: 0.34, r: 0.5 },
+      ];
+    }
+    case 'trailer_eu':
+      // The box on its own; a short kingpin stub where the tractor couples.
+      return [
+        { kind: 'coupling', f0: 0, f1: Math.min(0.6, L * 0.1), w: 0.3, h: 0.3 },
+        ...boxTrailer(Math.min(0.15, L * 0.05), L, W, true),
+      ];
+    case 'luton': {
+      // Van front (short bonnet + cab), the box running forward OVER the cab
+      // roof — the Luton peak — so from above the box starts at the windscreen.
+      const hood = clamp(0.7, 0.4, L * 0.12);
+      return [
+        { kind: 'hood', f0: 0, f1: hood, w: W * 0.9, h: 0.45, r: 0.4 },
+        { kind: 'cab', f0: hood - 0.05, f1: hood + 0.9, w: W * 0.92, h: 0.75, r: 0.3 },
+        { kind: 'glass', f0: hood, f1: hood + 0.4, w: W * 0.8, h: 0.78, r: 0.15 },
+        { kind: 'mirror', f0: hood + 0.1, f1: hood + 0.3, w: 0.18, h: 0.6, s: -(W / 2 + 0.12) },
+        { kind: 'mirror', f0: hood + 0.1, f1: hood + 0.3, w: 0.18, h: 0.6, s: W / 2 + 0.12 },
+        ...boxTrailer(hood + 0.45, L, W, true),
+      ];
+    }
+    case 'box_us': {
+      // Medium-duty conventional (short hood), then the 26 ft box.
+      const front = conventional(W, 1.5, 1.8);
+      return [...front.parts, ...boxTrailer(Math.min(front.end + 0.15, L - 1), L, W, true)];
+    }
+    case 'bandwagon':
+      return bandwagonParts(L, W);
+    case 'bandwagon_trailer': {
+      const t = spec?.trailer ?? { length: 5.5, gap: 0.9 };
+      return towed(L, W, t.length, t.gap, (end) => bandwagonParts(end, W));
+    }
+    case 'vito':
+      // A people-carrier: a longer bonnet than a Sprinter, one body to the tail.
+      return [
+        { kind: 'hood', f0: 0, f1: 1.0, w: W * 0.92, h: 0.5, r: 0.4 },
+        { kind: 'body', f0: 0.9, f1: L, w: W, h: 1, r: 0.35 },
+        { kind: 'glass', f0: 1.0, f1: 1.55, w: W * 0.86, h: 0.92, r: 0.2 },
+        { kind: 'mirror', f0: 1.15, f1: 1.35, w: 0.18, h: 0.62, s: -(W / 2 + 0.12) },
+        { kind: 'mirror', f0: 1.15, f1: 1.35, w: 0.18, h: 0.62, s: W / 2 + 0.12 },
+      ];
     case 'splitter':
       return towed(L, W, L * 0.4, 1.0, (end) => [
         { kind: 'hood', f0: 0, f1: 0.7, w: W * 0.9, h: 0.45, r: 0.35 },

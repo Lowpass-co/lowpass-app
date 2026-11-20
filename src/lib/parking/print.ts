@@ -10,7 +10,7 @@
    ============================================ */
 
 import { PRINT_SCALES, printScaleFor, type Pt, type View } from './geo';
-import { vehicleCorners, type ParkingItem } from './model';
+import { rearClearCorners, vehicleCorners, type ParkingItem } from './model';
 
 /** The map frame on A4 landscape, millimetres (exportPdf lays it out). */
 export const PRINT_FRAME_MM = { w: 196, h: 174 } as const;
@@ -25,7 +25,7 @@ export type PrintScaleChoice = 'auto' | (typeof PRINT_SCALES)[number];
 export function itemPoints(items: ParkingItem[]): Pt[] {
   const out: Pt[] = [];
   for (const i of items) {
-    if (i.kind === 'vehicle') out.push(...vehicleCorners(i), { x: i.x, y: i.y });
+    if (i.kind === 'vehicle') out.push(...vehicleCorners(i), ...(rearClearCorners(i) ?? []), { x: i.x, y: i.y });
     else if (i.kind === 'marker') out.push({ x: i.x, y: i.y });
     else if (i.kind === 'measure') out.push(i.a, i.b);
     else out.push(...i.points);
