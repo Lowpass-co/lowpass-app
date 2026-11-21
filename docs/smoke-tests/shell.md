@@ -666,6 +666,12 @@ wrong" from the error boundary, with the page never rendering. If you see that:
   on the dark background; nothing looks washed out or harsh.
 
 
+- [ ] **SHELL-74 — The logo is top left on every page.** Open /artists, a tour
+  page, Settings and /admin. Each top bar starts with the orange Lowpass logo
+  (no small orange square); clicking it goes to /artists. Beside it: a building
+  icon and the workspace name, which turns into a spinner while /artists
+  loads.
+
 ## Getting started — welcome + "Get set up" (Nov 2026)
 
 Replaces the old "App tour & tutorial" panel. To see the welcome again in a

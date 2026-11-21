@@ -18,7 +18,9 @@
    otherwise shows exactly the control the rest of the app shows.
    ============================================ */
 
+import Image from 'next/image';
 import Link from 'next/link';
+import { Building2 } from 'lucide-react';
 import { PendingSwap, PendingLive } from './PendingNav';
 import { SearchTrigger } from './SearchTrigger';
 import type { NavContext } from '@/lib/nav/ia';
@@ -58,20 +60,26 @@ export function TopBarV3({ ctx, workspaceName, switcher, right, landing = false 
         background: 'var(--lp-panel)',
       }}
     >
+      {/* The logo, top left on every page (Nov 2026, Adam — it replaced an
+          orange square). Home = the workspace, same as the name beside it. */}
+      <Link href="/artists" aria-label="Lowpass — home" data-testid="top-bar-logo" style={{ display: 'inline-flex', flex: '0 0 auto' }}>
+        <Image src="/lowpass-logo.png" alt="" width={36} height={28} className="h-7 w-auto" priority />
+      </Link>
+
       {/* Workspace — always the way back to the top. */}
       <Link
         href="/artists"
         data-testid="top-bar-workspace"
         style={{
-          display: 'inline-flex', alignItems: 'center', gap: 8,
+          display: 'inline-flex', alignItems: 'center', gap: 6,
           fontSize: 'var(--lp-text-sm)', color: 'var(--lp-text-secondary)',
           textDecoration: 'none', whiteSpace: 'nowrap',
         }}
       >
-        {/* The mark is the spinner slot — same 8px either way, so the name
+        {/* The icon is the spinner slot — same size either way, so the name
             doesn't shuffle sideways the moment you click it. */}
-        <PendingSwap className="h-2 w-2">
-          <span style={{ width: 8, height: 8, borderRadius: 2, background: 'var(--lp-orange)' }} aria-hidden />
+        <PendingSwap className="h-3.5 w-3.5">
+          <Building2 className="h-3.5 w-3.5" aria-hidden />
         </PendingSwap>
         {workspaceName}
         <PendingLive label={workspaceName} />
