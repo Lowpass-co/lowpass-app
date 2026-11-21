@@ -955,6 +955,11 @@ is made. Change the record's email to your login email (People panel) →
 Crew shows "Sees every tour" (or the access, for a Member); the old link
 now says the invite isn't found — none is needed. With an email that has no
 login yet, the same link stays valid for the NEW address.
+#### PAY-30 — Payroll has its rate columns (after 296)
+Payroll → Summary: between Name and Shows there are rate columns (Flat day,
+Flat tour, Show, Off / travel, Rehearsal, Per diem, …). Type a Show rate for
+someone → their Total fee and the Fees card move; Crew → their panel lists it.
+New tour → "Budget & advance" step lists the six budget templates again.
 #### CREW-10 — Rates in the person's panel
 Crew → click someone with rates in Payroll → **Rates** lists them (Show £…,
 Per diem £…). Someone with none → "No rates yet — set them in Payroll" (never
