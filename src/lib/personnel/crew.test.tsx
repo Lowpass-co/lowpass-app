@@ -81,7 +81,7 @@ describe('accessWrites — giving a login preset on one tour', () => {
   });
   it('is a no-op the second time', () => {
     const first = accessWrites([], T, 'accounts');
-    const rows = first.insert.map((r, i) => ({ id: String(i), tour_id: T, ...r }));
+    const rows = first.insert.map((r, i) => ({ id: String(i), ...r, tour_id: T }));
     expect(accessWrites(rows, T, 'accounts')).toEqual({ insert: [], raise: [] });
   });
   it('presetRows is the preset on this tour only', () => {

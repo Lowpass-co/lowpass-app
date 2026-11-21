@@ -8,6 +8,7 @@ import { NextResponse } from 'next/server';
 import { requireWrite } from '@/lib/auth/workspace-check';
 import { revalidatePath } from 'next/cache';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
+import { syncPersonnelLogin } from '@/server/people/tourLogin';
 
 async function assertWorkspacePerson(
   supabase: Awaited<ReturnType<typeof createServerSupabaseClient>>,
@@ -101,6 +102,22 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
 
   const { data, error } = await supabase.from('personnel').update(updates).eq('id', id).select().single();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  // A changed email: their login follows it (Nov 2026) — linked if it's a
+  // login here already, else a pending invite is re-addressed. Admin-only
+  // data; best-effort, never fails the save.
+  const prevEmail = ((row as { email?: string | null }).email ?? '').toLowerCase();
+  if (updates.email !== undefined && (updates.email ?? '') !== prevEmail) {
+    try {
+      const ws = (row as { workspace_id: string }).workspace_id;
+      if ((await syncPersonnelLogin(supabase, ws, id, user.id)) === 'linked') {
+        const { data: fresh } = await supabase.from('personnel').select().eq('id', id).single();
+        if (fresh) return NextResponse.json(fresh);
+      }
+    } catch {
+      /* best-effort */
+    }
+  }
   return NextResponse.json(data);
 }
 

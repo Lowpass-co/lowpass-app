@@ -948,3 +948,10 @@ already open and that person ticked.
 Anyone previously marked Cancelled or Fired now shows as plain crew — remove
 them if they shouldn't be there. Overview, Home and Dates & routing no longer
 mention unconfirmed crew.
+
+#### CREW-11 — A login follows the crew record's email
+Add yourself (a People record with an OLD email) with App access → an invite
+is made. Change the record's email to your login email (People panel) →
+Crew shows "Sees every tour" (or the access, for a Member); the old link
+now says the invite isn't found — none is needed. With an email that has no
+login yet, the same link stays valid for the NEW address.
