@@ -948,3 +948,8 @@ already open and that person ticked.
 Anyone previously marked Cancelled or Fired now shows as plain crew — remove
 them if they shouldn't be there. Overview, Home and Dates & routing no longer
 mention unconfirmed crew.
+
+#### CREW-10 — Rates in the person's panel
+Crew → click someone with rates in Payroll → **Rates** lists them (Show £…,
+Per diem £…). Someone with none → "No rates yet — set them in Payroll" (never
+"Could not load rates"). A Member without Payroll access can't read them.

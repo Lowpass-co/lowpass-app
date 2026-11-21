@@ -25,6 +25,11 @@ export interface FakeDbOptions {
   /** child table → { column, parent } with ON DELETE CASCADE. */
   cascade?: Array<{ child: string; column: string; parent: string; onDelete: 'cascade' | 'set null' }>;
   rpc?: Record<string, (db: FakeDb, args: Record<string, unknown>) => Result>;
+  /** table → its real columns. When given, a select naming any other column
+   *  fails like Postgres does (42703). The fake otherwise returns whole rows
+   *  whatever is asked for, which is how a select of a column that doesn't
+   *  exist ("display_name" on tour_personnel) hid for a month (Nov 2026). */
+  columns?: Record<string, string[]>;
 }
 
 let idSeq = 0;
@@ -127,8 +132,10 @@ class Query implements PromiseLike<Result> {
   private counting: { head: boolean } | null = null;
 
   constructor(private db: FakeDb, private table: string) {}
+  private selected = '*';
 
   select(cols = '*', o?: { count?: 'exact' | 'planned' | 'estimated'; head?: boolean }) {
+    this.selected = cols;
     if (o?.count) this.counting = { head: o.head === true };
     if (this.op === 'select') this.op = 'select';
     else this.returning = true;
@@ -227,6 +234,12 @@ class Query implements PromiseLike<Result> {
     if (this.op === 'select') {
       db.log.push({ op: 'select', table: this.table });
       if (db.failReads.has(this.table)) return { data: null, error: { message: `read of ${this.table} failed`, code: 'XX000' } };
+      const known = db.opts.columns?.[this.table];
+      if (known && this.selected.trim() !== '*') {
+        const plain = this.selected.replace(/\w+:\w+\([^)]*\)/g, '').split(',').map((c) => c.trim()).filter(Boolean);
+        const bad = plain.find((c) => c !== '*' && !known.includes(c));
+        if (bad) return { data: null, error: { message: `column ${this.table}.${bad} does not exist`, code: '42703' } };
+      }
       const rows = this.matches();
       if (this.counting) {
         const shaped = this.shape(rows);
