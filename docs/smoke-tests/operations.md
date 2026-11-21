@@ -954,3 +954,7 @@ Payroll → Summary: between Name and Shows there are rate columns (Flat day,
 Flat tour, Show, Off / travel, Rehearsal, Per diem, …). Type a Show rate for
 someone → their Total fee and the Fees card move; Crew → their panel lists it.
 New tour → "Budget & advance" step lists the six budget templates again.
+#### CREW-10 — Rates in the person's panel
+Crew → click someone with rates in Payroll → **Rates** lists them (Show £…,
+Per diem £…). Someone with none → "No rates yet — set them in Payroll" (never
+"Could not load rates"). A Member without Payroll access can't read them.

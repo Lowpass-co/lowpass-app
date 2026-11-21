@@ -1,32 +1,22 @@
 /* ============================================
-   LOWPASS — GET /api/tours/[id]/personnel/[memberId]/rates (read-only since Oct 2026)
-   (Payroll Sprint §P2)
+   LOWPASS — GET /api/tours/[id]/personnel/[memberId]/rates (read-only)
 
-   Reads + upserts the personnel_rates row for one tour
-   assignment. Separate from the existing
-   /personnel/[memberId] PATCH (which targets the retired
-   tour_personnel daily-rate column). Payroll needs the
-   show / off / per-diem / internal_rate quartet, read from
-   the SSOT rate lines (rateAmountsFor) and written via
-   writeRates. The GET/PUT wire keys are camelCase.
+   One crew member's rates on this tour, for the Crew panel's Rates block —
+   the same figures Payroll → Summary shows (SSOT: personnel_rate_lines via
+   rateAmountsFor). Rates are typed only in Payroll (/api/budget/rate-lines).
 
-   personnel_rates keys legacy on (tour_id, person_name) with
-   a roster_personnel_id FK to personnel(id) (migration 025 +
-   050). We resolve the row by roster_personnel_id =
-   tour_personnel.person_id; if no row exists we create one
-   (the legacy person_name is filled from the assignment's
-   display name so old SUMMARY-sheet joins still resolve).
+   Rates are money → the viewer needs Payroll on this tour (tour access);
+   internal_rate additionally only for admin / manager.
 
-   Admin gate: internal_rate ("Lowpass rate") is sensitive.
-   GET only returns it when the caller is admin/manager; PUT
-   only writes it for admin/manager. Non-admin writes that
-   include internal_rate are silently dropped (not an error —
-   keeps the auto-save flow simple).
+   Nov 2026 fix: the assignment lookup selected `display_name`, a column
+   tour_personnel doesn't have — the query errored, the route answered 404,
+   and the panel said "Could not load rates" for EVERYONE since Oct 2026.
    ============================================ */
 
 import { NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { getActiveMembership } from '@/lib/permissions/server';
+import { getViewerAccess, viewerAllows } from '@/lib/permissions/tourAccess';
 import { loadTourRateContext, rateAmountsFor } from '@/lib/payroll/loadRateLines';
 import { CANONICAL_RATE_TYPE_IDS } from '@/lib/payroll/rateLines';
 
@@ -42,7 +32,7 @@ async function resolve(
   tourId: string,
   memberId: string,
 ): Promise<
-  | { ok: true; workspaceId: string; personId: string; displayName: string; isAdmin: boolean }
+  | { ok: true; workspaceId: string; personId: string; isAdmin: boolean }
   | { ok: false; response: NextResponse }
 > {
   const {
@@ -56,17 +46,24 @@ async function resolve(
     return { ok: false, response: NextResponse.json({ error: 'No workspace' }, { status: 403 }) };
   }
 
-  const { data: assignment } = await supabase
+  // Rates are money: Payroll on this tour (tour access, Nov 2026).
+  if (!viewerAllows(await getViewerAccess(supabase, user.id, tourId), 'payroll')) {
+    return { ok: false, response: NextResponse.json({ error: 'Forbidden' }, { status: 403 }) };
+  }
+
+  const { data: assignment, error } = await supabase
     .from('tour_personnel')
-    .select('id, tour_id, person_id, workspace_id, display_name')
+    .select('id, tour_id, person_id, workspace_id')
     .eq('id', memberId)
     .maybeSingle<{
       id: string;
       tour_id: string;
       person_id: string;
       workspace_id: string;
-      display_name: string | null;
     }>();
+  if (error) {
+    return { ok: false, response: NextResponse.json({ error: error.message }, { status: 500 }) };
+  }
   if (!assignment || assignment.tour_id !== tourId) {
     return {
       ok: false,
@@ -80,7 +77,6 @@ async function resolve(
     ok: true,
     workspaceId: membership.workspace_id,
     personId: assignment.person_id,
-    displayName: assignment.display_name ?? '',
     isAdmin: isAdminRole(membership.role),
   };
 }

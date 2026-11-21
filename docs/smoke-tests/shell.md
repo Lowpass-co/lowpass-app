@@ -669,8 +669,13 @@ wrong" from the error boundary, with the page never rendering. If you see that:
 - [ ] **SHELL-74 — The logo is top left on every page.** Open /artists, a tour
   page, Settings and /admin. Each top bar starts with the orange Lowpass logo
   (no small orange square); clicking it goes to /artists. Beside it: a building
-  icon and the workspace name, which turns into a spinner while /artists
-  loads.
+  icon and the workspace name — shown ONCE (not again at the right). Clicking
+  the logo shows a small spinner on its corner while /artists loads.
+
+- [ ] **SHELL-75 — One workspace name, and it switches.** The workspace name
+  appears once, beside the logo. In 2+ workspaces it has a chevron and opens
+  the workspace list; picking one switches. In one workspace it's a plain
+  label.
 
 ## Getting started — welcome + "Get set up" (Nov 2026)
 
