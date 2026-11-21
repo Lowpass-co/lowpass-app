@@ -889,3 +889,62 @@ There is no other person form.
 
 Known gap: deleting a person on People still leaves them on tours they were on
 (Crew / Rooming / Payroll keep them; their panel can't open). Unchanged here.
+
+## Crew — add many, logins per tour, no status (Nov 2026)
+
+Status (Confirmed / Tentative / Awaiting contract / Cancelled / Fired) is
+retired everywhere — the Crew list, Add, the person's panel, the tour
+Overview's "crew not confirmed" line, Home's "unconfirmed crew" line and the
+Dates & routing "pending" crew. Someone on the list is on the crew.
+
+#### CREW-01 — The Crew list
+Tour → Logistics › Crew. A facts line ("N on the crew · N clashes"), search,
+**Department | A–Z**, **+ Add crew**. Department groups: Tour team, Band,
+Management, Audio, Lighting, Backline, Other (from each person's role tag).
+Rows: initials, name, "Whole tour" or their dates (a clash with another of
+your tours replaces it in red — hover for all of them), role · TAG, app access
+(key icon when they have a login). No Refresh button, no status pills.
+
+#### CREW-02 — Add several at once
+**+ Add crew** → People who've toured with this artist are first ("Toured with
+<artist>"), then everyone else; people already on the tour are greyed "On this
+tour". Tick three → each gets a line at the bottom: role (their usual role,
+small text), role tag chip worked out from it ("Monitor Engineer" → MONS),
+"Whole tour". → **Add 3 to tour** → they're on the list and in Payroll.
+
+#### CREW-03 — Someone new
+Type a name that isn't in People → "+ Add 'Jade Ng' as a new person" → their
+line has Email and Phone. Add → they're in People (next LP number) and on the
+crew. Type an email that already belongs to someone in People → that person is
+used, no duplicate.
+
+#### CREW-04 — Dates
+Click "Whole tour" on a line → two date boxes (start at the tour's dates).
+End before start → "the end date is before the start date", nothing added.
+
+#### CREW-05 — App access while adding (workspace admin)
+On a line: **App access** → Crew. No email on file → the email box turns red
+and Add says so. With an email → after Add the panel stays open with
+"Copy invite link". Open it signed out → it's an invite for that email;
+after sign-up they see only this tour, with Crew's areas.
+As a manager: no App access control at all.
+
+#### CREW-06 — Existing logins
+Add someone who already has a Member login with App access → Production →
+"This tour added to their login"; Team & roles shows the tour added, nothing
+they had removed. An admin / manager → "Already sees every tour".
+
+#### CREW-07 — Access in the person's panel
+Click a row → **App access** (where Status was): current state, a preset and
+**Invite** / **Give this access**; invited → Copy invite link; **Remove from
+this tour**. A manager sees the state and "Only workspace admins can change
+app access."
+
+#### CREW-08 — Assign to tour from People
+People → a person → Assign to tour → pick a tour → Crew opens with Add crew
+already open and that person ticked.
+
+#### CREW-09 — Old statuses
+Anyone previously marked Cancelled or Fired now shows as plain crew — remove
+them if they shouldn't be there. Overview, Home and Dates & routing no longer
+mention unconfirmed crew.

@@ -6,7 +6,8 @@
 
    Per-assignment Manage slide-over. Window-based assignment
    per Phase 6 refinement #3 — two date inputs replace the
-   per-show grid. Single status applies across the window.
+   per-show grid. (Status was retired Nov 2026 — its place is the
+   person's app access on this tour, <CrewLoginSection>.)
 
    Notes textarea NOT included v1: tour_personnel has no notes
    column. The Phase 6 mockup showed it speculatively; document
@@ -33,18 +34,8 @@ import { BrandedSelect } from '@/components/ui/BrandedSelect';
 import { ROLE_TAG_OPTIONS, type RoleTag } from '@/lib/personnel/role-tags';
 import { PersonnelRatesSection } from './PersonnelRatesSection';
 import { EMPLOYMENT_OPTIONS, type Employment } from '@/lib/personnel/employment';
-import type {
-  PersonnelListItem,
-  PersonnelStatus,
-} from '@/lib/personnel/types';
-
-const STATUS_OPTIONS: ReadonlyArray<{ value: PersonnelStatus; label: string }> = [
-  { value: 'confirmed', label: 'Confirmed' },
-  { value: 'tentative', label: 'Tentative' },
-  { value: 'awaiting_contract', label: 'Awaiting contract' },
-  { value: 'cancelled', label: 'Cancelled' },
-  { value: 'fired', label: 'Fired' },
-];
+import type { PersonnelListItem } from '@/lib/personnel/types';
+import { CrewLoginSection } from './CrewLoginSection';
 
 interface PersonnelManageSlideOverProps {
   open: boolean;
@@ -56,6 +47,8 @@ interface PersonnelManageSlideOverProps {
   onRemoved: () => void;
   /** Open the person's People record (closes this panel). */
   onEditPerson: (personId: string) => void;
+  /** Workspace admin — may change their app access (the database's rule). */
+  canChangeLogin?: boolean;
 }
 
 interface EditState {
@@ -64,7 +57,6 @@ interface EditState {
   roleTag: RoleTag;
   startsOn: string;
   endsOn: string;
-  status: PersonnelStatus;
   /** Principal / Band / Crew on this tour — the payroll card's field (the same
    *  one Payroll's Employment column edits). */
   employment: Employment;
@@ -76,7 +68,6 @@ function memberToState(m: PersonnelListItem): EditState {
     roleTag: (m.role_tag ?? 'other') as RoleTag,
     startsOn: m.starts_on ?? '',
     endsOn: m.ends_on ?? '',
-    status: m.status,
     employment: m.employment ?? 'crew',
   };
 }
@@ -90,6 +81,7 @@ export function PersonnelManageSlideOver({
   onSaved,
   onRemoved,
   onEditPerson,
+  canChangeLogin = false,
 }: PersonnelManageSlideOverProps) {
   const { showToast } = useToast();
   const [removeOpen, setRemoveOpen] = useState(false);
@@ -113,6 +105,7 @@ export function PersonnelManageSlideOver({
       onSaved={onSaved}
       onRemoved={onRemoved}
       onEditPerson={onEditPerson}
+      canChangeLogin={canChangeLogin}
       removeOpen={removeOpen}
       setRemoveOpen={setRemoveOpen}
       validationError={validationError}
@@ -131,6 +124,7 @@ interface EditorProps {
   onSaved: () => void;
   onRemoved: () => void;
   onEditPerson: (personId: string) => void;
+  canChangeLogin: boolean;
   removeOpen: boolean;
   setRemoveOpen: (v: boolean) => void;
   validationError: string | null;
@@ -147,6 +141,7 @@ function PersonnelManageEditor({
   onSaved,
   onRemoved,
   onEditPerson,
+  canChangeLogin,
   removeOpen,
   setRemoveOpen,
   validationError,
@@ -175,7 +170,7 @@ function PersonnelManageEditor({
       // #18 SSOT — rates are NOT edited here anymore. Payroll's Rates grid owns
       // rate editing (personnel_rates); the dangling tour_personnel simple rate
       // (daily-rate/currency/period) is no longer written. This slide persists
-      // only the assignment meta (role / tag / dates / status).
+      // only the assignment meta (role / tag / dates). Status is retired (Nov 2026).
       setValidationError(null);
       const res = await fetch(
         `/api/tours/${tourId}/personnel/${member.id}`,
@@ -187,7 +182,6 @@ function PersonnelManageEditor({
             role_tag: s.roleTag,
             starts_on: s.startsOn || null,
             ends_on: s.endsOn || null,
-            status: s.status,
             person_type: s.employment,
           }),
         },
@@ -521,62 +515,18 @@ function PersonnelManageEditor({
             </div>
           </div>
 
-          {/* Status pills */}
-          <fieldset
-            role="radiogroup"
-            aria-label="Status"
-            style={{ border: 'none', padding: 0, margin: 0 }}
-          >
-            <legend
-              className="lp-label-caps"
-              style={{
-                fontSize: 'var(--lp-text-2xs)',
-                color: 'var(--lp-text-secondary)',
-                marginBottom: 'var(--lp-space-2)',
-              }}
-            >
-              Status
-            </legend>
-            <div className="flex flex-wrap" style={{ gap: 'var(--lp-space-2)' }}>
-              {STATUS_OPTIONS.map((s) => {
-                const active = state.status === s.value;
-                const destructive = s.value === 'cancelled' || s.value === 'fired';
-                return (
-                  <button
-                    key={s.value}
-                    type="button"
-                    role="radio"
-                    aria-checked={active}
-                    onClick={() => set((p) => ({ ...p, status: s.value }))}
-                    className="btn-transition"
-                    style={{
-                      padding: 'var(--lp-space-1) var(--lp-space-3)',
-                      fontSize: 'var(--lp-text-sm)',
-                      fontWeight: active
-                        ? 'var(--lp-weight-semibold)'
-                        : 'var(--lp-weight-medium)',
-                      color: active
-                        ? 'var(--lp-text-inverse)'
-                        : 'var(--lp-text-secondary)',
-                      background: active
-                        ? destructive
-                          ? 'var(--color-lp-error)'
-                          : 'var(--color-lp-orange)'
-                        : 'var(--lp-bg-tertiary)',
-                      border: '1px solid transparent',
-                      borderRadius: 999,
-                      cursor: 'pointer',
-                      boxShadow: active
-                        ? '0 1px 2px color-mix(in srgb, black 15%, transparent)'
-                        : 'none',
-                    }}
-                  >
-                    {s.label}
-                  </button>
-                );
-              })}
-            </div>
-          </fieldset>
+          {/* App access on this tour (Nov 2026) — replaced the retired
+              Status pills. Explicit buttons, outside the auto-save. */}
+          <div style={{ paddingTop: 'var(--lp-space-3)', borderTop: '1px solid var(--lp-border)' }}>
+            <CrewLoginSection
+              tourId={tourId}
+              memberId={member.id}
+              login={member.login}
+              hasEmail={!!member.email}
+              canChange={canChangeLogin}
+              onChanged={onSaved}
+            />
+          </div>
 
           {/* #18 SSOT — the dangling simple "Rate" field (tour_personnel
               daily-rate/currency/period) is removed: payroll IGNORED it, and it

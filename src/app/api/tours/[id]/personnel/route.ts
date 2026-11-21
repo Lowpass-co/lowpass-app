@@ -1,11 +1,12 @@
 /* ============================================
-   LOWPASS — /api/tours/[id]/personnel (Sprint 9 §6)
+   LOWPASS — /api/tours/[id]/personnel (Sprint 9 §6; Nov 2026)
 
-   GET  — list assigned personnel for the tour. Admin/manager
-          full list; readonly without operations.personnel.read
-          grant returns 403.
-   POST — assign existing person to tour. Admin/manager OR
-          readonly with operations.personnel.write grant.
+   GET  — the tour's crew, with each person's login on this tour. Needs
+          Logistics (tour access); invites and others' access come back
+          only for admins (RLS).
+   POST — put ONE existing person on the crew (admin / manager), through
+          addPersonToTour. The Add crew panel uses /personnel/add (many at
+          once, new people, logins). Status is retired.
 
    The Personnel page also calls /conflicts (POST) for
    cross-workspace conflict warnings — separate route.
@@ -14,33 +15,16 @@
 import { NextResponse } from 'next/server';
 import { requireWrite } from '@/lib/auth/workspace-check';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
-import { isRoleTag } from '@/lib/personnel/role-tags';
 import {
   getActiveMembership,
 } from '@/lib/permissions/server';
 import { getViewerAccess, viewerAllows } from '@/lib/permissions/tourAccess';
-// Rates SSOT — a new card is seeded from the person's LAST tour (Oct 2026);
-// rates are only ever typed in Payroll → Summary.
-import { lastTourSeed, insertSeedLines } from '@/server/payroll/seedRateCard';
 import { tourFromParams, withDerivedRefresh } from '@/server/budget/withDerivedRefresh';
-import { employmentFromGroups, groupsOf, isEmployment, type Employment } from '@/lib/personnel/employment';
+import { isEmployment, type Employment } from '@/lib/personnel/employment';
+import { addPersonToTour } from '@/server/people/addToTour';
+import { tourLoginStates, type LoginState } from '@/server/people/tourLogin';
 
 export const dynamic = 'force-dynamic';
-
-type Status =
-  | 'confirmed'
-  | 'tentative'
-  | 'awaiting_contract'
-  | 'cancelled'
-  | 'fired';
-
-const VALID_STATUSES: ReadonlySet<Status> = new Set([
-  'confirmed',
-  'tentative',
-  'awaiting_contract',
-  'cancelled',
-  'fired',
-]);
 
 interface PersonnelListItem {
   id: string; // tour_personnel.id
@@ -58,9 +42,9 @@ interface PersonnelListItem {
   rate_period: string | null;
   starts_on: string | null;
   ends_on: string | null;
-  status: Status;
   canonical_person_id: string | null;
-  tags: string[];
+  /** Their login on THIS tour (what RLS lets the caller see). */
+  login: LoginState;
 }
 
 export async function GET(
@@ -98,7 +82,7 @@ export async function GET(
     .select(
       /* Sprint 12 §9c.0 — role_tag added to the select so the
          PersonnelListItem shape (and downstream UI) sees it. */
-      'id, workspace_id, person_id, role, role_tag, rate_currency, rate_period, starts_on, ends_on, status',
+      'id, workspace_id, person_id, role, role_tag, rate_currency, rate_period, starts_on, ends_on',
     )
     .eq('tour_id', tourId)
     .order('role', { ascending: true });
@@ -150,6 +134,13 @@ export async function GET(
     if (c.tour_personnel_id && isEmployment(c.person_type)) employmentByMember.set(c.tour_personnel_id, c.person_type);
   }
 
+  // Logins (person id = personnel id). Status is retired (Nov 2026).
+  const logins = await tourLoginStates(
+    supabase,
+    { workspaceId: (tour as { workspace_id: string }).workspace_id, tourId, origin: new URL(_request.url).origin },
+    personIds,
+  );
+
   const list: PersonnelListItem[] = ((rows ?? []) as Array<{
     id: string;
     workspace_id: string;
@@ -160,7 +151,6 @@ export async function GET(
     rate_period: string | null;
     starts_on: string | null;
     ends_on: string | null;
-    status: Status | null;
   }>).map((r) => {
     const p = personById.get(r.person_id);
     return {
@@ -181,12 +171,8 @@ export async function GET(
       rate_period: r.rate_period,
       starts_on: r.starts_on,
       ends_on: r.ends_on,
-      status: (r.status ?? 'confirmed') as Status,
       canonical_person_id: p?.canonical_person_id ?? null,
-      // tags: per-personnel-record tagging is a future sprint;
-      // for now read 'crew', 'sound', 'lights', 'content' off
-      // role inference. v1: empty array.
-      tags: [],
+      login: logins[r.person_id] ?? { state: 'none', preset: null },
     };
   });
 
@@ -216,45 +202,17 @@ async function postHandler(
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
-  let body: {
-    person_id?: unknown;
-    role?: unknown;
-    /* Sprint 12 §9c.0 — structured role discriminator. Defaults
-       to 'other' when omitted so existing API callers continue
-       working. */
-    role_tag?: unknown;
-    rate_currency?: unknown;
-    rate_period?: unknown;
-    starts_on?: unknown;
-    ends_on?: unknown;
-    status?: unknown;
-  };
+  let body: { person_id?: unknown; role?: unknown; role_tag?: unknown; starts_on?: unknown; ends_on?: unknown };
   try {
     body = await request.json();
   } catch {
     return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
   }
-
   const personId = typeof body.person_id === 'string' ? body.person_id : '';
   if (!personId) {
     return NextResponse.json({ error: 'person_id required' }, { status: 400 });
   }
-  const typedRole = typeof body.role === 'string' ? body.role.trim() : '';
 
-  /* Sprint 12 §9c.0 — role_tag validation. Falls back to
-     'other' when the field is missing or doesn't match the
-     CHECK-constrained enum. The DB constraint would catch a
-     bad value, but surfacing here gives a 400 with a clear
-     message instead of a 500. */
-  const roleTagRaw = body.role_tag;
-  const roleTag = isRoleTag(roleTagRaw) ? roleTagRaw : 'other';
-
-  const status =
-    typeof body.status === 'string' && VALID_STATUSES.has(body.status as Status)
-      ? (body.status as Status)
-      : 'confirmed';
-
-  // Verify the person belongs to the same workspace as the tour.
   const { data: tour } = await supabase
     .from('tours')
     .select('workspace_id')
@@ -263,135 +221,23 @@ async function postHandler(
   if (!tour) {
     return NextResponse.json({ error: 'Tour not found' }, { status: 404 });
   }
-  const tourWorkspaceId = (tour as { workspace_id: string }).workspace_id;
 
-  const { data: person } = await supabase
-    .from('persons')
-    .select('id, workspace_id, full_name, preferred_name')
-    .eq('id', personId)
-    .maybeSingle();
-  if (!person) {
-    return NextResponse.json({ error: 'Person not found' }, { status: 404 });
-  }
-  if ((person as { workspace_id: string }).workspace_id !== tourWorkspaceId) {
-    return NextResponse.json(
-      { error: 'Person belongs to a different workspace' },
-      { status: 400 },
-    );
-  }
-
-  // Nov 2026 (Adam) — a new tour starts from the People record: their usual
-  // role when none is typed, and Principal / Band / Crew from their groups.
-  // Changing either on this tour never changes the person.
-  const { data: master } = await supabase
-    .from('personnel')
-    .select('role, extended_profile')
-    .eq('id', personId)
-    .maybeSingle();
-  const m = master as { role?: string | null; extended_profile?: unknown } | null;
-  const role = typedRole || m?.role?.trim() || 'Crew';
-  const employment: Employment = employmentFromGroups(groupsOf(m?.extended_profile));
-
-  const insertRow = {
-    workspace_id: tourWorkspaceId,
-    tour_id: tourId,
-    person_id: personId,
-    role,
-    role_tag: roleTag,
-    // Rates SSOT — the daily-rate column is retired (my-schedule reads personnel_rate_lines;
-    // migration 231 drops the column). Currency/period stay as assignment metadata.
-    rate_currency: typeof body.rate_currency === 'string' ? body.rate_currency : 'GBP',
-    rate_period: typeof body.rate_period === 'string' ? body.rate_period : null,
-    starts_on: typeof body.starts_on === 'string' ? body.starts_on : null,
-    ends_on: typeof body.ends_on === 'string' ? body.ends_on : null,
-    status,
-  };
-
-  const { data: inserted, error } = await supabase
-    .from('tour_personnel')
-    .insert(insertRow)
-    .select('id')
-    .single();
-  if (error) {
-    // UNIQUE (tour_id, person_id, role) violation surfaces a
-    // 23505 — return 409 so the UI can show "already assigned".
-    const status = error.code === '23505' ? 409 : 500;
-    return NextResponse.json({ error: error.message }, { status });
-  }
-
-  await supabase.from('audit_log').insert({
-    workspace_id: tourWorkspaceId,
-    actor_user_id: user.id,
-    action: 'created',
-    entity_type: 'tour_personnel',
-    entity_id: inserted.id,
-    field_changes: {
-      tour_id: tourId,
-      person_id: personId,
-      role,
-      status,
-    },
+  // ONE writer for crew rows (src/server/people/addToTour.ts). Status is
+  // retired (Nov 2026) — a `status` in the body is ignored.
+  const r = await addPersonToTour(supabase, {
+    tourId,
+    workspaceId: (tour as { workspace_id: string }).workspace_id,
+    personId,
+    role: typeof body.role === 'string' ? body.role : null,
+    roleTag: body.role_tag,
+    startsOn: body.starts_on,
+    endsOn: body.ends_on,
+    actorUserId: user.id,
   });
-
-  /* Personnel unification Phase 2 — adding to the roster seeds the
-     payroll rate card so the member appears in Payroll immediately
-     (single source: roster → payroll). If a rate card already exists for
-     this person on this tour (e.g. removed then re-added, or backfilled),
-     relink it to the new roster row instead of creating a duplicate.
-     Rooming needs no seed row — its grid derives people from the roster.
-     Self-guarded: a failure here never fails the assignment. */
-  let rateCard: Record<string, unknown> | null = null;
-  try {
-    const personName =
-      (person as { full_name?: string | null }).full_name?.trim() || role;
-    const { data: existingRate } = await supabase
-      .from('personnel_rates')
-      .select('id')
-      .eq('tour_id', tourId)
-      .eq('person_id', personId)
-      .maybeSingle();
-    if (existingRate) {
-      const { data } = await supabase
-        .from('personnel_rates')
-        .update({ tour_personnel_id: inserted.id })
-        .eq('id', (existingRate as { id: string }).id)
-        .select('*')
-        .maybeSingle();
-      rateCard = data as Record<string, unknown> | null;
-    } else {
-      // Rates are typed in ONE place (Payroll → Summary). A new card starts
-      // from the person's LAST tour (Adam, Oct 2026) — blank if they've never
-      // toured — not from the retired library "Default day rates".
-      const seed = await lastTourSeed(supabase, { workspaceId: tourWorkspaceId, tourId, personId });
-
-      const { data } = await supabase
-        .from('personnel_rates')
-        .insert({
-          tour_id: tourId,
-          workspace_id: tourWorkspaceId,
-          person_name: personName,
-          role,
-          person_type: employment,
-          person_id: personId,
-          tour_personnel_id: inserted.id,
-          // The amounts live in personnel_rate_lines (seeded below); per_diem is
-          // the one legacy mirror still set here.
-          per_diem: seed.perDiem,
-        })
-        .select('*')
-        .maybeSingle();
-      rateCard = data as Record<string, unknown> | null;
-
-      const cardId = (rateCard as { id?: string } | null)?.id;
-      if (cardId) await insertSeedLines(supabase, { workspaceId: tourWorkspaceId, tourId, cardId, seed });
-    }
-  } catch {
-    /* rate-card seed is best-effort — the roster row is what matters */
-  }
-
+  if (!r.ok) return NextResponse.json({ error: r.error }, { status: r.status });
   // Return the seeded rate card so Payroll/Rooming can append the new
   // member optimistically (no router.refresh).
-  return NextResponse.json({ id: inserted.id, rateCard });
+  return NextResponse.json({ id: r.id, rateCard: r.rateCard });
 }
 
 // Money repair — roster and routing changes move salaries and per diems, so the

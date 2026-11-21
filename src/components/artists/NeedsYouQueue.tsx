@@ -8,13 +8,12 @@
    ============================================================ */
 
 import Link from 'next/link';
-import { ClipboardList, Receipt, Users, ChevronRight } from 'lucide-react';
+import { ClipboardList, Receipt, ChevronRight } from 'lucide-react';
 import type { NeedsYouItem } from '@/server/workspace/computeNeedsYou';
 
 const KIND_ICON = {
   advances: ClipboardList,
   settle: Receipt,
-  crew: Users,
 } as const;
 
 export function NeedsYouQueue({ items }: { items: NeedsYouItem[] }) {

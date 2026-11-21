@@ -21,7 +21,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 
 export interface NeedsYouItem {
   id: string;
-  kind: 'advances' | 'settle' | 'crew';
+  kind: 'advances' | 'settle';
   artistName: string;
   tourName: string;
   /** Derived status line: verb + time anchor, no mood words. */
@@ -76,13 +76,9 @@ export async function computeNeedsYou(
   const today = todayIso();
 
   // Bounded fetches keyed by the workspace's tours (RLS scopes to workspace).
-  const [routingRes, personnelRes] = await Promise.all([
-    supabase.from('routing').select('id, tour_id, date, day_type').in('tour_id', tourIds),
-    supabase.from('tour_personnel').select('tour_id, status').in('tour_id', tourIds),
-  ]);
+  const routingRes = await supabase.from('routing').select('id, tour_id, date, day_type').in('tour_id', tourIds);
   type RoutingRow = { id: string; tour_id: string; date: string; day_type: string | null };
   const routing = (routingRes.data ?? []) as RoutingRow[];
-  const personnel = (personnelRes.data ?? []) as Array<{ tour_id: string; status: string | null }>;
 
   const showRoutingIds = routing.filter((r) => isShowDay(r.day_type)).map((r) => r.id);
   const [advanceRes, settlementRes] =
@@ -106,12 +102,6 @@ export async function computeNeedsYou(
     const list = routingByTour.get(r.tour_id) ?? [];
     list.push(r);
     routingByTour.set(r.tour_id, list);
-  }
-  const unconfirmedCrewByTour = new Map<string, number>();
-  for (const p of personnel) {
-    if (p.status === 'tentative' || p.status === 'awaiting_contract') {
-      unconfirmedCrewByTour.set(p.tour_id, (unconfirmedCrewByTour.get(p.tour_id) ?? 0) + 1);
-    }
   }
 
   const items: NeedsYouItem[] = [];
@@ -163,21 +153,7 @@ export async function computeNeedsYou(
         });
       }
     }
-
-    // Rule 3 — unconfirmed crew × days-to-first-show.
-    const crew = unconfirmedCrewByTour.get(t.id) ?? 0;
-    if (crew > 0 && firstShow) {
-      const anchorDays = daysFromToday(firstShow.date, today);
-      items.push({
-        id: `crew-${t.id}`,
-        kind: 'crew',
-        artistName,
-        tourName: t.name,
-        status: `${plural(crew, 'crew member')} unconfirmed · first show ${inDays(anchorDays)}`,
-        href: `/operations/${t.id}/personnel`,
-        urgency: anchorDays,
-      });
-    }
+    // (Rule 3 — unconfirmed crew — retired with crew status, Nov 2026.)
   }
 
   // Most urgent first: ended-unsettled (negative urgency) → soonest anchors.

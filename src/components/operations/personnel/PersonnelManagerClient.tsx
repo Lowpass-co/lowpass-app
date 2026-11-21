@@ -1,39 +1,36 @@
 'use client';
 
 /* ============================================
-   LOWPASS — PersonnelManagerClient (Sprint 9 §6)
+   LOWPASS — Crew list (/operations/[tourId]/personnel) — redesigned
+   Nov 2026 (Adam: "more visually pleasing, better flow, less restrictive")
 
-   Manager view of /operations/[tourId]/personnel. Lists
-   assigned personnel, supports filter/search, opens the per-
-   assignment Manage slide-over, and surfaces cross-tour
-   conflict warnings inline.
+   One panel, rows split by hairlines, grouped by department (from the role
+   tag) or A–Z. Each row: who, their dates ("Whole tour" unless different),
+   a clash with another of your tours, role + tag, and their app login on
+   this tour. Status (Confirmed / Tentative / …) is RETIRED — someone on the
+   list is on the crew; remove them if they're not.
 
-   Real-time: subscribes to tour_personnel changes filtered by
-   tour_id (Phase 4's useRealtimeRows hook). Edits in another
-   tab refresh the list.
-
-   Tags: tour_personnel doesn't have a tags column. The list
-   column shows "—" for now; the tag filter dropdown is hidden
-   when no rows have tags. Per-personnel-record tagging is a
-   future-sprint concern.
+   - Live: refetches on any tour_personnel change (useRealtimeRows) — no
+     Refresh button.
+   - Click a row (admin / manager) → <PersonnelManageSlideOver>.
+   - "+ Add crew" → <AddCrewSlideOver>. `assignPersonId` (from People ›
+     Assign to tour, ?assign=) opens it with that person ticked.
+   - Members who can see Logistics get the list read-only.
    ============================================ */
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Loader2, Plus, RefreshCw } from 'lucide-react';
+import { ChevronRight, KeyRound, Loader2, Plus, AlertTriangle } from 'lucide-react';
 import { useRealtimeRows } from '@/lib/realtime/useRealtimeRows';
 import { useToast } from '@/components/ui/Toast';
 import { toTitleCase } from '@/lib/text/toTitleCase';
-import { ConflictBanner } from './ConflictBanner';
+import { ROLE_TAG_LABEL, type RoleTag } from '@/lib/personnel/role-tags';
+import { DEPARTMENT_LABELS, groupByDepartment, isWholeTour, type LoginState } from '@/lib/personnel/crew';
+import { PRESET_LABELS } from '@/lib/permissions/areas';
 import { PersonnelManageSlideOver } from './PersonnelManageSlideOver';
-import { AddPersonnelSlideOver } from './AddPersonnelSlideOver';
+import { AddCrewSlideOver } from './AddCrewSlideOver';
 import { PersonnelDetailSlideOver } from '@/components/personnel/PersonnelDetailSlideOver';
-import type {
-  ConflictsResponse,
-  ConflictRow,
-  PersonnelListItem,
-  PersonnelListResponse,
-  PersonnelStatus,
-} from '@/lib/personnel/types';
+import type { ConflictsResponse, ConflictRow, PersonnelListItem, PersonnelListResponse } from '@/lib/personnel/types';
+import './crewRoster.css';
 
 interface PersonnelManagerClientProps {
   tourId: string;
@@ -41,64 +38,87 @@ interface PersonnelManagerClientProps {
   tourCurrency?: string;
   tourStartDate: string | null;
   tourEndDate: string | null;
-  /** Whether the ?filter=conflicts query is set. Read on the SERVER and passed
-   *  down as a prop instead of via useSearchParams() — the latter (with no
-   *  Suspense boundary) is the one App-Router anomaly this client had, and the
-   *  page already knows the value. */
+  /** ?filter=conflicts — read on the server, passed down. */
   conflictsOnly: boolean;
+  /** Admin / manager: add, edit, remove. Members see the list only. */
+  canEdit: boolean;
+  /** ?assign=<personId> from People › Assign to tour. */
+  assignPersonId?: string | null;
+  /** Workspace admin — may change app access (the database's rule). */
+  canChangeLogin?: boolean;
 }
 
-type StatusFilter = 'all' | PersonnelStatus;
+type GroupMode = 'dept' | 'az';
 
-const STATUS_OPTIONS: ReadonlyArray<{ value: StatusFilter; label: string }> = [
-  { value: 'all', label: 'All' },
-  { value: 'confirmed', label: 'Confirmed' },
-  { value: 'tentative', label: 'Tentative' },
-  { value: 'awaiting_contract', label: 'Awaiting contract' },
-  { value: 'cancelled', label: 'Cancelled' },
-  { value: 'fired', label: 'Fired' },
-];
+type CrewLoad = { ok: true; personnel: PersonnelListItem[] } | { ok: false; error: string };
 
-const STATUS_BADGE: Record<PersonnelStatus, { label: string; bg: string; fg: string }> = {
-  confirmed: {
-    label: 'Confirmed',
-    bg: 'color-mix(in srgb, var(--color-lp-success, #10b981) 12%, transparent)',
-    fg: 'var(--color-lp-success, #10b981)',
-  },
-  tentative: {
-    label: 'Tentative',
-    bg: 'color-mix(in srgb, var(--color-lp-orange) 10%, transparent)',
-    fg: 'var(--color-lp-orange)',
-  },
-  awaiting_contract: {
-    label: 'Awaiting contract',
-    bg: 'var(--lp-panel)',
-    fg: 'var(--lp-text-secondary)',
-  },
-  cancelled: {
-    label: 'Cancelled',
-    bg: 'var(--lp-panel)',
-    fg: 'var(--lp-text-tertiary)',
-  },
-  fired: {
-    label: 'Fired',
-    bg: 'color-mix(in srgb, var(--color-lp-error) 10%, transparent)',
-    fg: 'var(--color-lp-error)',
-  },
-};
+async function loadCrew(tourId: string): Promise<CrewLoad> {
+  try {
+    const res = await fetch(`/api/tours/${tourId}/personnel`, { cache: 'no-store' });
+    if (!res.ok) {
+      const body = (await res.json().catch(() => null)) as { error?: string } | null;
+      return { ok: false, error: body?.error ?? `Couldn't load the crew (${res.status})` };
+    }
+    return { ok: true, personnel: ((await res.json()) as PersonnelListResponse).personnel };
+  } catch {
+    return { ok: false, error: "Couldn't load the crew — check your connection" };
+  }
+}
 
-function formatRange(start: string | null, end: string | null): string {
-  if (!start && !end) return '—';
-  const fmt = (iso: string) => {
-    const d = new Date(iso);
-    return d.toLocaleDateString(undefined, {
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric',
+const NO_CONFLICTS: ConflictsResponse = { by_canonical: {}, by_email: {} };
+
+/** Clashes are informational: any failure is "none". */
+async function loadConflicts(
+  tourId: string,
+  rows: PersonnelListItem[],
+  start: string | null,
+  end: string | null,
+): Promise<ConflictsResponse> {
+  if (rows.length === 0 || !start || !end) return NO_CONFLICTS;
+  const canonicalIds = Array.from(new Set(rows.map((r) => r.canonical_person_id).filter((v): v is string => !!v)));
+  const emails = Array.from(
+    new Set(rows.filter((r) => !r.canonical_person_id && r.email).map((r) => (r.email as string).toLowerCase())),
+  );
+  try {
+    const res = await fetch(`/api/tours/${tourId}/personnel/conflicts`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ canonical_person_ids: canonicalIds, emails, start_date: start, end_date: end }),
     });
-  };
-  if (start && end) return start === end ? fmt(start) : `${fmt(start)} – ${fmt(end)}`;
-  return fmt((start ?? end) as string);
+    return res.ok ? ((await res.json()) as ConflictsResponse) : NO_CONFLICTS;
+  } catch {
+    return NO_CONFLICTS;
+  }
+}
+
+function fmtDay(iso: string): string {
+  const d = new Date(`${iso.slice(0, 10)}T12:00:00`);
+  return Number.isNaN(d.getTime()) ? iso : d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+}
+function fmtRange(start: string | null, end: string | null): string {
+  if (start && end) return start === end ? fmtDay(start) : `${fmtDay(start)} – ${fmtDay(end)}`;
+  if (start) return `From ${fmtDay(start)}`;
+  if (end) return `Until ${fmtDay(end)}`;
+  return '';
+}
+function initials(name: string): string {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  return ((parts[0]?.[0] ?? '') + (parts.length > 1 ? parts[parts.length - 1][0] : '')).toUpperCase() || '?';
+}
+
+/** What the access column says. Managers can't read invites or others'
+ *  access (RLS), so for them a login shows without its preset. */
+export function loginLabel(l: LoginState): string {
+  switch (l.state) {
+    case 'full':
+      return 'Sees every tour';
+    case 'member':
+      return l.preset === 'custom' ? 'Custom access' : l.preset ? PRESET_LABELS[l.preset] : 'Has login';
+    case 'invited':
+      return l.preset && l.preset !== 'custom' ? `Invited · ${PRESET_LABELS[l.preset]}` : 'Invited';
+    default:
+      return 'No login';
+  }
 }
 
 export function PersonnelManagerClient({
@@ -107,102 +127,55 @@ export function PersonnelManagerClient({
   tourStartDate,
   tourEndDate,
   conflictsOnly,
+  canEdit,
+  assignPersonId = null,
+  canChangeLogin = false,
 }: PersonnelManagerClientProps) {
   const { showToast } = useToast();
   const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [list, setList] = useState<PersonnelListItem[]>([]);
-  const [conflicts, setConflicts] = useState<ConflictsResponse>({
-    by_canonical: {},
-    by_email: {},
-  });
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
-  const [tagFilter, setTagFilter] = useState<string>('all');
+  const [conflicts, setConflicts] = useState<ConflictsResponse>(NO_CONFLICTS);
   const [search, setSearch] = useState('');
+  const [group, setGroup] = useState<GroupMode>('dept');
   const [manageId, setManageId] = useState<string | null>(null);
-  const [addOpen, setAddOpen] = useState(false);
+  const [addOpen, setAddOpen] = useState(!!assignPersonId && canEdit);
   // The person's People record, opened from the Manage panel's "Edit person".
   const [personId, setPersonId] = useState<string | null>(null);
 
-  const fetchList = useCallback(async () => {
-    try {
-      const res = await fetch(`/api/tours/${tourId}/personnel`, {
-        cache: 'no-store',
-      });
-      if (!res.ok) {
-        const body = (await res.json().catch(() => null)) as { error?: string } | null;
-        setError(body?.error ?? `Failed to load (${res.status})`);
-        return;
-      }
-      const body = (await res.json()) as PersonnelListResponse;
-      setList(body.personnel);
+  // Loads return values; state is set only in callbacks (never synchronously
+  // inside an effect).
+  const applyLoad = useCallback((r: CrewLoad) => {
+    if (r.ok) {
+      setList(r.personnel);
       setError(null);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Network error');
-    }
-  }, [tourId]);
-
-  const fetchConflicts = useCallback(
-    async (rows: PersonnelListItem[]) => {
-      if (rows.length === 0 || !tourStartDate || !tourEndDate) {
-        setConflicts({ by_canonical: {}, by_email: {} });
-        return;
-      }
-      const canonicalIds = Array.from(
-        new Set(
-          rows
-            .map((r) => r.canonical_person_id)
-            .filter((v): v is string => !!v),
-        ),
-      );
-      const emails = Array.from(
-        new Set(
-          rows
-            .filter((r) => !r.canonical_person_id && r.email)
-            .map((r) => (r.email as string).toLowerCase()),
-        ),
-      );
-      try {
-        const res = await fetch(`/api/tours/${tourId}/personnel/conflicts`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            canonical_person_ids: canonicalIds,
-            emails,
-            start_date: tourStartDate,
-            end_date: tourEndDate,
-          }),
-        });
-        if (res.ok) {
-          const body = (await res.json()) as ConflictsResponse;
-          setConflicts(body);
-        }
-      } catch {
-        // Conflicts are informational; never block.
-      }
-    },
-    [tourId, tourStartDate, tourEndDate],
-  );
+    } else setError(r.error);
+  }, []);
+  const fetchList = useCallback(() => loadCrew(tourId).then(applyLoad), [tourId, applyLoad]);
 
   useEffect(() => {
-    let cancelled = false;
-    void fetchList().finally(() => {
-      if (!cancelled) setLoading(false);
+    let live = true;
+    void loadCrew(tourId).then((r) => {
+      if (!live) return;
+      applyLoad(r);
+      setLoading(false);
     });
     return () => {
-      cancelled = true;
+      live = false;
     };
-  }, [fetchList]);
+  }, [tourId, applyLoad]);
 
-  // Re-run conflict check whenever the list changes.
+  // Clashes with your other tours — re-checked whenever the list changes.
   useEffect(() => {
-    void fetchConflicts(list);
-  }, [list, fetchConflicts]);
+    let live = true;
+    void loadConflicts(tourId, list, tourStartDate, tourEndDate).then((c) => {
+      if (live) setConflicts(c);
+    });
+    return () => {
+      live = false;
+    };
+  }, [tourId, list, tourStartDate, tourEndDate]);
 
-  // Realtime sync — refetch on any tour_personnel change for this tour. The
-  // connection status is not shown here (the shell's ConnectionIndicator is the
-  // single Live pill; the per-surface one was redundant — revamp Phase 0).
   useRealtimeRows({
     table: 'tour_personnel',
     filterColumn: 'tour_id',
@@ -212,391 +185,230 @@ export function PersonnelManagerClient({
     },
   });
 
-  const handleRefresh = async () => {
-    setRefreshing(true);
-    await fetchList();
-    setRefreshing(false);
-  };
-
-  // Derived data
-  const knownTags = useMemo(() => {
-    const set = new Set<string>();
-    for (const p of list) for (const t of p.tags) set.add(t);
-    return Array.from(set).sort();
-  }, [list]);
-
-  function conflictsFor(p: PersonnelListItem): ConflictRow[] {
-    if (p.canonical_person_id) {
-      return conflicts.by_canonical[p.canonical_person_id] ?? [];
-    }
-    if (p.email) {
-      return conflicts.by_email[p.email.toLowerCase()] ?? [];
-    }
-    return [];
-  }
+  const conflictsFor = useCallback(
+    (p: PersonnelListItem): ConflictRow[] => {
+      if (p.canonical_person_id) return conflicts.by_canonical[p.canonical_person_id] ?? [];
+      if (p.email) return conflicts.by_email[p.email.toLowerCase()] ?? [];
+      return [];
+    },
+    [conflicts],
+  );
 
   const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    return list.filter((p) => {
-      // Sprint 9 §8 — ?filter=conflicts narrows to people with
-      // at least one cross-tour conflict. Linked from the
-      // Operations summary's Conflicts card.
-      if (conflictsOnly && conflictsFor(p).length === 0) return false;
-      if (statusFilter !== 'all' && p.status !== statusFilter) return false;
-      if (tagFilter !== 'all' && !p.tags.includes(tagFilter)) return false;
-      if (!q) return true;
-      const hay = `${p.display_name} ${p.email ?? ''} ${p.role}`.toLowerCase();
-      return hay.includes(q);
-    });
-    // conflictsFor closes over `conflicts` state; include it.
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- conflictsFor is a closure over conflicts state
-  }, [list, search, statusFilter, tagFilter, conflictsOnly, conflicts]);
+    const words = search.toLowerCase().split(/\s+/).filter(Boolean);
+    return list
+      .filter((p) => {
+        if (conflictsOnly && conflictsFor(p).length === 0) return false;
+        if (!words.length) return true;
+        const hay = `${p.display_name} ${p.email ?? ''} ${p.role} ${ROLE_TAG_LABEL[p.role_tag as RoleTag] ?? ''}`.toLowerCase();
+        return words.every((w) => hay.includes(w));
+      })
+      .sort((a, b) => a.display_name.localeCompare(b.display_name, undefined, { sensitivity: 'base' }));
+  }, [list, search, conflictsOnly, conflictsFor]);
 
+  const groups = useMemo(
+    () => (group === 'dept' ? groupByDepartment(filtered, (p) => p.role_tag) : [{ dept: null, rows: filtered }]),
+    [filtered, group],
+  );
+  const clashCount = useMemo(() => list.filter((p) => conflictsFor(p).length > 0).length, [list, conflictsFor]);
   const manageMember = manageId ? list.find((p) => p.id === manageId) ?? null : null;
-  const excludePersonIds = useMemo(() => list.map((p) => p.person_id), [list]);
 
   if (loading) {
     return (
-      <div
-        className="flex items-center"
-        style={{
-          gap: 'var(--lp-space-2)',
-          padding: 'var(--lp-space-6)',
-          color: 'var(--lp-text-tertiary)',
-        }}
-      >
-        <Loader2 size={14} className="animate-spin" />
-        Loading personnel…
+      <div className="cr-muted" style={{ fontSize: 'var(--lp-text-sm)' }}>
+        <Loader2 size={14} className="animate-spin" style={{ display: 'inline', marginRight: 6 }} />
+        Loading the crew…
       </div>
     );
   }
-
   if (error) {
     return (
-      <div
-        role="alert"
-        style={{
-          padding: 'var(--lp-space-3)',
-          fontSize: 'var(--lp-text-sm)',
-          color: 'var(--color-lp-error)',
-          background: 'color-mix(in srgb, var(--color-lp-error) 8%, transparent)',
-          border: '1px solid color-mix(in srgb, var(--color-lp-error) 25%, transparent)',
-          borderRadius: 'var(--lp-radius-md)',
-        }}
-      >
+      <div className="cr-error" role="alert">
         {error}
       </div>
     );
   }
 
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--lp-space-4)' }}>
-      {/* Header strip with realtime + refresh + add */}
-      <div
-        className="flex flex-wrap items-center justify-between"
-        style={{ gap: 'var(--lp-space-3)' }}
-      >
-        <div className="flex items-center" style={{ gap: 'var(--lp-space-2)' }}>
-          <span
-            style={{
-              fontSize: 'var(--lp-text-sm)',
-              color: 'var(--lp-text-secondary)',
-            }}
-          >
-            {list.length} assigned
-          </span>
-          {conflictsOnly ? (
-            <a
-              href={`/operations/${tourId}/personnel`}
-              className="lp-label-caps inline-flex items-center"
-              style={{
-                gap: 4,
-                padding: '2px 8px',
-                fontSize: 'var(--lp-text-2xs)',
-                color: 'var(--color-lp-orange)',
-                background: 'color-mix(in srgb, var(--color-lp-orange) 10%, transparent)',
-                border: '1px solid color-mix(in srgb, var(--color-lp-orange) 30%, transparent)',
-                borderRadius: 999,
-                textDecoration: 'none',
-              }}
-              title="Click to clear filter"
-            >
-              Conflicts only · clear ✕
-            </a>
-          ) : null}
-        </div>
-        <div className="flex items-center" style={{ gap: 'var(--lp-space-2)' }}>
-          <button
-            type="button"
-            onClick={() => void handleRefresh()}
-            disabled={refreshing}
-            className="btn-transition inline-flex items-center"
-            style={{
-              gap: 4,
-              padding: 'var(--lp-space-2) var(--lp-space-3)',
-              fontSize: 'var(--lp-text-sm)',
-              color: 'var(--lp-text-secondary)',
-              background: 'transparent',
-              border: '1px solid var(--lp-border-strong)',
-              borderRadius: 'var(--lp-radius-md)',
-              cursor: 'pointer',
-            }}
-          >
-            <RefreshCw
-              size={14}
-              strokeWidth={2.4}
-              className={refreshing ? 'animate-spin' : ''}
-            />
-            Refresh
-          </button>
-          <button
-            type="button"
-            onClick={() => setAddOpen(true)}
-            className="btn-transition btn-primary-press inline-flex items-center"
-            style={{
-              gap: 4,
-              padding: 'var(--lp-space-2) var(--lp-space-3)',
-              fontSize: 'var(--lp-text-sm)',
-              fontWeight: 'var(--lp-weight-semibold)',
-              color: 'var(--lp-text-inverse)',
-              background: 'var(--color-lp-orange)',
-              border: '1px solid transparent',
-              borderRadius: 'var(--lp-radius-md)',
-              cursor: 'pointer',
-            }}
-          >
-            <Plus size={14} strokeWidth={2.4} />
-            Add personnel
-          </button>
-        </div>
-      </div>
+  const facts = [`${list.length} on the crew`, clashCount ? `${clashCount} ${clashCount === 1 ? 'clash' : 'clashes'}` : null]
+    .filter(Boolean)
+    .join(' · ');
 
-      {/* Filter row */}
-      <div
-        className="flex flex-wrap items-center"
-        style={{ gap: 'var(--lp-space-2)' }}
-      >
-        <FilterSelect
-          label="Status"
-          value={statusFilter}
-          onChange={(v) => setStatusFilter(v as StatusFilter)}
-          options={STATUS_OPTIONS}
-        />
-        {knownTags.length > 0 ? (
-          <FilterSelect
-            label="Tag"
-            value={tagFilter}
-            onChange={setTagFilter}
-            options={[
-              { value: 'all', label: 'Any' },
-              ...knownTags.map((t) => ({ value: t, label: t })),
-            ]}
-          />
-        ) : null}
+  return (
+    <div className="cr-page" style={{ containerType: 'inline-size' }}>
+      <p className="cr-facts">{facts}</p>
+
+      <div className="cr-toolbar">
         <input
-          type="text"
-          placeholder="Search by name, email, or role…"
+          className="cr-input cr-search"
+          type="search"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          style={{
-            flex: 1,
-            minWidth: 200,
-            padding: 'var(--lp-space-2) var(--lp-space-3)',
-            fontSize: 'var(--lp-text-sm)',
-            color: 'var(--lp-text)',
-            background: 'var(--lp-bg)',
-            border: '1px solid var(--lp-border-strong)',
-            borderRadius: 'var(--lp-radius-md)',
-            outline: 'none',
-          }}
+          placeholder="Search crew"
+          aria-label="Search crew"
         />
+        <div className="cr-seg" role="group" aria-label="Group by">
+          <button type="button" className={group === 'dept' ? 'is-on' : ''} onClick={() => setGroup('dept')} aria-pressed={group === 'dept'}>
+            Department
+          </button>
+          <button type="button" className={group === 'az' ? 'is-on' : ''} onClick={() => setGroup('az')} aria-pressed={group === 'az'}>
+            A–Z
+          </button>
+        </div>
+        {conflictsOnly ? (
+          <a href={`/operations/${tourId}/personnel`} className="cr-chip is-on" style={{ textDecoration: 'none' }}>
+            Clashes only · clear
+          </a>
+        ) : null}
+        <span className="cr-spacer" />
+        {canEdit ? (
+          <button type="button" className="cr-btn is-primary" onClick={() => setAddOpen(true)}>
+            <Plus size={14} strokeWidth={2.4} />
+            Add crew
+          </button>
+        ) : null}
       </div>
 
-      {/* List */}
-      {filtered.length === 0 ? (
-        <div
-          style={{
-            padding: 'var(--lp-space-6)',
-            textAlign: 'center',
-            fontSize: 'var(--lp-text-sm)',
-            color: 'var(--lp-text-tertiary)',
-            background: 'var(--lp-panel)',
-            border: '1px dashed var(--lp-border-strong)',
-            borderRadius: 'var(--lp-radius-md)',
-          }}
-        >
-          {list.length === 0
-            ? 'No personnel assigned yet — click + Add personnel to get started.'
-            : 'No personnel match your filters.'}
-        </div>
-      ) : (
-        <ul
-          style={{
-            listStyle: 'none',
-            padding: 0,
-            margin: 0,
-            display: 'flex',
-            flexDirection: 'column',
-            gap: 'var(--lp-space-2)',
-          }}
-        >
-          {filtered.map((p) => {
-            const personConflicts = conflictsFor(p);
-            const badge = STATUS_BADGE[p.status];
-            return (
-              <li key={p.id}>
-                <button
-                  type="button"
-                  onClick={() => setManageId(p.id)}
-                  className="btn-transition flex w-full items-start"
-                  style={{
-                    gap: 'var(--lp-space-3)',
-                    padding: 'var(--lp-space-3) var(--lp-space-4)',
-                    background: 'var(--lp-surface)',
-                    border: '1px solid var(--lp-border-subtle)',
-                    borderRadius: 'var(--lp-radius-md)',
-                    cursor: 'pointer',
-                    textAlign: 'left',
-                  }}
-                >
-                  <span style={{ flex: 1, minWidth: 0 }}>
-                    <span className="flex items-center" style={{ gap: 'var(--lp-space-2)' }}>
-                      <span
-                        style={{
-                          fontSize: 'var(--lp-text-base)',
-                          fontWeight: 'var(--lp-weight-semibold)',
-                          color: 'var(--lp-text)',
-                        }}
-                      >
-                        {toTitleCase(p.display_name)}
-                      </span>
-                      <span
-                        style={{
-                          fontSize: 'var(--lp-text-sm)',
-                          color: 'var(--lp-text-secondary)',
-                        }}
-                      >
-                        {p.role}
-                      </span>
-                    </span>
-                    <span
-                      className="block"
-                      style={{
-                        marginTop: 2,
-                        fontSize: 'var(--lp-text-xs)',
-                        color: 'var(--lp-text-tertiary)',
-                      }}
-                    >
-                      {formatRange(p.starts_on, p.ends_on)}
-                      {p.tags.length > 0 ? ` · ${p.tags.join(', ')}` : ''}
-                    </span>
-                  </span>
-                  <span
-                    className="lp-label-caps"
-                    style={{
-                      flexShrink: 0,
-                      padding: '2px 8px',
-                      fontSize: 'var(--lp-text-2xs)',
-                      fontWeight: 'var(--lp-weight-semibold)',
-                      color: badge.fg,
-                      background: badge.bg,
-                      border: `1px solid ${badge.fg}`,
-                      borderRadius: 999,
-                    }}
-                  >
-                    {badge.label}
-                  </span>
-                </button>
-                {personConflicts.length > 0 ? (
-                  <ConflictBanner personName={toTitleCase(p.display_name)} conflicts={personConflicts} />
-                ) : null}
-              </li>
-            );
-          })}
-        </ul>
-      )}
+      <div className="cr-panel">
+        {filtered.length === 0 ? (
+          <div className="cr-empty">
+            {list.length === 0 ? (
+              canEdit ? (
+                <>
+                  No one on this tour yet.{' '}
+                  <button type="button" className="cr-chip is-on" onClick={() => setAddOpen(true)} style={{ marginLeft: 6 }}>
+                    <Plus size={12} /> Add crew
+                  </button>
+                </>
+              ) : (
+                'No one on this tour yet.'
+              )
+            ) : (
+              'No one matches.'
+            )}
+          </div>
+        ) : (
+          groups.map((g) => (
+            <div key={g.dept ?? 'all'}>
+              {g.dept ? (
+                <div className="cr-group">
+                  {DEPARTMENT_LABELS[g.dept]} · {g.rows.length}
+                </div>
+              ) : null}
+              {g.rows.map((p) => (
+                <CrewRow
+                  key={p.id}
+                  p={p}
+                  clashes={conflictsFor(p)}
+                  whole={isWholeTour(p.starts_on, p.ends_on, tourStartDate, tourEndDate)}
+                  onOpen={canEdit ? () => setManageId(p.id) : undefined}
+                />
+              ))}
+            </div>
+          ))
+        )}
+      </div>
 
-      <PersonnelManageSlideOver
-        open={!!manageMember}
-        tourId={tourId}
-        tourCurrency={tourCurrency}
-        member={manageMember}
-        onClose={() => setManageId(null)}
-        onSaved={() => void fetchList()}
-        onRemoved={() => {
-          showToast('Personnel removed.');
-          void fetchList();
-        }}
-        onEditPerson={(id) => {
-          setManageId(null);
-          setPersonId(id);
-        }}
-      />
-
-      <PersonnelDetailSlideOver
-        panel={personId ? { mode: 'edit', id: personId } : null}
-        onClose={() => setPersonId(null)}
-        onSaved={() => void fetchList()}
-      />
-
-      <AddPersonnelSlideOver
-        open={addOpen}
-        tourId={tourId}
-        excludePersonIds={excludePersonIds}
-        tourStartDate={tourStartDate}
-        tourEndDate={tourEndDate}
-        onClose={() => setAddOpen(false)}
-        onAdded={() => {
-          showToast('Personnel added.');
-          void fetchList();
-        }}
-      />
+      {canEdit ? (
+        <>
+          <PersonnelManageSlideOver
+            open={!!manageMember}
+            tourId={tourId}
+            tourCurrency={tourCurrency}
+            member={manageMember}
+            onClose={() => setManageId(null)}
+            onSaved={() => void fetchList()}
+            onRemoved={() => {
+              showToast('Removed from the crew');
+              void fetchList();
+            }}
+            onEditPerson={(id) => {
+              setManageId(null);
+              setPersonId(id);
+            }}
+            canChangeLogin={canChangeLogin}
+          />
+          <PersonnelDetailSlideOver
+            panel={personId ? { mode: 'edit', id: personId } : null}
+            onClose={() => setPersonId(null)}
+            onSaved={() => void fetchList()}
+          />
+          <AddCrewSlideOver
+            open={addOpen}
+            tourId={tourId}
+            tourStartDate={tourStartDate}
+            tourEndDate={tourEndDate}
+            preselectPersonId={assignPersonId}
+            onClose={() => {
+              setAddOpen(false);
+              void fetchList();
+            }}
+            onAdded={() => void fetchList()}
+          />
+        </>
+      ) : null}
     </div>
   );
 }
 
-interface FilterSelectProps<T extends string> {
-  label: string;
-  value: T;
-  onChange: (v: T) => void;
-  options: ReadonlyArray<{ value: T; label: string }>;
-}
-
-function FilterSelect<T extends string>({
-  label,
-  value,
-  onChange,
-  options,
-}: FilterSelectProps<T>) {
-  return (
-    <label
-      className="inline-flex items-center"
-      style={{
-        gap: 6,
-        fontSize: 'var(--lp-text-xs)',
-        color: 'var(--lp-text-tertiary)',
-      }}
-    >
-      <span>{label}:</span>
-      <select
-        value={value}
-        onChange={(e) => onChange(e.target.value as T)}
-        style={{
-          padding: '2px 8px',
-          fontSize: 'var(--lp-text-sm)',
-          color: 'var(--lp-text)',
-          background: 'var(--lp-bg)',
-          border: '1px solid var(--lp-border-strong)',
-          borderRadius: 'var(--lp-radius-sm)',
-          cursor: 'pointer',
-        }}
-      >
-        {options.map((o) => (
-          <option key={o.value} value={o.value}>
-            {o.label}
-          </option>
-        ))}
-      </select>
-    </label>
+function CrewRow({
+  p,
+  clashes,
+  whole,
+  onOpen,
+}: {
+  p: PersonnelListItem;
+  clashes: ConflictRow[];
+  whole: boolean;
+  onOpen?: () => void;
+}) {
+  const name = toTitleCase(p.display_name);
+  const tag = p.role_tag && p.role_tag !== 'other' ? ROLE_TAG_LABEL[p.role_tag as RoleTag] : null;
+  const first = clashes[0];
+  const clashText = first
+    ? `Also on ${first.tour_name}${fmtRange(first.start_date, first.end_date) ? `, ${fmtRange(first.start_date, first.end_date)}` : ''}${
+        clashes.length > 1 ? ` +${clashes.length - 1}` : ''
+      }`
+    : null;
+  const clashTitle = clashes
+    .map((c) => `${c.tour_name} (${c.workspace_name}) as ${c.role}${fmtRange(c.start_date, c.end_date) ? `, ${fmtRange(c.start_date, c.end_date)}` : ''}`)
+    .join('\n');
+  const login = loginLabel(p.login);
+  const body = (
+    <>
+      <span className="cr-avatar" aria-hidden>
+        {initials(name)}
+      </span>
+      <span style={{ minWidth: 0 }}>
+        <span className="cr-name" style={{ display: 'block' }}>{name}</span>
+        {clashText ? (
+          <span className="cr-sub cr-warn" style={{ display: 'block' }} title={clashTitle}>
+            <AlertTriangle size={11} style={{ display: 'inline', marginRight: 4, verticalAlign: '-1px' }} aria-hidden />
+            {clashText}
+          </span>
+        ) : (
+          <span className="cr-sub" style={{ display: 'block' }}>
+            {whole ? 'Whole tour' : fmtRange(p.starts_on, p.ends_on)}
+          </span>
+        )}
+      </span>
+      <span className="cr-role">
+        {p.role}
+        {tag ? <span className="cr-tag"> · {tag}</span> : null}
+      </span>
+      <span className={`cr-access${p.login.state === 'none' ? ' is-none' : ''}`}>
+        {p.login.state !== 'none' ? (
+          <KeyRound size={11} style={{ display: 'inline', marginRight: 4, verticalAlign: '-1px' }} aria-hidden />
+        ) : null}
+        {login}
+      </span>
+      <span aria-hidden className="cr-muted">{onOpen ? <ChevronRight size={14} /> : null}</span>
+    </>
+  );
+  return onOpen ? (
+    <button type="button" className="cr-row" onClick={onOpen} aria-label={`${name}, ${p.role}`}>
+      {body}
+    </button>
+  ) : (
+    <div className="cr-row">{body}</div>
   );
 }

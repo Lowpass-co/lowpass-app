@@ -42,7 +42,6 @@ interface MyScheduleResponse {
     role: string;
     starts_on: string | null;
     ends_on: string | null;
-    status: string;
   } | null;
   /** Oct 2026 — the SAME figures Payroll shows for this person (one formula,
    *  one place rates are typed), in the tour's currency. Null when there's no
@@ -155,7 +154,7 @@ export async function GET(
       .select(
         // The frozen daily-rate column is intentionally NOT selected — crew pay
         // reads the SSOT (personnel_rate_lines) below; it is retired in migration 231.
-        'role, employment_type, starts_on, ends_on, status',
+        'role, employment_type, starts_on, ends_on',
       )
       .eq('tour_id', tourId)
       .eq('person_id', personId)
@@ -167,13 +166,11 @@ export async function GET(
         role: string;
         starts_on: string | null;
         ends_on: string | null;
-        status: string;
       };
       assignment = {
         role: a.role,
         starts_on: a.starts_on,
         ends_on: a.ends_on,
-        status: a.status,
       };
       const days = daysBetweenInclusive(a.starts_on, a.ends_on);
 

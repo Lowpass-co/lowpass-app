@@ -14,7 +14,6 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { parseRoutingDate } from '@/lib/utils';
-import { toTitleCase } from '@/lib/text/toTitleCase';
 import type { OperationsReadiness } from '@/server/operations/getOperationsReadiness';
 
 function formatShowDate(iso: string | null): string {
@@ -48,8 +47,7 @@ export function RoutingStatLine({
 }) {
   const { shows, advances, budget, pending } = readiness;
   const [pendingOpen, setPendingOpen] = useState(false);
-  const pendingCount =
-    pending.awaitingContract.length + pending.tentative.length + pending.showsWithoutVenue.length;
+  const pendingCount = pending.showsWithoutVenue.length;
 
   const linkStyle: React.CSSProperties = { color: 'inherit', textDecoration: 'none' };
   const num: React.CSSProperties = { color: 'var(--lp-text)', fontWeight: 500 };
@@ -88,10 +86,7 @@ function PendingDetail({
   tourId: string;
   pending: OperationsReadiness['pending'];
 }) {
-  const empty =
-    pending.awaitingContract.length === 0 &&
-    pending.tentative.length === 0 &&
-    pending.showsWithoutVenue.length === 0;
+  const empty = pending.showsWithoutVenue.length === 0;
   return (
     <div
       style={{
@@ -100,24 +95,6 @@ function PendingDetail({
         background: 'color-mix(in srgb, var(--color-lp-orange) 3%, transparent)',
       }}
     >
-      <PendingGroup
-        title="Awaiting contract"
-        items={pending.awaitingContract.map((p) => ({
-          key: p.id,
-          primary: toTitleCase(p.display_name),
-          secondary: p.role,
-          href: `/operations/${tourId}/personnel`,
-        }))}
-      />
-      <PendingGroup
-        title="Tentative"
-        items={pending.tentative.map((p) => ({
-          key: p.id,
-          primary: toTitleCase(p.display_name),
-          secondary: p.role,
-          href: `/operations/${tourId}/personnel`,
-        }))}
-      />
       <PendingGroup
         title="Shows missing venue"
         items={pending.showsWithoutVenue.map((s) => ({

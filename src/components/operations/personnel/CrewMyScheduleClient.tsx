@@ -55,14 +55,6 @@ function formatMoney(amount: number | null, currency: string | null): string {
   }
 }
 
-const STATUS_LABEL: Record<string, string> = {
-  confirmed: 'confirmed',
-  tentative: 'tentative',
-  awaiting_contract: 'awaiting contract',
-  cancelled: 'cancelled',
-  fired: 'cancelled',
-};
-
 export function CrewMyScheduleClient({ tourId }: CrewMyScheduleClientProps) {
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState<MyScheduleResponse | null>(null);
@@ -188,10 +180,6 @@ export function CrewMyScheduleClient({ tourId }: CrewMyScheduleClientProps) {
           <>
             {' · '}
             <span style={{ color: 'var(--lp-text-secondary)' }}>{assignment.role}</span>
-            {' · '}
-            <span style={{ color: 'var(--lp-text-tertiary)' }}>
-              {STATUS_LABEL[assignment.status] ?? assignment.status}
-            </span>
           </>
         ) : null}
       </div>

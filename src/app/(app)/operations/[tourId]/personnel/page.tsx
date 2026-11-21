@@ -1,19 +1,15 @@
 /* ============================================
-   LOWPASS — Operations · Personnel (Sprint 9 §6)
+   LOWPASS — Crew (/operations/[tourId]/personnel)
 
-   /operations/[tourId]/personnel — replaces the placeholder.
-   Three-way role branching:
-     1. Admin/manager OR readonly with operations.personnel.read
-        grant → render <PersonnelManagerClient>.
-     2. Readonly with operations.personnel.my_schedule.read
-        grant (auto-seeded for 'crew' tag holders) → render
-        <CrewMyScheduleClient>.
-     3. Otherwise → in-body 403 panel; sub-nav still visible so
-        the user can navigate sideways.
-
-   Layout chrome (ProductShell + TourHeader) is provided by the
-   parent layout at /operations/[tourId]/layout.tsx — same
-   pattern as Phase 5's Routing page.
+   Tour access (Nov 2026):
+     1. Logistics on this tour → the crew list (<PersonnelManagerClient>);
+        admins / managers can add, edit and remove (canEdit), Members
+        read only. Rates mirror below needs Payroll as well.
+     2. Anyone else who can open the tour → their own schedule
+        (<CrewMyScheduleClient>).
+     3. Otherwise → an in-body "no access" panel.
+   ?assign=<personId> (People › Assign to tour) opens Add crew with that
+   person ticked. Chrome comes from the tour layout (<ShellV3Mount>).
    ============================================ */
 
 import { notFound, redirect } from 'next/navigation';
@@ -34,7 +30,7 @@ export const dynamic = 'force-dynamic';
 
 interface OperationsPersonnelPageProps {
   params: Promise<{ tourId: string }>;
-  searchParams: Promise<{ filter?: string }>;
+  searchParams: Promise<{ filter?: string; assign?: string }>;
 }
 
 /* Sprint 9 §14.11 — SUB_NAV moved to layout. */
@@ -44,7 +40,7 @@ export default async function OperationsTourPersonnelPage({
   searchParams,
 }: OperationsPersonnelPageProps) {
   const { tourId } = await params;
-  const { filter } = await searchParams;
+  const { filter, assign } = await searchParams;
   const conflictsOnly = filter === 'conflicts';
   const supabase = await createServerSupabaseClient();
   const {
@@ -60,7 +56,7 @@ export default async function OperationsTourPersonnelPage({
      paying for two round-trips for nothing. Run it alongside. */
   const [membership, tourRes] = await Promise.all([
     getActiveMembership(supabase, user.id),
-    supabase.from('tours').select('id, name, currency, start_date, end_date').eq('id', tourId).maybeSingle(),
+    supabase.from('tours').select('id, name, currency, start_date, end_date, workspace_id').eq('id', tourId).maybeSingle(),
   ]);
   if (!membership) {
     return <NoWorkspacePanel />;
@@ -82,6 +78,7 @@ export default async function OperationsTourPersonnelPage({
     currency: string | null;
     start_date: string | null;
     end_date: string | null;
+    workspace_id: string;
   };
 
   // PAY-09 — read-only rates mirror (name/role/type/rate/per-diem). Sourced
@@ -141,6 +138,9 @@ export default async function OperationsTourPersonnelPage({
             tourStartDate={tourRow.start_date}
             tourEndDate={tourRow.end_date}
             conflictsOnly={conflictsOnly}
+            canEdit={!!access?.manager}
+            canChangeLogin={access?.role === 'admin' && membership.workspace_id === tourRow.workspace_id}
+            assignPersonId={typeof assign === 'string' && assign ? assign : null}
             currency={tourRow.currency ?? 'GBP'}
             rateMirror={rateMirror}
             showRates={canSeeRates}
@@ -160,6 +160,9 @@ function ManagerSurface({
   tourStartDate,
   tourEndDate,
   conflictsOnly,
+  canEdit,
+  canChangeLogin,
+  assignPersonId,
   currency,
   rateMirror,
   showRates,
@@ -168,6 +171,9 @@ function ManagerSurface({
   tourStartDate: string | null;
   tourEndDate: string | null;
   conflictsOnly: boolean;
+  canEdit: boolean;
+  canChangeLogin: boolean;
+  assignPersonId: string | null;
   currency: string;
   rateMirror: RateMirrorRow[];
   /** Rates are money — only with Payroll access. */
@@ -186,6 +192,9 @@ function ManagerSurface({
         tourStartDate={tourStartDate}
         tourEndDate={tourEndDate}
         conflictsOnly={conflictsOnly}
+        canEdit={canEdit}
+        canChangeLogin={canChangeLogin}
+        assignPersonId={assignPersonId}
       />
       {/* PAY-09 — read-only rates mirror; the ONE write surface is Payroll. */}
       {showRates ? <PersonnelRatesMirror tourId={tourId} currency={currency} rows={rateMirror} /> : null}

@@ -35,7 +35,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
 
   const { data: rows, error } = await supabase
     .from('tour_personnel')
-    .select('id, tour_id, role, status, tours(name, start_date)')
+    .select('id, tour_id, role, tours(name, start_date)')
     .eq('person_id', personId)
     .eq('workspace_id', membership.workspace_id);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
@@ -44,7 +44,6 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
     id: string;
     tour_id: string;
     role: string;
-    status: string | null;
     tours: TourRel | TourRel[] | null;
   }>;
   const employment = new Map<string, Employment>();
@@ -71,7 +70,6 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
         startDate: t?.start_date ?? null,
         role: m.role,
         employment: employment.get(m.id) ?? null,
-        status: m.status ?? 'confirmed',
       };
     })
     // Newest tour first; undated last.

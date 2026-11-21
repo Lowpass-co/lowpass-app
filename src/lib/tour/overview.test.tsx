@@ -22,7 +22,6 @@ const facts = (extra: Partial<OverviewFacts> = {}): OverviewFacts => ({
   shows: [],
   settledRoutingIds: new Set(),
   receiptsNeedingDetails: 0,
-  unconfirmedCrew: 0,
   linesOverEstimate: 0,
   money: null,
   production: [],
@@ -62,7 +61,6 @@ describe('needs you', () => {
       ],
       settledRoutingIds: new Set(['r-2026-11-02']),
       receiptsNeedingDetails: 3,
-      unconfirmedCrew: 1,
       linesOverEstimate: 2,
     });
     expect(needsYou(f).map((n) => [n.id, n.count, n.href])).toEqual([
@@ -70,7 +68,6 @@ describe('needs you', () => {
       ['advance-review', 2, '/advance/t1'],
       ['settle', 1, '/budget/t1?tab=income'],
       ['receipts', 3, '/budget/t1?tab=receipts'],
-      ['crew', 1, '/operations/t1/personnel'],
       ['over-estimate', 2, '/budget/t1?tab=budget'],
     ]);
     expect(needsYou(f)[0].text).toBe('1 day in the next two weeks isn’t fully advanced');
@@ -82,10 +79,9 @@ describe('needs you', () => {
 
   it('a part the viewer cannot open is never mentioned', () => {
     const f = facts({
-      allow: { advance: false, budget: false, receipts: false, crew: false, production: false },
+      allow: { advance: false, budget: false, receipts: false, production: false },
       shows: [show('2026-11-01'), show('2026-11-10', { answered: 0, toReview: 1 })],
       receiptsNeedingDetails: 3,
-      unconfirmedCrew: 1,
       linesOverEstimate: 2,
     });
     expect(needsYou(f)).toEqual([]);

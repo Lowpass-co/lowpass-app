@@ -37,11 +37,8 @@ export async function loadTourOverview(
   const shows = board.rows.filter((r): r is BoardShowRow => r.kind === 'show');
   const showDayIds = shows.filter((s) => isShowDay(s.dayType)).map((s) => s.routingId);
 
-  const [receipts, crewRes, settleRes, packsRes, pnl] = await Promise.all([
+  const [receipts, settleRes, packsRes, pnl] = await Promise.all([
     allow.receipts ? countReceiptsNeedingDetails(supabase, tourId) : Promise.resolve(0),
-    allow.crew
-      ? supabase.from('tour_personnel').select('status').eq('tour_id', tourId)
-      : Promise.resolve({ data: [] as Array<{ status: string | null }>, error: null }),
     allow.budget && showDayIds.length
       ? supabase.from('settlement').select('routing_id, status').in('routing_id', showDayIds)
       : Promise.resolve({ data: [] as Array<{ routing_id: string; status: string | null }>, error: null }),
@@ -56,9 +53,6 @@ export async function loadTourOverview(
     }),
   ]);
 
-  const unconfirmedCrew = ((crewRes.data ?? []) as Array<{ status: string | null }>).filter(
-    (p) => p.status === 'tentative' || p.status === 'awaiting_contract',
-  ).length;
   const settledRoutingIds = new Set(
     ((settleRes.data ?? []) as Array<{ routing_id: string; status: string | null }>)
       .filter((s) => s.status === 'reconciled')
@@ -101,7 +95,6 @@ export async function loadTourOverview(
       })),
       settledRoutingIds,
       receiptsNeedingDetails: receipts,
-      unconfirmedCrew,
       linesOverEstimate,
       money: pnl
         ? {
