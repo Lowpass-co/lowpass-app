@@ -17,14 +17,6 @@ import { ExternalLink, Loader2 } from 'lucide-react';
 import { employmentLabel } from '@/lib/personnel/employment';
 import type { PersonTourRow } from '@/lib/personnel/types';
 
-const STATUS_LABEL: Record<string, string> = {
-  confirmed: 'Confirmed',
-  tentative: 'Tentative',
-  awaiting_contract: 'Awaiting contract',
-  cancelled: 'Cancelled',
-  fired: 'Fired',
-};
-
 export function PersonTours({ personId }: { personId: string | null }) {
   const [tours, setTours] = useState<PersonTourRow[] | null>(null);
   const [failed, setFailed] = useState(false);
@@ -73,7 +65,6 @@ export function PersonTours({ personId }: { personId: string | null }) {
                 <div className="truncate font-medium text-lp-text">{t.tourName}</div>
                 <div className="truncate text-xs text-lp-text-secondary">
                   {t.role} · {employmentLabel(t.employment)}
-                  {t.status !== 'confirmed' ? ` · ${STATUS_LABEL[t.status] ?? t.status}` : ''}
                 </div>
               </div>
               <Link

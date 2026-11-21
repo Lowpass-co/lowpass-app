@@ -6,12 +6,8 @@
    responses in src/app/api/tours/[id]/personnel/<sub>/route.ts.
    ============================================ */
 
-export type PersonnelStatus =
-  | 'confirmed'
-  | 'tentative'
-  | 'awaiting_contract'
-  | 'cancelled'
-  | 'fired';
+/* Crew status (Confirmed / Tentative / …) is RETIRED (Nov 2026, Adam): the
+   tour_personnel.status column stays, unread; every new row is 'confirmed'. */
 
 export interface PersonnelListItem {
   /** tour_personnel.id */
@@ -35,9 +31,9 @@ export interface PersonnelListItem {
   rate_period: string | null;
   starts_on: string | null;
   ends_on: string | null;
-  status: PersonnelStatus;
   canonical_person_id: string | null;
-  tags: string[];
+  /** Their login on THIS tour (src/server/people/tourLogin.ts). */
+  login: import('./crew').LoginState;
 }
 
 export interface PersonnelListResponse {
@@ -96,7 +92,6 @@ export interface MyScheduleResponse {
     role: string;
     starts_on: string | null;
     ends_on: string | null;
-    status: string;
   } | null;
   /** Oct 2026 — Payroll's own figures for the caller, in the tour currency. */
   pay: {
@@ -120,5 +115,4 @@ export interface PersonTourRow {
   role: string;
   /** Principal / Band / Crew on THIS tour (the payroll card). */
   employment: import('./employment').Employment | null;
-  status: string;
 }

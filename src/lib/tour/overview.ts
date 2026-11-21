@@ -36,10 +36,9 @@ export interface OverviewAllow {
   advance: boolean;
   budget: boolean;
   receipts: boolean;
-  crew: boolean;
   production: boolean;
 }
-export const ALLOW_ALL: OverviewAllow = { advance: true, budget: true, receipts: true, crew: true, production: true };
+export const ALLOW_ALL: OverviewAllow = { advance: true, budget: true, receipts: true, production: true };
 
 export interface OverviewFacts {
   tourId: string;
@@ -50,14 +49,13 @@ export interface OverviewFacts {
   /** Show days whose settlement is reconciled. */
   settledRoutingIds: ReadonlySet<string>;
   receiptsNeedingDetails: number;
-  unconfirmedCrew: number;
   linesOverEstimate: number;
   money: { currency: string; plannedCosts: number; spentCosts: number; plannedNet: number } | null;
   production: Array<{ kind: 'rider' | 'channel_list' | 'stage_plot'; count: number; updatedAt: string | null }>;
 }
 
 export interface NeedsYouLine {
-  id: 'advance-soon' | 'advance-review' | 'receipts' | 'settle' | 'crew' | 'over-estimate';
+  id: 'advance-soon' | 'advance-review' | 'receipts' | 'settle' | 'over-estimate';
   count: number;
   /** The sentence, count included: "7 days in the next two weeks aren't fully advanced". */
   text: string;
@@ -122,14 +120,6 @@ export function needsYou(f: OverviewFacts): NeedsYouLine[] {
       ...line(f.receiptsNeedingDetails, `${word(f.receiptsNeedingDetails, 'receipt')} ${f.receiptsNeedingDetails === 1 ? 'needs' : 'need'} details`),
       href: `/budget/${t}?tab=receipts`,
       cta: 'Receipts',
-    });
-  }
-  if (a.crew && f.unconfirmedCrew) {
-    out.push({
-      id: 'crew',
-      ...line(f.unconfirmedCrew, `${word(f.unconfirmedCrew, 'crew member')} not confirmed`),
-      href: `/operations/${t}/personnel`,
-      cta: 'Crew',
     });
   }
   if (a.budget && f.linesOverEstimate) {

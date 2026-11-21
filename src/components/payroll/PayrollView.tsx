@@ -101,10 +101,6 @@ export function PayrollView({
   const [lines, setLines] = useState<RateLineRecord[]>(rateLines);
   const amountMap = useMemo(() => buildAmountMap(lines), [lines]);
 
-  const excludePersonIds = useMemo(
-    () => rates.map((r) => r.person_id).filter((id): id is string => typeof id === 'string'),
-    [rates],
-  );
 
   const { statusOf, saveDayStatus, saveDayType, tourDayTypeOf, isExplicit, fillDays, effectiveCountsFor } = usePayrollGrid(tourId, routingDates as RoutingDay[], payrollEntries);
 
@@ -170,7 +166,6 @@ export function PayrollView({
           <PayrollExportButton tourId={tourId} />
           <AddPersonToTourButton
             tourId={tourId}
-            excludePersonIds={excludePersonIds}
             onAdded={(result) => { if (result?.rateCard) setRates((prev) => [...prev, result.rateCard as Record<string, unknown>]); }}
           />
         </div>

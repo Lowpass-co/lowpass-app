@@ -3,32 +3,30 @@
 /* ============================================
    LOWPASS — <AddPersonToTourButton> (Personnel unification, Phase 2/A)
 
-   Shared "+ Add person" trigger that mounts the standalone
-   <AddPersonnelSlideOver> on ANY surface (Payroll, Rooming, …), not just
-   the Personnel page. Adding assigns the person to the tour roster via
+   Shared "+ Add crew" trigger that mounts the standalone
+   <AddCrewSlideOver> on ANY surface (Payroll, Rooming, …), not just
+   the Crew page. Adding assigns the person to the tour roster via
    POST /api/tours/[id]/personnel — the single source — which seeds their
    rate card; the caller's `onAdded` receives the seeded card so the grid
    updates optimistically (no router.refresh).
 
-   The slide already supports creating a brand-new workspace person inline
-   (POST /api/personnel) before assigning. The adjacent "Workspace
-   personnel ↗" link is the explicit path to the full workspace page.
+   The panel adds several people at once, new ones included, and (for
+   admins) their app access. The adjacent "Workspace personnel ↗" link is
+   the explicit path to the full People page.
    ============================================ */
 
 import { useState } from 'react';
 import Link from 'next/link';
 import { UserPlus, ExternalLink } from 'lucide-react';
-import { AddPersonnelSlideOver } from './AddPersonnelSlideOver';
+import { AddCrewSlideOver } from './AddCrewSlideOver';
 
 export function AddPersonToTourButton({
   tourId,
-  excludePersonIds = [],
   tourStartDate,
   tourEndDate,
   onAdded,
 }: {
   tourId: string;
-  excludePersonIds?: string[];
   tourStartDate?: string | null;
   tourEndDate?: string | null;
   onAdded?: (result?: {
@@ -52,7 +50,7 @@ export function AddPersonToTourButton({
         title="Add a person to this tour's roster"
       >
         <UserPlus className="h-4 w-4" aria-hidden />
-        Add person
+        Add crew
       </button>
       <Link
         href="/personnel"
@@ -67,10 +65,9 @@ export function AddPersonToTourButton({
         <ExternalLink className="h-3 w-3" aria-hidden />
       </Link>
 
-      <AddPersonnelSlideOver
+      <AddCrewSlideOver
         open={open}
         tourId={tourId}
-        excludePersonIds={excludePersonIds}
         tourStartDate={tourStartDate}
         tourEndDate={tourEndDate}
         onClose={() => setOpen(false)}

@@ -44,13 +44,6 @@ export interface ReadinessRoutingDate {
   venue_name: string | null;
 }
 
-export interface ReadinessPendingPersonnel {
-  id: string;
-  display_name: string;
-  role: string;
-  status: string;
-}
-
 export interface ReadinessPendingShow {
   id: string;
   date: string;
@@ -65,9 +58,8 @@ export interface OperationsReadiness {
   /** §C4 — committed spend (sum of budget_line_items.proposed_cost) + currency. */
   budget: { committed: number; currency: string };
   conflicts: { count: number };
+  /** Crew status (awaiting contract / tentative) is retired (Nov 2026). */
   pending: {
-    awaitingContract: ReadinessPendingPersonnel[];
-    tentative: ReadinessPendingPersonnel[];
     showsWithoutVenue: ReadinessPendingShow[];
   };
   recentActivity: ReadinessActivityRow[];
@@ -79,7 +71,6 @@ interface TourPersonnelJoined {
   id: string;
   person_id: string;
   role: string;
-  status: string;
 }
 
 interface PersonRow {
@@ -117,7 +108,7 @@ export async function getOperationsReadiness(
       .order('date'),
     supabase
       .from('tour_personnel')
-      .select('id, person_id, role, status')
+      .select('id, person_id, role')
       .eq('tour_id', tourId),
     supabase
       .from('audit_log')
@@ -252,28 +243,6 @@ export async function getOperationsReadiness(
     }
   }
 
-  const awaitingContract = tourPersonnel
-    .filter((tp) => tp.status === 'awaiting_contract')
-    .map((tp) => {
-      const p = personById.get(tp.person_id);
-      return {
-        id: tp.id,
-        display_name: p?.preferred_name?.trim() || p?.full_name?.trim() || 'Unknown',
-        role: tp.role,
-        status: tp.status,
-      };
-    });
-  const tentative = tourPersonnel
-    .filter((tp) => tp.status === 'tentative')
-    .map((tp) => {
-      const p = personById.get(tp.person_id);
-      return {
-        id: tp.id,
-        display_name: p?.preferred_name?.trim() || p?.full_name?.trim() || 'Unknown',
-        role: tp.role,
-        status: tp.status,
-      };
-    });
   const showsWithoutVenue = routing
     .filter((r) => {
       const types = (r.day_type ?? '').split(',').map((s) => s.trim());
@@ -352,7 +321,7 @@ export async function getOperationsReadiness(
     crew: { count: tourPersonnel.length, excludePersonIds },
     budget: { committed: budgetCommitted, currency: budgetCurrency },
     conflicts: { count: conflictCount },
-    pending: { awaitingContract, tentative, showsWithoutVenue },
+    pending: { showsWithoutVenue },
     recentActivity,
     upcomingShows,
     allRoutingDates,

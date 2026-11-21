@@ -1,14 +1,11 @@
 /* ============================================
    LOWPASS — /api/tours/[id]/personnel/[memberId] (Sprint 9 §6)
 
-   PATCH  — update role / role tag / window dates / status for one
-            tour_personnel row, and employment (Principal / Band / Crew —
-            stored on the payroll card, Nov 2026). Admin/
-            manager OR readonly with operations.personnel.write.
-            On status change, fire an audit_log row tagged for
-            the Sprint 10 notification dispatcher to pick up.
-   DELETE — remove the assignment row. Admin/manager OR
-            readonly with operations.personnel.write.
+   PATCH  — update role / role tag / window dates for one tour_personnel
+            row, and employment (Principal / Band / Crew — stored on the
+            payroll card, Nov 2026). Admin / manager. Status is RETIRED
+            (Nov 2026, Adam): a `status` in the body is ignored.
+   DELETE — remove the assignment row. Admin / manager.
    ============================================ */
 
 import { NextResponse } from 'next/server';
@@ -25,21 +22,6 @@ import { isEmployment } from '@/lib/personnel/employment';
 
 export const dynamic = 'force-dynamic';
 
-type Status =
-  | 'confirmed'
-  | 'tentative'
-  | 'awaiting_contract'
-  | 'cancelled'
-  | 'fired';
-
-const VALID_STATUSES: ReadonlySet<Status> = new Set([
-  'confirmed',
-  'tentative',
-  'awaiting_contract',
-  'cancelled',
-  'fired',
-]);
-
 interface PatchPayload {
   role?: string;
   /** Sprint 12 §9c.0 — structured role discriminator. */
@@ -48,7 +30,6 @@ interface PatchPayload {
   rate_period?: string | null;
   starts_on?: string | null;
   ends_on?: string | null;
-  status?: Status;
 }
 
 async function patchHandler(
@@ -81,8 +62,7 @@ async function patchHandler(
     return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
   }
 
-  // Validate the payload — coerce known fields, reject unknown
-  // status values.
+  // Validate the payload — coerce known fields.
   const patch: PatchPayload = {};
   if (typeof body.role === 'string' && body.role.trim().length > 0) {
     patch.role = body.role.trim();
@@ -121,15 +101,6 @@ async function patchHandler(
   if (body.ends_on === null || typeof body.ends_on === 'string') {
     patch.ends_on = body.ends_on as string | null;
   }
-  if (typeof body.status === 'string') {
-    if (!VALID_STATUSES.has(body.status as Status)) {
-      return NextResponse.json(
-        { error: `Invalid status: ${body.status}` },
-        { status: 400 },
-      );
-    }
-    patch.status = body.status as Status;
-  }
 
   if (Object.keys(patch).length === 0 && !employment) {
     return NextResponse.json({ error: 'no fields to update' }, { status: 400 });
@@ -139,7 +110,7 @@ async function patchHandler(
   const { data: existing } = await supabase
     .from('tour_personnel')
     .select(
-      'id, workspace_id, tour_id, person_id, role, status, starts_on, ends_on',
+      'id, workspace_id, tour_id, person_id, role, starts_on, ends_on',
     )
     .eq('id', memberId)
     .maybeSingle();
@@ -152,7 +123,6 @@ async function patchHandler(
     tour_id: string;
     person_id: string;
     role: string;
-    status: Status;
     starts_on: string | null;
     ends_on: string | null;
   };
@@ -181,54 +151,14 @@ async function patchHandler(
     if (!r.ok) return NextResponse.json({ error: r.error }, { status: r.status });
   }
 
-  // Status-change audit row tagged for Sprint 10's notification
-  // dispatcher. We resolve the personnel.user_id (if any) up
-  // front so the dispatcher doesn't need a re-resolve query.
-  //
-  // Convention (per migration 078 comment block + Adam's Batch 1
-  // review note): personnel.id == persons.id for matching rows
-  // — they share UUIDs. There is NO personnel.person_id column.
-  // Look up by id, scoped to the same workspace as the
-  // assignment.
-  if (patch.status && patch.status !== ex.status) {
-    let wouldEmailUserId: string | null = null;
-    const { data: linkedPersonnel } = await supabase
-      .from('personnel')
-      .select('id, user_id')
-      .eq('id', ex.person_id)
-      .eq('workspace_id', ex.workspace_id)
-      .not('user_id', 'is', null)
-      .limit(1)
-      .maybeSingle();
-    if (linkedPersonnel) {
-      wouldEmailUserId = (linkedPersonnel as { user_id: string }).user_id;
-    }
-
-    await supabase.from('audit_log').insert({
-      workspace_id: ex.workspace_id,
-      actor_user_id: user.id,
-      action: 'status_changed',
-      entity_type: 'tour_personnel',
-      entity_id: memberId,
-      field_changes: {
-        from: ex.status,
-        to: patch.status,
-        tour_id: ex.tour_id,
-        person_id: ex.person_id,
-        would_email_user_id: wouldEmailUserId,
-      },
-    });
-  } else {
-    // Generic update audit row.
-    await supabase.from('audit_log').insert({
-      workspace_id: ex.workspace_id,
-      actor_user_id: user.id,
-      action: 'updated',
-      entity_type: 'tour_personnel',
-      entity_id: memberId,
-      field_changes: employment ? { ...patch, person_type: employment } : patch,
-    });
-  }
+  await supabase.from('audit_log').insert({
+    workspace_id: ex.workspace_id,
+    actor_user_id: user.id,
+    action: 'updated',
+    entity_type: 'tour_personnel',
+    entity_id: memberId,
+    field_changes: employment ? { ...patch, person_type: employment } : patch,
+  });
 
   return NextResponse.json({ ok: true });
 }
@@ -258,7 +188,7 @@ async function deleteHandler(
 
   const { data: existing } = await supabase
     .from('tour_personnel')
-    .select('id, workspace_id, tour_id, person_id, role, status')
+    .select('id, workspace_id, tour_id, person_id, role')
     .eq('id', memberId)
     .maybeSingle();
   if (!existing) {
@@ -270,7 +200,6 @@ async function deleteHandler(
     tour_id: string;
     person_id: string;
     role: string;
-    status: Status;
   };
   if (ex.tour_id !== tourId) {
     return NextResponse.json(
@@ -297,7 +226,6 @@ async function deleteHandler(
       tour_id: ex.tour_id,
       person_id: ex.person_id,
       role: ex.role,
-      previous_status: ex.status,
     },
   });
 

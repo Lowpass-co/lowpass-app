@@ -529,6 +529,35 @@ recreate a `_legacy/` tree: delete dead code instead of parking it.
 - Plan + as-built: `docs/handover/PERMISSIONS_DESIGN_2026_11.md`. DB tests:
   `database/tests/` (PGlite).
 
+### Crew — add many, logins per tour, no status (Nov 2026, Adam)
+
+- **ONE writer for crew rows: `addPersonToTour`** (`src/server/people/addToTour.ts`)
+  — role (typed, else their usual role, else Crew), role tag (given, else
+  `inferRoleTag` from the role), employment from their groups, payroll card
+  seeded from their last tour. The single POST `/api/tours/[id]/personnel` and
+  the Add crew panel's batch POST `/personnel/add` both call it. Reads People
+  (`personnel`, the master) — never `persons` — so a person made a moment ago
+  works.
+- **Status is RETIRED** (Adam: "I wouldn't add someone tentatively, and I can
+  remove them easily"). `tour_personnel.status` stays in the database, written
+  'confirmed', read by NOTHING — not the list, panel, Overview, Home, routing
+  readiness or crew My schedule. Don't bring a status back; remove = remove.
+- **Add crew** = `<AddCrewSlideOver>` (Crew, Payroll, Rooming via
+  `AddPersonToTourButton`): `/personnel/candidates` loads all People once
+  (`rankCandidates`: this artist's people first; on-tour people greyed, not
+  hidden — OPS-11), filtered client-side; tick many; "+ Add 'X' as new";
+  a tray line per person (role, tag chip, dates, app access). A new person
+  whose email is already in People IS that person.
+- **App access per tour** (`src/server/people/tourLogin.ts`): `giveTourLogin`
+  — has a login here → add this tour's areas (`accessWrites`, never lowers);
+  admin / manager → nothing to do; else an invite (Member, `personnel_id`,
+  this tour's preset rows), REUSING a pending invite for the same email.
+  `removeTourLogin` takes this tour off. Workspace ADMINS only (invites +
+  tour_access are admin-writable in the database); routes check up front.
+  `tourLoginStates` feeds the list (managers see "Has login", no presets).
+- Rules pure in `src/lib/personnel/crew.ts` (tags, departments, ranking,
+  accessWrites). Smoke: CREW-01…09 (operations.md).
+
 ### File & folder share links (Nov 2026, Adam)
 
 - Tour Files → ⋯ → **Share…** makes a `/f/<token>` link to one file or one

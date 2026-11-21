@@ -149,6 +149,21 @@ class Query implements PromiseLike<Result> {
   is(c: string, v: unknown) { this.filters.push((r) => (r[c] ?? null) === v); return this; }
   gte(c: string, v: unknown) { this.filters.push((r) => String(r[c] ?? '') >= String(v)); return this; }
   lte(c: string, v: unknown) { this.filters.push((r) => String(r[c] ?? '') <= String(v)); return this; }
+  gt(c: string, v: unknown) { this.filters.push((r) => String(r[c] ?? '') > String(v)); return this; }
+  /** LIKE, case-insensitive: % and _ wildcards, backslash escapes. */
+  ilike(c: string, pattern: string) {
+    let re = '';
+    for (let i = 0; i < pattern.length; i++) {
+      const ch = pattern[i];
+      if (ch === '\\' && i + 1 < pattern.length) re += pattern[++i].replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      else if (ch === '%') re += '.*';
+      else if (ch === '_') re += '.';
+      else re += ch.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    }
+    const rx = new RegExp(`^${re}$`, 'i');
+    this.filters.push((r) => typeof r[c] === 'string' && rx.test(r[c] as string));
+    return this;
+  }
   not(c: string, op: string, v: unknown) {
     if (op === 'is') this.filters.push((r) => (r[c] ?? null) !== v);
     else if (op === 'in') { const s = new Set(parseList(String(v))); this.filters.push((r) => !s.has(String(r[c]))); }

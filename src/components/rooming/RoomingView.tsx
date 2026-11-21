@@ -73,10 +73,6 @@ export function RoomingView({ tourId, currency, routingDates, hotels, roster }: 
   const [view, setView] = useState<ViewId>('matrix');
   const [hotelId, setHotelId] = useState<string | null>(null);
 
-  const excludePersonIds = useMemo(
-    () => people.map((r) => r.person_id).filter((id): id is string => typeof id === 'string'),
-    [people],
-  );
   // Nights away — every routing date except explicit home / no-tour days (Q2).
   const nights = useMemo(() => routingDates.filter((r) => isNightAway(r.day_type)), [routingDates]);
   const activeHotel = hotels.find((h) => h.id === hotelId) ?? null;
@@ -89,7 +85,6 @@ export function RoomingView({ tourId, currency, routingDates, hotels, roster }: 
         <RoomingExportButton tourId={tourId} />
         <AddPersonToTourButton
           tourId={tourId}
-          excludePersonIds={excludePersonIds}
           onAdded={(result) => {
             const card = result?.rateCard as
               | { person_id?: string | null; person_name?: string | null; role?: string | null }

@@ -13,7 +13,7 @@ const show = (date: string, o: Partial<OverviewShow> = {}): OverviewShow => ({
 const facts = (extra: Partial<OverviewFacts> = {}): OverviewFacts => ({
   tourId: 't1', today: '2026-11-15', allow: ALLOW_ALL,
   shows: [show('2026-11-10'), show('2026-11-15', { venue: 'Co-op Live', city: 'Manchester', answered: 31, total: 114, toReview: 1 }), show('2026-11-17')],
-  settledRoutingIds: new Set(), receiptsNeedingDetails: 0, unconfirmedCrew: 0, linesOverEstimate: 1,
+  settledRoutingIds: new Set(), receiptsNeedingDetails: 0, linesOverEstimate: 1,
   money: { currency: 'GBP', plannedCosts: 43562, spentCosts: 46011, plannedNet: -43562 },
   production: [],
   ...extra,

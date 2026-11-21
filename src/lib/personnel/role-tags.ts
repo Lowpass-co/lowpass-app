@@ -3,7 +3,7 @@
 
    Shared shape for the tour_personnel.role_tag column added
    in migration 101. Used by:
-     - AddPersonnelSlideOver / PersonnelManageSlideOver
+     - AddCrewSlideOver (worked out by inferRoleTag) / PersonnelManageSlideOver
        (the Role tag select)
      - /api/tours/[id]/personnel  POST  (insert validation)
      - /api/tours/[id]/personnel/[memberId]  PATCH (update validation)

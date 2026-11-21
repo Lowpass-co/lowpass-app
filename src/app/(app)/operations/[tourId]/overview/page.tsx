@@ -29,7 +29,6 @@ export default async function TourOverviewPage({ params }: { params: Promise<{ t
     advance: viewerCan(access, 'advance'),
     budget: viewerCan(access, 'budget'),
     receipts: viewerCan(access, 'receipts'),
-    crew: viewerCan(access, 'logistics'),
     production: viewerCan(access, 'production'),
   });
   if (!data) notFound();
