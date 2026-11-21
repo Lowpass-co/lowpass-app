@@ -145,7 +145,8 @@ export const RULES = [
   { table: 'tour_role_links', kind: 'manager' },
   { table: 'advance_schedule_templates', kind: 'manager' },
 
-  // ---- Shared reference data: read by any member, written by admin/manager ----
+  // ---- Shared reference data: read by any member (and everyone reads the
+  //      built-in rows with no workspace), written by admin/manager ----
   ...[
     'advance_day_type_templates', 'advance_layout_templates', 'advance_templates',
     'budget_templates', 'budget_template_sections', 'budget_template_lines',

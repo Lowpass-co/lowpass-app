@@ -21,7 +21,7 @@ import { ChevronDown, Lock, Unlock } from 'lucide-react';
 import { useToast } from '@/components/ui/Toast';
 import type { PersonnelRate } from '@/types';
 import type { RateBucket, RateBasis, DayStatus } from '@/lib/payroll/fees';
-import { canonicalOrderOf, CANONICAL_RATE_TYPE_IDS, type RateTypeMeta } from '@/lib/payroll/rateLines';
+import { canonicalOrderOf, CANONICAL_RATE_TYPE_IDS, DEFAULT_RATE_TYPES, type RateTypeMeta } from '@/lib/payroll/rateLines';
 import { PayrollRatesSpreadsheet } from './PayrollRatesSpreadsheet';
 import { PayrollDaysMatrix } from './PayrollDaysMatrix';
 import { buildAmountMap, oneOffTotals, personTotals, type RateLineRecord } from './rateLinesClient';
@@ -56,8 +56,8 @@ interface PayrollViewProps {
 /** Row → meta, CANONICAL-FILTERED (migration 261): only the flat-seven +
  *  Advance load; Weekly and custom types are retired (rows stay in the DB).
  *  Order is Adam's canonical column order, not raw order_index. */
-function toCanonicalMetas(rows: RateTypeRow[]): RateTypeMeta[] {
-  return rows
+export function toCanonicalMetas(rows: RateTypeRow[]): RateTypeMeta[] {
+  const metas = rows
     .filter((r) => CANONICAL_RATE_TYPE_IDS.includes(r.id))
     .map((r) => ({
       id: r.id,
@@ -67,6 +67,13 @@ function toCanonicalMetas(rows: RateTypeRow[]): RateTypeMeta[] {
       dayStatuses: (r.day_statuses ?? []) as DayStatus[],
       orderIndex: canonicalOrderOf(r.id),
     }))
+    .sort((a, b) => a.orderIndex - b.orderIndex);
+  if (metas.length) return metas;
+  // None readable → the built-ins, exactly as the server's pay maths does
+  // (rateLinesFor). Nov 2026: a database rule hid the built-in rows and
+  // Payroll lost every rate column while the budget still had the figures.
+  return DEFAULT_RATE_TYPES.filter((t) => CANONICAL_RATE_TYPE_IDS.includes(t.id))
+    .map((t) => ({ ...t, orderIndex: canonicalOrderOf(t.id) }))
     .sort((a, b) => a.orderIndex - b.orderIndex);
 }
 
