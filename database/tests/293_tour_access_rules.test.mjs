@@ -42,6 +42,7 @@ INSERT INTO public.payroll_entries (workspace_id, tour_id, person_id, note) VALU
 INSERT INTO public.rag_chunks (workspace_id, note) VALUES ('${WS}','deal memo chunk');
 INSERT INTO public.settlement_payments (settlement_id, workspace_id, note) VALUES ('${S1}','${WS}','paid');
 INSERT INTO public.venues (workspace_id, note) VALUES ('${WS}','Co-op');
+INSERT INTO public.rate_types (workspace_id, note) VALUES (NULL,'built-in Show'),('${WS}','our custom'),('${WS2}','their custom');
 INSERT INTO storage.objects (bucket_id, name) VALUES ('tour-files','${WS}/tour/${T1}/a.pdf'),('tour-files','${WS}/artist/${ART}/b.pdf'),('tour-files','${WS2}/tour/${TX}/c.pdf');
 UPDATE public.personnel SET user_id = '${CREW}' WHERE id = '${P_CREW}';
 `);
@@ -95,6 +96,11 @@ check('crew: persons on visible tours', (await as(CREW, `SELECT id FROM public.p
 check('crew: artist of their tours only', (await as(CREW, `SELECT id FROM public.artists`)).map((r) => r.id), [ART]);
 check('crew: AI index hidden', await notes(CREW, 'rag_chunks'), []);
 check('crew: reference data readable', await notes(CREW, 'venues'), ['Co-op']);
+// Built-in rows (no workspace) are everyone's — 293 as first pasted hid them,
+// and Payroll lost its rate columns (fixed by 296, Nov 2026).
+check('crew: built-in + own reference rows, never another workspace\'s', await notes(CREW, 'rate_types'), ['built-in Show', 'our custom']);
+check('manager: built-in rate types readable', (await notes(MGR, 'rate_types')).includes('built-in Show'), true);
+check('admin: a built-in can\'t be changed', (await as(ADAM, `UPDATE public.rate_types SET note = 'x' WHERE workspace_id IS NULL RETURNING 1`)).length, 0);
 check('crew: reference data not writable', denied(await as(CREW, `INSERT INTO public.venues (workspace_id, note) VALUES ('${WS}','x')`)), 'denied');
 check('crew: settlements hidden', await notes(CREW, 'settlement_payments'), []);
 
@@ -126,4 +132,14 @@ check('down: admin still works', await notes(ADAM, 'parking_maps'), ['p1 edited'
 check('down: member back on workspace scope', await notes(NOBODY, 'deal_memos'), ['deal']);
 await db.exec(m293);
 check('293 again after down', await notes(NOBODY, 'deal_memos'), []);
+
+// 296 on a database that has the FIRST 293 (reference rows = own workspace only).
+const m296 = fs.readFileSync(ROOT + 'database/migrations/296_shared_reference_rows.sql', 'utf8');
+await db.exec(m293.replaceAll('workspace_id IS NULL OR workspace_id = (SELECT public.get_my_workspace_id())', 'workspace_id = (SELECT public.get_my_workspace_id())'));
+check('first 293: built-ins hidden (the bug)', await notes(CREW, 'rate_types'), ['our custom']);
+await db.exec(m296.slice(0, m296.lastIndexOf('-- Check:')));
+check('296: built-ins back', await notes(CREW, 'rate_types'), ['built-in Show', 'our custom']);
+await db.exec(m296.slice(0, m296.lastIndexOf('-- Check:')));
+check('296 twice: same', await notes(CREW, 'rate_types'), ['built-in Show', 'our custom']);
+check('296: tour rules untouched', await notes(NOBODY, 'deal_memos'), []);
 done();

@@ -378,67 +378,67 @@ SELECT private.lp_set_rules('advance_schedule_templates', ARRAY['workspace_id'],
   $q$workspace_id = (SELECT public.get_my_workspace_id()) AND (SELECT private.is_manager())$q$);
 -- advance_day_type_templates: ref
 SELECT private.lp_set_rules('advance_day_type_templates', ARRAY['workspace_id'],
-  $q$workspace_id = (SELECT public.get_my_workspace_id())$q$,
+  $q$workspace_id IS NULL OR workspace_id = (SELECT public.get_my_workspace_id())$q$,
   $q$workspace_id = (SELECT public.get_my_workspace_id()) AND (SELECT private.is_manager())$q$);
 -- advance_layout_templates: ref
 SELECT private.lp_set_rules('advance_layout_templates', ARRAY['workspace_id'],
-  $q$workspace_id = (SELECT public.get_my_workspace_id())$q$,
+  $q$workspace_id IS NULL OR workspace_id = (SELECT public.get_my_workspace_id())$q$,
   $q$workspace_id = (SELECT public.get_my_workspace_id()) AND (SELECT private.is_manager())$q$);
 -- advance_templates: ref
 SELECT private.lp_set_rules('advance_templates', ARRAY['workspace_id'],
-  $q$workspace_id = (SELECT public.get_my_workspace_id())$q$,
+  $q$workspace_id IS NULL OR workspace_id = (SELECT public.get_my_workspace_id())$q$,
   $q$workspace_id = (SELECT public.get_my_workspace_id()) AND (SELECT private.is_manager())$q$);
 -- budget_templates: ref
 SELECT private.lp_set_rules('budget_templates', ARRAY['workspace_id'],
-  $q$workspace_id = (SELECT public.get_my_workspace_id())$q$,
+  $q$workspace_id IS NULL OR workspace_id = (SELECT public.get_my_workspace_id())$q$,
   $q$workspace_id = (SELECT public.get_my_workspace_id()) AND (SELECT private.is_manager())$q$);
 -- budget_template_sections: ref
 SELECT private.lp_set_rules('budget_template_sections', ARRAY['workspace_id'],
-  $q$workspace_id = (SELECT public.get_my_workspace_id())$q$,
+  $q$workspace_id IS NULL OR workspace_id = (SELECT public.get_my_workspace_id())$q$,
   $q$workspace_id = (SELECT public.get_my_workspace_id()) AND (SELECT private.is_manager())$q$);
 -- budget_template_lines: ref
 SELECT private.lp_set_rules('budget_template_lines', ARRAY['workspace_id'],
-  $q$workspace_id = (SELECT public.get_my_workspace_id())$q$,
+  $q$workspace_id IS NULL OR workspace_id = (SELECT public.get_my_workspace_id())$q$,
   $q$workspace_id = (SELECT public.get_my_workspace_id()) AND (SELECT private.is_manager())$q$);
 -- rider_section_templates: ref
 SELECT private.lp_set_rules('rider_section_templates', ARRAY['workspace_id'],
-  $q$workspace_id = (SELECT public.get_my_workspace_id())$q$,
+  $q$workspace_id IS NULL OR workspace_id = (SELECT public.get_my_workspace_id())$q$,
   $q$workspace_id = (SELECT public.get_my_workspace_id()) AND (SELECT private.is_manager())$q$);
 -- export_templates: ref
 SELECT private.lp_set_rules('export_templates', ARRAY['workspace_id'],
-  $q$workspace_id = (SELECT public.get_my_workspace_id())$q$,
+  $q$workspace_id IS NULL OR workspace_id = (SELECT public.get_my_workspace_id())$q$,
   $q$workspace_id = (SELECT public.get_my_workspace_id()) AND (SELECT private.is_manager())$q$);
 -- labor_call_templates: ref
 SELECT private.lp_set_rules('labor_call_templates', ARRAY['workspace_id'],
-  $q$workspace_id = (SELECT public.get_my_workspace_id())$q$,
+  $q$workspace_id IS NULL OR workspace_id = (SELECT public.get_my_workspace_id())$q$,
   $q$workspace_id = (SELECT public.get_my_workspace_id()) AND (SELECT private.is_manager())$q$);
 -- stage_plot_custom_items: ref
 SELECT private.lp_set_rules('stage_plot_custom_items', ARRAY['workspace_id'],
-  $q$workspace_id = (SELECT public.get_my_workspace_id())$q$,
+  $q$workspace_id IS NULL OR workspace_id = (SELECT public.get_my_workspace_id())$q$,
   $q$workspace_id = (SELECT public.get_my_workspace_id()) AND (SELECT private.is_manager())$q$);
 -- gear: ref
 SELECT private.lp_set_rules('gear', ARRAY['workspace_id'],
-  $q$workspace_id = (SELECT public.get_my_workspace_id())$q$,
+  $q$workspace_id IS NULL OR workspace_id = (SELECT public.get_my_workspace_id())$q$,
   $q$workspace_id = (SELECT public.get_my_workspace_id()) AND (SELECT private.is_manager())$q$);
 -- mic_library: ref
 SELECT private.lp_set_rules('mic_library', ARRAY['workspace_id'],
-  $q$workspace_id = (SELECT public.get_my_workspace_id())$q$,
+  $q$workspace_id IS NULL OR workspace_id = (SELECT public.get_my_workspace_id())$q$,
   $q$workspace_id = (SELECT public.get_my_workspace_id()) AND (SELECT private.is_manager())$q$);
 -- rate_types: ref
 SELECT private.lp_set_rules('rate_types', ARRAY['workspace_id'],
-  $q$workspace_id = (SELECT public.get_my_workspace_id())$q$,
+  $q$workspace_id IS NULL OR workspace_id = (SELECT public.get_my_workspace_id())$q$,
   $q$workspace_id = (SELECT public.get_my_workspace_id()) AND (SELECT private.is_manager())$q$);
 -- venues: ref
 SELECT private.lp_set_rules('venues', ARRAY['workspace_id'],
-  $q$workspace_id = (SELECT public.get_my_workspace_id())$q$,
+  $q$workspace_id IS NULL OR workspace_id = (SELECT public.get_my_workspace_id())$q$,
   $q$workspace_id = (SELECT public.get_my_workspace_id()) AND (SELECT private.is_manager())$q$);
 -- spaces: ref
 SELECT private.lp_set_rules('spaces', ARRAY['workspace_id'],
-  $q$workspace_id = (SELECT public.get_my_workspace_id())$q$,
+  $q$workspace_id IS NULL OR workspace_id = (SELECT public.get_my_workspace_id())$q$,
   $q$workspace_id = (SELECT public.get_my_workspace_id()) AND (SELECT private.is_manager())$q$);
 -- containers: ref
 SELECT private.lp_set_rules('containers', ARRAY['workspace_id'],
-  $q$workspace_id = (SELECT public.get_my_workspace_id())$q$,
+  $q$workspace_id IS NULL OR workspace_id = (SELECT public.get_my_workspace_id())$q$,
   $q$workspace_id = (SELECT public.get_my_workspace_id()) AND (SELECT private.is_manager())$q$);
 
 -- ---------------------------------------------------------------------------
