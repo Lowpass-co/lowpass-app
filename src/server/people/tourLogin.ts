@@ -15,6 +15,12 @@
        merged into it, so one person never holds two links. The app doesn't
        send email — the caller shows the link to copy.
    removeTourLogin: takes THIS tour off a member's access / a pending invite.
+   syncPersonnelLogin: a crew record's login FOLLOWS ITS EMAIL (Nov 2026,
+     Adam: added himself under an old email, fixed the email, and the invite
+     still pointed at the old one). If the email is a login already in this
+     workspace, the record is linked to it and any pending invite's access
+     moves onto it (invite withdrawn — no link needed); otherwise a pending
+     invite is re-addressed to the current email (same link).
    tourLoginStates: what the Crew list shows per person.
    ============================================ */
 
@@ -22,7 +28,7 @@ import { randomBytes } from 'node:crypto';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { isArea, presetFor, accessForTour, type Preset, type TourAccessRow } from '@/lib/permissions/areas';
 import { parseAccessRows } from '@/lib/permissions/accessRows';
-import { accessWrites, presetRows, type LoginState } from '@/lib/personnel/crew';
+import { mergeAccessRows, presetRows, type LoginState } from '@/lib/personnel/crew';
 
 export type { LoginState };
 
@@ -47,6 +53,17 @@ export async function giveTourLogin(
   preset: Preset,
   emailIn?: string | null,
 ): Promise<LoginResult> {
+  // A typed email goes on the record first, so the login can follow it.
+  if (emailIn?.trim()) {
+    await supabase
+      .from('personnel')
+      .update({ email: emailIn.trim().toLowerCase() })
+      .eq('id', personnelId)
+      .eq('workspace_id', ctx.workspaceId)
+      .is('email', null);
+  }
+  await syncPersonnelLogin(supabase, ctx.workspaceId, personnelId, ctx.actorUserId);
+
   const { data: p } = await supabase
     .from('personnel')
     .select('id, email, user_id, workspace_id')
@@ -66,28 +83,8 @@ export async function giveTourLogin(
     const member = mem as { id: string; role: string } | null;
     if (member) {
       if (member.role !== 'readonly') return { kind: 'full' };
-      const { data: rows, error: readErr } = await supabase
-        .from('tour_access')
-        .select('id, tour_id, area, level')
-        .eq('member_id', member.id);
-      if (readErr) return { kind: 'error', error: readErr.message };
-      const w = accessWrites((rows ?? []) as Array<TourAccessRow & { id: string }>, ctx.tourId, preset);
-      if (w.insert.length) {
-        const { error } = await supabase.from('tour_access').insert(
-          w.insert.map((r) => ({
-            ...r,
-            tour_id: ctx.tourId,
-            member_id: member.id,
-            workspace_id: ctx.workspaceId,
-            granted_by: ctx.actorUserId,
-          })),
-        );
-        if (error) return { kind: 'error', error: error.message };
-      }
-      if (w.raise.length) {
-        const { error } = await supabase.from('tour_access').update({ level: 'edit' }).in('id', w.raise);
-        if (error) return { kind: 'error', error: error.message };
-      }
+      const err = await addAccess(supabase, ctx.workspaceId, member.id, ctx.actorUserId, presetRows(ctx.tourId, preset));
+      if (err) return { kind: 'error', error: err };
       await audit(supabase, ctx, 'tour_access', member.id, { tour_id: ctx.tourId, preset });
       return { kind: 'granted' };
     }
@@ -97,7 +94,6 @@ export async function giveTourLogin(
   /* No login here → invite. */
   const email = (emailIn?.trim() || person.email || '').toLowerCase();
   if (!EMAIL.test(email)) return { kind: 'error', error: 'Add an email to give them a login' };
-  if (!person.email) await supabase.from('personnel').update({ email }).eq('id', person.id);
 
   const rows = presetRows(ctx.tourId, preset);
   const { data: pending } = await supabase
@@ -250,6 +246,112 @@ export async function tourLoginStates(
     };
   }
   return out;
+}
+
+/** Merge `wanted` rows into a member's tour_access — never lowers. */
+async function addAccess(
+  supabase: SupabaseClient,
+  workspaceId: string,
+  memberId: string,
+  actorUserId: string,
+  wanted: ReadonlyArray<{ tour_id: string | null; area: string; level: string }>,
+): Promise<string | null> {
+  const { data: rows, error: readErr } = await supabase
+    .from('tour_access')
+    .select('id, tour_id, area, level')
+    .eq('member_id', memberId);
+  if (readErr) return readErr.message;
+  const w = mergeAccessRows((rows ?? []) as Array<TourAccessRow & { id: string }>, wanted);
+  if (w.insert.length) {
+    const { error } = await supabase
+      .from('tour_access')
+      .insert(w.insert.map((r) => ({ ...r, member_id: memberId, workspace_id: workspaceId, granted_by: actorUserId })));
+    if (error) return error.message;
+  }
+  if (w.raise.length) {
+    const { error } = await supabase.from('tour_access').update({ level: 'edit' }).in('id', w.raise);
+    if (error) return error.message;
+  }
+  return null;
+}
+
+export type SyncResult = 'linked' | 'retargeted' | 'none';
+
+/**
+ * A crew record's login follows its email. Call after the email changes and
+ * before inviting. Admin-only data (the member list, invites): for anyone
+ * else it finds nothing and does nothing.
+ */
+export async function syncPersonnelLogin(
+  supabase: SupabaseClient,
+  workspaceId: string,
+  personnelId: string,
+  actorUserId: string,
+): Promise<SyncResult> {
+  const { data: p } = await supabase
+    .from('personnel')
+    .select('id, email, user_id, workspace_id')
+    .eq('id', personnelId)
+    .maybeSingle();
+  const person = p as { id: string; email: string | null; user_id: string | null; workspace_id: string } | null;
+  if (!person || person.workspace_id !== workspaceId) return 'none';
+  const email = (person.email ?? '').trim().toLowerCase();
+
+  const { data: inv } = await supabase
+    .from('workspace_invites')
+    .select('id, invited_email, invited_role, initial_access')
+    .eq('workspace_id', workspaceId)
+    .eq('personnel_id', personnelId)
+    .is('accepted_at', null)
+    .gt('expires_at', new Date().toISOString());
+  const pending = (inv ?? []) as Array<{ id: string; invited_email: string; invited_role: string; initial_access: unknown }>;
+
+  // 1. The email is already a login in this workspace → link it, no invite.
+  if (!person.user_id && EMAIL.test(email)) {
+    const { data: members } = await supabase.rpc('list_workspace_members', { p_workspace_id: workspaceId });
+    const member = ((members ?? []) as Array<{ member_id: string; user_id: string; email: string | null; role: string }>).find(
+      (m) => (m.email ?? '').toLowerCase() === email,
+    );
+    if (member) {
+      // One login, one crew record per workspace: don't steal a login that
+      // already has a record here.
+      const { data: other } = await supabase
+        .from('personnel')
+        .select('id')
+        .eq('workspace_id', workspaceId)
+        .eq('user_id', member.user_id)
+        .neq('id', personnelId)
+        .limit(1)
+        .maybeSingle();
+      if (!other) {
+        const { error } = await supabase.from('personnel').update({ user_id: member.user_id }).eq('id', personnelId).is('user_id', null);
+        if (!error) {
+          if (member.role === 'readonly') {
+            const wanted = pending.flatMap((i) =>
+              i.invited_role === 'readonly' && Array.isArray(i.initial_access)
+                ? (i.initial_access as Array<{ tour_id: string | null; area: string; level: string }>)
+                : [],
+            );
+            if (wanted.length) await addAccess(supabase, workspaceId, member.member_id, actorUserId, wanted);
+          }
+          if (pending.length) await supabase.from('workspace_invites').delete().in('id', pending.map((i) => i.id));
+          await audit(supabase, { workspaceId, tourId: '', actorUserId, origin: '' }, 'personnel', personnelId, {
+            linked_user_id: member.user_id,
+            withdrew_invites: pending.length,
+          });
+          return 'linked';
+        }
+      }
+    }
+  }
+
+  // 2. A pending invite for an old address → the current one (same link).
+  const stale = EMAIL.test(email) ? pending.filter((i) => i.invited_email !== email) : [];
+  if (stale.length) {
+    await supabase.from('workspace_invites').update({ invited_email: email }).in('id', stale.map((i) => i.id));
+    return 'retargeted';
+  }
+  return 'none';
 }
 
 async function audit(supabase: SupabaseClient, ctx: Ctx, entity: string, id: string, changes: Record<string, unknown>) {

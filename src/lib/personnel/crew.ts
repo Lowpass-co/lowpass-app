@@ -100,33 +100,45 @@ export function isWholeTour(
 const RANK: Record<Level, number> = { view: 1, edit: 2 };
 
 export type AccessWrites = {
-  insert: Array<{ area: Area; level: Level }>;
+  insert: Array<{ tour_id: string | null; area: Area; level: Level }>;
   /** Existing rows (by id) raised view → edit. */
   raise: string[];
 };
 
 /**
- * What granting `preset` on `tourId` writes for a member, given their existing
- * rows (with ids). Only tour-specific rows are written; an "all tours" row that
- * already covers an area means nothing is written for it. Never lowers a level.
+ * What writing `wanted` rows onto a member's existing tour_access rows takes:
+ * inserts for areas they don't have, raises for view → edit. Never lowers; an
+ * "all tours" row that already covers an area means nothing for that tour.
  */
+export function mergeAccessRows(
+  existing: ReadonlyArray<TourAccessRow & { id: string }>,
+  wanted: ReadonlyArray<{ tour_id: string | null; area: string; level: string }>,
+): AccessWrites {
+  const out: AccessWrites = { insert: [], raise: [] };
+  const seen = new Set<string>();
+  for (const w of wanted) {
+    const area = w.area as Area;
+    const level = w.level as Level;
+    if (!(AREAS as readonly string[]).includes(area) || !(level in RANK)) continue;
+    const key = `${w.tour_id ?? '*'}:${area}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    const all = existing.find((r) => r.tour_id === null && r.area === area);
+    if (all && RANK[all.level as Level] >= RANK[level]) continue;
+    const own = existing.find((r) => r.tour_id === w.tour_id && r.area === area);
+    if (!own) out.insert.push({ tour_id: w.tour_id, area, level });
+    else if (RANK[own.level as Level] < RANK[level] && !out.raise.includes(own.id)) out.raise.push(own.id);
+  }
+  return out;
+}
+
+/** Granting `preset` on `tourId` — mergeAccessRows with the preset's rows. */
 export function accessWrites(
   existing: ReadonlyArray<TourAccessRow & { id: string }>,
   tourId: string,
   preset: Preset,
 ): AccessWrites {
-  const out: AccessWrites = { insert: [], raise: [] };
-  const want = PRESET_ACCESS[preset];
-  for (const area of AREAS) {
-    const level = want[area];
-    if (!level) continue;
-    const all = existing.find((r) => r.tour_id === null && r.area === area);
-    if (all && RANK[all.level as Level] >= RANK[level]) continue;
-    const own = existing.find((r) => r.tour_id === tourId && r.area === area);
-    if (!own) out.insert.push({ area, level });
-    else if (RANK[own.level as Level] < RANK[level]) out.raise.push(own.id);
-  }
-  return out;
+  return mergeAccessRows(existing, presetRows(tourId, preset));
 }
 
 /** A preset as invite rows for one tour (the invite's initial_access). */

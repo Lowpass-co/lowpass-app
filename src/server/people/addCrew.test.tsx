@@ -58,13 +58,23 @@ beforeEach(() => {
   viewerManager = true;
   db = new FakeDb({
     unique: { tour_personnel: [['tour_id', 'person_id', 'role']], personnel: [['workspace_id', 'lp_id']] },
+    rpc: {
+      // Admin-only in the database; the fake returns members with their login emails.
+      list_workspace_members: (d, a) => ({
+        data: d
+          .t('workspace_members')
+          .filter((m) => m.workspace_id === a.p_workspace_id)
+          .map((m) => ({ member_id: m.id, user_id: m.user_id, email: m.email ?? null, role: m.role })),
+        error: null,
+      }),
+    },
   });
   db.seed('tours', [
     { id: TOUR, workspace_id: WS, artist_id: 'art', name: 'Winter 26', start_date: '2026-11-26' },
     { id: OLD, workspace_id: WS, artist_id: 'art', name: 'Spring 26', start_date: '2026-04-01' },
   ]);
   db.seed('artists', [{ id: 'art', name: 'Charlotte Sands' }]);
-  db.seed('workspace_members', [{ id: 'm-me', workspace_id: WS, user_id: 'user-1', role: 'admin' }]);
+  db.seed('workspace_members', [{ id: 'm-me', workspace_id: WS, user_id: 'user-1', role: 'admin', email: 'adam@lowpass.co' }]);
   person('ben', 'Ben Quinton', { role: 'TM Assistant', email: 'ben@x.co' });
   person('jo', 'Jo Monitors', { role: 'Monitor Engineer' });
 });
@@ -222,6 +232,65 @@ describe('app access on this tour', () => {
     role = 'manager';
     expect((await login(db.t('tour_personnel')[0].id as string, 'PUT', { preset: 'crew' })).status).toBe(403);
     expect(db.t('workspace_invites')).toHaveLength(0);
+  });
+});
+
+describe('a login follows the crew record\'s email (Adam added himself under an old email)', () => {
+  const pendingInvite = (email: string, access: unknown[] = []) =>
+    db.seed('workspace_invites', [
+      {
+        id: 'inv-x',
+        workspace_id: WS,
+        invited_email: email,
+        invited_role: 'readonly',
+        token: 'tok-x',
+        personnel_id: 'jo',
+        accepted_at: null,
+        expires_at: '2099-01-01T00:00:00Z',
+        created_at: '2026-11-21',
+        initial_access: access,
+      },
+    ]);
+
+  it("the email is an existing login here → linked, no invite (yourself: 'Sees every tour')", async () => {
+    db.t('personnel').find((p) => p.id === 'jo')!.email = 'ADAM@lowpass.co';
+    pendingInvite('old@gmail.com');
+    const res = await add([{ person_id: 'jo', login: { preset: 'crew' } }]);
+    const { results } = (await res.json()) as { results: Array<{ login: { kind: string } }> };
+    expect(results[0].login.kind).toBe('full');
+    expect(db.t('personnel').find((p) => p.id === 'jo')!.user_id).toBe('user-1');
+    expect(db.t('workspace_invites')).toHaveLength(0); // the stale link is withdrawn
+  });
+
+  it("a Member's pending invite access moves onto their login when linked", async () => {
+    db.seed('workspace_members', [{ id: 'm-jo', workspace_id: WS, user_id: 'u-jo', role: 'readonly', email: 'jo@x.co' }]);
+    db.t('personnel').find((p) => p.id === 'jo')!.email = 'jo@x.co';
+    pendingInvite('old@gmail.com', [{ tour_id: OLD, area: 'files', level: 'edit' }]);
+    const tp = await add([{ person_id: 'jo' }]);
+    expect(tp.status).toBe(200);
+    const memberId = db.t('tour_personnel').find((r) => r.person_id === 'jo')!.id as string;
+    const res = await login(memberId, 'PUT', { preset: 'crew' });
+    expect(((await res.json()) as { login: { kind: string } }).login.kind).toBe('granted');
+    const rows = db.t('tour_access').filter((r) => r.member_id === 'm-jo');
+    expect(rows.some((r) => r.tour_id === OLD && r.area === 'files' && r.level === 'edit')).toBe(true);
+    expect(rows.filter((r) => r.tour_id === TOUR)).toHaveLength(Object.keys(PRESET_ACCESS.crew).length);
+    expect(db.t('workspace_invites')).toHaveLength(0);
+  });
+
+  it('never steals a login that already has a crew record here', async () => {
+    db.t('personnel').find((p) => p.id === 'ben')!.user_id = 'user-1'; // Adam's own record
+    db.t('personnel').find((p) => p.id === 'jo')!.email = 'adam@lowpass.co';
+    const { syncPersonnelLogin } = await import('@/server/people/tourLogin');
+    expect(await syncPersonnelLogin(db.client(), WS, 'jo', 'user-1')).toBe('none');
+    expect(db.t('personnel').find((p) => p.id === 'jo')!.user_id).toBeNull();
+  });
+
+  it('no login yet → a pending invite is re-addressed to the new email (same link)', async () => {
+    db.t('personnel').find((p) => p.id === 'jo')!.email = 'new@x.co';
+    pendingInvite('old@gmail.com');
+    const { syncPersonnelLogin } = await import('@/server/people/tourLogin');
+    expect(await syncPersonnelLogin(db.client(), WS, 'jo', 'user-1')).toBe('retargeted');
+    expect(db.t('workspace_invites')[0]).toMatchObject({ invited_email: 'new@x.co', token: 'tok-x' });
   });
 });
 
