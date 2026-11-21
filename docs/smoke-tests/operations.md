@@ -955,3 +955,7 @@ is made. Change the record's email to your login email (People panel) →
 Crew shows "Sees every tour" (or the access, for a Member); the old link
 now says the invite isn't found — none is needed. With an email that has no
 login yet, the same link stays valid for the NEW address.
+#### CREW-10 — Rates in the person's panel
+Crew → click someone with rates in Payroll → **Rates** lists them (Show £…,
+Per diem £…). Someone with none → "No rates yet — set them in Payroll" (never
+"Could not load rates"). A Member without Payroll access can't read them.

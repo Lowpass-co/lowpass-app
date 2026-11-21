@@ -124,6 +124,11 @@ export async function ShellV3Mount({
       denseRail={denseRail}
       landing={landing}
       workspaceName={workspaceName ? toTitleCase(workspaceName) : 'Workspace'}
+      /* The wrong-workspace recovery control, on EVERY tier (S-3b) — shown
+         once, beside the logo; it used to sit at the right as well, so the
+         name appeared twice (Nov 2026, Adam). Single-workspace users see a
+         plain label. */
+      workspace={<WorkspaceSwitcher />}
       switcher={
         <ArtistTourPicker
           artists={pickerArtists}
@@ -139,11 +144,6 @@ export async function ShellV3Mount({
       }
       headerRight={
         <>
-          {/* S-3b — the wrong-workspace recovery control, on EVERY tier now.
-              shell-v1's TopBar and shell-v2's ProductHeader both mounted it;
-              the v3 bar didn't, which silently regressed recovery on every
-              migrated surface. Single-workspace users see a plain label. */}
-          <WorkspaceSwitcher />
           <ProductHeaderAvatarMenu
             user={{ name: displayName, email: user?.email ?? '', avatarUrl }}
             isSiteAdmin={isSiteAdmin}
