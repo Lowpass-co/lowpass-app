@@ -28,6 +28,10 @@ import type { NavContext } from '@/lib/nav/ia';
 export interface TopBarV3Props {
   ctx: NavContext;
   workspaceName: string;
+  /** The workspace control (the switcher — a dropdown for people in 2+
+   *  workspaces, a plain label otherwise). Shown ONCE, here, beside the logo
+   *  (Nov 2026, Adam: "it says my workspace twice"). Absent → a plain link. */
+  workspace?: React.ReactNode;
   /** THE artist/tour picker. Supplied by the mounting layout, which already has
    *  the server data it needs — the one <ArtistTourPicker>, not a second
    *  control that can drift from it. */
@@ -44,7 +48,7 @@ export interface TopBarV3Props {
   landing?: boolean;
 }
 
-export function TopBarV3({ ctx, workspaceName, switcher, right, landing = false }: TopBarV3Props) {
+export function TopBarV3({ ctx, workspaceName, workspace, switcher, right, landing = false }: TopBarV3Props) {
   // Nov 2026: on the workspace pages too — the home page is where you start,
   // and the fastest way into a tour was hidden exactly there. (Not on the You
   // pages: settings aren't about a tour.)
@@ -61,29 +65,43 @@ export function TopBarV3({ ctx, workspaceName, switcher, right, landing = false 
       }}
     >
       {/* The logo, top left on every page (Nov 2026, Adam — it replaced an
-          orange square). Home = the workspace, same as the name beside it. */}
-      <Link href="/artists" aria-label="Lowpass — home" data-testid="top-bar-logo" style={{ display: 'inline-flex', flex: '0 0 auto' }}>
-        <Image src="/lowpass-logo.png" alt="" width={36} height={28} className="h-7 w-auto" priority />
-      </Link>
-
-      {/* Workspace — always the way back to the top. */}
+          orange square). Home = the workspace's artists. */}
       <Link
         href="/artists"
-        data-testid="top-bar-workspace"
-        style={{
-          display: 'inline-flex', alignItems: 'center', gap: 6,
-          fontSize: 'var(--lp-text-sm)', color: 'var(--lp-text-secondary)',
-          textDecoration: 'none', whiteSpace: 'nowrap',
-        }}
+        aria-label="Lowpass — home"
+        data-testid="top-bar-logo"
+        style={{ position: 'relative', display: 'inline-flex', flex: '0 0 auto' }}
       >
-        {/* The icon is the spinner slot — same size either way, so the name
-            doesn't shuffle sideways the moment you click it. */}
-        <PendingSwap className="h-3.5 w-3.5">
-          <Building2 className="h-3.5 w-3.5" aria-hidden />
-        </PendingSwap>
-        {workspaceName}
-        <PendingLive label={workspaceName} />
+        <Image src="/lowpass-logo.png" alt="" width={36} height={28} className="h-7 w-auto" priority />
+        {/* Loading home: a small spinner on the logo's corner, so the bar
+            doesn't shift. */}
+        <span style={{ position: 'absolute', right: -6, bottom: -2, display: 'inline-flex' }}>
+          <PendingSwap className="h-3 w-3">
+            <></>
+          </PendingSwap>
+        </span>
+        <PendingLive label="home" />
       </Link>
+
+      {workspace ?? (
+        <Link
+          href="/artists"
+          data-testid="top-bar-workspace"
+          style={{
+            display: 'inline-flex', alignItems: 'center', gap: 6,
+            fontSize: 'var(--lp-text-sm)', color: 'var(--lp-text-secondary)',
+            textDecoration: 'none', whiteSpace: 'nowrap',
+          }}
+        >
+          {/* The icon is the spinner slot — same size either way, so the name
+              doesn't shuffle sideways the moment you click it. */}
+          <PendingSwap className="h-3.5 w-3.5">
+            <Building2 className="h-3.5 w-3.5" aria-hidden />
+          </PendingSwap>
+          {workspaceName}
+          <PendingLive label={workspaceName} />
+        </Link>
+      )}
 
       {showPicker ? (
         <>

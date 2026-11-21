@@ -52,6 +52,8 @@ export interface AppShellV3Props {
   /** Query string, for the budget tabs (?tab=). Include the leading '?'. */
   search?: string;
   workspaceName?: string;
+  /** The workspace control, beside the logo (the switcher). */
+  workspace?: React.ReactNode;
   /** The ONE picker, supplied by the layout that has its server data. */
   switcher?: React.ReactNode;
   /** Known at tour scope from server data — the path doesn't carry it. */
@@ -74,6 +76,7 @@ export function AppShellV3({
   pathname: pathnameProp,
   search: searchProp = '',
   workspaceName = 'Workspace',
+  workspace,
   switcher,
   artistId,
   badges,
@@ -134,6 +137,7 @@ export function AppShellV3({
       <TopBarV3
         ctx={ctx}
         workspaceName={workspaceName}
+        workspace={workspace}
         switcher={switcher}
         right={headerRight}
         landing={landing}

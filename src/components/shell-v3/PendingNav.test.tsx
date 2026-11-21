@@ -128,4 +128,10 @@ describe('the ways out of the current scope', () => {
     mount(`/operations/${T}/routing`);
     expect(spinning('top-bar-workspace')).toBe(true);
   });
+
+  it('so does the logo (home), without moving it', () => {
+    status.pending = true;
+    mount(`/operations/${T}/routing`);
+    expect(spinning('top-bar-logo')).toBe(true);
+  });
 });
