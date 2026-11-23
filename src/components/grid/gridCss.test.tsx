@@ -3,9 +3,10 @@
    start / center) therefore collapses to zero width — the section totals did,
    and broke every section header with figures (Nov 2026). Guard the header. */
 import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
-const css = readFileSync(new URL('./grid.css', import.meta.url), 'utf8');
+const css = readFileSync(resolve(process.cwd(), 'src/components/grid/grid.css'), 'utf8');
 const rule = (sel: string) => {
   const i = css.indexOf(`${sel} {`);
   expect(i, `${sel} rule`).toBeGreaterThan(-1);
