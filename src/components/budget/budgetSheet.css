@@ -224,3 +224,13 @@
     display: none;
   }
 }
+
+/* "Show in" another currency — the panel is a converted, read-only view. */
+.bs-converted {
+  margin: 0;
+  padding: var(--lp-space-2) var(--lp-space-4);
+  border-bottom: 1px solid var(--lp-border-subtle);
+  background: color-mix(in srgb, var(--lp-orange) 6%, transparent);
+  font-size: var(--lp-text-sm);
+  color: var(--lp-text-secondary);
+}

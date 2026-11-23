@@ -370,6 +370,18 @@ recreate a `_legacy/` tree: delete dead code instead of parking it.
   from the person's last tour (`src/server/payroll/seedRateCard.ts`); the library
   "Default day rates" (`standard_rates`) are retired. Don't add a rate input
   anywhere else (Oct 2026, Adam).
+- **A tour's currency changes ONLY through `changeTourCurrency`**
+  (`src/server/tours/currency.ts`, called by PATCH /api/tours/[id] — Tour
+  settings › Details and Budget › Money's Currency card both send it). It
+  fetches a live old → new rate and calls `change_tour_currency()` (migration
+  297), which restates every `budget_fx_rates` row and every
+  `locked_fx_rate` (lines + income) in one transaction, then rebuilds the
+  automatic lines. Never write `tours.currency` directly: stored rates are
+  "1 X = r <tour currency>", so flipping the code alone misreads all of them.
+  Amounts with no currency of their own keep their numbers (£350 → $350).
+- **"Show in" (?display=) is a VIEW**: the grid AND `<BudgetSheetTop>`
+  convert (`convertVia`); while converted the summary is read-only (no $ typed
+  into a £ field) and says so. It never changes the tour's currency.
 - **FX is live, never typed.** `budget_fx_rates` is filled by
   `src/server/budget/liveFx.ts` (hourly on budget load + Settings "Refresh now");
   there is no manual FX endpoint. Actuals keep their `locked_fx_rate`.
