@@ -2543,3 +2543,9 @@ Budget toolbar → Show in **EUR** on a £ tour → the summary panel (Income,
 Total expenses, Net, Where it goes, the folded rows) AND the grid show €,
 with "Showing in EUR — converted from GBP" at the top; no money box can be
 typed into. Show in back to GBP → the editors return.
+
+#### BUD-92 — Section headers stay on one line
+Budget grid with figures in Salaries / Per Diems (automatic sections): each
+section header is one line — dot, NAME, count, PAYROLL badge on the left, "est
+$… · act $…" on the right — and the first row sits below it. No text stacked
+down the right edge. Narrow the window: the totals clip with "…", never wrap.

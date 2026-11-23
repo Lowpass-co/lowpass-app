@@ -223,7 +223,12 @@
   gap: var(--lp-space-2);
   padding: 0 var(--gr-pad-x);
   grid-column: 1 / 4;
+  /* One line, always: a long name clips rather than growing the header. */
+  white-space: nowrap;
+  overflow: hidden;
 }
+.lp-grid .sh-name > * { flex-shrink: 0; }
+.lp-grid .sh-name > .sh-title { flex-shrink: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .lp-grid .dot {
   width: 7px;
   height: 7px;
@@ -271,9 +276,20 @@
   border: 1px solid color-mix(in srgb, var(--gr-purple) 35%, transparent);
   cursor: default;
 }
+/* The section totals FILL their span and right-align their text. They used
+   to `justify-self: end` — sized to their content — but every grid cell is
+   `contain: inline-size` (a cell's text must never size its column, #117), so
+   that content size is 0: the totals collapsed to a one-word-wide stack at the
+   far right, taller than the header, and pushed the section name down onto
+   the first row (Nov 2026, Adam: "bad visual bug"). `-1` = the last real
+   column line (99 made ~85 empty implicit columns). */
 .lp-grid .sh-sub {
-  grid-column: 4 / 99;
-  justify-self: end;
+  grid-column: 4 / -1;
+  justify-self: stretch;
+  text-align: right;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
   padding: 0 var(--gr-pad-x);
   color: var(--gr-text-3);
   font-size: var(--lp-text-xs);
