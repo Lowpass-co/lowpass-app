@@ -330,11 +330,14 @@ recreate a `_legacy/` tree: delete dead code instead of parking it.
 - Grid prop `onDeleteRows(uids)` — fired by the row's hover bin, right-click →
   Delete, ⌘⌫ / Ctrl+Backspace and More → Delete, always with the rows
   HIGHLIGHTED ON SCREEN. Plain Delete / Backspace still only clears cells.
-- Selection → rows goes through `viewRows()` (`src/components/grid/gridModel.ts`),
-  never `flat()`: grouped by phase / status, `flat()[i]` is a different row from
-  the one on screen. `groupedBuckets()` is the one place grouped order is decided
-  (the renderer reads it too). Other selection ops (clear, copy, paste, fill)
-  still use `flat()` — known wrong when grouped; not yet fixed.
+- Every display index (selection, `data-r`, the editor, fill, copy / paste /
+  clear, row delete) resolves through `viewRows()` (`src/components/grid/gridModel.ts`)
+  — inside Grid, `flat` IS `shownRows`. It used to be section order whatever
+  the grouping, so grouped by status / phase, TYPING saved to a different row
+  from the one highlighted, and ⤢ Open opened another line (grouped rows were
+  drawn with a stand-in section, `_si` 0) — both fixed Nov 2026, tested. `groupedBuckets()` is the
+  one place grouped order is decided (the renderer reads it too). Never index
+  display rows with `flatRows()` directly.
 - `BudgetGridView` hides the rows, shows "Deleted N rows · Undo" for 6 s, THEN
   sends `DELETE /api/budget/line-items?ids=` (keepalive; sent at once on
   unmount / pagehide). Undo never re-creates a line — nothing was deleted yet.
@@ -347,6 +350,35 @@ recreate a `_legacy/` tree: delete dead code instead of parking it.
   just-deleted row didn't show until the next refresh.
 - Workbook import drops totals and blanks (`skipRowReason`) and offers
   percentage / no-amount rows UNTICKED (`reviewHint`).
+
+### Grid right-click (Nov 2026, Adam: "add right click to the grid, with options")
+
+- Every right-click in `<Grid>` opens a `<GridMenu>`, never the browser's —
+  except inside a cell being typed in (spellcheck / paste stay). The row owns
+  it (`onRowContextMenu`), so the locked Estimate, # and receipts get it too.
+  - **Cell**: Copy · Paste · Clear · Open · Add line to "<section>" · Delete
+    row(s). Off a cell (#, receipts): no cell ops; Delete = that row.
+  - **Section header**: Rename · Add line · Move up / down · Delete section.
+    `isFixedSection` (Budget: "Uncategorised") → only Add line. Delete asks
+    the host (`onDeleteSection`) — no prop, no item.
+  - **Column header**: Hide column (not # / the reference block) · Columns… ·
+    Reset column widths.
+- Right-click inside the highlight (or another column of several highlighted
+  rows) keeps it; anywhere else moves it to the clicked cell first — the menu
+  always acts on what's highlighted.
+- **Clear commits through `onEdit`** like typing (it used to change only the
+  screen). Paste and Clear obey typing's guards (`cellWritable`: ro unless
+  overridden, version-locked Estimate, a derived section's Estimate) and
+  never write computed / structural cells; Clear also skips pick-lists
+  (status / dropdown — the grid can't know their "none").
+- `GridMenu` items take `disabled` (with the reason as `hint`), `hint`
+  (shortcut), `danger`, `sep`; config takes `title` and `gap`. It flips /
+  pulls itself back on screen.
+- **Delete section** (Budget): refused when the section holds automatic lines
+  (`planSectionDelete`, src/lib/budget/rowDelete.ts — client and the DELETE
+  route both use it, 409 DERIVED_LINES); 409 VERSION_LOCKED on an approved
+  budget; 403 when RLS lets you read it but not delete it (it used to say
+  204). Its lines move to Uncategorised (FK SET NULL); nothing is deleted.
 
 ### Money — one writer, one formula (money repair, Oct 2026)
 

@@ -18,7 +18,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Grid, autoSourcePage } from '@/components/grid/Grid';
 import { useBudgetConfirm } from '@/components/budget/BudgetConfirmDialog';
-import { autoSourcesText, deletedToastText, planRowDelete } from '@/lib/budget/rowDelete';
+import { autoSourcesText, deletedToastText, planRowDelete, planSectionDelete, sectionDeleteMessage } from '@/lib/budget/rowDelete';
 import { VersionLockModal } from '@/components/budget/versioning/VersionLockModal';
 import type { VersionStatus, BudgetVersionVm } from '@/components/budget/versioning/versionApi';
 import { AddReceiptPanel, type AddReceiptResult } from '@/components/budget/AddReceiptPanel';
@@ -557,6 +557,50 @@ export function BudgetGridView({
     [versionLocked, linesById, showToast, requestConfirm, commitDelete, unhide],
   );
 
+  /* Section delete (Nov 2026) — right-click a section header → Delete section.
+     Its lines move to Uncategorised (FK ON DELETE SET NULL); a section with
+     automatic lines is refused (planSectionDelete says why). Not optimistic:
+     the grid remounts on sections.length when the refresh lands. */
+  const onDeleteSection = useCallback(
+    (sectionUid: string) => {
+      const section = sections.find((x) => x.id === sectionUid);
+      if (!section) return; // "Uncategorised" or already gone
+      if (versionLocked) {
+        setLockModalOpen(true);
+        return;
+      }
+      const plan = planSectionDelete(sectionUid, allLines);
+      if (plan.auto.length) {
+        showToast(
+          `“${section.name}” holds automatic rows from ${autoSourcesText(plan.auto, autoSourcePage)} — Lowpass files them there, so it can’t be deleted.`,
+          'error',
+        );
+        return;
+      }
+      requestConfirm({
+        title: `Delete “${section.name}”?`,
+        message: sectionDeleteMessage(plan.lines),
+        confirmLabel: 'Delete section',
+        tone: 'danger',
+        onConfirm: () => {
+          void fetch(`/api/budget/sections?id=${encodeURIComponent(sectionUid)}`, { method: 'DELETE' })
+            .then(async (res) => {
+              const j = (await res.json().catch(() => null)) as { code?: string; error?: string } | null;
+              if (res.status === 409 && j?.code === 'VERSION_LOCKED') setLockModalOpen(true);
+              else if (!res.ok) showToast(j?.error ?? 'Could not delete the section', 'error');
+              router.refresh();
+            })
+            .catch(() => {
+              showToast('Could not delete the section', 'error');
+              router.refresh();
+            });
+        },
+      });
+    },
+    [sections, versionLocked, allLines, showToast, requestConfirm, router],
+  );
+  const isFixedSection = useCallback((uid: string) => uid === 'ungrouped', []);
+
   // Reorder persistence (BUD-42). Optimistic — the grid already shows the new
   // order; PATCH each uid with its new index. On any failure, toast + refresh
   // to the true order. Reuses the existing PATCH routes (both accept sort_order).
@@ -798,6 +842,8 @@ export function BudgetGridView({
         onAddSection={onAddSection}
         onRenameSection={onRenameSection}
         onDeleteRows={onDeleteRows}
+        onDeleteSection={onDeleteSection}
+        isFixedSection={isFixedSection}
         onReorderRow={onReorderRow}
         onReorderSection={onReorderSection}
         onFileDropToRow={handleFileDropToRow}

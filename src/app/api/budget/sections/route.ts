@@ -5,7 +5,12 @@
    GET    ?tour_id=uuid       — list sections for a tour (sort_order)
    POST   { tour_id, name }   — create a section (sort_order = max+1)
    PATCH  { id, name?, sort_order? } — rename / reorder
-   DELETE ?id=uuid (or body)  — delete; lines' section_id → NULL via FK
+   DELETE ?id=uuid (or body)  — delete; lines' section_id → NULL via FK.
+                                Refused: 404 not yours, 409 VERSION_LOCKED
+                                (approved budget), 409 DERIVED_LINES (holds
+                                automatic lines — reconcile files them
+                                there), 403 when RLS lets you read but not
+                                delete (it used to answer 204 for that).
 
    Workspace-scoped throughout (RLS + explicit workspace_id filter).
    ============================================ */
@@ -17,6 +22,9 @@ import {
   isSingletonSectionKind,
   normalizeSectionKind,
 } from '@/lib/budget/sectionKinds';
+import { planSectionDelete } from '@/lib/budget/rowDelete';
+import { resolveLockState } from '@/server/budget/versions';
+import type { BudgetLineItem } from '@/types';
 
 async function resolveWorkspace() {
   const supabase = await createServerSupabaseClient();
@@ -245,16 +253,67 @@ export async function DELETE(request: Request) {
     return NextResponse.json({ error: 'id is required' }, { status: 400 });
   }
 
+  const { data: section, error: readErr } = await supabase
+    .from('budget_sections')
+    .select('id, tour_id, name')
+    .eq('id', id)
+    .eq('workspace_id', workspaceId)
+    .maybeSingle();
+  if (readErr) {
+    return NextResponse.json({ error: readErr.message }, { status: 500 });
+  }
+  if (!section) {
+    return NextResponse.json({ error: 'Section not found' }, { status: 404 });
+  }
+  const tourId = (section as { tour_id: string }).tour_id;
+
+  // An approved & locked budget refuses structure changes, like adding or
+  // deleting a line does.
+  const { locked, version } = await resolveLockState(supabase, tourId, workspaceId);
+  if (locked) {
+    return NextResponse.json(
+      { error: 'This budget is approved & locked.', code: 'VERSION_LOCKED', versionId: version?.id ?? null },
+      { status: 409 },
+    );
+  }
+
+  // Automatic lines are filed by reconcile — the same rule the grid applies
+  // before asking (planSectionDelete).
+  const { data: lines, error: linesErr } = await supabase
+    .from('budget_line_items')
+    .select('id, section_id, source_entity_type, hotel_id, room_id, flight_id, gear_id, tour_gear_id')
+    .eq('section_id', id)
+    .eq('workspace_id', workspaceId);
+  if (linesErr) {
+    return NextResponse.json({ error: linesErr.message }, { status: 500 });
+  }
+  const plan = planSectionDelete(id, (lines ?? []) as unknown as BudgetLineItem[]);
+  if (plan.auto.length) {
+    const sources = [...new Set(plan.auto.map((a) => a.source))].join(', ');
+    return NextResponse.json(
+      {
+        error: `“${(section as { name: string }).name}” holds automatic rows (${sources}) — Lowpass files them there, so it can’t be deleted.`,
+        code: 'DERIVED_LINES',
+      },
+      { status: 409 },
+    );
+  }
+
   // Lines pointing at this section have section_id reset to NULL by the
   // FK (ON DELETE SET NULL) — they fall into "Uncategorised", not deleted.
-  const { error } = await supabase
+  const { data: gone, error } = await supabase
     .from('budget_sections')
     .delete()
     .eq('id', id)
-    .eq('workspace_id', workspaceId);
+    .eq('workspace_id', workspaceId)
+    .select('id');
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+  if (!gone?.length) {
+    // RLS let us read it but not delete it (a view-only member).
+    return NextResponse.json({ error: 'You can’t change this budget.' }, { status: 403 });
   }
   return new Response(null, { status: 204 });
 }

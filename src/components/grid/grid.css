@@ -852,6 +852,29 @@
 }
 .lp-grid-pop .mi:hover { background: var(--lp-surface-hover); color: var(--lp-text); }
 .lp-grid-pop .mi.on { color: var(--lp-orange); font-weight: 600; }
+/* Right-click menu (Nov 2026): shortcut / reason hint, disabled, dangerous,
+   and a hairline between groups. */
+.lp-grid-pop .mi .hint {
+  margin-left: auto;
+  padding-left: var(--lp-space-4);
+  font-size: var(--lp-text-2xs);
+  color: var(--lp-text-tertiary);
+  white-space: nowrap;
+}
+.lp-grid-pop .mi.dis { color: var(--lp-text-tertiary); cursor: default; opacity: 0.6; }
+.lp-grid-pop .mi.dis:hover { background: none; color: var(--lp-text-tertiary); }
+.lp-grid-pop .mi.danger { color: var(--color-lp-error); }
+.lp-grid-pop .mi.danger:hover { color: var(--color-lp-error); }
+.lp-grid-pop .mi.danger.dis { color: var(--lp-text-tertiary); }
+.lp-grid-pop .mi.sep { margin-top: var(--lp-space-2); position: relative; }
+.lp-grid-pop .mi.sep::before {
+  content: '';
+  position: absolute;
+  left: var(--lp-space-2);
+  right: var(--lp-space-2);
+  top: calc(-1 * var(--lp-space-1) - 1px);
+  border-top: 1px solid var(--lp-border);
+}
 .lp-grid-pop .go {
   width: 100%;
   margin-top: 6px;
