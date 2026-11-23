@@ -27,6 +27,8 @@ import {
   Trash2,
 } from 'lucide-react';
 import { useToast } from '@/components/ui/Toast';
+import { TOUR_CURRENCIES } from '@/lib/currencies';
+import { withCurrent } from '@/lib/tours/regions';
 import { useBudgetConfirm } from '@/components/budget/BudgetConfirmDialog';
 import { useTrackPhases } from '@/components/budget/BudgetTrackPhasesContext';
 import { InlineSelectCell } from '@/components/budget/cells/InlineSelectCell';
@@ -69,9 +71,12 @@ export function BudgetSettingsTab({
   versions = [],
   viewedVersionId = null,
   canApprove = false,
+  canEditTour = false,
 }: {
   tourId: string;
   tourCurrency?: string;
+  /** Admin / manager — may change the tour's currency (PATCH /api/tours/[id]). */
+  canEditTour?: boolean;
   sections: BudgetSection[];
   versions?: BudgetVersionVm[];
   /** State-fix B1 — the VIEWED version (?version=), so Settings agrees with the
@@ -81,6 +86,7 @@ export function BudgetSettingsTab({
 }) {
   return (
     <div className="mx-auto w-full max-w-[820px] space-y-5 py-2">
+      <TourCurrencyCard tourId={tourId} tourCurrency={tourCurrency} canEdit={canEditTour} />
       <VersionApprovalCard tourId={tourId} versions={versions} viewedVersionId={viewedVersionId} canApprove={canApprove} />
       <PhaseToggleCard />
       <OverheadsCard tourId={tourId} />
@@ -95,6 +101,107 @@ export function BudgetSettingsTab({
 
 /* -------------------------------------------------- */
 /* Exchange rates — LIVE, never typed (Oct 2026).      */
+/* The tour's currency (Nov 2026, Adam) — the SAME field */
+/* as Tour settings › Details. One currency per tour;    */
+/* changing it restates the tour's exchange rates and   */
+/* locked actuals (changeTourCurrency / migration 297).  */
+/* Explicit button with the consequence shown inline —   */
+/* a cascading change, never auto-saved.                 */
+/* -------------------------------------------------- */
+
+function TourCurrencyCard({ tourId, tourCurrency, canEdit }: { tourId: string; tourCurrency: string; canEdit: boolean }) {
+  const router = useRouter();
+  const { showToast } = useToast();
+  const current = (tourCurrency || 'GBP').toUpperCase();
+  const [pick, setPick] = useState(current);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const label = (c: string) => TOUR_CURRENCIES.find((o) => o.value === c)?.label ?? c;
+  const sym = (c: string) => label(c).split(' ')[0];
+
+  async function change() {
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/tours/${tourId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ currency: pick }),
+      });
+      const body = (await res.json().catch(() => null)) as { error?: string } | null;
+      if (!res.ok) {
+        setError(body?.error ?? `Couldn't change the currency (${res.status})`);
+        return;
+      }
+      showToast(`This tour is now in ${pick}`);
+      router.refresh();
+    } catch {
+      setError("Couldn't change the currency — check your connection.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <section className="rounded-lg border p-4" style={cardStyle}>
+      <h2 className="lp-h3">Currency</h2>
+      <p className="mt-1" style={{ fontSize: 'var(--lp-text-sm)', color: 'var(--lp-text-secondary)' }}>
+        The tour&rsquo;s one currency — budget, payroll, crew and income all use it. Same setting as Tour settings ›
+        Details.
+      </p>
+      <div className="mt-3 flex flex-wrap items-center gap-2">
+        <select
+          value={pick}
+          disabled={!canEdit || busy}
+          onChange={(e) => {
+            setPick(e.target.value);
+            setError(null);
+          }}
+          aria-label="Tour currency"
+          style={inputStyle}
+        >
+          {withCurrent(TOUR_CURRENCIES, current).map((c) => (
+            <option key={c.value} value={c.value}>
+              {c.label}
+            </option>
+          ))}
+        </select>
+        {canEdit && pick !== current ? (
+          <button
+            type="button"
+            onClick={() => void change()}
+            disabled={busy}
+            className="btn-transition inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 font-semibold"
+            style={{ background: 'var(--lp-orange)', color: 'var(--lp-text-inverse)', fontSize: 'var(--lp-text-sm)', opacity: busy ? 0.6 : 1 }}
+          >
+            {busy ? <RefreshCw className="h-3.5 w-3.5 animate-spin" aria-hidden /> : null}
+            Change to {pick}
+          </button>
+        ) : null}
+        {!canEdit ? (
+          <span style={{ fontSize: 'var(--lp-text-xs)', color: 'var(--lp-text-tertiary)' }}>
+            Admins and managers can change it.
+          </span>
+        ) : null}
+      </div>
+      {canEdit && pick !== current ? (
+        <p className="mt-2" style={{ fontSize: 'var(--lp-text-sm)', color: 'var(--lp-text)' }}>
+          Amounts typed in {current} keep their numbers and become {pick} ({sym(current)}350 → {sym(pick)}350): rates,
+          per diems and most lines. Anything with its own currency (a hotel, flight, receipt or line set to another
+          currency) keeps it and converts at today&rsquo;s live rate; locked actuals are restated so their value
+          doesn&rsquo;t change.
+        </p>
+      ) : null}
+      {error ? (
+        <p className="mt-2" role="alert" style={{ fontSize: 'var(--lp-text-sm)', color: 'var(--color-lp-error)' }}>
+          {error}
+        </p>
+      ) : null}
+    </section>
+  );
+}
+
+/* -------------------------------------------------- */
 /* Every foreign currency the tour uses is fetched     */
 /* from the live vendors and refreshed when over an    */
 /* hour old (src/server/budget/liveFx.ts). Actuals     */

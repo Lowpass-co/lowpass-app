@@ -12,7 +12,11 @@ import { BudgetSheetTop, money } from './BudgetSheetTop';
 import type { BudgetLineItem, BudgetSection } from '@/types';
 
 vi.mock('@/components/ui/Toast', () => ({ useToast: () => ({ showToast: vi.fn() }) }));
-vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh: vi.fn() }) }));
+const nav = vi.hoisted(() => ({ display: null as string | null }));
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ refresh: vi.fn() }),
+  useSearchParams: () => new URLSearchParams(nav.display ? `display=${nav.display}` : ''),
+}));
 
 const sections = [{ id: 's1', name: 'Salaries', sort_order: 1 }, { id: 's2', name: 'Hotels', sort_order: 2 }] as unknown as BudgetSection[];
 const lines = [
@@ -58,7 +62,29 @@ describe('<BudgetSheetTop>', () => {
     fetchMock.mockResolvedValue(new Response('{}', { status: 200 }));
     vi.stubGlobal('fetch', fetchMock);
   });
-  afterEach(() => vi.unstubAllGlobals());
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    nav.display = null;
+  });
+
+  it('"Show in" converts THIS panel too, and nothing is editable while converted', () => {
+    nav.display = 'USD';
+    // 1 USD = 0.8 GBP → £1,000 shows as $1,250.
+    mount({ fxRates: { USD: 0.8 } });
+    expect(screen.getByTestId('sheet-converted').textContent).toMatch(/Showing in USD — converted from GBP/);
+    const totals = screen.getByRole('region', { name: 'Budget totals' });
+    expect(within(totals).getAllByText('$1,250.00').length).toBeGreaterThan(0);
+    expect(within(totals).queryAllByText('£1,000.00')).toHaveLength(0);
+    // Nothing enabled to type a $ figure into a £ field (names / % show disabled, as on an approved version).
+    const boxes = within(totals).queryAllByRole('textbox') as HTMLInputElement[];
+    expect(boxes.filter((b) => !b.disabled)).toHaveLength(0);
+  });
+
+  it('in the tour currency there is no note and the editors are back', () => {
+    mount();
+    expect(screen.queryByTestId('sheet-converted')).toBeNull();
+    expect(within(screen.getByRole('region', { name: 'Budget totals' })).queryAllByRole('textbox').length).toBeGreaterThan(0);
+  });
 
   it('one row per section, then the overheads, total and net', () => {
     mount();

@@ -2529,3 +2529,17 @@ moves to the Band group. Reload: still Band. Same for any dropdown cell in a
 spreadsheet grid.
 Name, Role and Employment here are the same data Crew and People show — see
 PPL-02…04 in operations.md.
+
+#### BUD-90 — Change the tour's currency from the budget (after 297)
+Budget › Money (Tour settings) → **Currency** card → pick USD → the note says
+what happens (£350 → $350; own-currency items convert; locked actuals keep
+their value) → **Change to USD**. The budget, Payroll, Crew and Income all show
+$; a line or hotel priced in GBP now shows its GBP figure converted to $.
+Tour settings › Details shows USD too. Switch back to GBP → the original
+figures return. A Member sees the card but can't change it.
+
+#### BUD-91 — "Show in" converts the summary too
+Budget toolbar → Show in **EUR** on a £ tour → the summary panel (Income,
+Total expenses, Net, Where it goes, the folded rows) AND the grid show €,
+with "Showing in EUR — converted from GBP" at the top; no money box can be
+typed into. Show in back to GBP → the editors return.

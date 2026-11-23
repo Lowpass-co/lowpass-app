@@ -8,6 +8,7 @@
 import { NextResponse } from 'next/server';
 import { requireWrite } from '@/lib/auth/workspace-check';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
+import { changeTourCurrency } from '@/server/tours/currency';
 
 export async function GET(
   _request: Request,
@@ -62,15 +63,21 @@ export async function PATCH(
     return NextResponse.json({ error: 'No fields to update' }, { status: 400 });
   }
 
-  const { data, error } = await supabase
-    .from('tours')
-    .update(updates)
-    .eq('id', id)
-    .select(`
+  // Currency never changes by a plain write: changeTourCurrency restates the
+  // tour's exchange rates and locked actuals with it (migration 297).
+  if (updates.currency !== undefined) {
+    const c = await changeTourCurrency(supabase, id, updates.currency);
+    if (!c.ok) return NextResponse.json({ error: c.error }, { status: c.status });
+    delete updates.currency;
+  }
+
+  const select = `
       *,
       artist:artists(*)
-    `)
-    .single();
+    `;
+  const { data, error } = Object.keys(updates).length
+    ? await supabase.from('tours').update(updates).eq('id', id).select(select).single()
+    : await supabase.from('tours').select(select).eq('id', id).single();
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });

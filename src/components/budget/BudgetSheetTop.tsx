@@ -48,7 +48,7 @@
 import { Fragment, useMemo, useState } from 'react';
 import type { KeyboardEvent, ReactNode } from 'react';
 import './budgetSheet.css';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { ChevronDown, Plus, X } from 'lucide-react';
 import {
   computeBudgetPnl,
@@ -59,7 +59,7 @@ import {
 } from '@/lib/budget/computeBudgetPnl';
 import { sheetTotalsBySection } from '@/lib/budget/sheetTotals';
 import { isIncomeRow } from '@/lib/budget/income-rows';
-import type { FxRateMap } from '@/lib/budget/fxRates';
+import { convertVia, type FxRateMap } from '@/lib/budget/fxRates';
 import { formatCurrency } from '@/lib/utils';
 import { useToast } from '@/components/ui/Toast';
 import { COMMISSION_COMPONENTS, type BudgetLineItem, type BudgetSection, type CommissionComponent } from '@/types';
@@ -284,6 +284,20 @@ export function BudgetSheetTop({
   const { showToast } = useToast();
   const router = useRouter();
   const ccy = (tourCurrency || 'GBP').toUpperCase();
+  /* "Show in" (?display=, the toolbar) converts THIS panel too — it used to
+     convert only the grid, so the totals stayed in £ and the switch looked
+     broken (Nov 2026, Adam). Converted figures are a view: nothing here is
+     editable until it's back in the tour currency (typing $ into a £ field
+     would save the wrong number). */
+  const searchParams = useSearchParams();
+  const display = (searchParams?.get('display') ?? ccy).toUpperCase();
+  const converted = display !== ccy;
+  const locked = readOnly || converted;
+  /** A tour-currency amount, shown in the display currency. */
+  const show = (n: number) => money(convertVia(Number(n) || 0, ccy, display, ccy, fxRates), display);
+  /** An amount in its own currency (null = the tour's), shown in the display currency. */
+  const showFrom = (n: number, from: string | null | undefined) =>
+    money(convertVia(Number(n) || 0, (from || ccy).toUpperCase(), display, ccy, fxRates), display);
   const [settings, setSettings] = useState<PnlSettingsInput>(() => ({ ...(initialSettings ?? {}) }) as PnlSettingsInput);
   const [rows, setRows] = useState<CommissionRow[]>(() => initialCommissions.map(toRow));
   const [busy, setBusy] = useState(false);
@@ -511,7 +525,7 @@ export function BudgetSheetTop({
       id: 'show',
       label: 'Show income',
       v: pnl.showIncome.postTax,
-      title: `After withholding tax and settlement deductions. Before tax: ${money(pnl.showIncome.preTax.projected, ccy)} proposed · ${money(pnl.showIncome.preTax.actual, ccy)} actual`,
+      title: `After withholding tax and settlement deductions. Before tax: ${show(pnl.showIncome.preTax.projected)} proposed · ${show(pnl.showIncome.preTax.actual)} actual`,
     },
     ...(nonZero(pnl.incomeBreakdown.merch) ? [{ id: 'merch', label: 'Merch income', v: pnl.incomeBreakdown.merch }] : []),
     ...(nonZero(pnl.incomeBreakdown.vip) ? [{ id: 'vip', label: 'VIP income', v: pnl.incomeBreakdown.vip }] : []),
@@ -532,7 +546,7 @@ export function BudgetSheetTop({
     OVERHEADS.filter((o) => Math.abs(pnl[o.key].projected) > 0.004)
       .map((o) =>
         pnl.mode[o.key] === 'flat'
-          ? `${o.label} ${money(pnl[o.key].projected, ccy)}`
+          ? `${o.label} ${show(pnl[o.key].projected)}`
           : `${o.label} ${toPctBox(Number(settings[`${o.key}_pct`]) || 0)}%`,
       )
       .join(' · ') || 'None set';
@@ -574,8 +588,8 @@ export function BudgetSheetTop({
         <span className="bs-fold-name">{label}</span>
         <span className="bs-fold-summary">{summary}</span>
         <span className="bs-fold-money">
-          <span>{money(v.projected, ccy)}</span>
-          <span className="bs-sub">{money(v.actual, ccy)} so far</span>
+          <span>{show(v.projected)}</span>
+          <span className="bs-sub">{show(v.actual)} so far</span>
         </span>
         <ChevronDown className={`bs-chev${open[key] ? ' is-open' : ''}`} aria-hidden />
       </button>
@@ -585,6 +599,11 @@ export function BudgetSheetTop({
 
   return (
     <section className="bs-panel" aria-label="Budget totals" data-testid="budget-sheet-top">
+      {converted ? (
+        <p className="bs-converted" role="status" data-testid="sheet-converted">
+          Showing in {display} — converted from {ccy} at live rates. Switch &ldquo;Show in&rdquo; back to {ccy} to edit.
+        </p>
+      ) : null}
       {/* ── The bottom line, once ─────────────────────────── */}
       <div className="bs-figures" aria-label="Bottom line">
         {figures.map((f) => (
@@ -595,9 +614,9 @@ export function BudgetSheetTop({
               data-testid={f.id === 'expenses' ? 'sheet-total-expenses' : f.id === 'net' ? 'sheet-net' : undefined}
               style={{ color: f.id === 'net' ? negative(f.v.projected) : undefined }}
             >
-              {money(f.v.projected, ccy)}
+              {show(f.v.projected)}
             </span>
-            <span className="bs-sub">{money(f.v.actual, ccy)} actual so far</span>
+            <span className="bs-sub">{show(f.v.actual)} actual so far</span>
           </div>
         ))}
       </div>
@@ -621,8 +640,8 @@ export function BudgetSheetTop({
                   >
                     <span className="bs-sec-name">{r.name}</span>
                     <span className="bs-sec-money">
-                      <span className={`bs-sec-spent${over ? ' is-over' : ''}`}>{money(r.actual, ccy)} spent of </span>
-                      {money(r.projected, ccy)}
+                      <span className={`bs-sec-spent${over ? ' is-over' : ''}`}>{show(r.actual)} spent of </span>
+                      {show(r.projected)}
                     </span>
                     <span className="bs-bar" aria-hidden>
                       <span className={`bs-bar-fill${over ? ' is-over' : ''}`} style={{ width: `${Math.round(pct * 100)}%` }} />
@@ -679,7 +698,7 @@ export function BudgetSheetTop({
                         <input
                           aria-label="Commission name"
                           defaultValue={r.label}
-                          disabled={readOnly}
+                          disabled={locked}
                           onBlur={(e) => {
                             const v = e.target.value.trim();
                             if (v && v !== r.label) patchCommission(r.id, { label: v });
@@ -692,7 +711,7 @@ export function BudgetSheetTop({
                         <PctInput
                           label={r.label}
                           value={r.percentage}
-                          disabled={readOnly}
+                          disabled={locked}
                           onCommit={(f) => patchCommission(r.id, { percentage: f })}
                         />
                       </td>
@@ -710,9 +729,9 @@ export function BudgetSheetTop({
                           <ChevronDown className="h-3 w-3 shrink-0 text-lp-text-tertiary" />
                         </button>
                       </td>
-                      <td className={num} title={`Actual ${money(c?.actual ?? 0, ccy)}`}>{money(c?.projected ?? 0, ccy)}</td>
+                      <td className={num} title={`Actual ${show(c?.actual ?? 0)}`}>{show(c?.projected ?? 0)}</td>
                       <td className="px-1 text-right">
-                        {!readOnly ? (
+                        {!locked ? (
                           <button
                             type="button"
                             aria-label={`Remove ${r.label}`}
@@ -727,7 +746,7 @@ export function BudgetSheetTop({
                     {baseOpen === r.id ? (
                       <tr className="border-t border-lp-border/60" data-testid="sheet-commission-base">
                         <td colSpan={5} className="px-3 py-2" style={{ fontSize: 'var(--lp-text-sm)' }}>
-                          <fieldset disabled={readOnly} className="space-y-2">
+                          <fieldset disabled={locked} className="space-y-2">
                             <legend className="mb-1 text-lp-text-secondary">{r.label} is a % of — tick the parts:</legend>
                             <div className="flex flex-wrap gap-x-4 gap-y-1">
                               {COMMISSION_COMPONENTS.map((part) => (
@@ -751,7 +770,7 @@ export function BudgetSheetTop({
                               <select
                                 aria-label={`${r.label} single base`}
                                 value={r.basis}
-                                disabled={readOnly || ticked.size > 0}
+                                disabled={locked || ticked.size > 0}
                                 onChange={(e) => patchCommission(r.id, { basis: e.target.value })}
                                 className="h-7 rounded border border-lp-border bg-lp-bg px-1 text-lp-text outline-none focus:border-lp-orange disabled:opacity-50"
                               >
@@ -761,7 +780,7 @@ export function BudgetSheetTop({
                               </select>
                             </div>
                             <div className="tabular-nums text-lp-text-tertiary">
-                              Actual so far {money(c?.actual ?? 0, ccy)}
+                              Actual so far {show(c?.actual ?? 0)}
                             </div>
                           </fieldset>
                         </td>
@@ -772,7 +791,7 @@ export function BudgetSheetTop({
                 })}
               <tr className={totalRow}>
                 <td className="px-2" colSpan={3}>
-                  {!readOnly ? (
+                  {!locked ? (
                     <button
                       type="button"
                       onClick={() => void addCommission()}
@@ -783,7 +802,7 @@ export function BudgetSheetTop({
                     </button>
                   ) : null}
                 </td>
-                <td className={num}>{money(pnl.commissions.projected, ccy)}</td>
+                <td className={num}>{show(pnl.commissions.projected)}</td>
                 <td />
               </tr>
             </tbody>
@@ -815,7 +834,7 @@ export function BudgetSheetTop({
                   <tr key={o.key} className={tr} data-testid={`sheet-overhead-${o.key}`}>
                     <td className={lbl}>
                       <span>{o.label}</span>
-                      {!readOnly ? (
+                      {!locked ? (
                         <button
                           type="button"
                           onClick={() =>
@@ -836,38 +855,38 @@ export function BudgetSheetTop({
                         <PctInput
                           label={o.label}
                           value={Number(settings[`${o.key}_pct`]) || 0}
-                          disabled={readOnly}
+                          disabled={locked}
                           onCommit={(f) => saveOverhead(o.key, f)}
                         />
                       )}
                     </td>
-                    <td className={flat && !readOnly ? 'px-2' : num}>
-                      {flat && !readOnly ? (
+                    <td className={flat && !locked ? 'px-2' : num}>
+                      {flat && !locked ? (
                         <MoneyInput
                           label={`${o.label} fixed amount`}
                           value={settings[`${o.key}_flat_amount`] != null ? Number(settings[`${o.key}_flat_amount`]) : null}
-                          placeholder={money(0, ccy)}
+                          placeholder={show(0)}
                           onCommit={(v) => saveSettings({ [`${o.key}_flat_amount`]: v }, `${o.label.toLowerCase()} amount`)}
                         />
                       ) : (
-                        money(pnl[o.key].projected, ccy)
+                        show(pnl[o.key].projected)
                       )}
                     </td>
                     <td
-                      className={readOnly ? num : 'px-2'}
+                      className={locked ? num : 'px-2'}
                       title={
                         pnl.actualOverridden[o.key]
                           ? 'Typed actual (the real invoice). Clear it to use the calculation.'
                           : 'Calculated. Type the real invoice to replace it.'
                       }
                     >
-                      {readOnly ? (
-                        money(pnl[o.key].actual, ccy)
+                      {locked ? (
+                        show(pnl[o.key].actual)
                       ) : (
                         <MoneyInput
                           label={`${o.label} actual`}
                           value={typedActual != null ? Number(typedActual) : null}
-                          placeholder={money(pnl[o.key].actual, ccy)}
+                          placeholder={show(pnl[o.key].actual)}
                           onCommit={(v) => saveSettings({ [`${o.key}_actual_amount`]: v }, `${o.label.toLowerCase()} actual`)}
                         />
                       )}
@@ -879,8 +898,8 @@ export function BudgetSheetTop({
                 <tr className={tr}>
                   <td className={lbl}>Merch cost of goods</td>
                   <td />
-                  <td className={num}>{money(pnl.cogs.projected, ccy)}</td>
-                  <td className={num}>{money(pnl.cogs.actual, ccy)}</td>
+                  <td className={num}>{show(pnl.cogs.projected)}</td>
+                  <td className={num}>{show(pnl.cogs.actual)}</td>
                 </tr>
               ) : null}
             </tbody>
@@ -910,8 +929,8 @@ export function BudgetSheetTop({
               {incomeParts.map((r) => (
                 <tr key={r.id} className={tr} data-testid={`sheet-income-${r.id}`} title={r.title}>
                   <td className={lbl}>{r.label}</td>
-                  <td className={num}>{money(r.v.projected, ccy)}</td>
-                  <td className={num}>{money(r.v.actual, ccy)}</td>
+                  <td className={num}>{show(r.v.projected)}</td>
+                  <td className={num}>{show(r.v.actual)}</td>
                   <td />
                   <td />
                 </tr>
@@ -927,29 +946,38 @@ export function BudgetSheetTop({
                           label="Income name"
                           value={l.label ?? ''}
                           autoFocus={justAdded === l.id}
-                          disabled={readOnly}
+                          disabled={locked}
                           onCommit={(v) => saveIncomeLine(l.id, { label: v })}
                         />
                         {foreign ? <span className="text-lp-text-tertiary">{(l.currency || '').toUpperCase()}</span> : null}
                       </span>
                     </td>
-                    <td className="px-2">
-                      <MoneyInput
-                        label={`${l.label || 'Income'} proposed`}
-                        value={Number(l.proposed_cost) || 0}
-                        disabled={readOnly}
-                        onCommit={(v) => saveIncomeLine(l.id, { proposed_cost: v ?? 0 })}
-                      />
-                    </td>
-                    <td className="px-2">
-                      <MoneyInput
-                        label={`${l.label || 'Income'} actual`}
-                        value={Number(l.actual_cost) ? Number(l.actual_cost) : null}
-                        placeholder="—"
-                        disabled={readOnly}
-                        onCommit={(v) => saveIncomeLine(l.id, { actual_cost: v ?? 0, actual_cost_override: v != null })}
-                      />
-                    </td>
+                    {converted ? (
+                      <>
+                        <td className={num}>{showFrom(Number(l.proposed_cost) || 0, l.currency)}</td>
+                        <td className={num}>{Number(l.actual_cost) ? showFrom(Number(l.actual_cost), l.currency) : '—'}</td>
+                      </>
+                    ) : (
+                      <>
+                        <td className="px-2">
+                          <MoneyInput
+                            label={`${l.label || 'Income'} proposed`}
+                            value={Number(l.proposed_cost) || 0}
+                            disabled={locked}
+                            onCommit={(v) => saveIncomeLine(l.id, { proposed_cost: v ?? 0 })}
+                          />
+                        </td>
+                        <td className="px-2">
+                          <MoneyInput
+                            label={`${l.label || 'Income'} actual`}
+                            value={Number(l.actual_cost) ? Number(l.actual_cost) : null}
+                            placeholder="—"
+                            disabled={locked}
+                            onCommit={(v) => saveIncomeLine(l.id, { actual_cost: v ?? 0, actual_cost_override: v != null })}
+                          />
+                        </td>
+                      </>
+                    )}
                     <td className="px-2">
                       <label
                         className="inline-flex items-center gap-1 text-lp-text-tertiary"
@@ -959,14 +987,14 @@ export function BudgetSheetTop({
                         <input
                           type="checkbox"
                           checked={l.income_commissionable !== false}
-                          disabled={readOnly}
+                          disabled={locked}
                           onChange={(e) => saveIncomeLine(l.id, { income_commissionable: e.target.checked })}
                         />
                         Commission
                       </label>
                     </td>
                     <td className="px-1 text-right">
-                      {readOnly ? null : confirmRemove === l.id ? (
+                      {locked ? null : confirmRemove === l.id ? (
                         <button
                           type="button"
                           onClick={() => void removeIncomeLine(l.id)}
@@ -989,7 +1017,7 @@ export function BudgetSheetTop({
                   </tr>
                 );
               })}
-              {!readOnly ? (
+              {!locked ? (
                 <tr className="h-10 border-t border-lp-border">
                   <td className="px-2" colSpan={5}>
                     <button
@@ -1013,8 +1041,8 @@ export function BudgetSheetTop({
         <div key={r.id} className="bs-plain" data-testid={`sheet-deposits-${r.id}`} title={r.title}>
           <span className="bs-fold-name">{r.label}</span>
           <span className="bs-fold-money">
-            <span>{money(r.v.projected, ccy)}</span>
-            <span className="bs-sub">{money(r.v.actual, ccy)} so far</span>
+            <span>{show(r.v.projected)}</span>
+            <span className="bs-sub">{show(r.v.actual)} so far</span>
           </span>
         </div>
       ))}

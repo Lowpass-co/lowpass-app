@@ -58,6 +58,7 @@ import { resolveActiveVersion, getProposedLineMap, getProposedIncomeMap } from '
 import { loadTourFxRates } from '@/lib/budget/fxRates';
 import { refreshTourFxRates } from '@/server/budget/liveFx';
 import { DISPLAY_CURRENCIES } from '@/lib/budget/displayCurrencies';
+import { getRequestViewerAccess } from '@/lib/server/requestContext';
 import { FxMissingRateBanner } from '@/components/budget/FxMissingRateBanner';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { TourSettingsTabs } from '@/components/tour-settings/TourSettingsTabs';
@@ -625,6 +626,7 @@ export default async function BudgetTourPage({
               versions={versions}
               viewedVersionId={viewed?.id ?? null}
               canApprove={canApprove}
+              canEditTour={!!(await getRequestViewerAccess(tourId))?.manager}
             />
           ) : null}
         </div>
