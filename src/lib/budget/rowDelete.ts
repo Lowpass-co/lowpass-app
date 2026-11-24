@@ -52,3 +52,34 @@ export function deletedToastText(deleted: number, kept: number): string {
   const d = `Deleted ${deleted} ${deleted === 1 ? 'row' : 'rows'}`;
   return kept ? `${d} · kept ${kept} automatic` : d;
 }
+
+/* ---- sections (Nov 2026) ----------------------------------------------
+   Deleting a section deletes no lines: the database moves them to
+   Uncategorised (budget_line_items.section_id ON DELETE SET NULL). But a
+   section holding AUTOMATIC lines is where reconcile files them — Salaries /
+   Per Diems / Accommodation are re-created and refilled on the next pass,
+   Travel / Production lose their filing — so it's refused, with the pages
+   the lines come from. */
+
+export interface SectionDeletePlan {
+  /** Every saved line in the section (they all move to Uncategorised). */
+  lines: number;
+  /** Its automatic lines; non-empty = refuse. */
+  auto: Array<{ id: string; source: string }>;
+}
+
+export function planSectionDelete(sectionId: string, lines: BudgetLineItem[]): SectionDeletePlan {
+  const plan: SectionDeletePlan = { lines: 0, auto: [] };
+  for (const line of lines) {
+    if (line.section_id !== sectionId) continue;
+    plan.lines++;
+    if (isDerivedLine(line)) plan.auto.push({ id: line.id, source: perLineSourceLabel(line) });
+  }
+  return plan;
+}
+
+/** The confirm text: where the lines go. */
+export function sectionDeleteMessage(lines: number): string {
+  if (lines === 0) return 'It has no lines.';
+  return `${lines === 1 ? 'Its line moves' : `Its ${lines} lines move`} to Uncategorised — no line is deleted.`;
+}

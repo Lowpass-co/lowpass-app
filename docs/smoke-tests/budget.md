@@ -2549,3 +2549,39 @@ Budget grid with figures in Salaries / Per Diems (automatic sections): each
 section header is one line — dot, NAME, count, PAYROLL badge on the left, "est
 $… · act $…" on the right — and the first row sits below it. No text stacked
 down the right edge. Narrow the window: the totals clip with "…", never wrap.
+
+#### BUD-93 — Right-click a budget cell
+Right-click any cell in the budget grid → Lowpass's own menu (never the
+browser's): **Copy ⌘C · Paste · Clear ⌫ · Open · Add line to "<section>" ·
+Delete row**. Paste is grey ("Nothing copied") until you Copy. Clear on an
+Estimate sets it to 0 and it STAYS 0 after a reload (it used to come back).
+Clear is grey ("Nothing to clear") on Day, Show rate / Off rate and the Estimate of
+a Salaries / Per Diems row (their Actual can be cleared, as it can be typed);
+it never touches Status. Highlight three rows, right-click
+another column of one of them → "Delete 3 rows". Right-click a row outside
+the highlight → the highlight moves there first. While typing in a cell,
+right-click still gives the browser's menu (spellcheck, paste).
+
+#### BUD-94 — Right-click a section header
+Right-click "Misc" (a section you made) → **Rename · Add line · Move up ·
+Move down · Delete section**. Move down swaps it with the next section and
+holds after a reload. **Delete section** → "Delete "Misc"? Its 3 lines move to
+Uncategorised — no line is deleted." → the section is gone, its lines sit in
+Uncategorised, totals unchanged. Right-click **Salaries** → Delete section →
+a toast says it holds automatic rows from Payroll and can't be deleted (same
+from Budget › Money › Sections). Right-click **Uncategorised** → only "Add
+line". An approved budget → Delete section raises the lock window.
+
+#### BUD-95 — Right-click a column header
+Right-click "Estimate" → **Hide column · Columns… · Reset column widths**.
+Hide column hides it and it stays hidden after a reload; Columns… opens the
+column list at the pointer to bring it back. Right-click "#" → Hide column is
+grey ("Always shown").
+
+#### BUD-96 — Grouped by status, edits land on the row you see
+Budget grid → More → Group by: **Status**. Type a new Item name on the first
+row of the second group → Enter → reload, group by Status again: THAT row has
+the new name, and no other row changed. Right-click a row there → Clear its
+Estimate → the same row reads 0 after a reload. ⤢ Open on a grouped row opens
+THAT line's panel. (Before Nov 2026 the edit saved to whichever row sat at that
+position in section order, and Open opened a line from the first section.)

@@ -35,7 +35,6 @@ import {
   cloneData,
   colDef,
   demoFx,
-  flatRows,
   formulaEst,
   inSel,
   isFormula,
@@ -50,7 +49,7 @@ import {
   withCalc,
 } from './gridModel';
 import { evaluateFormula } from '@/lib/grid/formula';
-import { GridMenu, type MenuConfig } from './GridMenu';
+import { GridMenu, type MenuConfig, type MenuItem } from './GridMenu';
 import { GridSlideOver } from './GridSlideOver';
 import {
   GridConfirm,
@@ -111,6 +110,13 @@ export interface GridProps {
       the rest — which rows may go, confirmation, undo, persistence. Plain
       Delete / Backspace still only clears cell contents. */
   onDeleteRows?: (rowUids: string[]) => void;
+  /** Delete a section (right-click its header → Delete section). The caller
+      owns the rules, the confirmation and persistence; the grid only asks.
+      Absent → the menu has no Delete section. */
+  onDeleteSection?: (sectionUid: string) => void;
+  /** Sections the grid draws but that aren't real sections (Budget's
+      "Uncategorised" = lines with none): no rename, move or delete. */
+  isFixedSection?: (sectionUid: string) => boolean;
   /** Reorder persistence — fired after a drag commits with the NEW full order
       of uids (= DB ids on real surfaces). Caller PATCHes sort_order. Phase 3. */
   onReorderRow?: (sectionUid: string, orderedRowUids: string[]) => void;
@@ -276,6 +282,8 @@ export const Grid = forwardRef<GridHandle, GridProps>(function Grid({
   onAddSection,
   onRenameSection,
   onDeleteRows,
+  onDeleteSection,
+  isFixedSection,
   onReorderRow,
   onReorderSection,
   lineApi,
@@ -497,11 +505,14 @@ export const Grid = forwardRef<GridHandle, GridProps>(function Grid({
   const widths = () => widthsRef.current;
   const sel = () => selRef.current;
   const NC = () => navCols(cols());
-  const flat = () => flatRows(data(), queryRef.current, filterRef.current);
-  /** Rows in ON-SCREEN order for the current grouping. Row delete resolves
-   *  the selection through this, never flat(): grouped by phase / status,
-   *  flat()[i] is a different row from the one highlighted. */
+  /** Rows in ON-SCREEN order for the current grouping — what every display
+   *  index (selection, data-r, the editor, fill, copy / paste / clear) means.
+   *  It used to be section order whatever the grouping, so grouped by status
+   *  or phase, typing, clearing, pasting and filling all wrote to a DIFFERENT
+   *  row from the one highlighted (and saved it). By section the two orders
+   *  are the same list (viewRows → flatRows). */
   const shownRows = () => viewRows(data(), groupRef.current, queryRef.current, filterRef.current, statusUniverse(cols(), data()));
+  const flat = shownRows;
   /** The rows the selection covers (whole rows, any columns). */
   const selectedRows = (): Row[] => {
     const s = sel();
@@ -516,23 +527,163 @@ export const Grid = forwardRef<GridHandle, GridProps>(function Grid({
     const uids = rows.map((row) => String(row._uid ?? '')).filter(Boolean);
     if (uids.length) onDeleteRowsRef.current?.(uids);
   };
-  /** Right-click → Delete / Open for a row. */
-  const openRowMenu = (anchorEl: HTMLElement, fi: number, extra: MenuConfig['options'] = [], onExtra?: (v: string) => void) => {
-    const rows = selectedRows();
-    const a = anchorEl.getBoundingClientRect();
+  /* ---- right-click menus (Nov 2026, Adam: "add right click to the grid,
+     with options") — every right-click on a cell, a section header or a
+     column header opens a GridMenu, never the browser's menu. */
+  const MOD = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform) ? '⌘' : 'Ctrl+';
+  const atPointer = (e: React.MouseEvent) => ({ left: e.clientX, bottom: e.clientY });
+  const short = (name: string) => (name.length > 28 ? name.slice(0, 27) + '…' : name);
+  /** Right-click a row. On a cell (whose pointerdown already set the
+   *  highlight): copy / paste / clear the highlight, open the row, add a line
+   *  to its section, delete the highlighted rows. Off a cell (the # handle,
+   *  receipts): no cell ops, and Delete means this row — or the highlighted
+   *  rows when it's one of them. */
+  const openCellMenu = (e: React.MouseEvent, fi: number, onCell = true) => {
     const o = shownRows()[fi];
+    const cur = sel();
+    const inHighlight = fi >= Math.min(cur.ar, cur.fr) && fi <= Math.max(cur.ar, cur.fr);
+    const rows = !onDeleteRowsRef.current
+      ? []
+      : onCell || inHighlight
+        ? selectedRows()
+        : o && o.row._uid != null
+          ? [o.row]
+          : [];
+    const sec = o ? data()[o.si] : undefined;
+    const canAdd = !!sec && sec.kind === 'normal' && allowAddRows;
+    const options: MenuItem[] = [];
+    if (onCell) {
+      const canClear = selectionClearable();
+      options.push(
+        { value: 'copy', label: 'Copy', hint: `${MOD}C` },
+        { value: 'paste', label: 'Paste', hint: clipRef.current ? `${MOD}V` : 'Nothing copied', disabled: !clipRef.current },
+        { value: 'clear', label: 'Clear', hint: canClear ? '⌫' : 'Nothing to clear', disabled: !canClear },
+      );
+    }
+    // Open where the grid offers it (an Item column's ⤢, or a host's onOpenRow)
+    // — Rooming has neither, and a generic panel for a person row means nothing.
+    const canOpen = !!o && (!!onOpenRow || cols().some((c) => c.id === 'item' && !c.hidden));
+    if (canOpen) options.push({ value: 'open', label: 'Open', sep: options.length > 0 });
+    if (canAdd && sec) options.push({ value: 'add', label: `Add line to “${short(sec.name)}”`, sep: !canOpen && options.length > 0 });
+    if (rows.length)
+      options.push({
+        value: 'delete',
+        label: rows.length > 1 ? `Delete ${rows.length} rows` : 'Delete row',
+        hint: `${MOD}⌫`,
+        danger: true,
+        sep: options.length > 0,
+      });
+    if (!options.length) return;
     menuRef.current = {
-      anchor: { left: a.left, bottom: a.bottom },
+      anchor: atPointer(e),
+      gap: 0,
+      options,
+      onPick: (v) => {
+        closeMenu();
+        if (v === 'copy') doCopy();
+        else if (v === 'paste') doPaste();
+        else if (v === 'clear') doDelete();
+        else if (v === 'open' && o) openSlide(o.si, o.ri);
+        else if (v === 'add' && o) addLine(o.si);
+        else if (v === 'delete') deleteRows(rows);
+      },
+    };
+    render();
+  };
+  /** Every row's right-click lands here (cells, the locked Estimate, #,
+   *  receipts — anything in the row), so it's never the browser's menu. */
+  const onRowContextMenu = (e: React.MouseEvent, fi: number) => {
+    const tgt = e.target as HTMLElement;
+    // Typing in a cell keeps the browser's menu (spellcheck, paste).
+    if (editRef.current || fi < 0 || tgt.closest('input, textarea, select')) return;
+    e.preventDefault();
+    openCellMenu(e, fi, !!tgt.closest('.cell[data-r]'));
+  };
+  /** Rename a section — the header's double-click and its menu both use it. */
+  const promptRenameSection = (sec: Section) => {
+    promptRef.current = {
+      title: 'Rename section',
+      placeholder: sec.name,
+      defaultValue: sec.name,
+      onSubmit: (name) => {
+        if (!name) return;
+        pushUndo();
+        sec.name = name;
+        render();
+        // rename is a simple PATCH — persist without a re-fetch.
+        if (sec._uid) onRenameSection?.(sec._uid, name);
+      },
+    };
+    render();
+  };
+  const sectionFixed = (sec: Section | undefined) => !!sec?._uid && !!isFixedSection?.(sec._uid);
+  /** Move a section one place up / down — the same commit a header drag makes
+   *  (undo + onReorderSection with the new full order). */
+  const moveSection = (si: number, dir: -1 | 1) => {
+    const d = data();
+    const to = si + dir;
+    if (to < 0 || to >= d.length || sectionFixed(d[si]) || sectionFixed(d[to])) return;
+    pushUndo();
+    [d[si], d[to]] = [d[to], d[si]];
+    selRef.current = { ar: 0, ac: 0, fr: 0, fc: 0 };
+    render();
+    const ids = d.map((x) => x._uid).filter(Boolean) as string[];
+    if (ids.length) onReorderSectionRef.current?.(ids);
+  };
+  /** Right-click a section header: rename, add a line, move, delete. */
+  const openSectionMenu = (e: React.MouseEvent, si: number) => {
+    const d = data();
+    const sec = d[si];
+    if (!sec) return;
+    const fixed = sectionFixed(sec);
+    const canUp = !fixed && si > 0 && !sectionFixed(d[si - 1]);
+    const canDown = !fixed && si < d.length - 1 && !sectionFixed(d[si + 1]);
+    const options: MenuItem[] = [];
+    if (!fixed) options.push({ value: 'rename', label: 'Rename' });
+    if (sec.kind === 'normal' && allowAddRows) options.push({ value: 'add', label: 'Add line' });
+    if (!fixed) {
+      options.push({ value: 'up', label: 'Move up', disabled: !canUp, sep: options.length > 0 });
+      options.push({ value: 'down', label: 'Move down', disabled: !canDown });
+    }
+    if (!fixed && onDeleteSection && sec._uid)
+      options.push({ value: 'delete', label: 'Delete section', danger: true, sep: true });
+    if (!options.length) return;
+    menuRef.current = {
+      anchor: atPointer(e),
+      gap: 0,
+      title: short(sec.name),
+      options,
+      onPick: (v) => {
+        closeMenu();
+        if (v === 'rename') promptRenameSection(sec);
+        else if (v === 'add') addLine(si);
+        else if (v === 'up') moveSection(si, -1);
+        else if (v === 'down') moveSection(si, 1);
+        else if (v === 'delete' && sec._uid) onDeleteSection?.(sec._uid);
+      },
+    };
+    render();
+  };
+  /** Right-click a column header: hide it, pick columns, reset widths. */
+  const openColumnMenu = (e: React.MouseEvent, c: Column) => {
+    const locked = isHideLocked(c.id);
+    menuRef.current = {
+      anchor: atPointer(e),
+      gap: 0,
+      title: c.label && c.id !== 'idx' ? c.label : undefined,
       options: [
-        ...extra,
-        ...(o ? [{ value: '__open__', label: 'Open' }] : []),
-        { value: '__delete__', label: rows.length > 1 ? `Delete ${rows.length} rows` : 'Delete row' },
+        { value: 'hide', label: 'Hide column', disabled: locked, hint: locked ? 'Always shown' : undefined },
+        { value: 'cols', label: 'Columns…' },
+        { value: 'widths', label: 'Reset column widths', sep: true },
       ],
       onPick: (v) => {
         closeMenu();
-        if (v === '__delete__') deleteRows(rows);
-        else if (v === '__open__' && o) openSlide(o.si, o.ri);
-        else onExtra?.(v);
+        if (v === 'hide') setColumnHidden(c.id, true);
+        else if (v === 'cols') {
+          popAnchorRef.current = { left: e.clientX, bottom: e.clientY };
+          popRef.current = 'cols';
+          render();
+        } else if (v === 'widths') resetWidths();
       },
     };
     render();
@@ -670,6 +821,37 @@ export const Grid = forwardRef<GridHandle, GridProps>(function Grid({
   );
 
   /* ---- copy / paste / clear ---- */
+  /** Types that hold a value someone typed or picked. Everything else is
+   *  computed (variance, formula, calc), structural (#, receipts, documents,
+   *  deal) or display (day type) — paste and clear never write those. */
+  const VALUE_TYPES = new Set(['text', 'money', 'number', 'check', 'status', 'dropdown']);
+  /** Can paste / clear write this cell? Not a read-only column (incl. the
+   *  reference block) unless it's a manually overridden output, not the
+   *  version-locked Estimate, not a derived section's Estimate (its Actual
+   *  stays editable). The same guards typing has (startEdit). */
+  const cellWritable = (o: { row: Row; si: number } | undefined, k: string | undefined): boolean => {
+    if (!o || !k) return false;
+    const cd = colDef(cols(), k);
+    if (!cd || !VALUE_TYPES.has(cd.type)) return false;
+    if (cd.ro && !isCellOverridden(o.row._uid as string | undefined, k)) return false;
+    if (isVersionLocked(k)) return false;
+    if (data()[o.si]?.kind === 'derived' && k === 'est') return false;
+    return true;
+  };
+  /** Clear empties a cell — so not a pick-list (status / dropdown): the grid
+   *  can't know what "none" is there (Rooming's is "—"; Budget's statuses
+   *  have no blank, and the old reset wrote 'budgeted', which isn't one). */
+  const cellClearable = (o: { row: Row; si: number } | undefined, k: string | undefined): boolean => {
+    const t = k ? colDef(cols(), k)?.type : undefined;
+    return cellWritable(o, k) && t !== 'dropdown' && t !== 'status';
+  };
+  const selectionClearable = (): boolean => {
+    const s = sel();
+    const rows = flat();
+    for (let r = Math.min(s.ar, s.fr); r <= Math.max(s.ar, s.fr); r++)
+      for (let c = Math.min(s.ac, s.fc); c <= Math.max(s.ac, s.fc); c++) if (cellClearable(rows[r], NC()[c])) return true;
+    return false;
+  };
   const cellVal = (r: number, c: number): string | number => {
     const o = flat()[r];
     if (!o) return '';
@@ -700,9 +882,10 @@ export const Grid = forwardRef<GridHandle, GridProps>(function Grid({
     clip.forEach((rw, dr) =>
       rw.forEach((val, dc) => {
         const o = flat()[r0 + dr];
-        if (!o) return;
         const k = NC()[c0 + dc];
-        if (!k) return;
+        // Paste obeys the same read-only rules as typing — it used to write
+        // straight through ro / locked / derived cells.
+        if (!o || !k || !cellWritable(o, k)) return;
         const t = colDef(cols(), k)?.type;
         const v: string | number =
           t === 'money' || t === 'number' ? parseFloat(String(val).replace(/[^0-9.\-]/g, '')) || 0 : val;
@@ -722,29 +905,27 @@ export const Grid = forwardRef<GridHandle, GridProps>(function Grid({
       r1 = Math.max(s.ar, s.fr),
       c0 = Math.min(s.ac, s.fc),
       c1 = Math.max(s.ac, s.fc);
-    // Read-only cells are immutable to Backspace/Delete too — mirror the
-    // type-edit (startEdit :430) and paste (:1002) guards: column `ro` (incl
-    // the `referenceCols` reference block), the version-locked proposed (`est`)
-    // cell, and the derived (Payroll/Rooming) est/act source-lock. Defer
-    // pushUndo until the first real clear so an all-read-only selection is a
-    // genuine no-op (no empty undo entry, no needless render).
+    // Only cells Clear may write (cellClearable: the typing guards, plus no
+    // computed / structural / pick-list cells). Defer pushUndo until the first
+    // real clear so an all-read-only selection is a genuine no-op.
+    // Each cleared cell is COMMITTED through onEdit like a typed edit — it
+    // used to change only the screen, so a refresh brought the value back.
     let wrote = false;
     for (let r = r0; r <= r1; r++) {
       const o = flat()[r];
       if (!o) continue;
-      const tsec = data()[o.si];
       for (let c = c0; c <= c1; c++) {
         const k = NC()[c];
-        const cd = colDef(cols(), k);
-        if (!k || cd?.ro) continue;
-        if (isVersionLocked(k)) continue;
-        if (tsec?.kind === 'derived' && (k === 'est' || k === 'act')) continue;
+        if (!cellClearable(o, k)) continue;
+        const t = colDef(cols(), k)?.type;
+        const v: string | number | boolean = t === 'money' || t === 'number' ? 0 : t === 'check' ? false : '';
+        if (o.row[k] === v) continue;
         if (!wrote) {
           pushUndo();
           wrote = true;
         }
-        const t = cd?.type;
-        o.row[k] = t === 'money' || t === 'number' ? 0 : t === 'status' ? 'budgeted' : t === 'check' ? false : '';
+        o.row[k] = v;
+        if (o.row._uid) onEditRef.current?.(o.row._uid as string, k, v);
       }
     }
     if (wrote) render();
@@ -1197,6 +1378,24 @@ export const Grid = forwardRef<GridHandle, GridProps>(function Grid({
     }
     if (changed) render();
   }, [columnPrefsKey, isHideLocked, render]);
+  /** Hide / show a column — the Columns popover and the header's right-click
+   *  both use it. Persists the hidden set per tour (columnPrefsKey). */
+  const setColumnHidden = (id: string, hidden: boolean) => {
+    if (isHideLocked(id)) return; // structural columns can't be hidden
+    pushUndo();
+    const c = colDef(cols(), id);
+    if (c) c.hidden = hidden;
+    selRef.current = { ar: 0, ac: 0, fr: 0, fc: 0 };
+    if (columnPrefsKey && typeof window !== 'undefined') {
+      try {
+        const hiddenIds = cols().filter((cc) => cc.hidden).map((cc) => cc.id);
+        window.localStorage.setItem(columnPrefsKey, JSON.stringify(hiddenIds));
+      } catch {
+        /* localStorage unavailable (private mode / quota) — non-fatal */
+      }
+    }
+    render();
+  };
 
   /* ---- keyboard ---- */
   useEffect(() => {
@@ -1440,12 +1639,16 @@ export const Grid = forwardRef<GridHandle, GridProps>(function Grid({
     if (target.classList.contains('openbtn') || target.classList.contains('chk') || target.classList.contains('fillhandle') || target.closest('.delbtn')) return;
     e.preventDefault();
     if (editRef.current) commitEdit();
-    // Right-click: inside the highlighted rows keeps them (so the menu acts on
-    // all of them); outside selects the clicked cell. Never drags, never opens
-    // a dropdown — the context menu is what follows.
+    // Right-click: inside the highlighted area keeps it, and so do the other
+    // cells of several highlighted ROWS (so Delete acts on all of them);
+    // anywhere else selects the clicked cell — what the menu acts on is always
+    // what's highlighted. Never drags, never opens a dropdown.
     if (e.button === 2) {
       const cur = sel();
-      if (r < Math.min(cur.ar, cur.fr) || r > Math.max(cur.ar, cur.fr)) selRef.current = { ar: r, ac: c, fr: r, fc: c };
+      const inRows = r >= Math.min(cur.ar, cur.fr) && r <= Math.max(cur.ar, cur.fr);
+      const inCols = c >= Math.min(cur.ac, cur.fc) && c <= Math.max(cur.ac, cur.fc);
+      const manyRows = cur.ar !== cur.fr;
+      if (!(inRows && (inCols || manyRows))) selRef.current = { ar: r, ac: c, fr: r, fc: c };
       render();
       return;
     }
@@ -2054,14 +2257,10 @@ export const Grid = forwardRef<GridHandle, GridProps>(function Grid({
           overridable
             ? (e) => {
                 e.preventDefault();
+                e.stopPropagation(); // the row's menu would replace this one
                 openOverrideMenu(e.currentTarget, row, id, fi, ci, !!overridden);
               }
-            : onDeleteRowsRef.current && row._uid != null
-              ? (e) => {
-                  e.preventDefault();
-                  openRowMenu(e.currentTarget, fi);
-                }
-              : undefined
+            : undefined
         }
       >
         {showEdit ? renderEditInput() : cellInner(row, col, sec, ri)}
@@ -2254,15 +2453,19 @@ export const Grid = forwardRef<GridHandle, GridProps>(function Grid({
                 <span className="sh-count">{b.rows.length}</span>
               </div>
             </div>
-            {b.rows.map(({ row, ri }) => {
+            {b.rows.map(({ row, si, ri }) => {
               const fi = f++;
               return (
                 <div
                   className={`row${fileDragUidRef.current === row._uid ? ' file-drop-target' : ''}`}
                   key={row._uid ?? `${b.key}-${ri}`}
                   {...fileDropProps(row._uid ? String(row._uid) : undefined)}
+                  onContextMenu={(e) => onRowContextMenu(e, fi)}
                 >
-                  {vis.map((c) => wrapCell(renderCell({ kind: 'normal', _si: 0, name: '', rows: [] }, row, ri, c, fi, c.id), c.id))}
+                  {/* The row's REAL section — Open / receipts open (sec._si, ri) and
+                      a derived section locks its Estimate. A stand-in section
+                      (_si 0) used to open section 0's row ri: another line. */}
+                  {vis.map((c) => wrapCell(renderCell(Object.assign(data()[si], { _si: si }), row, ri, c, fi, c.id), c.id))}
                 </div>
               );
             })}
@@ -2291,8 +2494,13 @@ export const Grid = forwardRef<GridHandle, GridProps>(function Grid({
             className="sec-head"
             data-si={si}
             onPointerDown={(e) => {
+              if (e.button === 2) return; // right-click opens the menu, never a drag
               if ((e.target as HTMLElement).closest('.badge')) return;
               startReorder(e, 'section', e.currentTarget);
+            }}
+            onContextMenu={(e) => {
+              e.preventDefault();
+              openSectionMenu(e, si);
             }}
           >
             <div className="sh-name">
@@ -2300,25 +2508,12 @@ export const Grid = forwardRef<GridHandle, GridProps>(function Grid({
               <span className="dot" style={{ color: accent }} />
               <span
                 className="sh-title"
-                style={{ cursor: 'text' }}
-                title="Double-click to rename"
+                style={sectionFixed(sec) ? undefined : { cursor: 'text' }}
+                title={sectionFixed(sec) ? undefined : 'Double-click to rename · right-click for more'}
                 onPointerDown={(e) => e.stopPropagation()}
                 onDoubleClick={(e) => {
                   e.stopPropagation();
-                  promptRef.current = {
-                    title: 'Rename section',
-                    placeholder: sec.name,
-                    defaultValue: sec.name,
-                    onSubmit: (name) => {
-                      if (!name) return;
-                      pushUndo();
-                      sec.name = name;
-                      render();
-                      // rename is a simple PATCH — persist without a re-fetch.
-                      if (sec._uid) onRenameSection?.(sec._uid, name);
-                    },
-                  };
-                  render();
+                  if (!sectionFixed(sec)) promptRenameSection(sec);
                 }}
               >
                 {sec.name}
@@ -2347,6 +2542,7 @@ export const Grid = forwardRef<GridHandle, GridProps>(function Grid({
                 className={`row${row._rowClass ? ` ${String(row._rowClass)}` : ''}${fileDragUidRef.current === row._uid ? ' file-drop-target' : ''}`}
                 data-si={si} data-ri={ri} data-uid={row._uid} key={row._uid ?? ri}
                 {...fileDropProps(row._uid ? String(row._uid) : undefined)}
+                onContextMenu={(e) => onRowContextMenu(e, fi)}
               >
                 {vis.map((c) => wrapCell(renderCell(sec, row, ri, c, fi, c.id), c.id))}
               </div>
@@ -2461,9 +2657,14 @@ export const Grid = forwardRef<GridHandle, GridProps>(function Grid({
                 data-ci={cols().indexOf(c)}
                 data-colid={c.id}
                 onPointerDown={(e) => {
+                  if (e.button === 2) return; // right-click opens the menu, never a drag
                   if ((e.target as HTMLElement).classList.contains('grip')) return;
                   if (wide || c.id === 'idx') return; // wide: day columns are fixed-order
                   startReorder(e, 'col', e.currentTarget);
+                }}
+                onContextMenu={(e) => {
+                  e.preventDefault();
+                  openColumnMenu(e, c);
                 }}
                 onDoubleClick={(e) => {
                   e.stopPropagation();
@@ -2509,14 +2710,14 @@ export const Grid = forwardRef<GridHandle, GridProps>(function Grid({
         </span>
         {onDeleteRows ? (
           <span>
-            <kbd>⌘⌫</kbd> delete rows · right-click a row for more
+            <kbd>⌘⌫</kbd> delete rows
           </span>
         ) : null}
         <span>
           type to edit · <kbd>Enter</kbd>/<kbd>Tab</kbd> commit
         </span>
         <span>
-          drag <b>section</b> / <b>#</b> / <b>column header</b> to reorder
+          drag <b>section</b> / <b>#</b> / <b>column header</b> to reorder · right-click anything for options
         </span>
       </div>
       )}
@@ -2578,23 +2779,7 @@ export const Grid = forwardRef<GridHandle, GridProps>(function Grid({
           anchor={popAnchorRef.current}
           cols={cols()}
           lockedCols={refColSet}
-          onToggle={(id, hidden) => {
-            if (isHideLocked(id)) return; // structural columns can't be hidden
-            pushUndo();
-            const c = colDef(cols(), id);
-            if (c) c.hidden = hidden;
-            selRef.current = { ar: 0, ac: 0, fr: 0, fc: 0 };
-            // A3 — persist the hidden set per tour (opt-in via columnPrefsKey).
-            if (columnPrefsKey && typeof window !== 'undefined') {
-              try {
-                const hiddenIds = cols().filter((cc) => cc.hidden).map((cc) => cc.id);
-                window.localStorage.setItem(columnPrefsKey, JSON.stringify(hiddenIds));
-              } catch {
-                /* localStorage unavailable (private mode / quota) — non-fatal */
-              }
-            }
-            render();
-          }}
+          onToggle={(id, hidden) => setColumnHidden(id, hidden)}
           onDelete={(id) => {
             popRef.current = null; // close the Columns popover so the confirm isn't behind it (#3)
             confirmRef.current = {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { autoSourcesText, deletedToastText, planRowDelete } from './rowDelete';
+import { autoSourcesText, deletedToastText, planRowDelete, planSectionDelete, sectionDeleteMessage } from './rowDelete';
 import { groupedBuckets, viewRows } from '@/components/grid/gridModel';
 import type { BudgetLineItem } from '@/types';
 import type { Row, Section } from '@/components/grid/types';
@@ -67,5 +67,33 @@ describe('viewRows — the selection resolves to the row ON SCREEN', () => {
   it('search and the status filter narrow it the same way the screen does', () => {
     expect(viewRows(data, 'status', 'b', all, ['draft', 'paid']).map((o) => o.row._uid)).toEqual(['b1', 'b2']);
     expect(viewRows(data, 'section', '', new Set(['paid']), ['draft', 'paid']).map((o) => o.row._uid)).toEqual(['a1', 'b2']);
+  });
+});
+
+describe('planSectionDelete', () => {
+  const lines = [
+    line('m1', { section_id: 's1' }),
+    line('m2', { section_id: 's1' }),
+    line('pay', { section_id: 's2', source_entity_type: 'payroll' }),
+    line('m3', { section_id: 's2' }),
+    line('loose', { section_id: null }),
+  ];
+
+  it('counts the lines that will move to Uncategorised', () => {
+    expect(planSectionDelete('s1', lines)).toEqual({ lines: 2, auto: [] });
+  });
+
+  it('names the automatic lines — those refuse the delete', () => {
+    expect(planSectionDelete('s2', lines)).toEqual({ lines: 2, auto: [{ id: 'pay', source: 'Payroll' }] });
+  });
+
+  it('an empty section', () => {
+    expect(planSectionDelete('s9', lines)).toEqual({ lines: 0, auto: [] });
+  });
+
+  it('says where the lines go', () => {
+    expect(sectionDeleteMessage(0)).toBe('It has no lines.');
+    expect(sectionDeleteMessage(1)).toBe('Its line moves to Uncategorised — no line is deleted.');
+    expect(sectionDeleteMessage(4)).toBe('Its 4 lines move to Uncategorised — no line is deleted.');
   });
 });
