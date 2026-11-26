@@ -22,23 +22,15 @@ import { autoSourcesText, deletedToastText, planRowDelete, planSectionDelete, se
 import { VersionLockModal } from '@/components/budget/versioning/VersionLockModal';
 import type { VersionStatus, BudgetVersionVm } from '@/components/budget/versioning/versionApi';
 import { AddReceiptPanel, type AddReceiptResult } from '@/components/budget/AddReceiptPanel';
-import type { Column, GridFx, GridLineApi, GridStatusConfig } from '@/components/grid/types';
+import type { Column, GridFx, GridLineApi } from '@/components/grid/types';
 import { budgetToGridSections, gridEditToPatch, hideEmptyAutoRows } from '@/lib/grid/budgetAdapter';
 import { convertVia, type FxRateMap } from '@/lib/budget/fxRates';
 import { useToast } from '@/components/ui/Toast';
 import type { BudgetLineItem, BudgetSection } from '@/types';
 import type { PayrollRateFact } from '@/server/budget/payrollRateFacts';
 
-/** DB status set (decision 1 — kept, no migration). */
-const STATUS_OPTIONS = ['draft', 'quoted', 'approved', 'paid', 'disputed'];
-const STATUS_COLORS: Record<string, string> = {
-  draft: 'var(--lp-text-tertiary)',
-  quoted: 'var(--color-lp-warning)',
-  approved: 'var(--color-lp-info)',
-  paid: 'var(--color-lp-success)',
-  disputed: 'var(--color-lp-error)',
-};
-const STATUS_CONFIG: GridStatusConfig = { options: STATUS_OPTIONS, colors: STATUS_COLORS };
+/* Line status is retired on the budget (Nov 2026, Adam): no column, no
+   field in the line panel. The column stays in the database, unshown. */
 
 const CUR_SYMBOL: Record<string, string> = { GBP: '£', USD: '$', EUR: '€', CAD: 'C$', AUD: 'A$', JPY: '¥' };
 const CURRENCIES = ['GBP', 'USD', 'EUR', 'CAD', 'AUD', 'JPY'];
@@ -90,7 +82,8 @@ const EXPENSE_COLS: Column[] = [
   { id: 'est', label: 'Estimate', type: 'money', w: 120, min: 90, resize: true },
   { id: 'act', label: 'Actual', type: 'money', w: 120, min: 90, resize: true },
   { id: 'var', label: 'Variance', type: 'variance', w: 110, min: 90, resize: true },
-  { id: 'status', label: 'Status', type: 'status', w: 130, min: 100, resize: true, options: STATUS_OPTIONS, optColors: STATUS_COLORS },
+  // No Status column (Nov 2026, Adam: "draft pill can go, that won't be
+  // updated ever"). budget_line_items.status stays in the database, unshown.
   { id: 'rcpts', label: 'Receipts', type: 'receipts', w: 90, min: 70, resize: false },
   { id: 'notes', label: 'Notes', type: 'text', w: 220, min: 120, resize: true, hidden: true },
 ];
@@ -169,7 +162,7 @@ export function rateCellsFor(
 }
 
 export function BudgetGridView({
-  lines, sections, tourCurrency, tourId,
+  lines, sections: serverSections, tourCurrency, tourId,
   versionLocked = false, lockedVersionId = null, canApprove = false,
   viewedStatus = 'draft', draftVersionId = null, versions = [], fxRates = {},
   duplicateMap = {}, dayTypeByRouting = {}, vendorByLine = {},
@@ -178,6 +171,30 @@ export function BudgetGridView({
 }: BudgetGridViewProps) {
   // Stage-3 parity — count of lines flagged as possible duplicates.
   const duplicateCount = Object.keys(duplicateMap).length;
+
+  /* Sections without the wait (Nov 2026, Adam: "adding 5 sections took 10-20
+     seconds … it can be thinking and saving in the background"). Add section
+     no longer POSTs-then-refreshes the whole page: the grid shows the section
+     at once under a temporary id (tmp-…), this view saves it in the
+     background, and anything done to it meanwhile (rename, add a line, move,
+     delete) waits for the real id (realSectionId). Created and renamed
+     sections are overlaid on the server's list until a refresh carries them,
+     so a remount in between can't drop or un-rename them — a refresh landing
+     mid-rename is how renames used to "not save" on screen. */
+  const tempSections = useRef(new Map<string, Promise<string | null>>());
+  const [createdSections, setCreatedSections] = useState<BudgetSection[]>([]);
+  const [renamedSections, setRenamedSections] = useState<Record<string, string>>({});
+  const sections = useMemo(() => {
+    const ids = new Set(serverSections.map((x) => x.id));
+    return [...serverSections, ...createdSections.filter((x) => !ids.has(x.id))].map((x) =>
+      renamedSections[x.id] !== undefined ? { ...x, name: renamedSections[x.id]! } : x,
+    );
+  }, [serverSections, createdSections, renamedSections]);
+  const realSectionId = useCallback(
+    (uid: string): Promise<string | null> =>
+      uid.startsWith('tmp-') ? (tempSections.current.get(uid) ?? Promise.resolve(null)) : Promise.resolve(uid),
+    [],
+  );
   const router = useRouter();
   const { showToast } = useToast();
   const [lockModalOpen, setLockModalOpen] = useState(false);
@@ -356,17 +373,10 @@ export function BudgetGridView({
     [router, showToast, vendorTxnByLine],
   );
 
-  // Structural CRUD: POST/DELETE then refresh (the new row needs a real id;
-  // rename is a PATCH with no refresh — the grid already shows it).
-  const refreshOnFail = (res: Response) => {
-    if (!res.ok) {
-      showToast('Could not save the change', 'error');
-    }
-    router.refresh();
-  };
-
   const onAddLine = useCallback(
-    (sectionUid: string) => {
+    async (uid: string) => {
+      const sectionUid = uid === 'ungrouped' ? uid : await realSectionId(uid);
+      if (!sectionUid) return; // its section failed to save (already said so)
       void fetch('/api/budget/line-items', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -401,30 +411,64 @@ export function BudgetGridView({
         });
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [tourId, display, router],
+    [tourId, display, router, realSectionId],
   );
 
-  const onAddSection = useCallback(() => {
-    void fetch('/api/budget/sections', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ tour_id: tourId, name: 'New section', kind: 'custom', sort_order: sections.length }),
-    })
-      .then(refreshOnFail)
-      .catch(() => {
-        showToast('Could not add the section', 'error');
-      });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tourId, sections.length]);
+  const onAddSection = useCallback(
+    (name: string, tempUid: string): Promise<string | null> => {
+      const sort = sections.reduce((m, x) => Math.max(m, x.sort_order ?? 0), -1) + 1;
+      const saved = fetch('/api/budget/sections', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tour_id: tourId, name, kind: 'custom', sort_order: sort }),
+      })
+        .then(async (res) => {
+          const row = (await res.json().catch(() => null)) as (BudgetSection & { error?: string }) | null;
+          if (!res.ok || !row?.id) {
+            showToast(row?.error ?? 'Could not add the section', 'error');
+            return null;
+          }
+          setCreatedSections((prev) => [...prev, row]);
+          return row.id;
+        })
+        .catch(() => {
+          showToast('Could not add the section', 'error');
+          return null;
+        });
+      tempSections.current.set(tempUid, saved);
+      return saved;
+    },
+    [tourId, sections, showToast],
+  );
 
-  const onRenameSection = useCallback((sectionUid: string, name: string) => {
-    if (sectionUid === 'ungrouped') return;
-    void fetch('/api/budget/sections', {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id: sectionUid, name }),
-    }).catch(() => undefined); // optimistic; the grid already renamed locally
-  }, []);
+  const onRenameSection = useCallback(
+    (uid: string, name: string) => {
+      if (uid === 'ungrouped') return;
+      void realSectionId(uid).then(async (id) => {
+        if (!id) return;
+        setRenamedSections((prev) => ({ ...prev, [id]: name }));
+        try {
+          const res = await fetch('/api/budget/sections', {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id, name }),
+          });
+          if (!res.ok) throw new Error(((await res.json().catch(() => null)) as { error?: string } | null)?.error ?? 'rename failed');
+        } catch (e) {
+          // It used to swallow this — the grid showed the new name, the
+          // database kept the old one.
+          showToast(`Could not rename the section${e instanceof Error && e.message !== 'rename failed' ? ` — ${e.message}` : ''}`, 'error');
+          setRenamedSections((prev) => {
+            const next = { ...prev };
+            delete next[id];
+            return next;
+          });
+          router.refresh();
+        }
+      });
+    },
+    [realSectionId, showToast, router],
+  );
 
   /* Row delete (Nov 2026) — the rows disappear at once and an Undo toast
      stays up for UNDO_DELETE_MS; only then is the DELETE sent. Undo just
@@ -562,7 +606,9 @@ export function BudgetGridView({
      automatic lines is refused (planSectionDelete says why). Not optimistic:
      the grid remounts on sections.length when the refresh lands. */
   const onDeleteSection = useCallback(
-    (sectionUid: string) => {
+    async (uid: string) => {
+      const sectionUid = await realSectionId(uid);
+      if (!sectionUid) return;
       const section = sections.find((x) => x.id === sectionUid);
       if (!section) return; // "Uncategorised" or already gone
       if (versionLocked) {
@@ -597,7 +643,7 @@ export function BudgetGridView({
         },
       });
     },
-    [sections, versionLocked, allLines, showToast, requestConfirm, router],
+    [sections, versionLocked, allLines, showToast, requestConfirm, router, realSectionId],
   );
   const isFixedSection = useCallback((uid: string) => uid === 'ungrouped', []);
 
@@ -640,9 +686,12 @@ export function BudgetGridView({
   // only real DB section ids, re-indexed among themselves.
   const knownSectionIds = useMemo(() => new Set(sections.map((s) => s.id)), [sections]);
   const onReorderSection = useCallback(
-    (orderedSectionUids: string[]) =>
-      persistOrder('/api/budget/sections', orderedSectionUids.filter((id) => knownSectionIds.has(id))),
-    [persistOrder, knownSectionIds],
+    (orderedSectionUids: string[]) => {
+      void Promise.all(orderedSectionUids.map(realSectionId)).then((ids) =>
+        persistOrder('/api/budget/sections', ids.filter((id): id is string => !!id && knownSectionIds.has(id))),
+      );
+    },
+    [persistOrder, knownSectionIds, realSectionId],
   );
 
   // Steps 3–5 — async transactions/documents CRUD against the real tables.
@@ -825,11 +874,11 @@ export function BudgetGridView({
         // server rows + the optimistic adds / deletes), not `lines`: keyed on
         // the server count, a just-added or just-deleted row didn't show until
         // the next refresh.
-        key={`${tourId}:${allLines.length}:${sections.length}:${versionLocked ? 'locked' : 'draft'}:${showEmptyAuto ? 'all' : 'tidy'}:${hasRates ? 'rates' : 'plain'}`}
+        key={`${tourId}:${allLines.length}:${serverSections.length}:${versionLocked ? 'locked' : 'draft'}:${showEmptyAuto ? 'all' : 'tidy'}:${hasRates ? 'rates' : 'plain'}`}
         initialColumns={columns}
         initialData={data}
         fx={fx}
-        slideStatuses={STATUS_CONFIG}
+        slideStatuses={false}
         slideLineVariant
         fillHandle
         clickTwiceToOpen
@@ -850,7 +899,8 @@ export function BudgetGridView({
         lineApi={lineApi}
         // Stage-3 parity — add phase to the Group-by cycle only when the tour
         // tracks phases (opt-in; income + /grid-demo pass nothing → unchanged).
-        groupModes={trackPhases ? ['section', 'status', 'phase'] : undefined}
+        // Group by: section (+ phase when tracked). No Status — the column is gone.
+        groupModes={trackPhases ? ['section', 'phase'] : ['section']}
       />
       <VersionLockModal
         open={lockModalOpen}

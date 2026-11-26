@@ -2578,10 +2578,26 @@ Hide column hides it and it stays hidden after a reload; Columns… opens the
 column list at the pointer to bring it back. Right-click "#" → Hide column is
 grey ("Always shown").
 
-#### BUD-96 — Grouped by status, edits land on the row you see
-Budget grid → More → Group by: **Status**. Type a new Item name on the first
-row of the second group → Enter → reload, group by Status again: THAT row has
+#### BUD-96 — Grouped by phase, edits land on the row you see
+On a tour that tracks phases: Budget grid → More → Group by: **Phase** (Status
+grouping left with the Status column, BUD-98). Type a new Item name on the first
+row of the second group → Enter → reload, group by Phase again: THAT row has
 the new name, and no other row changed. Right-click a row there → Clear its
 Estimate → the same row reads 0 after a reload. ⤢ Open on a grouped row opens
 THAT line's panel. (Before Nov 2026 the edit saved to whichever row sat at that
 position in section order, and Open opened a line from the first section.)
+
+#### BUD-97 — Add section is instant; renames stick
+Budget grid → **＋ Add section** → type "Merch" → Enter (or ⌘↵). The section is
+there AT ONCE — no wait, no page reload. Do it five times in a row: each one
+appears as you press Enter. Immediately double-click one and rename it, then
+reload: every section is there with the name you gave it. Right-click a section
+that's still saving → Add line: the line lands in it (not Uncategorised). Cancel
+on the name box adds nothing. If a save fails, the section disappears again
+with "Could not add the section"; a failed rename says "Could not rename the
+section" (it used to fail silently).
+
+#### BUD-98 — No line Status
+The budget grid has no Status column, and a line's panel has no Status field.
+More → Group by offers Section (and Phase when the tour tracks phases), not
+Status. Line statuses stay in the database, unshown.
