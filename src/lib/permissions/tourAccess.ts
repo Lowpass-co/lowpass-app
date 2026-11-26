@@ -12,10 +12,21 @@ import { AREAS, FULL_ACCESS, isArea, isLevel, type Area, type Level, type TourAc
 export type ViewerAccess = {
   /** Admin or manager of the active workspace — everything, every tour. */
   manager: boolean;
-  role: 'admin' | 'manager' | 'readonly' | null;
-  /** This tour's areas (FULL for managers; empty without a tour). */
+  role: 'admin' | 'manager' | 'tour_manager' | 'readonly' | null;
+  /** This tour's areas (FULL for managers and for a Tour manager on their
+   *  tour; empty without a tour). */
   tour: TourAccess;
+  /** Runs THIS tour: admin / manager, or a Tour manager on one of their tours
+   *  (migration 298) — dates & details, crew, its People. */
+  runsTour?: boolean;
+  /** May edit the workspace's templates + libraries: admin / manager / Tour manager. */
+  library?: boolean;
 };
+
+/** Does the viewer run this tour (dates, details, crew)? */
+export function runsTour(access: ViewerAccess | null): boolean {
+  return !!access && (access.manager || !!access.runsTour);
+}
 
 type RpcRow = { area: string; level: string };
 
@@ -51,11 +62,15 @@ export async function getViewerAccess(
     .maybeSingle();
   const role = ((member as { role?: string } | null)?.role ?? null) as ViewerAccess['role'];
   if (!role) return null;
-  if (role === 'admin' || role === 'manager') return { manager: true, role, tour: FULL_ACCESS };
-  if (!tourId) return { manager: false, role, tour: {} };
+  if (role === 'admin' || role === 'manager') return { manager: true, role, tour: FULL_ACCESS, runsTour: true, library: true };
+  const library = role === 'tour_manager';
+  if (!tourId) return { manager: false, role, tour: {}, runsTour: false, library };
   const { data, error } = await supabase.rpc('my_tour_access', { p_tour_id: tourId });
   if (error) return null;
-  return { manager: false, role, tour: accessFromRows(data as RpcRow[]) };
+  const tour = accessFromRows(data as RpcRow[]);
+  // A Tour manager gets every area on their tours from the database (298);
+  // having any area here means this tour is one of theirs.
+  return { manager: false, role, tour, runsTour: library && Object.keys(tour).length > 0, library };
 }
 
 /** May the viewer do `level` in `area`? Unknown access (null) → yes (fail open

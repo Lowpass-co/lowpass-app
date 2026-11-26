@@ -35,7 +35,7 @@ import {
   type RoutingStatusByDate,
 } from '@/server/operations/getRoutingDayStatus';
 import { getActiveMembership } from '@/lib/permissions/server';
-import { getViewerAccess, viewerAllows } from '@/lib/permissions/tourAccess';
+import { getViewerAccess, viewerAllows, runsTour } from '@/lib/permissions/tourAccess';
 
 export const dynamic = 'force-dynamic';
 
@@ -80,7 +80,8 @@ export default async function OperationsTourRoutingPage({
   // the routing route, which is admin / manager only — so only they get the editor.
   const access = await getViewerAccess(supabase, user.id, tourId);
   const canRead = viewerAllows(access, 'schedule');
-  const canWrite = !!access?.manager;
+  // Dates: whoever runs the tour (admin / manager / its Tour manager — 298).
+  const canWrite = runsTour(access);
 
   const { data: tour } = await supabase
     .from('tours')

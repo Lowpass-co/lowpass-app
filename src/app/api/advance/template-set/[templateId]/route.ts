@@ -17,7 +17,7 @@ type Params = { params: Promise<{ templateId: string }> };
 export async function PATCH(request: Request, { params }: Params) {
   const { templateId } = await params;
   const supabase = await createServerSupabaseClient();
-  const auth = await requireWrite(supabase);
+  const auth = await requireWrite(supabase, { library: true });
   if ('error' in auth) return auth.error;
   const body = await readJson<{ name?: unknown; sections?: unknown }>(request);
   if (!body) return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
@@ -55,7 +55,7 @@ export async function PATCH(request: Request, { params }: Params) {
 export async function DELETE(_request: Request, { params }: Params) {
   const { templateId } = await params;
   const supabase = await createServerSupabaseClient();
-  const auth = await requireWrite(supabase);
+  const auth = await requireWrite(supabase, { library: true });
   if ('error' in auth) return auth.error;
   const { data, error } = await (supabase as unknown as SupabaseClient)
     .from('advance_layout_templates')

@@ -23,7 +23,7 @@ import { createServerSupabaseClient } from '@/lib/supabase-server';
 import {
   getActiveMembership,
 } from '@/lib/permissions/server';
-import { getViewerAccess } from '@/lib/permissions/tourAccess';
+import { getViewerAccess, runsTour } from '@/lib/permissions/tourAccess';
 import { tourFromParams, withDerivedRefresh } from '@/server/budget/withDerivedRefresh';
 
 export const dynamic = 'force-dynamic';
@@ -33,7 +33,8 @@ async function postHandler(
   { params }: { params: Promise<{ id: string; memberId: string }> },
 ) {
   const supabase = await createServerSupabaseClient();
-  const auth = await requireWrite(supabase);
+  // Runs this tour: admin / manager, or a Tour manager on one of theirs (298).
+  const auth = await requireWrite(supabase, { runsTour: true, tourId: (await params).id });
   if ('error' in auth) return auth.error;
   const {
     data: { user },
@@ -46,8 +47,8 @@ async function postHandler(
   if (!membership) {
     return NextResponse.json({ error: 'No active workspace' }, { status: 403 });
   }
-  // Changing the crew is admin / manager only (as requireWrite(supabase)).
-  if (!(await getViewerAccess(supabase, user.id, tourId))?.manager) {
+  // Changing the crew: whoever runs this tour (admin / manager / its Tour manager).
+  if (!runsTour(await getViewerAccess(supabase, user.id, tourId))) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 

@@ -24,7 +24,7 @@ import { NextResponse } from 'next/server';
 import { requireWrite } from '@/lib/auth/workspace-check';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { getActiveMembership } from '@/lib/permissions/server';
-import { getViewerAccess } from '@/lib/permissions/tourAccess';
+import { getViewerAccess, runsTour } from '@/lib/permissions/tourAccess';
 import { PRESETS, type Preset } from '@/lib/permissions/areas';
 import { addPersonToTour, createPerson } from '@/server/people/addToTour';
 import { giveTourLogin, type LoginResult } from '@/server/people/tourLogin';
@@ -59,7 +59,8 @@ const isPreset = (v: unknown): v is Preset => typeof v === 'string' && (PRESETS 
 
 async function postHandler(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const supabase = await createServerSupabaseClient();
-  const auth = await requireWrite(supabase);
+  // Runs this tour: admin / manager, or a Tour manager on one of theirs (298).
+  const auth = await requireWrite(supabase, { runsTour: true, tourId: (await params).id });
   if ('error' in auth) return auth.error;
   const { id: tourId } = await params;
   const {
@@ -69,7 +70,7 @@ async function postHandler(request: Request, { params }: { params: Promise<{ id:
 
   const membership = await getActiveMembership(supabase, user.id);
   if (!membership) return NextResponse.json({ error: 'No active workspace' }, { status: 403 });
-  if (!(await getViewerAccess(supabase, user.id, tourId))?.manager) {
+  if (!runsTour(await getViewerAccess(supabase, user.id, tourId))) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 

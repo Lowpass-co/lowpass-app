@@ -22,7 +22,7 @@ interface MembershipRow {
   membership_id: string;
   workspace_id: string;
   workspace_name: string;
-  role: 'admin' | 'manager' | 'readonly';
+  role: 'admin' | 'manager' | 'tour_manager' | 'readonly';
   is_workspace_owner: boolean;
   joined_at: string;
   tags: string[];

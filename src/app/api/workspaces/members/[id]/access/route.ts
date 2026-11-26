@@ -47,7 +47,9 @@ export async function PUT(request: Request, { params }: Params) {
   if ('error' in auth) return auth.error;
   const member = await loadMember(supabase, id, auth.workspaceId);
   if (!member) return NextResponse.json({ error: 'Member not found' }, { status: 404 });
-  if (member.role !== 'readonly') {
+  // Members and Tour managers (298) are scoped by these rows; a Tour
+  // manager's areas are ignored by the database — every area is edit.
+  if (member.role !== 'readonly' && member.role !== 'tour_manager') {
     return NextResponse.json({ error: 'Admins and managers already see every tour' }, { status: 400 });
   }
   const body = (await request.json().catch(() => null)) as { rows?: unknown } | null;

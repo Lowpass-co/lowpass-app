@@ -24,7 +24,7 @@ async function has(q: PromiseLike<{ count: number | null; error: { message: stri
 
 export async function loadOnboardingStatus(
   client: SupabaseClient,
-  args: { workspaceId: string; userId: string; role: 'admin' | 'manager' | 'readonly'; now?: Date },
+  args: { workspaceId: string; userId: string; role: 'admin' | 'manager' | 'tour_manager' | 'readonly'; now?: Date },
 ): Promise<OnboardingStatus> {
   const { workspaceId: ws, userId, role } = args;
   const now = args.now ?? new Date();

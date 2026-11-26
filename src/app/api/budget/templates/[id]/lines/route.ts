@@ -54,7 +54,7 @@ export async function POST(request: Request, ctx: RouteCtx) {
   const guard = await guardTemplate(templateId);
   if (guard.error) return guard.error;
   const { supabase, workspaceId } = guard;
-  const auth = await requireWrite(supabase);
+  const auth = await requireWrite(supabase, { library: true });
   if ('error' in auth) return auth.error;
 
   let body: {

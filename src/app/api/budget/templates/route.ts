@@ -119,7 +119,7 @@ export async function POST(request: Request) {
   const ctx = await resolveWorkspace();
   if (ctx.error) return ctx.error;
   const { supabase, workspaceId } = ctx;
-  const auth = await requireWrite(supabase);
+  const auth = await requireWrite(supabase, { library: true });
   if ('error' in auth) return auth.error;
 
   let body: {

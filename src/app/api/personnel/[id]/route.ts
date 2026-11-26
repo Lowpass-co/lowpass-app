@@ -51,7 +51,8 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const supabase = await createServerSupabaseClient();
-  const auth = await requireWrite(supabase);
+  // Admin / manager / Tour manager — the database decides which people (298).
+  const auth = await requireWrite(supabase, { people: true });
   if ('error' in auth) return auth.error;
   const {
     data: { user },

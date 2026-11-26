@@ -90,9 +90,19 @@ export async function requireWrite(
     adminOnly?: boolean;
     /** Tour access (Nov 2026): a Member passes with EDIT on this area of this
      *  tour (`my_tour_access`, the same rows the database rules read). Admins
-     *  and managers pass on role. Give both or neither. */
+     *  and managers pass on role; a Tour manager passes on their tours (298
+     *  gives them every area). Give both or neither. */
     area?: Area;
     tourId?: string | null;
+    /** Runs this tour (dates, details, crew, its People): admin / manager, or a
+     *  Tour manager on one of THEIR tours. Members never. Needs `tourId`. */
+    runsTour?: boolean;
+    /** The workspace's templates + libraries: admin / manager / Tour manager. */
+    library?: boolean;
+    /** A People record (add / edit, never delete): admin / manager / Tour
+     *  manager — the database decides WHICH people (298: those on their tours
+     *  and those they added). */
+    people?: boolean;
   } = {},
 ): Promise<WriteAuth | { error: NextResponse }> {
   const {
@@ -115,6 +125,16 @@ export async function requireWrite(
   const privileged = membership.role === 'admin' || membership.role === 'manager';
 
   if (opts.adminOnly) return membership.role === 'admin' ? ok : { error: forbidden };
+
+  if (opts.library || opts.people) return privileged || membership.role === 'tour_manager' ? ok : { error: forbidden };
+
+  if (opts.runsTour) {
+    if (privileged) return ok;
+    if (membership.role !== 'tour_manager' || !opts.tourId) return { error: forbidden };
+    const { data, error } = await supabase.rpc('my_tour_access', { p_tour_id: opts.tourId });
+    // Any area on this tour = one of theirs (298: a Tour manager's rows are all edit).
+    return !error && Array.isArray(data) && data.length > 0 ? ok : { error: forbidden };
+  }
 
   if (opts.area) {
     if (privileged) return ok;

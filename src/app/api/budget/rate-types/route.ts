@@ -47,7 +47,7 @@ export async function GET() {
 
 export async function POST(request: Request) {
   const supabase = await createServerSupabaseClient();
-  const auth = await requireWrite(supabase);
+  const auth = await requireWrite(supabase, { library: true });
   if ('error' in auth) return auth.error;
   const ctx = await workspace(supabase);
   if ('error' in ctx) return ctx.error;
@@ -115,7 +115,7 @@ export async function POST(request: Request) {
 
 export async function PATCH(request: Request) {
   const supabase = await createServerSupabaseClient();
-  const auth = await requireWrite(supabase);
+  const auth = await requireWrite(supabase, { library: true });
   if ('error' in auth) return auth.error;
   const ctx = await workspace(supabase);
   if ('error' in ctx) return ctx.error;
@@ -152,7 +152,7 @@ export async function PATCH(request: Request) {
 
 export async function DELETE(request: Request) {
   const supabase = await createServerSupabaseClient();
-  const auth = await requireWrite(supabase);
+  const auth = await requireWrite(supabase, { library: true });
   if ('error' in auth) return auth.error;
   const ctx = await workspace(supabase);
   if ('error' in ctx) return ctx.error;

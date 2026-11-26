@@ -10,5 +10,6 @@ checks what each kind of user can read and write.
     node database/tests/293_tour_access_rules.test.mjs
     node database/tests/295_admin_delete.test.mjs
     node database/tests/297_change_tour_currency.test.mjs
+    node database/tests/298_tour_manager.test.mjs
 
 Run from the repo root. Not part of `vitest` (PGlite is not a dependency).

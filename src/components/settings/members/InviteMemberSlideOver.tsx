@@ -8,6 +8,7 @@
    manually. Sprint 10 wires Supabase Auth invite email.
    ============================================ */
 
+import { ROLES, ROLE_LABEL, ROLE_HINT, isTourScoped } from '@/lib/permissions/roles';
 import { useEffect, useRef, useState } from 'react';
 import { Check, Copy, Loader2 } from 'lucide-react';
 import { useToast } from '@/components/ui/Toast';
@@ -82,7 +83,7 @@ export function InviteMemberSlideOver({
   const emailValid = EMAIL_RE.test(normalizedEmail);
   const duplicateEmail = emailValid && existingEmails.has(normalizedEmail);
 
-  const wouldBeEmpty = role === 'readonly' && draftIsEmpty(access);
+  const wouldBeEmpty = isTourScoped(role) && draftIsEmpty(access);
   const canSubmit = emailValid && !duplicateEmail && !submitting && (!wouldBeEmpty || emptyAck);
 
   async function handleSubmit() {
@@ -98,8 +99,8 @@ export function InviteMemberSlideOver({
           role,
           tags: [],
           grants: [],
-          access: role === 'readonly' ? draftToRows(access) : [],
-          personnel_id: role === 'readonly' ? personnelId : null,
+          access: isTourScoped(role) ? draftToRows(access) : [],
+          personnel_id: isTourScoped(role) ? personnelId : null,
         }),
       });
       const body = (await res.json().catch(() => null)) as
@@ -298,7 +299,7 @@ export function InviteMemberSlideOver({
                 Role *
               </legend>
               <div className="flex flex-wrap" style={{ gap: 'var(--lp-space-3)' }}>
-                {(['admin', 'manager', 'readonly'] as const).map((r) => (
+                {ROLES.map((r) => (
                   <label
                     key={r}
                     className="inline-flex items-center"
@@ -317,16 +318,14 @@ export function InviteMemberSlideOver({
                       onChange={() => setRole(r)}
                       style={{ accentColor: 'var(--color-lp-orange)' }}
                     />
-                    <span style={{ textTransform: 'capitalize' }}>
-                      {r === 'readonly' ? 'Read-only' : r}
-                    </span>
+                    <span title={ROLE_HINT[r]}>{ROLE_LABEL[r]}</span>
                   </label>
                 ))}
               </div>
             </fieldset>
 
-            {/* Tour access + crew record (Nov 2026) — Members only */}
-            {role === 'readonly' ? (
+            {/* Tour access + crew record (Nov 2026) — Members and Tour managers */}
+            {isTourScoped(role) ? (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--lp-space-3)' }}>
                 <div>
                   <div

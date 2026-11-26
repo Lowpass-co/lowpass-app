@@ -63,12 +63,14 @@ export interface RailItem {
    *   an Area     → admins, managers, and Members with that area on the tour
    *                 (`tour_access`, read through `my_tour_access`).
    *   'manager'   → admins and managers only.
+   *   'runsTour'  → whoever runs this tour: admin / manager / its Tour manager (298).
+   *   'library'   → the workspace's templates + libraries: admin / manager / Tour manager.
    *   absent      → anyone who can see the scope (the tour, the artist…).
    *
    * The rail hides what you can't open, and AppShellV3 shows "No access" in
    * place of the page — but neither is the gate: the database is (293).
    */
-  area?: Area | 'manager';
+  area?: Area | 'manager' | 'runsTour' | 'library';
 }
 
 /** What the rail and the page gate need to know about the viewer. `null` =
@@ -77,12 +79,18 @@ export interface RailAccess {
   manager: boolean;
   /** This tour's areas (tour scope only; empty elsewhere). */
   tour: TourAccess;
+  /** Runs this tour (Tour manager on one of theirs — 298). */
+  runsTour?: boolean;
+  /** Edits the workspace's templates + libraries (Tour manager — 298). */
+  library?: boolean;
 }
 
 /** May this viewer open an item gated on `area`? */
 export function railAllows(access: RailAccess | null, area: RailItem['area']): boolean {
   if (!access || !area || access.manager) return true;
   if (area === 'manager') return false;
+  if (area === 'runsTour') return !!access.runsTour;
+  if (area === 'library') return !!access.library;
   return can(access.tour, area, 'view');
 }
 
@@ -192,7 +200,7 @@ const TOUR_RAIL: RailEntry[] = [
     /* Three pages, one item (TourSettingsTabs): Details (name, dates,
        currency, delete), Dates & routing (the old Schedule page) and Money
        (approval, overheads, commissions, exchange rates, exports). */
-    kind: 'item', id: 'tour-settings', label: 'Tour settings', icon: 'Settings2', area: 'manager',
+    kind: 'item', id: 'tour-settings', label: 'Tour settings', icon: 'Settings2', area: 'runsTour',
     href: (c) => `/operations/${c.tourId}/settings`,
     match: (p, s) => /^\/operations\/[^/]+\/(settings|routing)(\/|$)/.test(p) || budgetTab('settings')(p, s),
   },
@@ -251,10 +259,10 @@ const ARTIST_RAIL: RailEntry[] = [
 const WORKSPACE_RAIL: RailEntry[] = [
   g('Workspace'),
   { kind: 'item', id: 'artists', label: 'Artists', icon: 'Music2', badge: 'artists', href: () => '/artists' },
-  { kind: 'item', id: 'personnel', label: 'People', icon: 'Users', area: 'manager', href: () => '/personnel' },
+  { kind: 'item', id: 'personnel', label: 'People', icon: 'Users', area: 'library', href: () => '/personnel' },
   {
     /* "Gear", as the tour menu says it (was "Equipment & rentals"). */
-    kind: 'item', id: 'equipment', label: 'Gear & rentals', icon: 'Package', area: 'manager',
+    kind: 'item', id: 'equipment', label: 'Gear & rentals', icon: 'Package', area: 'library',
     href: () => '/assets',
     // /equipment survives until S-3 picks a winner; both light this item.
     match: (p) => p.startsWith('/assets') || p.startsWith('/equipment'),
@@ -262,7 +270,7 @@ const WORKSPACE_RAIL: RailEntry[] = [
   { kind: 'item', id: 'venues', label: 'Venues', icon: 'MapPin', area: 'manager', href: () => '/venues' },
   /* Nov 2026 — advance templates are the workspace's, shared by every tour;
      they were only reachable from inside a tour. */
-  { kind: 'item', id: 'templates', label: 'Templates', icon: 'LayoutTemplate', area: 'manager', href: () => '/templates' },
+  { kind: 'item', id: 'templates', label: 'Templates', icon: 'LayoutTemplate', area: 'library', href: () => '/templates' },
 ];
 
 /* ── YOU scope ────────────────────────────────────────────────────────────── */
