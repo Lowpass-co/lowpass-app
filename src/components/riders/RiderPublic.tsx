@@ -10,16 +10,18 @@
    here and marks the line confirmed / substitute / cut for this show.
    ============================================ */
 
-import { useMemo, useState } from 'react';
-import { Check, ChevronDown, FileDown, MessageSquare } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Check, ChevronDown, ExternalLink, FileDown, MessageSquare, X } from 'lucide-react';
 import { fmtDay } from '@/lib/riders/blocks';
-import { docModel, versionLine } from '@/lib/riders/render';
-import { changeLine } from '@/lib/riders/summary';
+import { linkHost } from '@/lib/riders/photos';
+import { docModel, versionLine, type DocItem } from '@/lib/riders/render';
+import { changeLine, changeReaches } from '@/lib/riders/summary';
 import { RIDER_KIND_LABEL, type ResolvedAttachment, type RiderChange } from '@/lib/riders/types';
 import type { PublicRider } from '@/server/riders/public';
 import { RiderDocStyles, RiderDocView } from './RiderDocView';
 
 type Msg = PublicRider['threads'][string][number];
+type RequestItem = Extract<DocItem, { t: 'request' }>;
 
 const remember = {
   /** Who acknowledged / replied last time on this browser — first visit: blanks. */
@@ -87,18 +89,35 @@ export function RiderPublic({ data, token }: { data: PublicRider; token: string 
   const showLine = data.show ? `For ${[data.show.venue, data.show.city].filter(Boolean).join(', ') || 'your show'} — ${fmtDay(data.show.date, true)}` : 'Every show on the tour';
   const header = { artist: data.artist, version: versionLine(version.label, version.publishedAt), show: showLine };
   const models = useMemo(
-    () => snap.docs.map((d) => docModel(d, { date: data.show?.date ?? null, party: snap.party, docs: snap.docs, attachments: snap.attachments, states: data.states })),
+    () =>
+      snap.docs.map((d) =>
+        docModel(d, {
+          date: data.show?.date ?? null,
+          party: snap.party,
+          docs: snap.docs,
+          attachments: snap.attachments,
+          states: data.states,
+          embeds: snap.embeds,
+          routingId: data.show?.routingId ?? null,
+        }),
+      ),
     [snap, data.show, data.states],
   );
+  const [item, setItem] = useState<RequestItem | null>(null);
+  const photoUrl = (path: string) => data.photos[path] ?? null;
   const model = models.find((m) => m.kind === kind) ?? models[0];
   const myAck = acks.find((a) => a.versionId === version.id) ?? null;
   const olderAck = !myAck ? acks[0] ?? null : null;
+  // A show's link lists only what reaches that show (its dates, its own
+  // input list / stage plot); the whole-tour link lists everything.
+  const show = data.show;
+  const reaches = useCallback((c: RiderChange) => !show || changeReaches(c, show, snap.embeds), [show, snap.embeds]);
   // Read an older version here before? Everything published since, newest first.
   const since = useMemo(() => {
     if (!olderAck) return [];
     const i = data.versions.findIndex((v) => v.id === olderAck.versionId);
-    return (i < 0 ? data.versions.slice(0, 1) : data.versions.slice(0, i)).flatMap((v) => v.changes);
-  }, [olderAck, data.versions]);
+    return (i < 0 ? data.versions.slice(0, 1) : data.versions.slice(0, i)).flatMap((v) => v.changes).filter(reaches);
+  }, [olderAck, data.versions, reaches]);
   const fileHref = (a: ResolvedAttachment) => (a.id ? `/api/public/riders/${token}/file?kind=${a.kind}${a.kind === 'file' ? `&id=${a.id}` : ''}` : null);
 
   return (
@@ -134,12 +153,14 @@ export function RiderPublic({ data, token }: { data: PublicRider; token: string 
                 {vi === 0 ? <span className="rdp-current">Current</span> : null}
               </div>
               {v.note ? <p className="rdp-note">{v.note}</p> : null}
-              {v.changes.length ? (
+              {v.changes.some(reaches) ? (
                 <ul>
-                  {v.changes.map((c, i) => (
+                  {v.changes.filter(reaches).map((c, i) => (
                     <li key={i}>{changeLine(c)}</li>
                   ))}
                 </ul>
+              ) : v.changes.length ? (
+                <p className="rdp-muted">Nothing that changes this show.</p>
               ) : (
                 <p className="rdp-muted">
                   {vi === data.versions.length - 1 && data.versions.length < 30 ? 'First version.' : 'Only the order or the attached files changed.'}
@@ -177,6 +198,8 @@ export function RiderPublic({ data, token }: { data: PublicRider; token: string 
             model={model}
             header={header}
             fileHref={fileHref}
+            photoUrl={photoUrl}
+            onItem={setItem}
             lineExtras={(r) => (
               <LineThread
                 key={r.id}
@@ -190,6 +213,18 @@ export function RiderPublic({ data, token }: { data: PublicRider; token: string 
             )}
           />
         </div>
+        {item ? (
+          <ItemSheet
+            item={item}
+            photo={item.photo ? photoUrl(item.photo) : null}
+            onClose={() => setItem(null)}
+            onReply={() => {
+              setOpenLine(item.id);
+              setItem(null);
+              setTimeout(() => document.getElementById(`line-${item.id}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 50);
+            }}
+          />
+        ) : null}
         <p className="rdp-foot">
           This page always shows the current version of the rider{data.show ? ' for your show' : ''}. Can’t do something? Reply on the line — the tour manager sees it straight away.
         </p>
@@ -343,5 +378,58 @@ function LineThread({
         </button>
       )}
     </span>
+  );
+}
+
+/** A request line's card: its photo, the exact item, what else will do. */
+function ItemSheet({ item, photo, onClose, onReply }: { item: RequestItem; photo: string | null; onClose: () => void; onReply: () => void }) {
+  const closeRef = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    closeRef.current?.focus();
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
+  return (
+    <div className="rdp-sheet-back" onClick={onClose}>
+      <div className="rdp-sheet" role="dialog" aria-modal="true" aria-label={item.item} onClick={(e) => e.stopPropagation()}>
+        <button ref={closeRef} type="button" className="rdp-sheet-x" onClick={onClose} aria-label="Close">
+          <X size={18} aria-hidden />
+        </button>
+        {photo ? (
+          // eslint-disable-next-line @next/next/no-img-element -- a signed storage URL
+          <img className="rdp-sheet-photo" src={photo} alt={item.item} />
+        ) : null}
+        <div className="rdp-sheet-body">
+          <div className="rdp-sheet-title">
+            {item.qty ? <span className="rdp-sheet-qty">{item.qty}</span> : null}
+            {item.item}
+          </div>
+          <div className="rdp-sheet-tags">
+            {item.provider ? <span className="rd-who" data-who={item.providerId ?? undefined}>{item.provider}</span> : null}
+            {item.optional ? <span className="rd-opt">If possible</span> : null}
+            {item.perPerson ? <span className="rd-opt">{item.perPerson}</span> : null}
+          </div>
+          {item.alternatives ? (
+            <p>
+              <span className="rdp-muted">Or </span>
+              {item.alternatives}
+            </p>
+          ) : null}
+          {item.note ? <p>{item.note}</p> : null}
+          <div className="rdp-sheet-actions">
+            {item.link ? (
+              <a className="rdp-btn rdp-btn-primary" href={item.link} target="_blank" rel="noopener noreferrer nofollow">
+                See the exact item <ExternalLink size={14} aria-hidden />
+                <span className="rdp-sheet-host">{linkHost(item.link)}</span>
+              </a>
+            ) : null}
+            <button type="button" className="rdp-btn" onClick={onReply}>
+              <MessageSquare size={14} aria-hidden /> Reply on this line
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }

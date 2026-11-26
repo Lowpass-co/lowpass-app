@@ -18,7 +18,7 @@ import type { RiderChange, RiderKind, RiderSnapshot } from '@/lib/riders/types';
 export async function riderPdfDoc(input: {
   snapshot: RiderSnapshot;
   version: { label: string; publishedAt: string } | null;
-  show: { date: string; venue: string | null; city: string | null } | null;
+  show: { date: string; venue: string | null; city: string | null; routingId?: string | null } | null;
   states?: Record<string, LineStateView>;
   changes: RiderChange[];
   linkUrl: string | null;
@@ -26,7 +26,7 @@ export async function riderPdfDoc(input: {
 }): Promise<ExportDoc> {
   const { snapshot: s } = input;
   const docs = input.kinds?.length ? s.docs.filter((d) => input.kinds!.includes(d.kind)) : s.docs;
-  const ctx = { date: input.show?.date ?? null, party: s.party, docs: s.docs, attachments: s.attachments, states: input.states };
+  const ctx = { date: input.show?.date ?? null, party: s.party, docs: s.docs, attachments: s.attachments, states: input.states, embeds: s.embeds, routingId: input.show?.routingId ?? null };
   const models = docs.map((d) => docModel(d, ctx));
   const versionText = input.version ? versionLine(input.version.label, input.version.publishedAt) : versionLine('', null);
   const where = input.show ? [input.show.venue, input.show.city].filter(Boolean).join(', ') : '';

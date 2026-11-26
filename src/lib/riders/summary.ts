@@ -11,17 +11,23 @@
    ============================================ */
 
 import { blockLabel, dateTag, inForce, providerShort, requestLine } from './blocks';
+import { diffEmbeds, embedKey, usesEmbed } from './embeds';
 import { proseText } from './prose';
 import type {
   BlockContentMap,
   RequestContent,
   RiderChange,
+  RiderEmbeds,
   RiderKind,
   RiderSnapshot,
   SnapBlock,
   SnapDoc,
   VersionNo,
 } from './types';
+
+/** What a diff / "which shows changed" compares: the documents, the party
+ *  and (when the documents show them) the embedded input list / stage plot. */
+type Comparable = Pick<RiderSnapshot, 'docs' | 'party'> & { embeds?: RiderEmbeds | null };
 
 /* ---------- summary ---------- */
 
@@ -87,6 +93,8 @@ function requestDetail(a: RequestContent, b: RequestContent, party: number | nul
   if (a.alternatives !== b.alternatives) bits.push(b.alternatives ? `alternatives: ${b.alternatives}` : 'alternatives removed');
   if (a.note !== b.note) bits.push(b.note ? `note: ${b.note.length > 60 ? `${b.note.slice(0, 58)}…` : b.note}` : 'note removed');
   if (a.optional !== b.optional) bits.push(b.optional ? 'now if possible' : 'now required');
+  if ((a.link ?? '') !== (b.link ?? '')) bits.push(b.link ? (a.link ? 'new link to the exact item' : 'link to the exact item') : 'link removed');
+  if ((a.photo ?? null) !== (b.photo ?? null)) bits.push(b.photo ? (a.photo ? 'new photo' : 'photo added') : 'photo removed');
   return bits.length ? { what: `${lb} — ${bits.join('; ')}` } : {};
 }
 
@@ -100,6 +108,9 @@ function blockChange(doc: RiderKind, section: string | null, prev: SnapBlock, ne
     const d = requestDetail(prev.content, next.content, party);
     if (d.before) return { ...base, what: d.after!, before: d.before, after: d.after };
     if (d.what) return { ...base, what: d.what };
+  }
+  if (contentChanged && prev.kind === 'input_list' && next.kind === 'input_list' && prev.content.outputs !== next.content.outputs) {
+    return { ...base, what: `Input list — ${next.content.outputs ? 'now with the outputs (IEM / mixes)' : 'outputs left out'}` };
   }
   if (contentChanged && prev.kind === 'heading' && next.kind === 'heading' && prev.content.text !== next.content.text) {
     return { ...base, what: `Section renamed`, before: prev.content.text, after: next.content.text };
@@ -117,7 +128,7 @@ function blockChange(doc: RiderKind, section: string | null, prev: SnapBlock, ne
 }
 
 /** Changes from `prev` (null = first version: nothing to compare) to `next`. */
-export function diffSnapshots(prev: Pick<RiderSnapshot, 'docs' | 'party'> | null, next: Pick<RiderSnapshot, 'docs' | 'party'>): RiderChange[] {
+export function diffSnapshots(prev: Comparable | null, next: Comparable): RiderChange[] {
   if (!prev) return [];
   const out: RiderChange[] = [];
   if ((prev.party ?? null) !== (next.party ?? null)) {
@@ -146,6 +157,12 @@ export function diffSnapshots(prev: Pick<RiderSnapshot, 'docs' | 'party'> | null
     }
     if (pd.title && nd.title !== pd.title) out.push({ doc: nd.kind, section: null, type: 'changed', what: 'Title', before: pd.title, after: nd.title, blockId: null });
   }
+  out.push(
+    ...diffEmbeds(prev.embeds, next.embeds, {
+      inputList: usesEmbed(prev.docs, 'inputList') && usesEmbed(next.docs, 'inputList'),
+      stagePlot: usesEmbed(prev.docs, 'stagePlot') && usesEmbed(next.docs, 'stagePlot'),
+    }),
+  );
   return out;
 }
 
@@ -157,24 +174,35 @@ export function changeLine(c: RiderChange): string {
   if (c.type === 'added') return `${where}Added: ${c.what}${tail}`;
   if (c.type === 'removed') return `${where}Removed: ${c.what}`;
   if (c.before !== undefined && c.after !== undefined) {
-    return c.what === 'Section renamed' || c.what === 'Title' || c.what === 'Touring party'
+    return c.named || c.what === 'Section renamed' || c.what === 'Title' || c.what === 'Touring party'
       ? `${where}${c.what}: ${c.before} → ${c.after}`
       : `${where}${c.before} → ${c.after}${tail}`;
   }
   return `${where}Changed: ${c.what}${tail}`;
 }
 
-/** The blocks in force on a show date, as comparable text. */
-function inForceKey(s: Pick<RiderSnapshot, 'docs' | 'party'>, date: string): string {
-  return JSON.stringify([s.party, s.docs.map((d) => [d.kind, d.title, d.blocks.filter((b) => inForce(b, date)).map((b) => [b.id, b.kind, b.content])])]);
+/** Does this change reach this show? A dated line only on its dates; a
+ *  change to the tour's input list / stage plot not where the show has its
+ *  own (`embeds`: the copies of the version being read); a show's own
+ *  document's change only there. */
+export function changeReaches(c: RiderChange, show: { date: string; routingId?: string | null }, embeds?: RiderEmbeds | null): boolean {
+  if ((c.from || c.until) && !inForce({ from: c.from ?? null, until: c.until ?? null }, show.date)) return false;
+  if (c.show) return c.show === show.routingId;
+  if (c.embed && show.routingId && embeds?.shows[show.routingId]?.[c.embed]) return false;
+  return true;
+}
+
+/** What a show reads, as comparable text: the blocks in force on its date
+ *  and the input list / stage plot it gets. */
+function inForceKey(s: Comparable, date: string, routingId: string | null): string {
+  return JSON.stringify([
+    s.party,
+    s.docs.map((d) => [d.kind, d.title, d.blocks.filter((b) => inForce(b, date)).map((b) => [b.id, b.kind, b.content])]),
+    embedKey(s.embeds, routingId),
+  ]);
 }
 
 /** Upcoming shows (date ≥ today) whose rider reads differently in `next`. */
-export function showsAffected<T extends { date: string }>(
-  prev: Pick<RiderSnapshot, 'docs' | 'party'> | null,
-  next: Pick<RiderSnapshot, 'docs' | 'party'>,
-  shows: readonly T[],
-  today: string,
-): T[] {
-  return shows.filter((s) => s.date >= today && (!prev || inForceKey(prev, s.date) !== inForceKey(next, s.date)));
+export function showsAffected<T extends { date: string; routingId?: string }>(prev: Comparable | null, next: Comparable, shows: readonly T[], today: string): T[] {
+  return shows.filter((s) => s.date >= today && (!prev || inForceKey(prev, s.date, s.routingId ?? null) !== inForceKey(next, s.date, s.routingId ?? null)));
 }

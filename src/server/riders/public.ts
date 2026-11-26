@@ -18,10 +18,12 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { ROUTING_VENUE_SELECT } from '@/server/advance/board';
 import { inForce, isUuid, requestLine } from '@/lib/riders/blocks';
 import type { LineStateView } from '@/lib/riders/render';
+import { photoPathsIn } from '@/lib/riders/photos';
 import { parseSnapshot } from '@/lib/riders/snapshot';
 import type { RiderChange, RiderSnapshot } from '@/lib/riders/types';
 import { REPLY_COLS, VERSION_COLS, toReply, toShow, toVersion, type RiderReplyRow } from './data';
-import { RiderError } from './actions';
+import { RiderError } from './errors';
+import { signPhotos } from './photos';
 
 export const TOKEN_RE = /^[A-Za-z0-9_-]{20,64}$/;
 const ACKS_PER_HOUR = 20;
@@ -47,6 +49,8 @@ export interface PublicRider {
   states: Record<string, LineStateView>;
   threads: Record<string, Pick<RiderReplyRow, 'id' | 'author' | 'name' | 'body' | 'createdAt'>[]>;
   acks: { versionId: string; versionLabel: string; name: string; company: string | null; ackedAt: string }[];
+  /** Signed URLs for the version's item photos (this tour's only, ~1 h). */
+  photos: Record<string, string>;
 }
 
 interface LinkRow {
@@ -134,6 +138,7 @@ export async function loadPublicRider(service: SupabaseClient, token: string, op
     company: a.company,
     ackedAt: a.acked_at,
   }));
+  const photos = snapshot ? await signPhotos(service, link.workspace_id, link.tour_id, photoPathsIn(snapshot.docs.flatMap((d) => d.blocks))) : {};
   if (opts.recordView) {
     // Best-effort: a view never blocks the page.
     const { data: cur } = await service.from('rider_links').select('view_count').eq('id', link.id).maybeSingle();
@@ -157,6 +162,7 @@ export async function loadPublicRider(service: SupabaseClient, token: string, op
     states,
     threads,
     acks,
+    photos,
   };
 }
 
@@ -249,15 +255,18 @@ export interface ShowRider {
   snapshot: RiderSnapshot;
   states: Record<string, LineStateView>;
   date: string | null;
+  routingId: string;
   linkToken: string | null;
+  photos: Record<string, string>;
 }
 
 export async function loadShowRider(service: SupabaseClient, tourId: string, routingId: string): Promise<ShowRider | null> {
-  const [latestRes, showRes, statesRes, linksRes] = await Promise.all([
+  const [latestRes, showRes, statesRes, linksRes, tourRes] = await Promise.all([
     service.from('rider_versions').select('major, minor, published_at, snapshot').eq('tour_id', tourId).order('major', { ascending: false }).order('minor', { ascending: false }).limit(1).maybeSingle(),
     service.from('routing').select('date').eq('id', routingId).eq('tour_id', tourId).maybeSingle(),
     service.from('rider_line_states').select('block_id, state, note').eq('tour_id', tourId).eq('routing_id', routingId),
     service.from('rider_links').select('token, routing_id').eq('tour_id', tourId).is('revoked_at', null).order('created_at', { ascending: false }).limit(200),
+    service.from('tours').select('workspace_id').eq('id', tourId).maybeSingle(),
   ]);
   const latest = latestRes.data as { major: number; minor: number; published_at: string; snapshot: unknown } | null;
   if (!latest) return null;
@@ -265,11 +274,15 @@ export async function loadShowRider(service: SupabaseClient, tourId: string, rou
   for (const s of (statesRes.data ?? []) as { block_id: string; state: LineStateView['state']; note: string | null }[]) states[s.block_id] = { state: s.state, note: s.note };
   const links = (linksRes.data ?? []) as { token: string; routing_id: string | null }[];
   const link = links.find((l) => l.routing_id === routingId) ?? links.find((l) => l.routing_id === null) ?? null;
+  const snapshot = parseSnapshot(latest.snapshot);
+  const ws = (tourRes.data as { workspace_id: string } | null)?.workspace_id;
   return {
     version: { label: `${latest.major}.${latest.minor}`, publishedAt: latest.published_at },
-    snapshot: parseSnapshot(latest.snapshot),
+    snapshot,
     states,
     date: (showRes.data as { date: string | null } | null)?.date ?? null,
+    routingId,
     linkToken: link?.token ?? null,
+    photos: ws ? await signPhotos(service, ws, tourId, photoPathsIn(snapshot.docs.flatMap((d) => d.blocks))) : {},
   };
 }

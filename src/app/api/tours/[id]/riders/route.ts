@@ -20,9 +20,10 @@
 
 import { NextResponse } from 'next/server';
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { createServerSupabaseClient } from '@/lib/supabase-server';
+import { createServerSupabaseClient, createServiceSupabaseClient } from '@/lib/supabase-server';
 import { requireUserAndWorkspace, requireWrite } from '@/lib/auth/workspace-check';
 import { readJson, tourGate } from '@/server/advance/routeGuard';
+import { getViewerAccess, viewerAllows } from '@/lib/permissions/tourAccess';
 import { loadRiderEditor } from '@/server/riders/data';
 import {
   RiderError,
@@ -52,6 +53,10 @@ export async function GET(_req: Request, { params }: Params) {
   if ('error' in auth) return auth.error;
   const gate = await tourGate(supabase, tourId, auth.workspaceId);
   if (gate) return gate;
+  // The input list / stage plot are read with the service role — Production
+  // VIEW first (same rule as the page).
+  const access = await getViewerAccess(supabase as unknown as SupabaseClient, auth.user.id, tourId);
+  if (!viewerAllows(access, 'production', 'view')) return NextResponse.json({ error: 'You can’t see this tour’s riders.' }, { status: 403 });
   try {
     const data = await loadRiderEditor(supabase as unknown as SupabaseClient, tourId);
     if (!data) return NextResponse.json({ error: 'Tour not found' }, { status: 404 });
@@ -98,7 +103,7 @@ export async function POST(request: Request, { params }: Params) {
         return new NextResponse(null, { status: 204 });
       }
       case 'publish':
-        return NextResponse.json(await publish(client, tourId, ws, { bump: body.bump, note: body.note }, uid));
+        return NextResponse.json(await publish(client, tourId, ws, { bump: body.bump, note: body.note }, uid, createServiceSupabaseClient() as unknown as SupabaseClient));
       case 'template':
         return NextResponse.json({ id: await saveAsTemplate(client, tourId, ws, body.riderId, body.name, uid) });
       case 'links':

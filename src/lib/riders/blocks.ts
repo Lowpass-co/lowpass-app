@@ -7,6 +7,7 @@
    nothing a client sends can carry more than the renderers know.
    ============================================ */
 
+import { cleanLink, isPhotoPath } from './photos';
 import { cleanDoc, emptyDoc, proseText } from './prose';
 import {
   BLOCK_KINDS,
@@ -53,6 +54,8 @@ export function parseContent<K extends BlockKind>(kind: K, raw: unknown): BlockC
         optional: r.optional === true,
         perPerson: r.perPerson === true,
         summary: r.summary === true,
+        link: cleanLink(r.link),
+        photo: isPhotoPath(r.photo) ? r.photo : null,
       };
       return c as BlockContentMap[K];
     }
@@ -92,6 +95,9 @@ export function parseContent<K extends BlockKind>(kind: K, raw: unknown): BlockC
       }
       return { items } as BlockContentMap[K];
     }
+    case 'input_list':
+      return { outputs: r.outputs !== false } as BlockContentMap[K];
+    case 'stage_plot':
     case 'break':
     default:
       return {} as BlockContentMap[K];
@@ -101,7 +107,9 @@ export function parseContent<K extends BlockKind>(kind: K, raw: unknown): BlockC
 export function emptyContent<K extends BlockKind>(kind: K): BlockContentMap[K] {
   if (kind === 'text') return { doc: emptyDoc() } as BlockContentMap[K];
   if (kind === 'table') return { columns: ['', ''], rows: [['', ''], ['', '']] } as BlockContentMap[K];
-  if (kind === 'files') return { items: [{ kind: 'channel_list' }, { kind: 'stage_plot' }] } as BlockContentMap[K];
+  // The input list and stage plot are their own blocks now (shown in the
+  // document); Attachments is for other files.
+  if (kind === 'files') return { items: [] } as unknown as BlockContentMap[K];
   return parseContent(kind, {});
 }
 
@@ -162,6 +170,10 @@ export function blockLabel(b: LabelBlock, party: number | null = null): string {
       return (b.content as BlockContentMap['summary']).title;
     case 'files':
       return 'Attachments';
+    case 'input_list':
+      return 'Input list';
+    case 'stage_plot':
+      return 'Stage plot';
     case 'break':
       return 'Page break';
     default:

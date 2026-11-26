@@ -309,7 +309,7 @@ export function PublicShowView({ token }: { token: string }) {
  *  /r/<token> and the PDF, read-only here. Acknowledge / reply / PDF live on
  *  the show's own rider link when the team has made one. */
 function NewRider({ rider, artist, venue }: { rider: ShowRider; artist: string | null; venue: string }) {
-  const { snapshot, states, date } = rider;
+  const { snapshot, states, date, routingId, photos } = rider;
   const header = {
     artist,
     version: versionLine(rider.version.label, rider.version.publishedAt),
@@ -329,8 +329,9 @@ function NewRider({ rider, artist, venue }: { rider: ShowRider; artist: string |
       {snapshot.docs.map((d) => (
         <div key={d.kind} className="rounded-xl border border-neutral-200 bg-white p-6 sm:p-10">
           <RiderDocView
-            model={docModel(d, { date, party: snapshot.party, docs: snapshot.docs, attachments: snapshot.attachments, states })}
+            model={docModel(d, { date, party: snapshot.party, docs: snapshot.docs, attachments: snapshot.attachments, states, embeds: snapshot.embeds, routingId })}
             header={header}
+            photoUrl={(p) => photos[p] ?? null}
           />
         </div>
       ))}

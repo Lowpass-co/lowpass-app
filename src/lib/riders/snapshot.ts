@@ -8,12 +8,14 @@
    ============================================ */
 
 import { isBlockKind, parseContent, parseDates } from './blocks';
+import { embedsInUse, parseEmbeds } from './embeds';
 import { byPosition } from './position';
 import {
   RIDER_DEFAULT_TITLE,
   RIDER_KINDS,
   type ResolvedAttachment,
   type RiderBlock,
+  type RiderEmbeds,
   type RiderKind,
   type RiderSnapshot,
   type SnapBlock,
@@ -34,9 +36,19 @@ export function buildSnapshot(input: {
   party: number | null;
   docs: readonly SnapDoc[];
   attachments: readonly ResolvedAttachment[];
+  /** The live input lists / stage plots; only what the documents show is kept. */
+  embeds?: RiderEmbeds | null;
 }): RiderSnapshot {
   const docs = RIDER_KINDS.flatMap((k) => input.docs.filter((d) => d.kind === k));
-  return { v: 1, tourName: input.tourName, artistName: input.artistName, party: input.party, docs, attachments: [...input.attachments] };
+  return {
+    v: 1,
+    tourName: input.tourName,
+    artistName: input.artistName,
+    party: input.party,
+    docs,
+    attachments: [...input.attachments],
+    embeds: embedsInUse(docs, input.embeds),
+  };
 }
 
 export function parseSnapshot(raw: unknown): RiderSnapshot {
@@ -69,6 +81,7 @@ export function parseSnapshot(raw: unknown): RiderSnapshot {
     party,
     docs,
     attachments,
+    embeds: parseEmbeds(r.embeds),
   };
 }
 

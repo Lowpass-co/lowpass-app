@@ -11,10 +11,10 @@ import { Modal } from '@/components/ui/Modal';
 import { SlideOver } from '@/components/ui/SlideOver';
 import { Button } from '@/components/ui/Button';
 import { useToast } from '@/components/ui/Toast';
-import { blockLabel, dayBefore, fmtDay, inForce } from '@/lib/riders/blocks';
+import { blockLabel, dayBefore, fmtDay } from '@/lib/riders/blocks';
 import { gmailUrl, mailtoUrl, notifyEmail } from '@/lib/riders/email';
 import { STARTERS } from '@/lib/riders/starters';
-import { changeLine, nextVersion, versionLabel } from '@/lib/riders/summary';
+import { changeLine, changeReaches, nextVersion, versionLabel } from '@/lib/riders/summary';
 import { RIDER_KIND_LABEL, type RiderBlock, type RiderChange, type RiderKind } from '@/lib/riders/types';
 import type { RiderShow } from '@/server/riders/data';
 import { linkUrl, showLabel, showStatus } from './RiderPanels';
@@ -130,7 +130,8 @@ function changesFor(store: RiderEditorStore, show: RiderShow, sentVersionId: str
   const idx = versions.findIndex((v) => v.id === sentVersionId);
   const newer = idx < 0 ? versions.slice(0, 1) : versions.slice(0, idx);
   const all = newer.reverse().flatMap((v) => v.changes);
-  return { changes: all.filter((c) => !(c.from || c.until) || inForce({ from: c.from ?? null, until: c.until ?? null }, show.date)), first: false };
+  const embeds = store.data.latest?.snapshot.embeds ?? null;
+  return { changes: all.filter((c) => changeReaches(c, show, embeds)), first: false };
 }
 
 export function SendPanel({ open, onClose, store, only, me }: { open: boolean; onClose: () => void; store: RiderEditorStore; only: string[] | null; me: { name: string } }) {

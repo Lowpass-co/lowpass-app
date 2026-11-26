@@ -10,7 +10,7 @@
    summary built from them), with wording a TM edits rather than replaces.
    ============================================ */
 
-import { emptyContent, parseContent, parseDates, isBlockKind } from './blocks';
+import { parseContent, parseDates, isBlockKind } from './blocks';
 import { docFromText } from './prose';
 import { keysBetween } from './position';
 import type { BlockContentMap, BlockKind, Provider, RequestContent, RiderKind } from './types';
@@ -44,12 +44,15 @@ const req = (
     optional: o.optional ?? false,
     perPerson: o.perPerson ?? false,
     summary: o.summary ?? false,
+    link: '',
+    photo: null,
   };
   return { kind: 'request', content: c };
 };
 const contacts = (): TemplateBlock => ({ kind: 'contacts', content: { people: [] } });
 const summary = (): TemplateBlock => ({ kind: 'summary', content: { title: 'Advance summary' } });
-const files = (): TemplateBlock => ({ kind: 'files', content: emptyContent('files') });
+const inputList = (): TemplateBlock => ({ kind: 'input_list', content: { outputs: true } });
+const stagePlot = (): TemplateBlock => ({ kind: 'stage_plot', content: {} });
 
 const DISCLAIMER =
   'This rider is part of the performance agreement. Every venue is different: if anything here doesn’t suit your room, talk to the tour manager before the show, not on the day. Anything struck from this rider must be agreed in writing by the tour manager.';
@@ -59,7 +62,7 @@ export const STARTERS: Starter[] = [
     id: 'headline-tech',
     name: 'Headline show — Tech',
     kind: 'tech',
-    blurb: 'Schedule, transport, local crew, security, stage, lighting, audio, attachments.',
+    blurb: 'Schedule, transport, local crew, security, stage, lighting, audio, input list and stage plot.',
     blocks: [
       p(DISCLAIMER),
       h('Key contacts'),
@@ -91,7 +94,8 @@ export const STARTERS: Starter[] = [
       req('Drive lines direct into the house system, no sub-desk'),
       req('Full line package, stands and stage power', { summary: true }),
       h('Input list & stage plot'),
-      files(),
+      inputList(),
+      stagePlot(),
       h('Merch'),
       p('We carry merch and a seller. Please advance the merch split, space and float.'),
       req('Merch space with a table, light and power', { qty: 1 }),
@@ -116,7 +120,8 @@ export const STARTERS: Starter[] = [
       req('Lines and stands per our input list', { summary: true }),
       req('Stage power at each position on our plot'),
       h('Input list & stage plot'),
-      files(),
+      inputList(),
+      stagePlot(),
     ],
   },
   {

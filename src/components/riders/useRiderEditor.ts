@@ -19,6 +19,7 @@ import type { RealtimeChannel } from '@supabase/supabase-js';
 import { createClient } from '@/lib/supabase-client';
 import { useRealtimeRows } from '@/lib/realtime/useRealtimeRows';
 import { blockFromRow, emptyContent } from '@/lib/riders/blocks';
+import { photoPathsIn } from '@/lib/riders/photos';
 import { byPosition, keyAfter } from '@/lib/riders/position';
 import { toSnapDoc } from '@/lib/riders/snapshot';
 import type { BlockContentMap, BlockKind, RiderBlock, SnapDoc } from '@/lib/riders/types';
@@ -56,6 +57,10 @@ export function useRiderEditor(initial: RiderEditorData, opts: { tourId: string;
   const [failed, setFailed] = useState<'error' | 'offline' | null>(null);
   const [focus, setFocusState] = useState<{ id: string; field?: string; at: number } | null>(null);
   const [peers, setPeers] = useState<Peer[]>([]);
+  // Item photos: signed URLs by storage path (the page load signs the ones it
+  // has; a photo that arrives later — mine or someone else's — is signed then).
+  const [photoUrls, setPhotoUrls] = useState<Record<string, string>>(initial.photoUrls ?? {});
+  const askedPhotos = useRef(new Set<string>(Object.keys(initial.photoUrls ?? {})));
   const channel = useRef<RealtimeChannel | null>(null);
   const focusRef = useRef<string | null>(null);
 
@@ -213,6 +218,21 @@ export function useRiderEditor(initial: RiderEditorData, opts: { tourId: string;
     [canEdit, schedule, setB],
   );
 
+  /** Merge into the block's LATEST content — for work that finishes later
+   *  (a photo upload) while the line may have been typed in meanwhile. */
+  const patchContent = useCallback(
+    (id: string, patch: Record<string, unknown>) => {
+      if (!canEdit) return;
+      setB((prev) => {
+        const cur = prev[id];
+        if (!cur) return prev;
+        return { ...prev, [id]: { ...cur, content: { ...cur.content, ...patch } } as RiderBlock };
+      });
+      if (serverVersion.current[id]) schedule(id);
+    },
+    [canEdit, schedule, setB],
+  );
+
   const setFocus = useCallback((id: string | null, field?: string) => {
     setFocusState(id ? { id, field, at: Date.now() } : null);
   }, []);
@@ -304,6 +324,7 @@ export function useRiderEditor(initial: RiderEditorData, opts: { tourId: string;
     try {
       const fresh = await api.load();
       setData(fresh);
+      setPhotoUrls((p) => ({ ...p, ...(fresh.photoUrls ?? {}) }));
       setB((prev) => {
         const next: Record<string, RiderBlock> = {};
         for (const b of fresh.blocks) {
@@ -408,6 +429,22 @@ export function useRiderEditor(initial: RiderEditorData, opts: { tourId: string;
     };
   }, [save]);
 
+  useEffect(() => {
+    const missing = photoPathsIn(Object.values(blocks)).filter((p) => !askedPhotos.current.has(p));
+    if (!missing.length) return;
+    for (const p of missing) askedPhotos.current.add(p);
+    api
+      .photoUrls(missing)
+      .then(({ urls }) => setPhotoUrls((prev) => ({ ...prev, ...urls })))
+      .catch(() => {
+        for (const p of missing) askedPhotos.current.delete(p);
+      });
+  }, [blocks, api]);
+  const addPhotoUrl = useCallback((path: string, url: string) => {
+    askedPhotos.current.add(path);
+    setPhotoUrls((p) => ({ ...p, [path]: url }));
+  }, []);
+
   /* ---------- derived ---------- */
 
   const party = data.party.setting ?? (data.party.crew > 0 ? data.party.crew : null);
@@ -435,6 +472,7 @@ export function useRiderEditor(initial: RiderEditorData, opts: { tourId: string;
     focus,
     setFocus,
     edit,
+    patchContent,
     insertAfter,
     insertFirst,
     remove,
@@ -442,6 +480,8 @@ export function useRiderEditor(initial: RiderEditorData, opts: { tourId: string;
     refresh,
     action,
     api,
+    photoUrls,
+    addPhotoUrl,
   };
 }
 

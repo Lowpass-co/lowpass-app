@@ -92,7 +92,7 @@ function fieldBlocks(raw: unknown, sectionTitle: string): TemplateBlock[] {
       case 'checkbox_list':
         for (const it of (Array.isArray(x.items) ? x.items : []) as Record<string, unknown>[]) {
           const item = s(it.label).trim();
-          if (item) out.push({ kind: 'request', content: { qty: null, item: item.slice(0, 300), provider: 'venue', alternatives: '', note: '', optional: false, perPerson: false, summary: false } });
+          if (item) out.push({ kind: 'request', content: { qty: null, item: item.slice(0, 300), provider: 'venue', alternatives: '', note: '', optional: false, perPerson: false, summary: false, link: '', photo: null } });
         }
         break;
       case 'time':
@@ -145,7 +145,9 @@ export function convertLegacyPack(pack: LegacyPack, sections: readonly LegacySec
         break;
       }
       case 'channel_list':
-        body.push({ kind: 'files', content: { items: [{ kind: 'channel_list' }] } });
+        // The old builder printed the tour's channel list here: the new rider
+        // SHOWS it (and freezes it with each version).
+        body.push({ kind: 'input_list', content: { outputs: true } });
         break;
       default:
         body.push(...fieldBlocks(sec.fields, title));

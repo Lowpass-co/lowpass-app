@@ -20,7 +20,7 @@ export const RIDER_DEFAULT_TITLE: Record<RiderKind, string> = {
   hospitality: 'Hospitality Rider',
 };
 
-export const BLOCK_KINDS = ['heading', 'text', 'request', 'table', 'contacts', 'summary', 'files', 'break'] as const;
+export const BLOCK_KINDS = ['heading', 'text', 'request', 'table', 'contacts', 'summary', 'files', 'break', 'input_list', 'stage_plot'] as const;
 export type BlockKind = (typeof BLOCK_KINDS)[number];
 
 /** Tiptap / ProseMirror JSON, StarterKit subset (see prose.ts). */
@@ -70,6 +70,11 @@ export interface RequestContent {
   perPerson: boolean;
   /** Listed in the advance summary. */
   summary: boolean;
+  /** The exact item: a shop / product page (http(s)). '' = none. */
+  link: string;
+  /** A photo of the exact item — a path in tour storage
+   *  (`rider-photos/<workspace>/<tour>/<id>.<ext>`, see photoPath). null = none. */
+  photo: string | null;
 }
 export interface TableContent {
   columns: string[];
@@ -97,6 +102,13 @@ export interface FilesContent {
   items: Attachment[];
 }
 export type BreakContent = Record<string, never>;
+/** The tour's input list, embedded (from Production › Channel list). */
+export interface InputListContent {
+  /** Print the outputs (IEM / mixes) table under the inputs. */
+  outputs: boolean;
+}
+/** The tour's stage plot, embedded (from Production › Stage plot). */
+export type StagePlotContent = Record<string, never>;
 
 export interface BlockContentMap {
   heading: HeadingContent;
@@ -107,6 +119,8 @@ export interface BlockContentMap {
   summary: SummaryContent;
   files: FilesContent;
   break: BreakContent;
+  input_list: InputListContent;
+  stage_plot: StagePlotContent;
 }
 
 /** A block as the editor holds it. `from` / `until` = the show dates it
@@ -147,6 +161,49 @@ export interface ResolvedAttachment {
   label: string;
 }
 
+/* ---------- the channel list + stage plot, embedded ----------
+   Edited only in their own tools; the rider shows them. The editor reads them
+   live; Publish freezes a copy into the version, so version 1.4 always shows
+   the input list as it was at 1.4. A show with its own document attached
+   (show → tour, as the tools resolve it) gets that one. */
+
+/** A plain table: header labels + rows of text. */
+export interface EmbedTable {
+  columns: string[];
+  rows: string[][];
+}
+export interface EmbedInputList {
+  /** The channel-list document (rider_packs id). */
+  docId: string;
+  title: string;
+  /** The document's version name ("Festival"), if it is a saved version. */
+  version: string | null;
+  inputs: EmbedTable;
+  outputs: EmbedTable | null;
+}
+export interface EmbedStagePlot {
+  docId: string;
+  title: string;
+  version: string | null;
+  /** Self-contained SVG. Rendered ONLY as an <img> (never inline): custom
+   *  icons are uploaded SVG, and an image can't run anything. */
+  svg: string;
+}
+/** A show that gets a different document from the tour's. */
+export interface EmbedShowPick {
+  /** "14 Dec · Barrowland" — for the whole-tour view's note. */
+  label: string;
+  inputList?: string;
+  stagePlot?: string;
+}
+export interface RiderEmbeds {
+  inputLists: Record<string, EmbedInputList>;
+  stagePlots: Record<string, EmbedStagePlot>;
+  tour: { inputList: string | null; stagePlot: string | null };
+  /** routingId → only the shows whose document differs from the tour's. */
+  shows: Record<string, EmbedShowPick>;
+}
+
 export interface RiderSnapshot {
   v: 1;
   tourName: string;
@@ -154,6 +211,8 @@ export interface RiderSnapshot {
   party: number | null;
   docs: SnapDoc[];
   attachments: ResolvedAttachment[];
+  /** Empty for versions published before embeds existed. */
+  embeds: RiderEmbeds;
 }
 
 export type ChangeType = 'added' | 'removed' | 'changed';
@@ -170,6 +229,13 @@ export interface RiderChange {
   from?: string | null;
   until?: string | null;
   blockId: string | null;
+  /** Print as "what: before → after" (a named field, e.g. an input-list channel). */
+  named?: boolean;
+  /** A change to the TOUR's input list / stage plot — not news to a show
+   *  that gets its own document of that kind. */
+  embed?: 'inputList' | 'stagePlot';
+  /** A change to one show's own input list / stage plot (routing id). */
+  show?: string;
 }
 
 export interface VersionNo {

@@ -6,13 +6,19 @@
    injected once by <RiderDocStyles>). Used by the promoter page and the
    editor's preview. No hooks — server or client.
    `lineExtras` lets the promoter page hang replies under a request line;
-   `fileHref` turns an attachment into a link.
+   `fileHref` turns an attachment into a link; `photoUrl` shows a line's
+   photo (signed URLs — the page signs them); `onItem` makes a line with a
+   photo / exact-item link open its card. The input list and stage plot
+   render inline (the plot as an <img> only — see lib/riders/embeds.ts).
    ============================================ */
 
 import type { ReactNode } from 'react';
+import { embedName, svgDataUri } from '@/lib/riders/embeds';
 import { safeHref } from '@/lib/riders/prose';
-import { RIDER_DOC_CSS, runsOf, stateText, type DocItem, type DocModel, type RiderHeader } from '@/lib/riders/render';
-import type { ProseNode, ResolvedAttachment } from '@/lib/riders/types';
+import { RIDER_DOC_CSS, inputsCount, runsOf, stateText, type DocItem, type DocModel, type RiderHeader } from '@/lib/riders/render';
+import type { EmbedStagePlot, EmbedTable, ProseNode, ResolvedAttachment } from '@/lib/riders/types';
+
+type RequestItem = Extract<DocItem, { t: 'request' }>;
 
 export function RiderDocStyles() {
   return <style dangerouslySetInnerHTML={{ __html: RIDER_DOC_CSS }} />;
@@ -73,11 +79,49 @@ export function ProseView({ nodes }: { nodes: ProseNode[] | undefined }) {
 
 const Tag = ({ tag }: { tag: string | null }) => (tag ? <span className="rd-tag">{tag}</span> : null);
 
-export function RequestLine({ r, extras }: { r: Extract<DocItem, { t: 'request' }>; extras?: ReactNode }) {
+function ItemText({ r, photoUrl, onItem }: { r: RequestItem; photoUrl?: (path: string) => string | null; onItem?: (r: RequestItem) => void }) {
+  const thumb = r.photo && photoUrl ? photoUrl(r.photo) : null;
+  if (onItem && (r.link || thumb)) {
+    return (
+      <button type="button" className="rd-itembtn" onClick={() => onItem(r)} aria-label={`${r.item} — photo and details`}>
+        {/* eslint-disable-next-line @next/next/no-img-element -- a signed storage URL, sized by CSS */}
+        {thumb ? <img className="rd-thumb" src={thumb} alt="" loading="lazy" /> : null}
+        <span>{r.item}</span>
+      </button>
+    );
+  }
+  return (
+    <>
+      {/* eslint-disable-next-line @next/next/no-img-element -- a signed storage URL, sized by CSS */}
+      {thumb ? <img className="rd-thumb" src={thumb} alt="" loading="lazy" /> : null}
+      {r.link ? (
+        <a href={r.link} target="_blank" rel="noopener noreferrer nofollow">
+          {r.item}
+        </a>
+      ) : (
+        r.item
+      )}
+    </>
+  );
+}
+
+export function RequestLine({
+  r,
+  extras,
+  photoUrl,
+  onItem,
+}: {
+  r: RequestItem;
+  extras?: ReactNode;
+  photoUrl?: (path: string) => string | null;
+  onItem?: (r: RequestItem) => void;
+}) {
   return (
     <li className="rd-req" data-state={r.state?.state} id={`line-${r.id}`}>
       <span className={`rd-qty${r.qty ? '' : ' rd-qty-none'}`}>{r.qty ?? '—'}</span>
-      <span className="rd-item">{r.item}</span>
+      <span className="rd-item">
+        <ItemText r={r} photoUrl={photoUrl} onItem={onItem} />
+      </span>
       <span className="rd-side">
         {r.state ? (
           <span className="rd-state" data-state={r.state.state}>
@@ -108,6 +152,98 @@ export function RequestLine({ r, extras }: { r: Extract<DocItem, { t: 'request' 
   );
 }
 
+function Table({ t }: { t: EmbedTable }) {
+  return (
+    <div className="rd-scroll">
+      <table className="rd-table rd-inputs">
+        <thead>
+          <tr>
+            {t.columns.map((c, i) => (
+              <th key={i}>{c}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {t.rows.map((r, ri) => (
+            <tr key={ri}>
+              {r.map((c, ci) => (
+                <td key={ci}>{c}</td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function EmbedHead({ title, meta }: { title: string; meta: string | null }) {
+  return (
+    <div className="rd-embed-head">
+      <span className="rd-embed-title">{title}</span>
+      {meta ? <span className="rd-embed-meta">{meta}</span> : null}
+    </div>
+  );
+}
+
+function Others({ others }: { others: string[] }) {
+  return others.length ? <div className="rd-embed-note">Different for: {others.join(' · ')}</div> : null;
+}
+
+export function InputsView({ it }: { it: Extract<DocItem, { t: 'inputs' }> }) {
+  const l = it.list;
+  return (
+    <section className="rd-embed" id={`sec-${it.id}`}>
+      <EmbedHead title="Input list" meta={l ? `${embedName(l)} · ${inputsCount(l)}` : null} />
+      {l ? (
+        <>
+          <Table t={l.inputs} />
+          {it.outputs && l.outputs && l.outputs.rows.length ? (
+            <>
+              <div className="rd-embed-sub">Outputs (IEM / mixes)</div>
+              <Table t={l.outputs} />
+            </>
+          ) : null}
+        </>
+      ) : (
+        <div className="rd-embed-none">The input list will follow.</div>
+      )}
+      <Others others={it.others} />
+    </section>
+  );
+}
+
+/** The plot's data URI, made once per copy (it can be megabytes, and the
+ *  editor re-renders on every keystroke). No hooks: this file renders on the
+ *  server too. */
+const PLOT_SRC = new WeakMap<object, string>();
+function plotSrc(plot: EmbedStagePlot): string {
+  let src = PLOT_SRC.get(plot);
+  if (!src) {
+    src = svgDataUri(plot.svg);
+    PLOT_SRC.set(plot, src);
+  }
+  return src;
+}
+
+export function PlotView({ it }: { it: Extract<DocItem, { t: 'plot' }> }) {
+  return (
+    <section className={it.plot ? 'rd-embed rd-embed-plot' : 'rd-embed'} id={`sec-${it.id}`}>
+      <EmbedHead title="Stage plot" meta={it.plot ? embedName(it.plot) : null} />
+      {it.plot ? (
+        <figure className="rd-plot">
+          {/* An <img>, never inline SVG: a custom icon is uploaded SVG and an image can't run anything. */}
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img alt="Stage plot" src={plotSrc(it.plot)} />
+        </figure>
+      ) : (
+        <div className="rd-embed-none">The stage plot will follow.</div>
+      )}
+      <Others others={it.others} />
+    </section>
+  );
+}
+
 function FileLine({ a, href }: { a: ResolvedAttachment; href: string | null }) {
   if (!a.id) return <li className="rd-file"><span className="rd-file-missing">{a.label} — not attached yet</span></li>;
   return (
@@ -128,11 +264,15 @@ export function RiderDocView({
   header,
   lineExtras,
   fileHref,
+  photoUrl,
+  onItem,
 }: {
   model: DocModel;
   header: RiderHeader;
-  lineExtras?: (r: Extract<DocItem, { t: 'request' }>) => ReactNode;
+  lineExtras?: (r: RequestItem) => ReactNode;
   fileHref?: (a: ResolvedAttachment) => string | null;
+  photoUrl?: (path: string) => string | null;
+  onItem?: (r: RequestItem) => void;
 }) {
   return (
     <article className="rd-doc">
@@ -149,7 +289,7 @@ export function RiderDocView({
           return (
             <ul className="rd-reqs" key={`r${i}`}>
               {run.items.map((r) => (
-                <RequestLine key={r.id} r={r} extras={lineExtras?.(r)} />
+                <RequestLine key={r.id} r={r} extras={lineExtras?.(r)} photoUrl={photoUrl} onItem={onItem} />
               ))}
             </ul>
           );
@@ -258,6 +398,10 @@ export function RiderDocView({
                 ))}
               </ul>
             );
+          case 'inputs':
+            return <InputsView key={it.id} it={it} />;
+          case 'plot':
+            return <PlotView key={it.id} it={it} />;
           case 'break':
             return <hr className="rd-break" key={it.id} />;
           default:
