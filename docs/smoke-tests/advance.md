@@ -161,6 +161,39 @@ nothing is added unless ticked.
 **Expect**: The pack opens at that place. The pack is listed under Venue
 documents and opens from there too.
 
+#### ADV-143 — Reading shows how long, and you can walk away
+
+*Needs migration 300 pasted.*
+
+**Do**: Drop a long venue pack (20+ pages) on a show.
+
+**Expect**: After the upload, a panel reads "Reading with AI · N of M parts
+read" with "About 40 s left" (counts down from how long recent reads took;
+past that it says "Taking longer than usual — still reading", never a
+negative), a moving bar, and "You don't have to wait here…" with **Close —
+I'll come back**. A 20-page pack is noticeably quicker than before (it's read
+in parts side by side).
+
+#### ADV-144 — A read you walked away from waits on the show
+
+**Do**: Start a read, press **Close — I'll come back**, open another page,
+then come back to the show (or the board) a minute later.
+
+**Expect**: A banner: "Info pack read — N suggested answers to review"
+(on the board, one line per show, named). **Review** opens the review where
+you'd have been — the pack beside each answer. Saving clears the banner;
+**Put aside** clears it without saving. While it's still reading the banner
+says so, with **Watch**.
+
+#### ADV-145 — Several shows read at once
+
+**Do**: Drop packs for three shows on the board, confirm the matches, Start
+reviewing.
+
+**Expect**: All three read together. While you review the first, the others
+finish; "Next: <venue>" opens straight onto its answers (no second wait). If
+you close part-way, the rest wait on their shows (ADV-144).
+
 #### ADV-138 — A pack that can't be read says so
 
 **Do**: Drop a file the reader can't handle (e.g. a password-protected PDF)

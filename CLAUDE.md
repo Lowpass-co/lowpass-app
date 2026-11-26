@@ -915,6 +915,20 @@ recreate a `_legacy/` tree: delete dead code instead of parking it.
   `advance_documents`; every suggested answer carries a quote + page, verified
   by `findQuote` before it is offered, and the viewer boxes it or outlines the
   page — never a box in the wrong place.
+- **Pack reads run in the background** (Nov 2026, Adam: "SLOW … doesnt
+  encourage you to close the window and come back" — migration 300,
+  `advance_pack_reads`, service role only). POST `packs/read` {mode:'extract',
+  reads:[{routingId, paths}]} starts one read per show and answers at once;
+  the read runs after the response (`after` from next/server) and writes
+  `parts_done / parts_total`, then its result. `<PackFlow>` polls, shows
+  "About N s left" (median of recent reads, `packWait.ts`) and **Close — I'll
+  come back**; `<PackReadsBanner>` (show page + board) is where a read waits.
+  Speed comes from PARTS: text in ~24k-character parts, scans in 12-page parts
+  (pdf-lib, `scanParts`), all side by side (≤ 6 at once per read) — a call is
+  slow because of what it WRITES, so never send a whole pack as one call. A
+  failed part keeps the others (`failedParts`, said in the notice). Model
+  `PACK_MODEL` (Sonnet 5.5; `LP_IMPORT_MODEL` overrides). Identify still runs
+  in the request (Haiku, a scan's first 3 pages).
 - **Day sheets are RETIRED** (pages, `/m/day` crew links — now a static "no
   longer active" page — tour roles, the Day Sheet PDF, the tour Labor page).
   Local crew calls live on each show's advance (`#crew-calls`). The
