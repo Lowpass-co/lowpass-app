@@ -14,6 +14,7 @@
    the already-cold Personnel page doesn't grow another round-trip.
    ============================================ */
 
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 
 export interface RateMirrorRow {
@@ -91,11 +92,13 @@ export function PersonnelRatesMirror({
         >
           Rates
         </span>
-        <span
-          style={{ fontSize: 'var(--lp-text-2xs)', color: 'var(--lp-text-tertiary)' }}
+        {/* A real link (Nov 2026, Adam: "it isn't a link, just text"). */}
+        <Link
+          href={`/operations/${tourId}/payroll`}
+          style={{ fontSize: 'var(--lp-text-2xs)', color: 'var(--lp-text-secondary)', textDecoration: 'underline', textUnderlineOffset: 3 }}
         >
           Read-only · edit in Payroll ↗
-        </span>
+        </Link>
       </header>
 
       {/* Column heads */}

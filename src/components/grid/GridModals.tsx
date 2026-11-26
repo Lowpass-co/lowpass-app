@@ -21,6 +21,8 @@ export interface PromptState {
   placeholder?: string;
   /** pre-filled, selected on open (e.g. the current name when renaming). */
   defaultValue?: string;
+  /** The OK button's label (default "Add"; rename says "Save"). */
+  submitLabel?: string;
   onSubmit: (value: string) => void;
 }
 export interface WarnState {
@@ -38,7 +40,20 @@ function Overlay({ children, onClose }: { children: React.ReactNode; onClose: ()
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      <div className="lp-grid-modal">{children}</div>
+      {/* role="dialog" so ⌘↵ (SubmitShortcut) finds its OK; Esc closes. */}
+      <div
+        className="lp-grid-modal"
+        role="dialog"
+        aria-modal="true"
+        onKeyDown={(e) => {
+          if (e.key === 'Escape') {
+            e.stopPropagation();
+            onClose();
+          }
+        }}
+      >
+        {children}
+      </div>
     </div>,
     document.body,
   );
@@ -93,6 +108,9 @@ export function GridPrompt({ state, onClose }: { state: PromptState; onClose: ()
           if (e.key === 'Enter') {
             e.preventDefault();
             submit();
+          } else if (e.key === 'Escape') {
+            e.preventDefault();
+            onClose();
           }
         }}
       />
@@ -105,8 +123,9 @@ export function GridPrompt({ state, onClose }: { state: PromptState; onClose: ()
           className="pri"
           style={{ background: 'var(--lp-orange)', color: 'var(--lp-text-inverse)', border: 0 }}
           onClick={submit}
+          data-submit
         >
-          Add
+          {state.submitLabel ?? 'Add'}
         </button>
       </div>
     </Overlay>

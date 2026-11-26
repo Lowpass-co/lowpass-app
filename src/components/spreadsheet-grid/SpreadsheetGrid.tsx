@@ -22,6 +22,7 @@ import type { CellCoord, GridColumn, GridRow, SelectionRange, SpreadsheetGridPro
 import { getCellRaw } from './utils/accessor';
 import { filterCollapsed } from './utils/collapseFilter';
 import {
+  getColumnIdsInRange,
   getRowIdsInRange,
   isRectSingleColumn,
   mergeWithSections,
@@ -55,6 +56,7 @@ export function SpreadsheetGrid<T>(props: SpreadsheetGridProps<T>) {
     onCommitCell,
     onBulkEdit,
     onRowOpen,
+    rowOpenLabel = 'Open',
     onRowDelete,
     onRowDuplicate,
     contextMenuItems,
@@ -283,6 +285,26 @@ export function SpreadsheetGrid<T>(props: SpreadsheetGridProps<T>) {
     [edit, finishEdit],
   );
 
+  const clearSelection = useCallback(() => {
+    const r = sel.range;
+    if (!r) return;
+    const rids = getRowIdsInRange(displayFlat as import('./types').DisplayEntry<T>[], r.startRowId, r.endRowId);
+    const cids = getColumnIdsInRange(columns, r.startColumnId, r.endColumnId);
+    for (const rid of rids) {
+      const row = rowById.get(rid);
+      if (!row) continue;
+      for (const cid of cids) {
+        const col = colById.get(cid);
+        if (!col || roCell(row, col)) continue;
+        const k = col.type.kind;
+        if (k !== 'text' && k !== 'number' && k !== 'currency' && k !== 'percent' && k !== 'date') continue;
+        const cur = getCellRaw(row, col);
+        if (cur === null || cur === undefined || cur === '' || cur === 0) continue;
+        void commit(row, col, '');
+      }
+    }
+  }, [colById, columns, commit, displayFlat, roCell, rowById, sel.range]);
+
   const onKeyDown = useCallback(
     (e: KeyboardEvent) => {
       if (!gridRef.current?.contains(e.target as Node)) return;
@@ -307,6 +329,14 @@ export function SpreadsheetGrid<T>(props: SpreadsheetGridProps<T>) {
             void finishEdit('right');
           }
         }
+        return;
+      }
+      // Backspace / Delete (navigate mode) empties every editable cell in the
+      // highlight — numbers to 0, text to blank (Nov 2026, Adam). Pick-lists
+      // and checkboxes are left alone: the grid can't know their "none".
+      if ((e.key === 'Backspace' || e.key === 'Delete') && sel.focus && !e.metaKey && !e.ctrlKey && !e.altKey) {
+        e.preventDefault();
+        clearSelection();
         return;
       }
       // Phase P — Tab in NAVIGATE mode moves to the next editable cell and
@@ -380,8 +410,38 @@ export function SpreadsheetGrid<T>(props: SpreadsheetGridProps<T>) {
         }
       }
     },
-    [colIds, columns, dataIdOrder, displayFlat, edit, finishEdit, isCellEditable, onRowOpen, roCell, rows, sel]
+    [clearSelection, colIds, columns, dataIdOrder, displayFlat, edit, finishEdit, isCellEditable, onRowOpen, roCell, rows, sel]
   );
+
+  // Keep the keyboard in the grid. Closing an editor unmounts its <input>, and
+  // the browser drops focus to <body> — so the next Tab went to the Days paint
+  // chips and the arrows scrolled the page (Nov 2026, Adam). When an edit ends
+  // with nobody else holding focus, the grid takes it back.
+  const wasEditing = useRef(false);
+  useEffect(() => {
+    if (edit.mode === 'edit') {
+      wasEditing.current = true;
+      return;
+    }
+    if (!wasEditing.current) return;
+    wasEditing.current = false;
+    const a = typeof document !== 'undefined' ? document.activeElement : null;
+    if (!a || a === document.body || !a.isConnected || gridRef.current?.contains(a)) {
+      gridRef.current?.focus({ preventScroll: true });
+    }
+  }, [edit.mode]);
+
+  // The focused cell stays on screen as the keyboard moves it.
+  useEffect(() => {
+    const f = sel.focus;
+    const root = scrollRef.current;
+    if (!f || !root) return;
+    const esc = typeof CSS !== 'undefined' && CSS.escape ? CSS.escape(f.rowId) : f.rowId.replace(/["\\]/g, '\\$&');
+    const tr = root.querySelector(`[data-grid-row-id="${esc}"]`);
+    const ci = colIds.indexOf(f.columnId);
+    const td = tr && ci >= 0 ? (tr.querySelector(`[aria-colindex="${ci + 1}"]`) as HTMLElement | null) : null;
+    (td ?? (tr as HTMLElement | null))?.scrollIntoView?.({ block: 'nearest', inline: 'nearest' });
+  }, [sel.focus, colIds, scrollRef]);
 
   const onCellDown = (rowId: string, colId: string, e: React.MouseEvent, sh: boolean) => {
     if (e.button !== 0) return;
@@ -695,7 +755,7 @@ export function SpreadsheetGrid<T>(props: SpreadsheetGridProps<T>) {
                   setCtx(null);
                 }}
               >
-                Open context
+                {rowOpenLabel}
               </button>
             )}
             {onRowDelete && (

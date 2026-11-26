@@ -134,3 +134,10 @@ at 12% orange + an inset bar instead of a 5.1% tint you could not see.
 | UI-DT-07 | /assets | Compare row height to Budget/Personnel tables | Assets rows are taller (`cozy`: 14px pad / 15px type). Other tables are unchanged — density is set on Assets only, not on the app preference. |
 | UI-DT-08 | /assets | Open a toolbar multi-select filter | Its checkboxes match the table's, not white squares. |
 | UI-DT-09 | Budget grid, Gear library, Tour personnel | Select rows | Same new box + tint. These share the primitive; only their looks changed, not their behaviour or density. |
+
+#### KEY-08 — ⌘↵ presses OK
+In any form, dialog or slide-over: type into a field and press **⌘↵**
+(Ctrl+↵ on Windows) → its OK / Save / Add / Done button is pressed — e.g. the
+grid's New section box, Rename section, a confirm dialog. Cancel / Remove are
+never pressed. In a search box or the page body it does nothing (it must not
+fire the page's big orange button). In a grid cell, the grid keeps its keys.

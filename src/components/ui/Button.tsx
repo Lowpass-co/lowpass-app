@@ -123,6 +123,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
       type={type ?? 'button'}
       disabled={isDisabled}
       aria-busy={loading || undefined}
+      data-variant={variant}
       className={cn(
         BASE,
         variant !== 'link' && SIZE[size],

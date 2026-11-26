@@ -964,3 +964,18 @@ New tour → "Budget & advance" step lists the six budget templates again.
 Crew → click someone with rates in Payroll → **Rates** lists them (Show £…,
 Per diem £…). Someone with none → "No rates yet — set them in Payroll" (never
 "Could not load rates"). A Member without Payroll access can't read them.
+
+#### PAY-31 — Payroll keys stay in the grid
+Payroll rates: click a Show cell, type 650, **Tab** → saved, and the next cell
+is active — the Days paint chips below did NOT take the focus. Keep going:
+type, Tab, type, Enter. After Enter, the **arrow keys** move the cell (they
+used to scroll the page). Select a cell or a block and press **Backspace**
+(or Delete): numbers go to 0 / blank and save; the Employment pick-list is
+left alone. Right-click a row → **Open full profile** (was "Open context").
+
+#### CREW-12 — Crew right-click
+Crew page → right-click a person → **Edit on this tour · Open full profile ·
+Rates in Payroll · Copy email · Remove from tour…** (Remove asks first; it
+takes them off this tour only). The "Read-only · edit in Payroll ↗" line on
+the Rates panel is a link to Payroll. A viewer who can't edit gets only Copy
+email.
