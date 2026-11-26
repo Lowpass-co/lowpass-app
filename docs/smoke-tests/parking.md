@@ -484,3 +484,9 @@ browser key restricted to the Map Tiles API and the app's domains).**
 **Currently**: Each export is a new file in Files › Parking maps (the parking map remembers the latest). Share the **folder** (Files › Parking maps › Share…) to give drivers a link that always has the newest.
 
 **Tracked in**: feat/parking-maps follow-up.
+
+#### PRK-91 — A Member with Parking edit can edit the map
+Give a Member Parking EDIT on a tour (Team & roles, e.g. the Production or
+Tour manager preset). As them, open Production › Parking › a show: the map is
+editable and saves. (The page used to check for admin / manager only, so they
+got a read-only map while the server would have accepted their saves.)

@@ -19,6 +19,7 @@
    ============================================ */
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { ChevronRight, KeyRound, Loader2, Plus, AlertTriangle } from 'lucide-react';
 import { useRealtimeRows } from '@/lib/realtime/useRealtimeRows';
 import { useToast } from '@/components/ui/Toast';
@@ -29,6 +30,8 @@ import { PRESET_LABELS } from '@/lib/permissions/areas';
 import { PersonnelManageSlideOver } from './PersonnelManageSlideOver';
 import { AddCrewSlideOver } from './AddCrewSlideOver';
 import { PersonnelDetailSlideOver } from '@/components/personnel/PersonnelDetailSlideOver';
+import { DeleteConfirmationModal } from '@/components/ui/DeleteConfirmationModal';
+import { GridMenu, type MenuConfig, type MenuItem } from '@/components/grid/GridMenu';
 import type { ConflictsResponse, ConflictRow, PersonnelListItem, PersonnelListResponse } from '@/lib/personnel/types';
 import './crewRoster.css';
 
@@ -142,6 +145,43 @@ export function PersonnelManagerClient({
   const [addOpen, setAddOpen] = useState(!!assignPersonId && canEdit);
   // The person's People record, opened from the Manage panel's "Edit person".
   const [personId, setPersonId] = useState<string | null>(null);
+  const router = useRouter();
+  // Right-click a crew row (Nov 2026, Adam: "I want right click menu on crew too").
+  const [menu, setMenu] = useState<MenuConfig | null>(null);
+  const [removing, setRemoving] = useState<PersonnelListItem | null>(null);
+  const openRowMenu = (e: React.MouseEvent, p: PersonnelListItem) => {
+    const items: MenuItem[] = [];
+    if (canEdit) {
+      items.push({ value: 'manage', label: 'Edit on this tour' });
+      items.push({ value: 'profile', label: 'Open full profile' });
+      items.push({ value: 'payroll', label: 'Rates in Payroll' });
+    }
+    if (p.email) items.push({ value: 'email', label: 'Copy email', sep: items.length > 0 });
+    if (p.phone) items.push({ value: 'phone', label: 'Copy phone', sep: items.length > 0 && !p.email });
+    if (canEdit) items.push({ value: 'remove', label: 'Remove from tour…', danger: true, sep: true });
+    if (!items.length) return; // nothing to offer → the browser's menu
+    e.preventDefault();
+    const copy = (text: string, what: string) =>
+      void navigator.clipboard?.writeText(text).then(
+        () => showToast(`${what} copied`),
+        () => showToast(`Could not copy the ${what.toLowerCase()}`, 'error'),
+      );
+    setMenu({
+      anchor: { left: e.clientX, bottom: e.clientY },
+      gap: 0,
+      title: toTitleCase(p.display_name),
+      options: items,
+      onPick: (v) => {
+        setMenu(null);
+        if (v === 'manage') setManageId(p.id);
+        else if (v === 'profile') setPersonId(p.person_id);
+        else if (v === 'payroll') router.push(`/operations/${tourId}/payroll`);
+        else if (v === 'email' && p.email) copy(p.email, 'Email');
+        else if (v === 'phone' && p.phone) copy(p.phone, 'Phone');
+        else if (v === 'remove') setRemoving(p);
+      },
+    });
+  };
 
   // Loads return values; state is set only in callbacks (never synchronously
   // inside an effect).
@@ -301,6 +341,7 @@ export function PersonnelManagerClient({
                   clashes={conflictsFor(p)}
                   whole={isWholeTour(p.starts_on, p.ends_on, tourStartDate, tourEndDate)}
                   onOpen={canEdit ? () => setManageId(p.id) : undefined}
+                  onContextMenu={(e) => openRowMenu(e, p)}
                 />
               ))}
             </div>
@@ -308,8 +349,24 @@ export function PersonnelManagerClient({
         )}
       </div>
 
+      {menu ? <GridMenu config={menu} onClose={() => setMenu(null)} /> : null}
       {canEdit ? (
         <>
+          <DeleteConfirmationModal
+            open={!!removing}
+            itemName={removing ? toTitleCase(removing.display_name) : ''}
+            description="They come off this tour's crew. Their People record and their other tours stay."
+            onClose={() => setRemoving(null)}
+            onConfirm={async () => {
+              if (!removing) return;
+              const res = await fetch(`/api/tours/${tourId}/personnel/${removing.id}`, { method: 'DELETE' });
+              const body = (await res.json().catch(() => null)) as { error?: string } | null;
+              if (!res.ok) throw new Error(body?.error ?? `Remove failed (${res.status})`);
+              showToast('Removed from the crew');
+              setRemoving(null);
+              void fetchList();
+            }}
+          />
           <PersonnelManageSlideOver
             open={!!manageMember}
             tourId={tourId}
@@ -355,11 +412,13 @@ function CrewRow({
   clashes,
   whole,
   onOpen,
+  onContextMenu,
 }: {
   p: PersonnelListItem;
   clashes: ConflictRow[];
   whole: boolean;
   onOpen?: () => void;
+  onContextMenu?: (e: React.MouseEvent) => void;
 }) {
   const name = toTitleCase(p.display_name);
   const tag = p.role_tag && p.role_tag !== 'other' ? ROLE_TAG_LABEL[p.role_tag as RoleTag] : null;
@@ -405,10 +464,12 @@ function CrewRow({
     </>
   );
   return onOpen ? (
-    <button type="button" className="cr-row" onClick={onOpen} aria-label={`${name}, ${p.role}`}>
+    <button type="button" className="cr-row" onClick={onOpen} onContextMenu={onContextMenu} aria-label={`${name}, ${p.role}`}>
       {body}
     </button>
   ) : (
-    <div className="cr-row">{body}</div>
+    <div className="cr-row" onContextMenu={onContextMenu}>
+      {body}
+    </div>
   );
 }

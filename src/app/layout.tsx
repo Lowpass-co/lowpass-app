@@ -10,6 +10,7 @@ import { headers } from 'next/headers';
 import { Inter, Montserrat, Barlow_Condensed } from 'next/font/google';
 import './globals.css';
 import '@/lib/entities';
+import { SubmitShortcut } from '@/components/keyboard/SubmitShortcut';
 
 const inter = Inter({
   variable: '--font-geist-sans',
@@ -106,6 +107,7 @@ export default function RootLayout({
         />
       </head>
       <body className={`${inter.variable} ${montserrat.variable} ${barlowCondensed.variable} font-sans antialiased`}>
+        <SubmitShortcut />
         {children}
       </body>
     </html>

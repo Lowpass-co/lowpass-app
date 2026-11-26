@@ -75,7 +75,8 @@ export interface GridSlideOverProps {
   openMenu: (config: MenuConfig) => void;
   /** Phase 3 injections (default to the demo). */
   fx?: GridFx;
-  statuses?: GridStatusConfig;
+  /** false = no Status field (Budget, Nov 2026 — the line status is retired there). */
+  statuses?: GridStatusConfig | false;
   /** budget Expenses: always the LINE variant (no person/hotel/settlement). */
   forceLineVariant?: boolean;
   /** persist a slide field edit (item/est/act/status/notes) by the row _uid. */
@@ -198,8 +199,8 @@ export function GridSlideOver({
   const pickStatus = (e: React.MouseEvent) =>
     openMenu({
       anchor: rectOf(e),
-      options: statuses?.options ?? [...STATUSES],
-      optColors: statuses?.colors,
+      options: (statuses || undefined)?.options ?? [...STATUSES],
+      optColors: (statuses || undefined)?.colors,
       current: String(row.status),
       onPick: (v) =>
         commit(() => {
@@ -359,7 +360,8 @@ export function GridSlideOver({
     </div>
   );
 
-  const StatusBlock = () => (
+  const StatusBlock = () =>
+    statuses === false ? null : (
     <div className="so-field">
       <label>Status</label>
       <div>

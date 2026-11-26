@@ -95,14 +95,17 @@ export interface GridProps {
   /** Currency/FX injection (default: demo static table). */
   fx?: GridFx;
   /** Status set for the slide's status menu (default: canonical 4). */
-  slideStatuses?: GridStatusConfig;
+  slideStatuses?: GridStatusConfig | false;
   /** Force the slide's LINE variant (budget Expenses — no person/hotel/
       settlement variants). */
   slideLineVariant?: boolean;
   /** Structural CRUD hooks. When provided, the grid delegates instead of
       mutating local state (real surfaces persist + re-fetch). Phase 3. */
   onAddLine?: (sectionUid: string) => void;
-  onAddSection?: () => void;
+  /** Persist a new section the grid has ALREADY drawn (under `tempUid`,
+      "tmp-…"); resolve to its real id, or null if it failed (the grid then
+      removes it). The grid never waits for this — it's the background save. */
+  onAddSection?: (name: string, tempUid: string) => Promise<string | null>;
   onRenameSection?: (sectionUid: string, name: string) => void;
   /** Delete these rows (uids = DB ids on real surfaces). Fired by the row's
       hover bin, right-click → Delete, ⌘⌫ / Ctrl+Backspace and More → Delete,
@@ -605,6 +608,7 @@ export const Grid = forwardRef<GridHandle, GridProps>(function Grid({
       title: 'Rename section',
       placeholder: sec.name,
       defaultValue: sec.name,
+      submitLabel: 'Save',
       onSubmit: (name) => {
         if (!name) return;
         pushUndo();
@@ -1699,10 +1703,35 @@ export const Grid = forwardRef<GridHandle, GridProps>(function Grid({
   }, [render]);
 
   const addSection = () => {
-    // Real surfaces persist + re-fetch (the new row needs a DB id before it's
-    // editable); the demo mutates locally.
+    // Real surfaces: name it, draw it AT ONCE, save in the background (Nov
+    // 2026, Adam: "everything feels like click, app thinks, action happens").
+    // It used to POST, then re-fetch the page, then remount the grid — seconds
+    // per section, and a rename typed meanwhile was lost with the remount.
     if (onAddSection) {
-      onAddSection();
+      promptRef.current = {
+        title: 'New section',
+        placeholder: 'Section name',
+        submitLabel: 'Add section',
+        onSubmit: (typed) => {
+          const name = typed || 'New section';
+          const d = data();
+          const sec: Section = { name, kind: 'normal', _uid: `tmp-${uidc.current++}`, rows: [] };
+          // before any fixed section (Uncategorised stays last)
+          let at = d.length;
+          while (at > 0 && sectionFixed(d[at - 1])) at--;
+          d.splice(at, 0, sec);
+          render();
+          void onAddSection(name, sec._uid as string).then((id) => {
+            if (id) sec._uid = id;
+            else {
+              const i = data().indexOf(sec);
+              if (i >= 0) data().splice(i, 1);
+            }
+            render();
+          });
+        },
+      };
+      render();
       return;
     }
     pushUndo();

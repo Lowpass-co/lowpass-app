@@ -380,6 +380,33 @@ recreate a `_legacy/` tree: delete dead code instead of parking it.
   budget; 403 when RLS lets you read it but not delete it (it used to say
   204). Its lines move to Uncategorised (FK SET NULL); nothing is deleted.
 
+### Keyboard + speed (Nov 2026, Adam)
+
+- **⌘↵ / Ctrl+↵ presses OK everywhere** — ONE listener, `<SubmitShortcut>` in
+  the root layout (`src/lib/keyboard/submitShortcut.ts`). From the focused
+  field: a `<form>` → its submit; a `role="dialog"` (Modal, SlideOver, the
+  grid's prompt) or a `data-submit-scope` block → its primary button
+  (`data-submit` › `type="submit"` attribute › `<Button variant="primary">`
+  (`data-variant`) › the one orange button). Two candidates = nothing. Never
+  from a search box / page body, never inside a grid. A new inline editor that
+  isn't a form or dialog: mark it `data-submit-scope` (+ `data-submit` on OK).
+- **`<SpreadsheetGrid>` keeps the keyboard** (Payroll): closing an editor
+  hands focus back to the grid (it fell to `<body>`, so Tab went to the Days
+  paint chips and arrows scrolled the page); the focused cell scrolls into
+  view; **Backspace / Delete** clears the highlight (numbers → 0, text →
+  blank; pick-lists / checkboxes untouched). `rowOpenLabel` names the
+  right-click open ("Open full profile" on Payroll).
+- **Budget sections are optimistic**: Grid `onAddSection(name, tempUid)` —
+  the grid draws the section at once under `tmp-…`; `BudgetGridView` saves in
+  the background and every op on it (rename, add line, move, delete) awaits
+  the real id (`realSectionId`). Created / renamed sections overlay the server
+  list until a refresh carries them; the Grid key counts SERVER sections.
+  Never go back to POST → `router.refresh()` → remount for a section: that was
+  seconds per add and lost renames typed during the remount.
+- **Line Status is retired on the budget** (Adam: "won't be updated ever"): no
+  column, no panel field (`slideStatuses={false}`), no Status grouping. The DB
+  column stays, unshown.
+
 ### Money — one writer, one formula (money repair, Oct 2026)
 
 - **Automatic budget lines** (hotels, salaries, per diems, flights, gear) are
@@ -549,7 +576,9 @@ recreate a `_legacy/` tree: delete dead code instead of parking it.
   `DEFAULT_RATE_TYPES` like the server's `rateLinesFor`, so an empty rate-type
   read can never mean "no rates" again.
 - **The app asks the database**: `getViewerAccess` / `getRequestViewerAccess`
-  (`my_tour_access` RPC). Rail items carry `area` in ia.ts; AppShellV3 shows
+  (`my_tour_access` RPC). A page's edit switch is `viewerAllows(access, area,
+  'edit')` — never `membership.role` (Parking checked the role and showed a
+  Member with Parking EDIT a read-only map; fixed Nov 2026). Rail items carry `area` in ia.ts; AppShellV3 shows
   `<NoAccess>` for a page the viewer can't open. Never re-derive access in code.
 - **Writes**: `requireWrite(supabase, { area, tourId })` lets a Member with EDIT
   through (and a Tour manager on their tours); `{ runsTour: true, tourId }` =

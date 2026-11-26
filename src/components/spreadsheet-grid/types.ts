@@ -72,6 +72,8 @@ export type SpreadsheetGridProps<T> = {
   cellReadOnly?: (row: GridRow<T>, column: GridColumn<T>) => boolean;
 
   onRowOpen?: (row: T) => void;
+  /** Right-click label for onRowOpen (default "Open"). Payroll: "Open full profile". */
+  rowOpenLabel?: string;
   onRowDelete?: (rowId: string) => void;
   onRowDuplicate?: (rowId: string) => void;
   contextMenuItems?: (row: GridRow<T>) => Array<{ id: string; label: string; onSelect: () => void }>;

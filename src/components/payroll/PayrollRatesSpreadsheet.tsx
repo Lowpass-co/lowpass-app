@@ -342,6 +342,7 @@ export function PayrollRatesSpreadsheet({
         sectionHeaders={sectionHeaders}
         onCommitCell={onCommitCell}
         onRowOpen={onRowOpen}
+        rowOpenLabel="Open full profile"
         cellReadOnly={() => finalized /* M1-C — whole grid read-only when finalized. */}
         ariaLabel="Personnel rate cards"
         columnWidthsKey="lp-cols-payroll-v3" /* v3 — Oct 2026 summary layout; old saved widths no longer apply */
