@@ -51,11 +51,23 @@ export interface OverviewFacts {
   receiptsNeedingDetails: number;
   linesOverEstimate: number;
   money: { currency: string; plannedCosts: number; spentCosts: number; plannedNet: number } | null;
+  /** Channel lists / stage plots (rider_packs). Riders are `riders` below. */
   production: Array<{ kind: 'rider' | 'channel_list' | 'stage_plot'; count: number; updatedAt: string | null }>;
+  /** The tour's rider (migration 301) — null when production isn't the
+   *  viewer's to see or the riders tables aren't there yet. */
+  riders?: {
+    /** Tech / Hospitality documents started. */
+    docs: number;
+    latest: { label: string; publishedAt: string } | null;
+    /** Upcoming shows not yet sent the latest version (lib/riders/status). */
+    toSend: number;
+    /** Lines a promoter replied on, waiting for an answer. */
+    toAnswer: number;
+  } | null;
 }
 
 export interface NeedsYouLine {
-  id: 'advance-soon' | 'advance-review' | 'receipts' | 'settle' | 'over-estimate';
+  id: 'advance-soon' | 'advance-review' | 'receipts' | 'settle' | 'over-estimate' | 'rider-replies' | 'rider-send';
   count: number;
   /** The sentence, count included: "7 days in the next two weeks aren't fully advanced". */
   text: string;
@@ -109,6 +121,23 @@ export function needsYou(f: OverviewFacts): NeedsYouLine[] {
   const review = upcoming.reduce((n, s) => n + s.toReview, 0);
   if (review) {
     out.push({ id: 'advance-review', ...line(review, `${word(review, 'advance answer')} to review`), href: `/advance/${t}`, cta: 'Review' });
+  }
+  const r = a.production ? f.riders : null;
+  if (r?.toAnswer) {
+    out.push({
+      id: 'rider-replies',
+      ...line(r.toAnswer, `rider ${word(r.toAnswer, 'reply', 'replies')} to answer`),
+      href: `/operations/${t}/riders?panel=replies`,
+      cta: 'Reply',
+    });
+  }
+  if (r?.latest && r.toSend) {
+    out.push({
+      id: 'rider-send',
+      ...line(r.toSend, `${word(r.toSend, 'show')} ${r.toSend === 1 ? 'hasn’t' : 'haven’t'} been sent rider version ${r.latest.label}`),
+      href: `/operations/${t}/riders?panel=shows`,
+      cta: 'Send',
+    });
   }
   const unsettled = !a.budget ? 0 : f.shows.filter((s) => isShowDay(s.dayType) && s.date < f.today && !f.settledRoutingIds.has(s.routingId)).length;
   if (unsettled) {
@@ -179,12 +208,18 @@ export function agoText(iso: string | null, today: string): string {
   return new Date(`${iso.slice(0, 10)}T12:00:00Z`).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' });
 }
 
-/** "Rider updated 3 days ago · Channel list not made · Stage plot updated 2 Nov" */
-export function productionLine(f: Pick<OverviewFacts, 'production' | 'today'>): string {
-  return (['rider', 'channel_list', 'stage_plot'] as const)
-    .map((k) => {
-      const p = f.production.find((x) => x.kind === k);
-      return p && p.count ? `${PROD_LABEL[k]} updated ${agoText(p.updatedAt, f.today)}` : `${PROD_LABEL[k]} not made`;
-    })
-    .join(' · ');
+/** "Rider version 1.7, published 3 days ago · Channel list not made · Stage plot
+ *  updated 2 Nov". The rider is the tour's Tech / Hospitality documents
+ *  (migration 301): a version once published, else a draft, else not made. */
+export function productionLine(f: Pick<OverviewFacts, 'production' | 'today' | 'riders'>): string {
+  const rider = f.riders?.latest
+    ? `Rider version ${f.riders.latest.label}, published ${agoText(f.riders.latest.publishedAt, f.today)}`
+    : f.riders?.docs
+      ? 'Rider not published yet'
+      : 'Rider not made';
+  const rest = (['channel_list', 'stage_plot'] as const).map((k) => {
+    const p = f.production.find((x) => x.kind === k);
+    return p && p.count ? `${PROD_LABEL[k]} updated ${agoText(p.updatedAt, f.today)}` : `${PROD_LABEL[k]} not made`;
+  });
+  return [rider, ...rest].join(' · ');
 }

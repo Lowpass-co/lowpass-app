@@ -42,6 +42,8 @@ interface DeletePreviewCounts {
   flights: number;
   hotels: number;
   gear: number;
+  /** Tech / Hospitality rider documents (migration 301). */
+  riders?: number;
 }
 
 interface DeletePreview {
@@ -419,6 +421,9 @@ function buildCountsLine(counts: DeletePreviewCounts): string {
         counts.budgetRows === 1 ? 'ROW' : 'ROWS'
       }`,
     );
+  }
+  if (counts.riders) {
+    parts.push(`${counts.riders} ${counts.riders === 1 ? 'RIDER' : 'RIDERS'}`);
   }
   if (counts.riderPacks > 0) {
     parts.push(

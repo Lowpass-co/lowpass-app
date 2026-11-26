@@ -120,6 +120,13 @@ export async function POST(request: Request) {
     );
   }
   const kind: 'rider' | 'channel_list' = (kindClient as 'rider' | 'channel_list' | undefined) ?? 'rider';
+  /* Riders rebuild (Nov 2026, migration 301): riders are the tour's Tech /
+     Hospitality documents (/api/tours/[id]/riders) and workspace rider
+     templates. This route makes channel-list documents only — an old-format
+     rider pack would be one nothing can open. */
+  if (kind === 'rider') {
+    return NextResponse.json({ error: 'Riders now live on each tour’s Production › Riders page.' }, { status: 410 });
+  }
 
   if (!scope || !SCOPES.includes(scope)) {
     return NextResponse.json({ error: 'scope must be artist|tour|show' }, { status: 400 });

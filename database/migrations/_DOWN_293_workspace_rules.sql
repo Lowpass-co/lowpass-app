@@ -29,6 +29,17 @@ SELECT private.lp_set_rules('stage_boxes', ARRAY[]::text[], $q$pack_id IN (SELEC
 SELECT private.lp_set_rules('sub_snakes', ARRAY[]::text[], $q$pack_id IN (SELECT id FROM public.rider_packs WHERE workspace_id = (SELECT public.get_my_workspace_id()))$q$, $q$pack_id IN (SELECT id FROM public.rider_packs WHERE workspace_id = (SELECT public.get_my_workspace_id()))$q$);
 SELECT private.lp_set_rules('stage_plots', ARRAY[]::text[], $q$rider_pack_id IN (SELECT id FROM public.rider_packs WHERE workspace_id = (SELECT public.get_my_workspace_id()))$q$, $q$rider_pack_id IN (SELECT id FROM public.rider_packs WHERE workspace_id = (SELECT public.get_my_workspace_id()))$q$);
 SELECT private.lp_set_rules('stage_plot_items', ARRAY[]::text[], $q$stage_plot_id IN (SELECT id FROM public.stage_plots WHERE workspace_id = (SELECT public.get_my_workspace_id()))$q$, $q$stage_plot_id IN (SELECT id FROM public.stage_plots WHERE workspace_id = (SELECT public.get_my_workspace_id()))$q$);
+SELECT private.lp_set_rules('riders', ARRAY[]::text[], $q$workspace_id = (SELECT public.get_my_workspace_id())$q$, $q$workspace_id = (SELECT public.get_my_workspace_id())$q$);
+SELECT private.lp_set_rules('rider_blocks', ARRAY[]::text[], $q$workspace_id = (SELECT public.get_my_workspace_id())$q$, $q$workspace_id = (SELECT public.get_my_workspace_id())$q$);
+SELECT private.lp_set_rules('rider_settings', ARRAY[]::text[], $q$workspace_id = (SELECT public.get_my_workspace_id())$q$, $q$workspace_id = (SELECT public.get_my_workspace_id())$q$);
+SELECT private.lp_set_rules('rider_versions', ARRAY[]::text[], $q$workspace_id = (SELECT public.get_my_workspace_id())$q$, $q$workspace_id = (SELECT public.get_my_workspace_id())$q$);
+SELECT private.lp_set_rules('rider_links', ARRAY[]::text[], $q$workspace_id = (SELECT public.get_my_workspace_id())$q$, $q$workspace_id = (SELECT public.get_my_workspace_id())$q$);
+SELECT private.lp_set_rules('rider_sends', ARRAY[]::text[], $q$workspace_id = (SELECT public.get_my_workspace_id())$q$, $q$workspace_id = (SELECT public.get_my_workspace_id())$q$);
+SELECT private.lp_set_rules('rider_acks', ARRAY[]::text[], $q$workspace_id = (SELECT public.get_my_workspace_id())$q$, $q$workspace_id = (SELECT public.get_my_workspace_id())$q$);
+SELECT private.lp_set_rules('rider_replies', ARRAY[]::text[], $q$workspace_id = (SELECT public.get_my_workspace_id())$q$, $q$workspace_id = (SELECT public.get_my_workspace_id())$q$);
+SELECT private.lp_set_rules('rider_line_states', ARRAY[]::text[], $q$workspace_id = (SELECT public.get_my_workspace_id())$q$, $q$workspace_id = (SELECT public.get_my_workspace_id())$q$);
+SELECT private.lp_set_rules('rider_templates', ARRAY[]::text[], $q$workspace_id = (SELECT public.get_my_workspace_id())$q$, $q$workspace_id = (SELECT public.get_my_workspace_id())$q$);
+SELECT private.lp_set_rules('rider_legacy_imports', ARRAY[]::text[], $q$workspace_id = (SELECT public.get_my_workspace_id())$q$, $q$workspace_id = (SELECT public.get_my_workspace_id())$q$);
 SELECT private.lp_set_rules('parking_maps', ARRAY[]::text[], $q$workspace_id = (SELECT public.get_my_workspace_id())$q$, $q$workspace_id = (SELECT public.get_my_workspace_id())$q$);
 SELECT private.lp_set_rules('parking_share_links', ARRAY[]::text[], $q$workspace_id = (SELECT public.get_my_workspace_id())$q$, $q$workspace_id = (SELECT public.get_my_workspace_id())$q$);
 SELECT private.lp_set_rules('tour_personnel', ARRAY[]::text[], $q$workspace_id = (SELECT public.get_my_workspace_id())$q$, $q$workspace_id = (SELECT public.get_my_workspace_id())$q$);

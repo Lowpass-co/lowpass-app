@@ -486,8 +486,7 @@ describe('hasOwnRail — where the app rail should start collapsed', () => {
 
   it.each([
     `/advance/${T}/r-1`,            // the shows rail
-    `/operations/${T}/riders/p-1`,  // RiderPackEditorView → RiderPackSidebar, 280px
-    '/rider-packs/p-1',             // S-3b — the STANDALONE editor, same sidebar
+    '/rider-packs/p-1',             // a channel-list document — PackEditor's Sections list
   ])('%s carries one, unconditionally — no view can turn it off', (p) => {
     expect(hasOwnRail(p)).toBe(true);
   });
@@ -495,7 +494,8 @@ describe('hasOwnRail — where the app rail should start collapsed', () => {
   it.each([
     `/advance/${T}`,             // tour-level advance overview, no rail
     `/advance/${T}/templates`,   // templates page, no rail
-    `/operations/${T}/riders`,   // the pack LIST, likewise
+    `/operations/${T}/riders`,   // the riders page — its panel is on the RIGHT
+    `/operations/${T}/riders/p-1`, // an old pack URL — redirects, renders nothing
     `/operations/${T}/personnel`,
     `/operations/${T}/files`,
     `/operations/${T}/channel-list`,

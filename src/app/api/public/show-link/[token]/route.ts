@@ -11,6 +11,9 @@
      · rider payloads   — getPacketRiderPayloads (riders + channel lists,
                           show → tour → artist order; the client renders
                           them with the B3 grouped ReadOnlyPackView)
+     · rider            — loadShowRider: the NEW rider's latest published
+                          version for this show (riders rebuild, Nov 2026);
+                          supersedes the old builder's rider packs
      · stage plot SVG   — resolveShowDocuments (show → tour attachment)
                           else newest tour stage_plot pack, rendered
                           server-side via the export loader + SVG builder
@@ -23,6 +26,7 @@
    ============================================ */
 
 import { NextResponse } from 'next/server';
+import type { SupabaseClient } from '@supabase/supabase-js';
 import { createServiceSupabaseClient } from '@/lib/supabase-server';
 import { verifyPassword, type PublicRiderPayload } from '@/lib/rider-packs/web-links';
 import { getPacketManifest, type PacketManifest } from '@/lib/advance-packet/manifest';
@@ -30,6 +34,7 @@ import { getPacketRiderPayloads } from '@/lib/advance-packet/payloads';
 import { resolveShowDocuments } from '@/lib/rider-packs/attachments';
 import { loadStagePlotExportData } from '@/lib/export/stageplot-data';
 import { buildStagePlotSvg } from '@/lib/stage-plot/stageplot-svg';
+import { loadShowRider, type ShowRider } from '@/server/riders/public';
 
 export const dynamic = 'force-dynamic';
 
@@ -112,7 +117,7 @@ export async function POST(
   const manifest: PacketManifest | null = await getPacketManifest(service, link.tour_id, link.routing_id);
   if (!manifest) return NextResponse.json({ error: 'Show not found' }, { status: 404 });
 
-  const [payloads, stagePlotSvg, intake] = await Promise.all([
+  const [payloads, stagePlotSvg, intake, rider] = await Promise.all([
     getPacketRiderPayloads(service, manifest).catch(() => [] as PublicRiderPayload[]),
     resolveStagePlotSvg(service, link.workspace_id, link.tour_id, link.routing_id),
     /* The routing's newest live venue-intake link — the Advance tab embeds
@@ -135,6 +140,10 @@ export async function POST(
         return null;
       }
     })(),
+    /* The rider (Nov 2026 rebuild, migration 301): the latest PUBLISHED
+       version, for this show. When there is one, the manifest has already
+       dropped the old builder's rider packs (getPacketManifest). */
+    loadShowRider(service as unknown as SupabaseClient, link.tour_id, link.routing_id).catch((): ShowRider | null => null),
   ]);
 
   const ipHeader = request.headers.get('x-forwarded-for') ?? request.headers.get('x-real-ip');
@@ -151,6 +160,7 @@ export async function POST(
   return NextResponse.json({
     manifest,
     payloads,
+    rider,
     stage_plot_svg: stagePlotSvg,
     intake_url: intake ? `/advance-intake/${encodeURIComponent(intake)}` : null,
     tour_id: link.tour_id,

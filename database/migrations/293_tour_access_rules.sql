@@ -168,6 +168,50 @@ SELECT private.lp_set_rules('stage_plots', ARRAY['rider_pack_id'],
 SELECT private.lp_set_rules('stage_plot_items', ARRAY['stage_plot_id'],
   $q$stage_plot_id IN (SELECT sp.id FROM public.stage_plots sp WHERE sp.rider_pack_id IN (SELECT private.packs_i_can('view')))$q$,
   $q$stage_plot_id IN (SELECT sp.id FROM public.stage_plots sp WHERE sp.rider_pack_id IN (SELECT private.packs_i_can('edit')))$q$);
+-- riders: tour · production
+SELECT private.lp_set_rules('riders', ARRAY['tour_id', 'workspace_id'],
+  $q$tour_id IN (SELECT private.tours_i_can('production', 'view'))$q$,
+  $q$tour_id IN (SELECT private.tours_i_can('production', 'edit'))$q$);
+-- rider_blocks: tour · production
+SELECT private.lp_set_rules('rider_blocks', ARRAY['tour_id', 'workspace_id'],
+  $q$tour_id IN (SELECT private.tours_i_can('production', 'view'))$q$,
+  $q$tour_id IN (SELECT private.tours_i_can('production', 'edit'))$q$);
+-- rider_settings: tour · production
+SELECT private.lp_set_rules('rider_settings', ARRAY['tour_id', 'workspace_id'],
+  $q$tour_id IN (SELECT private.tours_i_can('production', 'view'))$q$,
+  $q$tour_id IN (SELECT private.tours_i_can('production', 'edit'))$q$);
+-- rider_versions: tour · production
+SELECT private.lp_set_rules('rider_versions', ARRAY['tour_id', 'workspace_id'],
+  $q$tour_id IN (SELECT private.tours_i_can('production', 'view'))$q$,
+  $q$tour_id IN (SELECT private.tours_i_can('production', 'edit'))$q$);
+-- rider_links: tour · production
+SELECT private.lp_set_rules('rider_links', ARRAY['tour_id', 'workspace_id'],
+  $q$tour_id IN (SELECT private.tours_i_can('production', 'view'))$q$,
+  $q$tour_id IN (SELECT private.tours_i_can('production', 'edit'))$q$);
+-- rider_sends: tour · production
+SELECT private.lp_set_rules('rider_sends', ARRAY['tour_id', 'workspace_id'],
+  $q$tour_id IN (SELECT private.tours_i_can('production', 'view'))$q$,
+  $q$tour_id IN (SELECT private.tours_i_can('production', 'edit'))$q$);
+-- rider_acks: tour · production
+SELECT private.lp_set_rules('rider_acks', ARRAY['tour_id', 'workspace_id'],
+  $q$tour_id IN (SELECT private.tours_i_can('production', 'view'))$q$,
+  $q$tour_id IN (SELECT private.tours_i_can('production', 'edit'))$q$);
+-- rider_replies: tour · production
+SELECT private.lp_set_rules('rider_replies', ARRAY['tour_id', 'workspace_id'],
+  $q$tour_id IN (SELECT private.tours_i_can('production', 'view'))$q$,
+  $q$tour_id IN (SELECT private.tours_i_can('production', 'edit'))$q$);
+-- rider_line_states: tour · production
+SELECT private.lp_set_rules('rider_line_states', ARRAY['tour_id', 'workspace_id'],
+  $q$tour_id IN (SELECT private.tours_i_can('production', 'view'))$q$,
+  $q$tour_id IN (SELECT private.tours_i_can('production', 'edit'))$q$);
+-- rider_templates: ref
+SELECT private.lp_set_rules('rider_templates', ARRAY['workspace_id'],
+  $q$workspace_id IS NULL OR workspace_id = (SELECT public.get_my_workspace_id())$q$,
+  $q$workspace_id = (SELECT public.get_my_workspace_id()) AND (SELECT private.is_manager())$q$);
+-- rider_legacy_imports: manager
+SELECT private.lp_set_rules('rider_legacy_imports', ARRAY['workspace_id'],
+  $q$workspace_id = (SELECT public.get_my_workspace_id()) AND (SELECT private.is_manager())$q$,
+  $q$workspace_id = (SELECT public.get_my_workspace_id()) AND (SELECT private.is_manager())$q$);
 -- parking_maps: tour · parking
 SELECT private.lp_set_rules('parking_maps', ARRAY['tour_id', 'workspace_id'],
   $q$tour_id IN (SELECT private.tours_i_can('parking', 'view'))$q$,
@@ -504,7 +548,7 @@ COMMIT;
 -- ---------------------------------------------------------------------------
 -- Read-only check. Expect: every row OK.
 -- ---------------------------------------------------------------------------
-WITH covered(t) AS (VALUES ('tours'), ('routing'), ('advance_documents'), ('advance_form_configs'), ('advance_intake_links'), ('advance_packet_links'), ('advance_instances'), ('labor_calls'), ('show_links'), ('tour_advance_day_templates'), ('rider_packs'), ('rider_folders'), ('rider_assets'), ('rider_pack_attachments'), ('tour_gear'), ('channel_list_rows'), ('rider_pack_exports'), ('rider_pack_history'), ('rider_sections'), ('rider_web_links'), ('stage_boxes'), ('sub_snakes'), ('stage_plots'), ('stage_plot_items'), ('parking_maps'), ('parking_share_links'), ('tour_personnel'), ('personnel_tour_assignments'), ('flights'), ('flight_bookings'), ('hotels'), ('hotel_bookings'), ('rooming_grid'), ('rooms'), ('room_assignments'), ('file_references'), ('file_share_links'), ('file_share_events'), ('file_entity_links'), ('budget_line_items'), ('budget_sections'), ('budget_settings'), ('budget_fx_rates'), ('budget_versions'), ('import_batches'), ('budget_line_item_attachments'), ('budget_line_item_notes'), ('budget_line_item_transactions'), ('budget_version_lines'), ('budget_version_income'), ('budget_version_sections'), ('expense_receipts'), ('expenses'), ('personnel_rates'), ('personnel_rate_lines'), ('payroll_entries'), ('deal_memos'), ('budget_commissions'), ('budget_income'), ('settlement'), ('settlement_deductions'), ('settlement_expenses'), ('settlement_payments'), ('personnel'), ('persons'), ('contacts'), ('personnel_intake_tokens'), ('intake_pending_answers'), ('intake_reminders'), ('import_pending_lines'), ('artists'), ('rag_chunks'), ('tour_roles'), ('tour_role_links'), ('advance_schedule_templates'), ('advance_day_type_templates'), ('advance_layout_templates'), ('advance_templates'), ('budget_templates'), ('budget_template_sections'), ('budget_template_lines'), ('rider_section_templates'), ('export_templates'), ('labor_call_templates'), ('stage_plot_custom_items'), ('gear'), ('mic_library'), ('rate_types'), ('venues'), ('spaces'), ('containers')),
+WITH covered(t) AS (VALUES ('tours'), ('routing'), ('advance_documents'), ('advance_form_configs'), ('advance_intake_links'), ('advance_packet_links'), ('advance_instances'), ('labor_calls'), ('show_links'), ('tour_advance_day_templates'), ('rider_packs'), ('rider_folders'), ('rider_assets'), ('rider_pack_attachments'), ('tour_gear'), ('channel_list_rows'), ('rider_pack_exports'), ('rider_pack_history'), ('rider_sections'), ('rider_web_links'), ('stage_boxes'), ('sub_snakes'), ('stage_plots'), ('stage_plot_items'), ('riders'), ('rider_blocks'), ('rider_settings'), ('rider_versions'), ('rider_links'), ('rider_sends'), ('rider_acks'), ('rider_replies'), ('rider_line_states'), ('rider_templates'), ('rider_legacy_imports'), ('parking_maps'), ('parking_share_links'), ('tour_personnel'), ('personnel_tour_assignments'), ('flights'), ('flight_bookings'), ('hotels'), ('hotel_bookings'), ('rooming_grid'), ('rooms'), ('room_assignments'), ('file_references'), ('file_share_links'), ('file_share_events'), ('file_entity_links'), ('budget_line_items'), ('budget_sections'), ('budget_settings'), ('budget_fx_rates'), ('budget_versions'), ('import_batches'), ('budget_line_item_attachments'), ('budget_line_item_notes'), ('budget_line_item_transactions'), ('budget_version_lines'), ('budget_version_income'), ('budget_version_sections'), ('expense_receipts'), ('expenses'), ('personnel_rates'), ('personnel_rate_lines'), ('payroll_entries'), ('deal_memos'), ('budget_commissions'), ('budget_income'), ('settlement'), ('settlement_deductions'), ('settlement_expenses'), ('settlement_payments'), ('personnel'), ('persons'), ('contacts'), ('personnel_intake_tokens'), ('intake_pending_answers'), ('intake_reminders'), ('import_pending_lines'), ('artists'), ('rag_chunks'), ('tour_roles'), ('tour_role_links'), ('advance_schedule_templates'), ('advance_day_type_templates'), ('advance_layout_templates'), ('advance_templates'), ('budget_templates'), ('budget_template_sections'), ('budget_template_lines'), ('rider_section_templates'), ('export_templates'), ('labor_call_templates'), ('stage_plot_custom_items'), ('gear'), ('mic_library'), ('rate_types'), ('venues'), ('spaces'), ('containers')),
 left_alone(t) AS (VALUES ('rental_jobs'), ('ai_usage_events'), ('tour_access')),
 present AS (SELECT c.t FROM covered c WHERE to_regclass('public.' || c.t) IS NOT NULL)
 SELECT '1 tables with the four lp_ rules only: ' || count(*) FILTER (WHERE ok) || ' of ' || count(*) AS check,

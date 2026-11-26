@@ -56,6 +56,21 @@ export const RULES = [
     parent: (lvl) => `SELECT sp.id FROM public.stage_plots sp WHERE sp.rider_pack_id IN (SELECT private.packs_i_can('${lvl}'))`,
   },
 
+  // ---- Riders (rebuild, Nov 2026 — migration 301). `since: 301` = the
+  //      rules are ALSO written into 301 (generated section), so pasting 301
+  //      alone gives the new tables their rules. ----
+  { table: 'riders', kind: 'tour', area: 'production', ws: true, since: 301 },
+  { table: 'rider_blocks', kind: 'tour', area: 'production', ws: true, since: 301 },
+  { table: 'rider_settings', kind: 'tour', area: 'production', ws: true, since: 301 },
+  { table: 'rider_versions', kind: 'tour', area: 'production', ws: true, since: 301 },
+  { table: 'rider_links', kind: 'tour', area: 'production', ws: true, since: 301 },
+  { table: 'rider_sends', kind: 'tour', area: 'production', ws: true, since: 301 },
+  { table: 'rider_acks', kind: 'tour', area: 'production', ws: true, since: 301 },
+  { table: 'rider_replies', kind: 'tour', area: 'production', ws: true, since: 301 },
+  { table: 'rider_line_states', kind: 'tour', area: 'production', ws: true, since: 301 },
+  { table: 'rider_templates', kind: 'ref', since: 301 },
+  { table: 'rider_legacy_imports', kind: 'manager', since: 301 },
+
   // ---- Parking ----
   { table: 'parking_maps', kind: 'tour', area: 'parking', ws: true },
   { table: 'parking_share_links', kind: 'tour', area: 'parking', ws: true },

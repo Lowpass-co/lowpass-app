@@ -1,0 +1,86 @@
+/* ============================================
+   LOWPASS — the promoter's live rider (/r/<token>). Tokens only.
+   The document itself is rd-* (lib/riders/render.ts RIDER_DOC_CSS, shared
+   with the PDF and the editor's preview); this is the page around it (rdp-*).
+   Phone first: most promoters open the link from an email on a phone.
+   ============================================ */
+
+.rdp-page { min-height: 100vh; background: var(--lp-bg-secondary); color: var(--lp-text); padding-bottom: var(--lp-space-16); }
+
+/* ---- the bar: who, which version, the PDF ---- */
+.rdp-bar { position: sticky; top: 0; z-index: var(--lp-z-sticky); background: color-mix(in srgb, var(--lp-bg) 90%, transparent); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); border-bottom: 1px solid var(--lp-border); }
+.rdp-bar-in { max-width: 860px; margin: 0 auto; display: flex; align-items: center; justify-content: space-between; gap: var(--lp-space-3); padding: var(--lp-space-3) var(--lp-space-4); }
+.rdp-who { display: flex; flex-direction: column; min-width: 0; }
+.rdp-artist { font-weight: var(--lp-weight-bold); font-size: var(--lp-text-base); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rdp-ver { font-size: var(--lp-text-xs); color: var(--lp-text-tertiary); font-variant-numeric: tabular-nums; }
+.rdp-actions { display: flex; align-items: center; gap: var(--lp-space-2); flex-shrink: 0; }
+
+.rdp-btn { display: inline-flex; align-items: center; justify-content: center; gap: var(--lp-space-1); min-height: 36px; padding: var(--lp-space-1) var(--lp-space-3); border: 1px solid var(--lp-border); border-radius: var(--lp-radius-md); background: var(--lp-bg); color: var(--lp-text); font: inherit; font-size: var(--lp-text-sm); font-weight: var(--lp-weight-semibold); text-decoration: none; cursor: pointer; white-space: nowrap; transition: background var(--lp-duration-fast) var(--lp-ease-standard); }
+.rdp-btn:hover:not(:disabled) { background: var(--lp-surface-hover); }
+.rdp-btn:disabled { opacity: 0.5; cursor: default; }
+.rdp-btn:focus-visible, .rdp-tab:focus-visible, .rdp-reply:focus-visible, .rdp-link:focus-visible { outline: none; box-shadow: var(--lp-shadow-focus-ring); }
+.rdp-btn-primary { background: var(--lp-orange); border-color: var(--lp-orange); color: var(--lp-text-inverse); }
+.rdp-btn-primary:hover:not(:disabled) { background: var(--lp-orange-hover); }
+.rdp-btn svg { transition: transform var(--lp-duration-fast) var(--lp-ease-standard); }
+
+.rdp-link { border: 0; background: none; padding: 0; margin-left: var(--lp-space-2); font: inherit; font-weight: var(--lp-weight-semibold); color: var(--lp-orange); cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
+
+/* ---- what changed ---- */
+.rdp-history { max-width: 860px; margin: 0 auto; padding: var(--lp-space-4); border-bottom: 1px solid var(--lp-border); background: var(--lp-bg); display: flex; flex-direction: column; gap: var(--lp-space-4); max-height: 50vh; overflow-y: auto; }
+.rdp-history-v { font-size: var(--lp-text-sm); }
+.rdp-history-h { display: flex; align-items: center; gap: var(--lp-space-2); color: var(--lp-text-secondary); margin-bottom: var(--lp-space-1); }
+.rdp-history-h b { color: var(--lp-text); }
+.rdp-current { font-size: var(--lp-text-xs); font-weight: var(--lp-weight-semibold); padding: 0 var(--lp-space-2); border-radius: var(--lp-radius-full); background: color-mix(in srgb, var(--lp-orange) 12%, transparent); color: var(--lp-orange); }
+.rdp-history ul, .rdp-since { margin: 0; padding-left: var(--lp-space-5); display: flex; flex-direction: column; gap: 2px; }
+.rdp-note { margin: 0 0 var(--lp-space-1); font-style: italic; color: var(--lp-text-secondary); }
+.rdp-muted { margin: 0; color: var(--lp-text-tertiary); }
+
+/* ---- the page body ---- */
+.rdp-wrap { max-width: 860px; margin: 0 auto; padding: var(--lp-space-4); display: flex; flex-direction: column; gap: var(--lp-space-4); }
+
+/* ---- "I've read it" ---- */
+.rdp-ack { display: flex; flex-direction: column; gap: var(--lp-space-3); padding: var(--lp-space-4); border: 1px solid color-mix(in srgb, var(--lp-orange) 35%, var(--lp-border)); border-radius: var(--lp-radius-lg); background: color-mix(in srgb, var(--lp-orange) 5%, var(--lp-bg)); }
+.rdp-ack-text { display: flex; flex-direction: column; gap: 2px; font-size: var(--lp-text-sm); }
+.rdp-ack-text b { font-size: var(--lp-text-base); }
+.rdp-ack-text span { color: var(--lp-text-secondary); }
+.rdp-since { font-size: var(--lp-text-sm); color: var(--lp-text); }
+.rdp-ack-fields { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--lp-space-2); }
+.rdp-ack-fields input, .rdp-compose textarea { width: 100%; min-height: 40px; padding: var(--lp-space-2) var(--lp-space-3); border: 1px solid var(--lp-border); border-radius: var(--lp-radius-md); background: var(--lp-bg); color: var(--lp-text); font: inherit; font-size: var(--lp-text-base); }
+.rdp-ack-fields input:focus, .rdp-compose textarea:focus { outline: none; border-color: var(--lp-orange); box-shadow: var(--lp-shadow-focus-ring); }
+.rdp-ack-done { flex-direction: row; align-items: center; gap: var(--lp-space-2); font-size: var(--lp-text-sm); font-weight: var(--lp-weight-semibold); border-color: color-mix(in srgb, var(--color-lp-success) 40%, var(--lp-border)); background: color-mix(in srgb, var(--color-lp-success) 8%, var(--lp-bg)); color: color-mix(in srgb, var(--color-lp-success) 70%, var(--lp-text)); }
+.rdp-err { display: block; font-size: var(--lp-text-sm); font-weight: var(--lp-weight-semibold); color: var(--color-lp-error); }
+@media (min-width: 640px) {
+  .rdp-ack-fields { grid-template-columns: minmax(0, 1.2fr) minmax(0, 1.2fr) minmax(0, 1.4fr) auto; }
+}
+
+/* ---- Tech | Hospitality ---- */
+.rdp-tabs { display: flex; gap: 2px; padding: 3px; border-radius: var(--lp-radius-lg); background: var(--lp-bg); border: 1px solid var(--lp-border); align-self: flex-start; }
+.rdp-tab { border: 0; background: none; min-height: 34px; padding: var(--lp-space-1) var(--lp-space-5); border-radius: var(--lp-radius-md); font: inherit; font-size: var(--lp-text-sm); font-weight: var(--lp-weight-semibold); color: var(--lp-text-secondary); cursor: pointer; }
+.rdp-tab[aria-selected="true"] { background: var(--lp-orange); color: var(--lp-text-inverse); }
+
+/* ---- the paper ---- */
+.rdp-paper { background: var(--lp-bg); border: 1px solid var(--lp-border); border-radius: var(--lp-radius-xl); box-shadow: var(--lp-shadow-sm); padding: var(--lp-space-6) var(--lp-space-4) var(--lp-space-8); }
+@media (min-width: 720px) { .rdp-paper { padding: var(--lp-space-12) var(--lp-space-12) var(--lp-space-16); } }
+.rdp-foot { margin: 0; text-align: center; font-size: var(--lp-text-xs); color: var(--lp-text-tertiary); }
+
+/* ---- a reply on a line (hangs under the request, in the rd-req grid) ---- */
+.rdp-thread { grid-column: 2 / -1; display: flex; flex-direction: column; align-items: flex-start; gap: var(--lp-space-1); margin-top: var(--lp-space-1); }
+.rdp-msg { display: flex; flex-direction: column; gap: 1px; max-width: 100%; padding: var(--lp-space-2) var(--lp-space-3); border-radius: var(--lp-radius-md); background: var(--lp-bg-secondary); font-size: var(--lp-text-sm); white-space: pre-wrap; overflow-wrap: anywhere; }
+.rdp-msg[data-author="tour"] { background: color-mix(in srgb, var(--lp-orange) 8%, var(--lp-bg)); border-left: 3px solid var(--lp-orange); }
+.rdp-msg-who { font-size: var(--lp-text-xs); font-weight: var(--lp-weight-semibold); color: var(--lp-text-tertiary); white-space: normal; }
+.rdp-reply { display: inline-flex; align-items: center; gap: var(--lp-space-1); min-height: 28px; border: 0; background: none; padding: 0; font: inherit; font-size: var(--lp-text-xs); font-weight: var(--lp-weight-semibold); color: var(--lp-text-tertiary); cursor: pointer; border-radius: var(--lp-radius-sm); }
+.rdp-reply:hover { color: var(--lp-orange); }
+.rdp-compose { display: flex; flex-direction: column; gap: var(--lp-space-2); width: 100%; }
+.rdp-compose textarea { resize: vertical; }
+.rdp-compose-actions { display: flex; justify-content: flex-end; gap: var(--lp-space-2); }
+
+/* ---- a link that can't show a rider ---- */
+.rdp-notice { max-width: 520px; margin: 0 auto; padding: var(--lp-space-16) var(--lp-space-6); text-align: center; }
+.rdp-notice h1 { margin: 0 0 var(--lp-space-2); font-size: var(--lp-text-xl); font-weight: var(--lp-weight-bold); }
+.rdp-notice p { margin: 0; color: var(--lp-text-secondary); line-height: var(--lp-leading-relaxed); }
+
+@media print {
+  .rdp-page { background: none; padding: 0; }
+  .rdp-bar, .rdp-history, .rdp-ack, .rdp-tabs, .rdp-reply, .rdp-compose, .rdp-foot { display: none; }
+  .rdp-paper { border: 0; box-shadow: none; padding: 0; }
+}
