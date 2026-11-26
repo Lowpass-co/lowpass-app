@@ -1,0 +1,36 @@
+/* ============================================
+   LOWPASS — the artist's Riders library (/artists/[id]/riders). Tokens only.
+   One panel style, rows split by hairlines — like the tour Overview.
+   ============================================ */
+
+.rdl-page { max-width: 880px; margin: 0 auto; padding: var(--lp-space-6); display: flex; flex-direction: column; gap: var(--lp-space-6); }
+.rdl-head { display: flex; flex-direction: column; gap: var(--lp-space-1); }
+.rdl-caps { font-size: var(--lp-text-xs); font-weight: var(--lp-weight-semibold); letter-spacing: var(--lp-tracking-caps, 0.08em); text-transform: uppercase; color: var(--lp-text-tertiary); }
+.rdl-facts { font-size: var(--lp-text-sm); color: var(--lp-text-secondary); }
+
+.rdl-banner { display: flex; align-items: center; gap: var(--lp-space-3); padding: var(--lp-space-3) var(--lp-space-4); border: 1px solid color-mix(in srgb, var(--lp-orange) 35%, var(--lp-border)); border-radius: var(--lp-radius-lg); background: color-mix(in srgb, var(--lp-orange) 5%, var(--lp-bg)); font-size: var(--lp-text-sm); }
+.rdl-banner .grow { flex: 1; }
+
+.rdl-section { display: flex; flex-direction: column; gap: var(--lp-space-2); }
+.rdl-h { margin: 0; font-size: var(--lp-text-xs); font-weight: var(--lp-weight-bold); letter-spacing: var(--lp-tracking-caps, 0.08em); text-transform: uppercase; color: var(--lp-text-secondary); }
+.rdl-panel { list-style: none; margin: 0; padding: 0; border: 1px solid var(--lp-border); border-radius: var(--lp-radius-lg); background: var(--lp-bg); overflow: hidden; }
+.rdl-row { display: flex; align-items: center; gap: var(--lp-space-3); padding: var(--lp-space-3) var(--lp-space-4); min-height: 56px; }
+.rdl-row + .rdl-row { border-top: 1px solid var(--lp-border-subtle, var(--lp-border)); }
+.rdl-row:has(> a.rdl-main):hover { background: var(--lp-surface-hover); }
+.rdl-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; color: inherit; text-decoration: none; }
+.rdl-name { font-size: var(--lp-text-sm); font-weight: var(--lp-weight-semibold); color: var(--lp-text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rdl-sub { font-size: var(--lp-text-xs); color: var(--lp-text-tertiary); }
+.rdl-docs { display: flex; gap: var(--lp-space-1); flex-shrink: 0; }
+.rdl-chip { font-size: var(--lp-text-xs); font-weight: var(--lp-weight-semibold); padding: 2px var(--lp-space-2); border-radius: var(--lp-radius-full); border: 1px solid var(--lp-border); color: var(--lp-text-secondary); text-decoration: none; background: var(--lp-bg); }
+.rdl-chip:hover { border-color: var(--lp-orange); color: var(--lp-orange); }
+.rdl-chev { color: var(--lp-text-tertiary); flex-shrink: 0; }
+.rdl-empty { margin: 0; padding: var(--lp-space-5) var(--lp-space-4); border: 1px dashed var(--lp-border); border-radius: var(--lp-radius-lg); font-size: var(--lp-text-sm); color: var(--lp-text-secondary); text-align: center; }
+
+.rdl-rename { flex: 1; display: flex; align-items: center; gap: var(--lp-space-2); }
+.rdl-rename input { flex: 1; min-width: 0; min-height: 34px; padding: var(--lp-space-1) var(--lp-space-3); border: 1px solid var(--lp-orange); border-radius: var(--lp-radius-md); background: var(--lp-bg); color: var(--lp-text); font: inherit; font-size: var(--lp-text-sm); outline: none; box-shadow: var(--lp-shadow-focus-ring); }
+.rdl-modal-text { margin: 0; font-size: var(--lp-text-sm); color: var(--lp-text-secondary); }
+
+@media (max-width: 560px) {
+  .rdl-page { padding: var(--lp-space-4); }
+  .rdl-docs { display: none; }
+}

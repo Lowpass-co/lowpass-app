@@ -216,6 +216,10 @@ BEGIN
 END $fn$;
 REVOKE ALL ON FUNCTION private.lp_set_rules(TEXT, TEXT[], TEXT, TEXT) FROM PUBLIC, authenticated;
 
+-- rider_templates: ref
+SELECT private.lp_set_rules('rider_templates', ARRAY['workspace_id'],
+  $q$workspace_id IS NULL OR workspace_id = (SELECT public.get_my_workspace_id())$q$,
+  $q$workspace_id = (SELECT public.get_my_workspace_id()) AND (SELECT private.is_library_editor())$q$);
 -- advance_day_type_templates: ref
 SELECT private.lp_set_rules('advance_day_type_templates', ARRAY['workspace_id'],
   $q$workspace_id IS NULL OR workspace_id = (SELECT public.get_my_workspace_id())$q$,

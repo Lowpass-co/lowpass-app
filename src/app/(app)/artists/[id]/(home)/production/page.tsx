@@ -8,8 +8,9 @@
    stamp — and killed the "Financials" card (its deal-memo/payroll defaults live
    on the tour tier, not here).
 
-   Riders / channel lists / stage plots are all artist-scope `rider_packs`
-   discriminated by `kind` (one query, grouped in JS). Files is still a
+   Channel lists / stage plots are artist-scope `rider_packs` discriminated by
+   `kind` (one query, grouped in JS); riders are the artist's tours' documents
+   + rider templates (Nov 2026 rebuild). Files is still a
    placeholder surface, so it shows no count. Each row links to its existing
    library route (unchanged).
 
@@ -46,7 +47,7 @@ interface ProductionSurface {
 }
 
 const SURFACES: ReadonlyArray<ProductionSurface> = [
-  { key: 'riders', label: 'Riders', description: 'Technical & hospitality rider packs.', slug: 'riders', Icon: FileText, kind: 'rider' },
+  { key: 'riders', label: 'Riders', description: 'Each tour’s Tech & Hospitality riders, and rider templates.', slug: 'riders', Icon: FileText, kind: 'rider' },
   { key: 'channel-lists', label: 'Channel lists', description: 'Reusable input lists that seed each tour.', slug: 'channel-lists', Icon: ListChecks, kind: 'channel_list' },
   { key: 'stage-plots', label: 'Stage plots', description: 'Stage layouts and backline diagrams.', slug: 'stage-plots', Icon: Presentation, kind: 'stage_plot' },
   { key: 'files', label: 'Files', description: 'Artist-level documents and assets.', slug: 'files', Icon: FolderOpen, kind: null },
@@ -78,21 +79,32 @@ export default async function ArtistProductionPage({ params }: PageProps) {
   const artist = artistData as { id: string; name: string } | null;
   if (!artist) notFound();
 
-  // One query for all three rider_pack-backed surfaces; group by kind in JS.
-  const { data: packData } = await supabase
-    .from('rider_packs')
-    .select('kind, updated_at')
-    .eq('artist_id', artistId)
-    .eq('scope', 'artist')
-    .in('kind', ['rider', 'channel_list', 'stage_plot']);
+  // Channel lists + stage plots are artist-scope rider_packs (one query,
+  // grouped by kind). Riders (Nov 2026 rebuild, migration 301) are each tour's
+  // Tech / Hospitality documents + rider templates tagged with this artist.
+  const [{ data: packData }, { data: tourRows }, { data: templateRows }] = await Promise.all([
+    supabase.from('rider_packs').select('kind, updated_at').eq('artist_id', artistId).eq('scope', 'artist').in('kind', ['channel_list', 'stage_plot']),
+    supabase.from('tours').select('id').eq('artist_id', artistId),
+    supabase.from('rider_templates').select('updated_at').eq('artist_id', artistId),
+  ]);
+  const tourIds = ((tourRows ?? []) as Array<{ id: string }>).map((t) => t.id);
+  const [{ data: riderRows }, { data: lastBlock }] = tourIds.length
+    ? await Promise.all([
+        supabase.from('riders').select('updated_at').in('tour_id', tourIds),
+        supabase.from('rider_blocks').select('updated_at').in('tour_id', tourIds).order('updated_at', { ascending: false }).limit(1),
+      ])
+    : [{ data: [] }, { data: [] }];
   const statByKind = new Map<string, { count: number; lastEdited: string | null }>();
-  for (const r of (packData ?? []) as Array<{ kind: string | null; updated_at: string | null }>) {
-    if (!r.kind) continue;
-    const cur = statByKind.get(r.kind) ?? { count: 0, lastEdited: null };
-    cur.count += 1;
-    if (r.updated_at && (!cur.lastEdited || r.updated_at > cur.lastEdited)) cur.lastEdited = r.updated_at;
-    statByKind.set(r.kind, cur);
-  }
+  const bump = (kind: string, updatedAt: string | null, count = 1) => {
+    const cur = statByKind.get(kind) ?? { count: 0, lastEdited: null };
+    cur.count += count;
+    if (updatedAt && (!cur.lastEdited || updatedAt > cur.lastEdited)) cur.lastEdited = updatedAt;
+    statByKind.set(kind, cur);
+  };
+  for (const r of (packData ?? []) as Array<{ kind: string | null; updated_at: string | null }>) if (r.kind) bump(r.kind, r.updated_at);
+  for (const r of [...((riderRows ?? []) as Array<{ updated_at: string | null }>), ...((templateRows ?? []) as Array<{ updated_at: string | null }>)]) bump('rider', r.updated_at);
+  const blockEdit = ((lastBlock ?? []) as Array<{ updated_at: string | null }>)[0]?.updated_at ?? null;
+  if (blockEdit && statByKind.has('rider')) bump('rider', blockEdit, 0);
 
   return (
     <div className="lp-view-tier">

@@ -312,24 +312,53 @@ async function searchBugReports(query: string): Promise<SearchResult[]> {
   return results;
 }
 
+/** "Riders & specs": each tour's Tech / Hospitality rider (Nov 2026 rebuild,
+ *  migration 301 — matched on title + tour name) and the channel-list /
+ *  stage-plot documents still kept as rider_packs. Old builder RIDER packs
+ *  are superseded (brought over into the new riders) and not offered. */
 async function searchRiderPacks(query: string): Promise<SearchResult[]> {
   const supabase = createClient();
   const q = query.trim();
-  let req = supabase
+  let packs = supabase
     .from('rider_packs')
-    .select('id, title, scope, tour_id')
+    .select('id, title, kind, scope, tour_id, artist_id')
+    .neq('kind', 'rider')
     .order('updated_at', { ascending: false })
     .limit(PER_KIND_LIMIT);
-  if (q) req = req.ilike('title', `%${q}%`);
-  const { data, error } = await req;
-  if (error || !data) return [];
+  if (q) packs = packs.ilike('title', `%${q}%`);
+  const [packRes, riderRes] = await Promise.all([
+    packs,
+    supabase.from('riders').select('id, kind, title, tour_id, tour:tours(name)').order('updated_at', { ascending: false }).limit(PER_KIND_LIMIT * 4),
+  ]);
   const results: SearchResult[] = [];
-  for (const row of data as Array<{ id: string; title: string | null; scope: string; tour_id: string | null }>) {
-    const label = row.title ?? '(untitled pack)';
-    const secondary = `Rider pack · ${row.scope}`;
+  for (const row of (riderRes.data ?? []) as Array<{ id: string; kind: 'tech' | 'hospitality'; title: string | null; tour_id: string; tour: { name: string | null } | { name: string | null }[] | null }>) {
+    const tour = Array.isArray(row.tour) ? row.tour[0] : row.tour;
+    const label = row.title?.trim() || (row.kind === 'tech' ? 'Technical & Production Rider' : 'Hospitality Rider');
+    const secondary = `${tour?.name ?? 'Tour'} · ${row.kind === 'tech' ? 'Tech rider' : 'Hospitality rider'}`;
     const scored = scoreCandidate(q, label, secondary);
     if (!scored && q) continue;
-    const href = row.tour_id ? `/tours/${row.tour_id}/rider-packs/${row.id}` : `/rider-packs/${row.id}`;
+    results.push({
+      id: row.id,
+      kind: 'rider-pack',
+      label,
+      secondary,
+      score: scored?.score ?? 0,
+      ranges: scored?.ranges ?? [],
+      action: { type: 'navigate', href: `/operations/${row.tour_id}/riders?doc=${row.kind}` },
+    });
+  }
+  if (packRes.error || !packRes.data) return results;
+  for (const row of packRes.data as Array<{ id: string; title: string | null; kind: string | null; scope: string; tour_id: string | null; artist_id: string | null }>) {
+    const plot = row.kind === 'stage_plot';
+    const label = row.title ?? (plot ? '(untitled stage plot)' : '(untitled channel list)');
+    const secondary = `${plot ? 'Stage plot' : 'Channel list'} · ${row.scope}`;
+    const scored = scoreCandidate(q, label, secondary);
+    if (!scored && q) continue;
+    const href = row.tour_id
+      ? `/operations/${row.tour_id}/${plot ? 'stage-plot' : 'channel-list'}`
+      : plot
+        ? `/artists/${row.artist_id ?? ''}/stage-plots`
+        : `/rider-packs/${row.id}`;
     results.push({
       id: row.id,
       kind: 'rider-pack',

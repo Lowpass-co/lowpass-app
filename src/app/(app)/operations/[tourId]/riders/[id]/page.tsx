@@ -1,31 +1,21 @@
-/* ============================================
-   LOWPASS — Operations · Rider editor (Riders fix Stage B)
+/* LOWPASS — /operations/[tourId]/riders/[id]: an old rider-pack link
+   (⌘K, /tours/:id/rider-packs/:packId redirects, bookmarks). A rider is now
+   the tour's two documents on one page (Nov 2026 rebuild); a channel list or
+   stage plot that came through the same old URL goes to its own page. */
 
-   /operations/[tourId]/riders/[id] — opens a rider pack INSIDE the Operations
-   product. Renders the shared <RiderPackEditorView> as INNER content; the
-   Operations layout (/operations/[tourId]/layout.tsx) supplies the ProductShell
-   + TourHeader, so the editor keeps the SAME shell as the riders LIST (D2).
-
-   This page existing is what makes Open work: the row click pushes here directly,
-   AND the legacy /tours/[id]/rider-packs/[packId] → /operations/[id]/riders/[id]
-   redirect (next.config.ts) now resolves here instead of 404ing.
-
-   `tourId` is unused for data — the pack row carries its own tour_id; the segment
-   only scopes the URL inside Operations.
-   ============================================ */
-
-import { RiderPackEditorView } from '@/components/rider-pack/RiderPackEditorView';
+import { redirect } from 'next/navigation';
+import { createServerSupabaseClient } from '@/lib/supabase-server';
+import { isUuid } from '@/lib/riders/blocks';
 
 export const dynamic = 'force-dynamic';
 
-export default async function OperationsRiderEditorPage({
-  params,
-  searchParams,
-}: {
-  params: Promise<{ tourId: string; id: string }>;
-  searchParams: Promise<{ mode?: string }>;
-}) {
-  const { id } = await params;
-  const { mode } = await searchParams;
-  return <RiderPackEditorView packId={id} mode={mode} standalone={false} />;
+export default async function OldRiderPackRoute({ params }: { params: Promise<{ tourId: string; id: string }> }) {
+  const { tourId, id } = await params;
+  if (isUuid(id)) {
+    const supabase = await createServerSupabaseClient();
+    const { data } = await supabase.from('rider_packs').select('kind').eq('id', id).maybeSingle<{ kind: string | null }>();
+    if (data?.kind === 'channel_list') redirect(`/operations/${tourId}/channel-list`);
+    if (data?.kind === 'stage_plot') redirect(`/operations/${tourId}/stage-plot`);
+  }
+  redirect(`/operations/${tourId}/riders`);
 }

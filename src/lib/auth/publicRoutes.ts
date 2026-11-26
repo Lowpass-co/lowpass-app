@@ -33,8 +33,11 @@
  * swallow a sibling route. See the prefix-safety note above.
  *
  * Authorisation that remains AFTER middleware lets these through:
- *   /r/               rider-pack share  — token → rider_packs row, service-role
- *                     lookup; an unknown token 404s.
+ *   /r/               LIVE RIDER (migration 301) — token → rider_links row,
+ *                     service-role (server/riders/public.ts); serves only the
+ *                     latest PUBLISHED version for that link's show; ack /
+ *                     reply capped per link per hour. An old builder token
+ *                     (rider_web_links) only gets a static "moved" page.
  *   /invite/accept    workspace invite  — token validated against the invite row;
  *                     the panel only offers sign-in/sign-up, grants nothing.
  *   /intake/          personnel intake  — token-gated form; the route resolves the

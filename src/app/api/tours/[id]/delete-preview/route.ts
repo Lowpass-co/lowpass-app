@@ -66,6 +66,7 @@ export async function GET(
     flightsRes,
     hotelsRes,
     gearRes,
+    ridersRes,
   ] = await Promise.all([
     supabase
       .from('routing')
@@ -99,6 +100,12 @@ export async function GET(
       .from('tour_gear')
       .select('id', { count: 'exact', head: true })
       .eq('tour_id', tourId),
+    // The tour's rider documents (migration 301) — they go with the tour,
+    // with every published version and every promoter link.
+    supabase
+      .from('riders')
+      .select('id', { count: 'exact', head: true })
+      .eq('tour_id', tourId),
   ]);
 
   return NextResponse.json({
@@ -112,6 +119,7 @@ export async function GET(
       flights: flightsRes.count ?? 0,
       hotels: hotelsRes.count ?? 0,
       gear: gearRes.count ?? 0,
+      riders: ridersRes.count ?? 0,
     },
   });
 }

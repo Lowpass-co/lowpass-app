@@ -121,7 +121,8 @@ Where the mounts live:
 - The tourless landings /operations, /budget, /advance mount
   `<ShellV3Mount landing>` in their pages: workspace rail visible,
   live picker until a tour is picked.
-- The standalone rider editor /rider-packs/[id] is ARTIST scope —
+- /rider-packs/[id] (since the Nov 2026 riders rebuild: the CHANNEL-LIST
+  document editor only — an old rider pack redirects) is ARTIST scope —
   `RiderPackEditorView` wraps itself in `<ShellV3Mount>` with the
   pack's artist id; the rail lights "Riders & specs".
 
@@ -879,6 +880,72 @@ recreate a `_legacy/` tree: delete dead code instead of parking it.
   the shared `useMapTiles`. The map's notes go with it — the editor says so.
 - Known: each export is a new file (share the Parking maps folder for a link
   that stays current).
+
+### Riders — two documents, numbered versions, one live link per show (Nov 2026, Adam — migration 301)
+
+Adam: "it is a document… legally binding… make requests and demands really
+clearly… one link… a version number and edit date… things change as a tour
+goes on". The old builder (rider_packs kind 'rider') is DELETED — don't
+rebuild sections / cover pages / variables.
+
+- **Where**: Production › Riders, `/operations/[tourId]/riders` (`?doc=tech|
+  hospitality`, `?panel=outline|changes|shows|replies`). UI
+  `src/components/riders/`, rules pure in `src/lib/riders/`, server
+  `src/server/riders/`. API `/api/tours/[id]/riders` (GET + POST `action`),
+  `/riders/blocks` (POST / PATCH `ifVersion` / DELETE), `/riders/pdf`;
+  `/api/rider-templates(/[id])`; `/api/riders/bring-over`. Artist library:
+  `/artists/[id]/riders` (each tour's documents + templates).
+- **Model**: `riders` (one per tour × Tech / Hospitality) → `rider_blocks`
+  (heading, text (Tiptap, `cleanDoc`), request, table, contacts, summary,
+  files, break). `parseContent` is THE gate for block content. Order is a
+  fractional `position` (`COLLATE "C"`, lib/riders/position.ts). A block can
+  be DATED (`applies_from` / `applies_until`) — that's how a mid-tour change
+  works ("Change from a show…" ends the old block the day before and starts a
+  copy); `inForce(block, date)` decides, never per-show copies.
+- **ONE look**: `docModel` + `RIDER_DOC_CSS` (lib/riders/render.ts) feed the
+  editor's preview, the promoter page, the PDF (`riderPdfHtml`) and the
+  legacy show link. Never fork the rendering — a second stylesheet is how a
+  PDF ends up disagreeing with the page.
+- **Versions**: Publish freezes both documents into `rider_versions`
+  (`snapshot`, major.minor, `changes` from `diffSnapshots`). The trigger
+  refuses every UPDATE and any DELETE that isn't a cascade. Promoters only
+  ever see the latest PUBLISHED version — never the draft. Publishing an
+  unchanged rider → 409 UNCHANGED.
+- **Live editing**: each block saves on its own, 700 ms after typing, with
+  its `version` (`ifVersion`); a stale save → 409 STALE + the current block →
+  a theirs / mine banner. Realtime `postgres_changes` on rider_blocks (+
+  replies, acks, versions); presence + broadcast on `riders:${tourId}`
+  (deletes are broadcast — Realtime can't filter DELETE). Database triggers
+  copy workspace / tour from the rider — don't send them from the client.
+- **Links**: `rider_links.token` IS the grant (one live link per show +
+  an optional whole-tour link). `/r/<token>` and `/api/public/riders/[token]`
+  (+ `/pdf`, `/file`) use the service role, scoped to the link's tour, its
+  show's date and the latest version (server/riders/public.ts). Acknowledge
+  + reply on a request line; caps 20 acks / 60 replies per link per hour.
+  **Lowpass never emails**: Send writes the email (Gmail / Mail app / Copy)
+  and records `rider_sends`. Per-show line states (confirmed / substitute /
+  cut) live on `rider_line_states`.
+- **To-do rules are ONE function each** (lib/riders/status.ts):
+  `showsToSend` (link's newest send ≠ latest version) and `repliesToAnswer`
+  (promoter spoke last, unresolved). The Riders page's tabs and the tour
+  Overview's "Needs you" both call them — never re-derive.
+- **The old builder's leftovers**: `rider_packs` kind 'rider' rows stay
+  (read only by bring-over, `rider_legacy_imports` ledger, never deleted).
+  `/api/rider-packs` refuses kind 'rider' (410); `/rider-packs/[id]` and
+  `/operations/[id]/riders/[packId]` redirect a rider (or stage-plot) pack;
+  `/r/<old token>` keeps the OLD reader for channel-list share links
+  (PackEditor still makes them), forwards an old rider link to the tour-wide
+  link only when it had no password, else "This rider has moved";
+  `/api/public/rider/[token]` answers 410 for rider packs.
+  `getPacketManifest` drops old rider packs once the tour has published a
+  rider; the legacy show link's Rider tab renders the new one
+  (`loadShowRider`). PackEditor still carries rider-era section types
+  (cover page, rich text, PDF import) — channel lists only now.
+- **Permissions**: tour tables are area `production` in
+  `scripts/permissions/rules.mjs` (`since: 301`); `rider_templates` is 'ref'
+  (library editors write); `rider_legacy_imports` manager. 301's rules block
+  is GENERATED between its markers by `gen293.mjs` — never hand-edit it.
+  DB tests: `database/tests/301_riders.test.mjs`. Smoke: RID-07…31.
 
 ### A city is not a venue (Nov 2026, Adam)
 

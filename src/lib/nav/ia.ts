@@ -240,12 +240,11 @@ const ARTIST_RAIL: RailEntry[] = [
     kind: 'item', id: 'riders-specs', label: 'Riders & specs', icon: 'FileText', area: 'manager',
     href: (c) => `/artists/${c.artistId}/riders`,
     // Channel lists and stage plots are grouped under this item (IA_CANONICAL).
-    /* S-3b — /rider-packs/[id] lights this too. The standalone rider editor is
-       reached FROM the artist library riders list, and Adam's call was that it
-       belongs to the artist library, not to a workspace no-man's-land. The URL
-       carries no artist id; the pack's own artist_id is supplied server-side by
-       the mounting view (same pattern as tour scope, where the artist comes
-       from data, not the path). */
+    /* S-3b — /rider-packs/[id] lights this too (since the Nov 2026 riders
+       rebuild it is the channel-list document editor, reached from the artist
+       library). The URL carries no artist id; the pack's own artist_id is
+       supplied server-side by the mounting view (same pattern as tour scope,
+       where the artist comes from data, not the path). */
     match: (p) =>
       /^\/artists\/[^/]+\/(riders|channel-lists|stage-plots)(\/|$)/.test(p) ||
       /^\/rider-packs(\/|$)/.test(p),
@@ -492,12 +491,12 @@ export function isShelledPath(pathname: string, search = ''): boolean {
  */
 export function hasOwnRail(pathname: string): boolean {
   return (
-    /^\/operations\/[^/]+\/riders\/[^/]+/.test(pathname) ||
     /* The show page's shows rail — not the tour's Templates page. */
     /^\/advance\/[^/]+\/(?!templates(\/|$))[^/]+/.test(pathname) ||
-    /* S-3b — the STANDALONE rider editor renders the same RiderPackSidebar the
-       tour-scoped one does (280px, unconditional whenever the pack has a
-       context id). Same component, same collapse rule. */
+    /* /rider-packs/[id] — a channel-list document in PackEditor, whose
+       Sections list sits where a rail would. (The old rider builder and its
+       RiderPackSidebar were deleted in the Nov 2026 riders rebuild; the old
+       /operations/[id]/riders/[packId] URL now only redirects.) */
     /^\/rider-packs\/[^/]+/.test(pathname) ||
     /* The parking editor's tool panel sits where a rail would (Nov 2026). */
     /^\/operations\/[^/]+\/parking\/[^/]+/.test(pathname)

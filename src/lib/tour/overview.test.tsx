@@ -108,9 +108,39 @@ describe('the three area lines', () => {
       '£2,449 over · £46,011 spent of £43,562',
     );
   });
-  it('production', () => {
-    expect(productionLine(facts({ production: [{ kind: 'rider', count: 2, updatedAt: '2026-11-06T10:00:00Z' }] }))).toBe(
-      'Rider updated 3 days ago · Channel list not made · Stage plot not made',
+  it('production — the rider by its published version, then the other documents', () => {
+    expect(productionLine(facts({ production: [{ kind: 'channel_list', count: 2, updatedAt: '2026-11-06T10:00:00Z' }] }))).toBe(
+      'Rider not made · Channel list updated 3 days ago · Stage plot not made',
     );
+    const riders = { docs: 2, latest: { label: '1.7', publishedAt: '2026-11-08T09:00:00Z' }, toSend: 0, toAnswer: 0 };
+    expect(productionLine(facts({ riders }))).toBe('Rider version 1.7, published yesterday · Channel list not made · Stage plot not made');
+    expect(productionLine(facts({ riders: { ...riders, latest: null } }))).toMatch(/^Rider not published yet · /);
+    // An old builder 'rider' pack no longer counts as the rider.
+    expect(productionLine(facts({ production: [{ kind: 'rider', count: 1, updatedAt: '2026-11-06T10:00:00Z' }] }))).toMatch(/^Rider not made · /);
+  });
+});
+
+describe('needs you — the rider', () => {
+  const riders = { docs: 2, latest: { label: '2.1', publishedAt: '2026-11-08T09:00:00Z' }, toSend: 3, toAnswer: 2 };
+  it('replies to answer, then shows not sent the latest version — each a link to that tab', () => {
+    const lines = needsYou(facts({ riders }));
+    expect(lines.map((l) => [l.id, l.count, l.href])).toEqual([
+      ['rider-replies', 2, '/operations/t1/riders?panel=replies'],
+      ['rider-send', 3, '/operations/t1/riders?panel=shows'],
+    ]);
+    expect(lines[0].text).toBe('2 rider replies to answer');
+    expect(lines[1].text).toBe('3 shows haven’t been sent rider version 2.1');
+    expect(needsYou(facts({ riders: { ...riders, toSend: 1, toAnswer: 1 } })).map((l) => l.text)).toEqual([
+      '1 rider reply to answer',
+      '1 show hasn’t been sent rider version 2.1',
+    ]);
+  });
+  it('nothing published → nothing to send; no production access → no rider lines', () => {
+    expect(needsYou(facts({ riders: { ...riders, latest: null, toAnswer: 0 } }))).toEqual([]);
+    expect(needsYou(facts({ riders, allow: { ...ALLOW_ALL, production: false } }))).toEqual([]);
+  });
+  it('sits after the advance lines (venue work), before money', () => {
+    const f = facts({ riders, shows: [show('2026-11-12', { answered: 2 })], receiptsNeedingDetails: 1 });
+    expect(needsYou(f).map((l) => l.id)).toEqual(['advance-soon', 'rider-replies', 'rider-send', 'receipts']);
   });
 });

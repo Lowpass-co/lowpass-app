@@ -1,98 +1,68 @@
 /* ============================================
-   LOWPASS — Operations · Riders (Phase 4 unblock)
+   LOWPASS — Production › Riders (rebuild, Nov 2026 — migration 301)
 
-   /operations/[tourId]/riders — the live Rider Packs list for the tour.
-   Ports the working /tours/[id]/rider-packs surface onto this URL,
-   rendering the inner content only (ProductShell + TourHeader come from
-   /operations/[tourId]/layout.tsx). Each card links to /rider-packs/[id]
-   (the new builder/show shell).
+   /operations/[tourId]/riders — the tour's two rider documents (Tech,
+   Hospitality): write them, publish numbered versions, send each show its
+   own live link, answer promoters' replies. Opening the page writes nothing.
+   Who edits is the DATABASE's answer (tour access, production area): the
+   same rule the API applies (requireWrite area 'production').
    ============================================ */
 
 import { notFound } from 'next/navigation';
+import type { SupabaseClient } from '@supabase/supabase-js';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
-import { RiderPacksTourClient } from '@/components/tours/RiderPacksTourClient';
-import { riderPackRowsFromServer } from '@/components/tours/rider-pack-rows';
+import { getActiveMembership } from '@/lib/permissions/server';
+import { getViewerAccess, viewerAllows } from '@/lib/permissions/tourAccess';
+import { loadRiderEditor } from '@/server/riders/data';
+import { legacyCount } from '@/server/riders/legacy';
+import { RIDER_DEFAULT_TITLE, RIDER_KINDS, type RiderKind } from '@/lib/riders/types';
+import { RidersEditor } from '@/components/riders/RidersEditor';
 
 export const dynamic = 'force-dynamic';
 
-export default async function OperationsTourRidersPage({ params }: { params: Promise<{ tourId: string }> }) {
-  const { tourId } = await params;
-  const supabase = await createServerSupabaseClient();
+const SIDES = ['outline', 'changes', 'shows', 'replies'] as const;
+
+export default async function RidersPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ tourId: string }>;
+  searchParams: Promise<{ doc?: string; panel?: string }>;
+}) {
+  const [{ tourId }, sp] = await Promise.all([params, searchParams]);
+  const initialKind = (RIDER_KINDS as readonly string[]).includes(sp.doc ?? '') ? (sp.doc as RiderKind) : null;
+  const initialSide = (SIDES as readonly string[]).includes(sp.panel ?? '') ? (sp.panel as (typeof SIDES)[number]) : null;
+  const supabase = (await createServerSupabaseClient()) as unknown as SupabaseClient;
   const {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) notFound();
-
-  const { data: profile } = await supabase.from('profiles').select('workspace_id').eq('id', user.id).single();
-  if (!profile?.workspace_id) notFound();
-
-  const { data: tour, error: tourErr } = await supabase
-    .from('tours')
-    .select('id, name, workspace_id, artist_id')
-    .eq('id', tourId)
-    .eq('workspace_id', profile.workspace_id)
-    .maybeSingle();
-
-  if (tourErr || !tour) notFound();
-
-  const { data: packs } = await supabase
-    .from('rider_packs')
-    .select(
-      `
-      id,
-      title,
-      scope,
-      artist_id,
-      tour_id,
-      updated_at,
-      created_by,
-      artists ( name ),
-      rider_pack_exports ( exported_at, export_type )
-    `,
-    )
-    .eq('tour_id', tour.id)
-    // A6 — this is the RIDERS landing; stage_plot / channel_list packs live in
-    // their own surfaces. Without this filter they leaked into the rider list
-    // (e.g. "… Stage Plot" showing as a rider). Mirrors the artist riders page.
-    .eq('kind', 'rider')
-    .order('updated_at', { ascending: false });
-
-  const { data: artists } = await supabase.from('artists').select('id, name').eq('workspace_id', profile.workspace_id);
-  const artistMap = new Map((artists ?? []).map((a) => [a.id, a.name ?? 'Artist']));
-
-  /* R-D — author. created_by has existed since 034:52 and is populated; it was
-     simply never selected.
-     NOT a PostgREST embed, deliberately. `profiles:created_by ( name )` would
-     be terser, but a wrong embed alias 400s the WHOLE query and takes the page
-     down, and profiles RLS is recursion-prone here historically (004 exists
-     because of it). I cannot exercise the embed from this environment, so this
-     uses the separate-fetch-and-map pattern the artists lookup two lines above
-     already proves in this exact file: a failed lookup degrades to "Unknown"
-     instead of blanking the page. */
-  const authorIds = [...new Set((packs ?? []).map((p) => p.created_by).filter(Boolean))] as string[];
-  const authorMap = new Map<string, { name: string | null; avatarUrl: string | null }>();
-  if (authorIds.length > 0) {
-    const { data: authors } = await supabase
-      .from('profiles')
-      .select('id, name, avatar_url')
-      .in('id', authorIds);
-    for (const a of authors ?? []) {
-      authorMap.set(a.id as string, {
-        name: (a.name as string | null) ?? null,
-        avatarUrl: (a.avatar_url as string | null) ?? null,
-      });
-    }
-  }
-
-  const rows = riderPackRowsFromServer(
-    (packs ?? []) as unknown as Parameters<typeof riderPackRowsFromServer>[0],
-    artistMap,
-    authorMap,
-  );
-
+  const [data, membership, access, profileRes, othersRes] = await Promise.all([
+    loadRiderEditor(supabase, tourId),
+    getActiveMembership(supabase, user.id),
+    getViewerAccess(supabase, user.id, tourId),
+    supabase.from('profiles').select('name').eq('id', user.id).maybeSingle(),
+    supabase.from('riders').select('id, kind, title, tour_id, tour:tours(name)').neq('tour_id', tourId).order('updated_at', { ascending: false }).limit(200),
+  ]);
+  if (!data || !membership || membership.workspace_id !== data.tour.workspaceId) notFound();
+  const canEdit = viewerAllows(access, 'production', 'edit');
+  const manager = !!access?.manager;
+  const otherRiders = ((othersRes.data ?? []) as { id: string; kind: RiderKind; title: string | null; tour: { name: string | null } | { name: string | null }[] | null }[]).map((r) => {
+    const t = Array.isArray(r.tour) ? r.tour[0] : r.tour;
+    return { id: r.id, kind: r.kind, title: r.title || RIDER_DEFAULT_TITLE[r.kind], tourName: t?.name ?? 'Another tour' };
+  });
+  const name = ((profileRes.data as { name: string | null } | null)?.name ?? '').trim() || user.email?.split('@')[0] || 'Me';
   return (
-    <div className="mx-auto w-full px-4 pt-6">
-      <RiderPacksTourClient tourId={tour.id} tourName={tour.name ?? 'Tour'} artistId={tour.artist_id} rows={rows} />
-    </div>
+    <RidersEditor
+      initial={data}
+      tourId={tourId}
+      me={{ id: user.id, name }}
+      canEdit={canEdit}
+      canBringOver={manager}
+      legacyCount={manager ? await legacyCount(supabase, data.tour.workspaceId) : 0}
+      otherRiders={otherRiders}
+      initialKind={initialKind}
+      initialSide={initialSide}
+    />
   );
 }
