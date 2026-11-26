@@ -979,3 +979,12 @@ Rates in Payroll · Copy email · Remove from tour…** (Remove asks first; it
 takes them off this tour only). The "Read-only · edit in Payroll ↗" line on
 the Rates panel is a link to Payroll. A viewer who can't edit gets only Copy
 email.
+
+#### TRV-06 — Find flight (needs migration 299 + AVIATIONSTACK_KEY)
+Travel › Add flight: type a flight number flying TODAY (e.g. one you can see
+on the departures board) and today's date → **Find flight** → Airline, From,
+To and Departs fill in; the line under says what was found. Press it again →
+same answer instantly (cached — no second call). A date next week → "only
+finds flights flying today" and NOTHING is sent (check: `SELECT count(*) FROM
+flight_lookups` doesn't move). Without the key the button isn't there. A
+read-only crew member can't search (403).

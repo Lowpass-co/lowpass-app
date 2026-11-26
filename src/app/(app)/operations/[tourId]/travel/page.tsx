@@ -61,6 +61,8 @@ export default async function OperationsTravelPage({ params }: { params: Promise
       tourId={tour.id}
       tourCurrency={String(tour.currency ?? 'GBP').toUpperCase()}
       crewNames={names}
+      // Flight search needs the provider key on the server (never sent to the page).
+      flightSearch={!!process.env.AVIATIONSTACK_KEY}
     />
   );
 }
