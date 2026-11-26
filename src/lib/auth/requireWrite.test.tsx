@@ -142,3 +142,40 @@ describe('requireWrite by tour area', () => {
     expect(ok(await requireWriteReal(fakeClient('readonly', null), { area: 'receipts', tourId: 't1' }))).toBe(false);
   });
 });
+
+/* ---- The Tour manager tier (Nov 2026, migration 298) ---- */
+describe('requireWrite for a Tour manager', () => {
+  const ok = (r: Awaited<ReturnType<typeof requireWriteReal>>) => !('error' in r);
+  const ALL = ['advance', 'production', 'parking', 'logistics', 'files', 'schedule', 'budget', 'receipts', 'payroll', 'income'].map((area) => ({ area, level: 'edit' }));
+
+  it('runs THEIR tour (dates, details, crew)', async () => {
+    expect(ok(await requireWriteReal(fakeClient('tour_manager', ALL), { runsTour: true, tourId: 't1' }))).toBe(true);
+  });
+  it('not a tour that isn’t theirs', async () => {
+    expect(ok(await requireWriteReal(fakeClient('tour_manager', []), { runsTour: true, tourId: 't2' }))).toBe(false);
+  });
+  it('never without a tour', async () => {
+    expect(ok(await requireWriteReal(fakeClient('tour_manager', ALL), { runsTour: true, tourId: null }))).toBe(false);
+  });
+  it('a Member never runs a tour, whatever their areas', async () => {
+    expect(ok(await requireWriteReal(fakeClient('readonly', ALL), { runsTour: true, tourId: 't1' }))).toBe(false);
+  });
+  it('admin / manager run every tour', async () => {
+    expect(ok(await requireWriteReal(fakeClient('admin', []), { runsTour: true, tourId: 't9' }))).toBe(true);
+    expect(ok(await requireWriteReal(fakeClient('manager', []), { runsTour: true, tourId: 't9' }))).toBe(true);
+  });
+  it('templates + libraries: Tour manager yes, Member no', async () => {
+    expect(ok(await requireWriteReal(fakeClient('tour_manager', []), { library: true }))).toBe(true);
+    expect(ok(await requireWriteReal(fakeClient('readonly', ALL), { library: true }))).toBe(false);
+    expect(ok(await requireWriteReal(fakeClient('manager', []), { library: true }))).toBe(true);
+  });
+  it('by area on their tour: passes (the database gives them every area)', async () => {
+    expect(ok(await requireWriteReal(fakeClient('tour_manager', ALL), { area: 'payroll', tourId: 't1' }))).toBe(true);
+  });
+  it('with NO area and no tour: still admin / manager only', async () => {
+    expect(ok(await requireWriteReal(fakeClient('tour_manager', ALL)))).toBe(false);
+  });
+  it('adminOnly stays admin only', async () => {
+    expect(ok(await requireWriteReal(fakeClient('tour_manager', ALL), { adminOnly: true }))).toBe(false);
+  });
+});

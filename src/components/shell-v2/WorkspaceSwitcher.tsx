@@ -26,11 +26,11 @@ import { Building2, ChevronDown, Loader2, Check } from 'lucide-react';
 import { useToast } from '@/components/ui/Toast';
 import type { WorkspaceListItem, WorkspaceRole } from '@/lib/permissions/types';
 import { toTitleCase } from '@/lib/text/toTitleCase';
+import { ROLE_LABEL } from '@/lib/permissions/roles';
 
 function roleLabel(r: WorkspaceRole, isOwner: boolean): string {
   if (isOwner) return 'Owner';
-  if (r === 'readonly') return 'Read-only';
-  return r.charAt(0).toUpperCase() + r.slice(1);
+  return ROLE_LABEL[r] ?? r;
 }
 
 export function WorkspaceSwitcher() {

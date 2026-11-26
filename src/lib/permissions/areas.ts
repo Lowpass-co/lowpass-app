@@ -177,3 +177,12 @@ export function summariseAccess(rows: readonly TourAccessRow[]): string {
   const view = list('view');
   return [where, edit.length ? `Edit: ${edit.join(', ')}` : null, view.length ? `View: ${view.join(', ')}` : null].filter(Boolean).join(' · ');
 }
+
+/** A Tour manager's rows in one line — only WHICH tours matter (298: every
+ *  area on them is edit, whatever the rows say). */
+export function summariseTours(rows: readonly TourAccessRow[]): string {
+  if (!rows.length) return 'No tours yet';
+  if (rows.some((r) => r.tour_id === null)) return 'All tours · everything';
+  const n = new Set(rows.map((r) => r.tour_id)).size;
+  return `${n} ${n === 1 ? 'tour' : 'tours'} · everything`;
+}

@@ -14,7 +14,7 @@ import { createServerSupabaseClient } from '@/lib/supabase-server';
 import {
   getActiveMembership,
 } from '@/lib/permissions/server';
-import { getViewerAccess } from '@/lib/permissions/tourAccess';
+import { getViewerAccess, runsTour } from '@/lib/permissions/tourAccess';
 
 export const dynamic = 'force-dynamic';
 
@@ -43,8 +43,8 @@ export async function GET(
   if (!membership) {
     return NextResponse.json({ error: 'No active workspace' }, { status: 403 });
   }
-  // Changing the crew is admin / manager only (as requireWrite(supabase)).
-  if (!(await getViewerAccess(supabase, user.id, tourId))?.manager) {
+  // Changing the crew: whoever runs this tour (admin / manager / its Tour manager).
+  if (!runsTour(await getViewerAccess(supabase, user.id, tourId))) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 

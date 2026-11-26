@@ -13,7 +13,7 @@
 import { NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { getActiveMembership } from '@/lib/permissions/server';
-import { getViewerAccess } from '@/lib/permissions/tourAccess';
+import { getViewerAccess, runsTour } from '@/lib/permissions/tourAccess';
 import { rankCandidates } from '@/lib/personnel/crew';
 
 export const dynamic = 'force-dynamic';
@@ -31,7 +31,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   if (!membership) {
     return NextResponse.json({ error: 'No active workspace' }, { status: 403 });
   }
-  if (!(await getViewerAccess(supabase, user.id, tourId))?.manager) {
+  if (!runsTour(await getViewerAccess(supabase, user.id, tourId))) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 

@@ -261,3 +261,20 @@ Cosmetically identical; flagged for a dedup pass.
 ## Retired
 
 (None yet.)
+
+#### AUTH-30 — Tour manager tier (needs migration 298)
+Team & roles → Ben → Role: **Tour manager** → Tour access: tick the Aura tour
+(any preset). As Ben:
+- He sees ONLY Aura (no other tour in the picker / Artists).
+- On Aura: Tour settings shows; Details and Dates & routing are editable and
+  save (changing the **currency** or **artist** is refused — admin / manager).
+- Crew: Add crew, Remove, edit roles all work; app logins stay admin-only.
+  Add crew lists only people already on his tours; new people he adds are his.
+- People: shows the people on his tours, with passports; nobody else.
+- Parking, Advance, Receipts all editable (as before).
+- Templates (workspace menu): opens and saves — advance + budget templates,
+  rate types. A template change reaches days on HIS tours; other tours' days
+  update next time an admin / manager saves it.
+- Never: Team & roles, AI Ask, other tours, artist-level riders.
+A Read-only member is unchanged (AUTH-21). Invite with role Tour manager +
+tours → accepting gives those tours.

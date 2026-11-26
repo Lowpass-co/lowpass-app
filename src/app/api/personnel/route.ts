@@ -42,7 +42,8 @@ export async function GET() {
 
 export async function POST(request: Request) {
   const supabase = await createServerSupabaseClient();
-  const auth = await requireWrite(supabase);
+  // Admin / manager / Tour manager (298: a Tour manager sees the people they add).
+  const auth = await requireWrite(supabase, { people: true });
   if ('error' in auth) return auth.error;
   const {
     data: { user },

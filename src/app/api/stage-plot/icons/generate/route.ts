@@ -35,7 +35,7 @@ export async function POST(request: Request) {
   }
 
   const supabase = await createServerSupabaseClient();
-  const auth = await requireWrite(supabase);
+  const auth = await requireWrite(supabase, { library: true });
   if ('error' in auth) return auth.error;
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) {

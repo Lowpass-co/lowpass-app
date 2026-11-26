@@ -15,7 +15,7 @@ export const dynamic = 'force-dynamic';
 interface WorkspaceListItem {
   id: string;
   name: string;
-  role: 'admin' | 'manager' | 'readonly';
+  role: 'admin' | 'manager' | 'tour_manager' | 'readonly';
   is_workspace_owner: boolean;
   member_count: number;
   is_active: boolean;
@@ -51,7 +51,7 @@ export async function GET() {
   const rows = (memberships ?? []) as Array<{
     id: string;
     workspace_id: string;
-    role: 'admin' | 'manager' | 'readonly';
+    role: 'admin' | 'manager' | 'tour_manager' | 'readonly';
     is_workspace_owner: boolean;
   }>;
   if (rows.length === 0) {

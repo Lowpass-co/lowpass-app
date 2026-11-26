@@ -24,7 +24,7 @@ import {
 import { loadTourRateContext, rateAmountsFor } from '@/lib/payroll/loadRateLines';
 import type { PersonnelRate } from '@/types';
 import { getActiveMembership } from '@/lib/permissions/server';
-import { getViewerAccess, viewerAllows } from '@/lib/permissions/tourAccess';
+import { getViewerAccess, viewerAllows, runsTour } from '@/lib/permissions/tourAccess';
 
 export const dynamic = 'force-dynamic';
 
@@ -138,7 +138,7 @@ export default async function OperationsTourPersonnelPage({
             tourStartDate={tourRow.start_date}
             tourEndDate={tourRow.end_date}
             conflictsOnly={conflictsOnly}
-            canEdit={!!access?.manager}
+            canEdit={runsTour(access)}
             canChangeLogin={access?.role === 'admin' && membership.workspace_id === tourRow.workspace_id}
             assignPersonId={typeof assign === 'string' && assign ? assign : null}
             currency={tourRow.currency ?? 'GBP'}

@@ -32,7 +32,8 @@ const LIMIT: Record<ImportField, number> = { day_type: 60, venue_name: 160, city
 
 async function postHandler(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const supabase = await createServerSupabaseClient();
-  const auth = await requireWrite(supabase);
+  // Runs this tour: admin / manager, or a Tour manager on one of theirs (298).
+  const auth = await requireWrite(supabase, { runsTour: true, tourId: (await params).id });
   if ('error' in auth) return auth.error;
   const { user, workspaceId } = auth;
   const { id: tourId } = await params;

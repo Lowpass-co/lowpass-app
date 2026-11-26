@@ -14,7 +14,7 @@ import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { TourSettingsTabs } from '@/components/tour-settings/TourSettingsTabs';
 import { TourDetailsPanel } from '@/components/tour-settings/TourDetailsPanel';
-import { getViewerAccess } from '@/lib/permissions/tourAccess';
+import { getViewerAccess, runsTour } from '@/lib/permissions/tourAccess';
 
 export const dynamic = 'force-dynamic';
 
@@ -28,7 +28,8 @@ export default async function TourSettingsDetailsPage({ params }: { params: Prom
 
   // The tour's details save through PATCH /api/tours/[id] — admin / manager only.
   const access = await getViewerAccess(supabase, user.id, tourId);
-  const canWrite = !!access?.manager;
+  // Details: whoever runs the tour (admin / manager / its Tour manager — 298).
+  const canWrite = runsTour(access);
 
   const [{ data: tour }, { data: routing }] = await Promise.all([
     supabase

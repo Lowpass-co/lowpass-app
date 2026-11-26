@@ -40,7 +40,8 @@ async function patchHandler(
   { params }: { params: Promise<{ id: string; routingId: string }> }
 ) {
   const supabase = await createServerSupabaseClient();
-  const auth = await requireWrite(supabase);
+  // Runs this tour: admin / manager, or a Tour manager on one of theirs (298).
+  const auth = await requireWrite(supabase, { runsTour: true, tourId: (await params).id });
   if ('error' in auth) return auth.error;
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) {

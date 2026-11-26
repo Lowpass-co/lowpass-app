@@ -12,6 +12,7 @@
    still round-trips the member's stored tags / grants unchanged.
    ============================================ */
 
+import { ROLES, ROLE_LABEL, ROLE_HINT, isTourScoped } from '@/lib/permissions/roles';
 import { useState } from 'react';
 import { useToast } from '@/components/ui/Toast';
 import { Loader2, X } from 'lucide-react';
@@ -242,7 +243,7 @@ function MemberManageEditor({
               Role
             </legend>
             <div className="flex flex-wrap" style={{ gap: 'var(--lp-space-3)' }}>
-              {(['admin', 'manager', 'readonly'] as const).map((r) => (
+              {ROLES.map((r) => (
                 <label
                   key={r}
                   className="inline-flex items-center"
@@ -261,9 +262,7 @@ function MemberManageEditor({
                     onChange={() => set((p) => ({ ...p, role: r }))}
                     style={{ accentColor: 'var(--color-lp-orange)' }}
                   />
-                  <span style={{ textTransform: 'capitalize' }}>
-                    {r === 'readonly' ? 'Read-only' : r}
-                  </span>
+                  <span title={ROLE_HINT[r]}>{ROLE_LABEL[r]}</span>
                 </label>
               ))}
             </div>
@@ -274,7 +273,7 @@ function MemberManageEditor({
                 color: 'var(--lp-text-tertiary)',
               }}
             >
-              Admin: everything, including members. Manager: every tour, every area — everything except members and billing. Read-only: only the tours and areas set under Tour access below.
+              {ROLE_HINT[state.role]}
             </div>
             {member.is_workspace_owner ? (
               <div
@@ -291,8 +290,15 @@ function MemberManageEditor({
           </fieldset>
 
           {/* Tour access (Nov 2026) — replaces the page-grant matrix */}
-          {state.role === 'readonly' ? (
-            <MemberTourAccess memberId={member.member_id} />
+          {isTourScoped(state.role) ? (
+            <>
+              {state.role === 'tour_manager' ? (
+                <div style={{ fontSize: 'var(--lp-text-xs)', color: 'var(--lp-text-tertiary)' }}>
+                  A Tour manager edits everything on the tours they have here — pick the tours (any preset).
+                </div>
+              ) : null}
+              <MemberTourAccess memberId={member.member_id} />
+            </>
           ) : (
             <div style={{ fontSize: 'var(--lp-text-xs)', color: 'var(--lp-text-tertiary)' }}>
               Admins and managers see every tour.

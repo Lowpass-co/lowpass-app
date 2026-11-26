@@ -12,13 +12,14 @@
      - <MemberManageSlideOver> + <InviteMemberSlideOver> mounts.
    ============================================ */
 
+import { ROLE_LABEL } from '@/lib/permissions/roles';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Loader2, Plus, RefreshCw } from 'lucide-react';
 import { useToast } from '@/components/ui/Toast';
 import { toTitleCase } from '@/lib/text/toTitleCase';
 import { MemberManageSlideOver } from './MemberManageSlideOver';
 import { InviteMemberSlideOver } from './InviteMemberSlideOver';
-import { summariseAccess } from '@/lib/permissions/areas';
+import { summariseAccess, summariseTours } from '@/lib/permissions/areas';
 import type {
   Member,
   PendingInvite,
@@ -61,8 +62,7 @@ function initials(name: string | null, email: string | null): string {
 }
 
 function roleLabel(r: WorkspaceRole): string {
-  if (r === 'readonly') return 'Read-only';
-  return r.charAt(0).toUpperCase() + r.slice(1);
+  return ROLE_LABEL[r] ?? r;
 }
 
 export function MembersListClient({ currentUserId }: MembersListClientProps) {
@@ -123,13 +123,15 @@ export function MembersListClient({ currentUserId }: MembersListClientProps) {
   const counts = useMemo(() => {
     let admin = 0,
       manager = 0,
+      tourManager = 0,
       readonly = 0;
     for (const m of members) {
       if (m.role === 'admin') admin++;
       else if (m.role === 'manager') manager++;
+      else if (m.role === 'tour_manager') tourManager++;
       else if (m.role === 'readonly') readonly++;
     }
-    return { admin, manager, readonly };
+    return { admin, manager, tourManager, readonly };
   }, [members]);
 
   const existingEmails = useMemo(() => {
@@ -209,7 +211,8 @@ export function MembersListClient({ currentUserId }: MembersListClientProps) {
           }}
         >
           {counts.admin} admin{counts.admin === 1 ? '' : 's'} · {counts.manager} manager
-          {counts.manager === 1 ? '' : 's'} · {counts.readonly} read-only
+          {counts.manager === 1 ? '' : 's'}
+          {counts.tourManager ? ` · ${counts.tourManager} tour manager${counts.tourManager === 1 ? '' : 's'}` : ''} · {counts.readonly} read-only
           {invites.length > 0 ? ` · ${invites.length} pending` : ''}
         </div>
         <div className="flex items-center" style={{ gap: 'var(--lp-space-2)' }}>
@@ -281,6 +284,7 @@ export function MembersListClient({ currentUserId }: MembersListClientProps) {
             { value: 'all', label: 'Any' },
             { value: 'admin', label: 'Admin' },
             { value: 'manager', label: 'Manager' },
+            { value: 'tour_manager', label: 'Tour manager' },
             { value: 'readonly', label: 'Read-only' },
           ]}
         />
@@ -411,7 +415,8 @@ interface MemberCardProps {
 
 function MemberCard({ member, accessRows, isCallerSelf, onManage }: MemberCardProps) {
   // A Member's tour access in one line (admins / managers see every tour).
-  const grantSummary = member.role === 'readonly' ? summariseAccess(accessRows) : null;
+  const grantSummary =
+    member.role === 'readonly' ? summariseAccess(accessRows) : member.role === 'tour_manager' ? summariseTours(accessRows) : null;
 
   return (
     <article

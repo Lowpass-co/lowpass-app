@@ -82,7 +82,9 @@ export async function giveTourLogin(
       .maybeSingle();
     const member = mem as { id: string; role: string } | null;
     if (member) {
-      if (member.role !== 'readonly') return { kind: 'full' };
+      // Admin / manager see every tour; a Member or a Tour manager (298) is
+      // scoped by tour_access, so this tour is added to theirs.
+      if (member.role === 'admin' || member.role === 'manager') return { kind: 'full' };
       const err = await addAccess(supabase, ctx.workspaceId, member.id, ctx.actorUserId, presetRows(ctx.tourId, preset));
       if (err) return { kind: 'error', error: err };
       await audit(supabase, ctx, 'tour_access', member.id, { tour_id: ctx.tourId, preset });
@@ -206,7 +208,7 @@ export async function tourLoginStates(
       .eq('workspace_id', ctx.workspaceId)
       .in('user_id', userIds);
     const members = (mems ?? []) as Array<{ id: string; user_id: string; role: string }>;
-    const readonlyIds = members.filter((m) => m.role === 'readonly').map((m) => m.id);
+    const readonlyIds = members.filter((m) => m.role === 'readonly' || m.role === 'tour_manager').map((m) => m.id);
     const { data: acc } = readonlyIds.length
       ? await supabase.from('tour_access').select('member_id, tour_id, area, level').in('member_id', readonlyIds)
       : { data: [] };
@@ -214,7 +216,7 @@ export async function tourLoginStates(
     for (const p of people) {
       const m = members.find((x) => x.user_id === p.user_id);
       if (!m) continue;
-      if (m.role !== 'readonly') {
+      if (m.role === 'admin' || m.role === 'manager') {
         out[p.id] = { state: 'full', preset: null, memberId: m.id };
         continue;
       }
@@ -326,9 +328,9 @@ export async function syncPersonnelLogin(
       if (!other) {
         const { error } = await supabase.from('personnel').update({ user_id: member.user_id }).eq('id', personnelId).is('user_id', null);
         if (!error) {
-          if (member.role === 'readonly') {
+          if (member.role === 'readonly' || member.role === 'tour_manager') {
             const wanted = pending.flatMap((i) =>
-              i.invited_role === 'readonly' && Array.isArray(i.initial_access)
+              (i.invited_role === 'readonly' || i.invited_role === 'tour_manager') && Array.isArray(i.initial_access)
                 ? (i.initial_access as Array<{ tour_id: string | null; area: string; level: string }>)
                 : [],
             );

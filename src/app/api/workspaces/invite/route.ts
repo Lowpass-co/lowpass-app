@@ -22,10 +22,10 @@ import { validateGrant, type GrantInput } from '@/lib/permissions/resources';
 
 export const dynamic = 'force-dynamic';
 
-type Role = 'admin' | 'manager' | 'readonly';
+type Role = 'admin' | 'manager' | 'tour_manager' | 'readonly';
 
 function isRole(v: unknown): v is Role {
-  return v === 'admin' || v === 'manager' || v === 'readonly';
+  return v === 'admin' || v === 'manager' || v === 'tour_manager' || v === 'readonly';
 }
 
 function isEmail(s: string): boolean {
@@ -84,7 +84,7 @@ export async function POST(request: Request) {
   }
   if (!isRole(body.role)) {
     return NextResponse.json(
-      { error: 'role must be admin|manager|readonly' },
+      { error: 'role must be admin|manager|tour_manager|readonly' },
       { status: 400 },
     );
   }
@@ -152,7 +152,7 @@ export async function POST(request: Request) {
       initial_tags: tags,
       initial_grants: grants,
       ...(personnelId ? { personnel_id: personnelId } : {}),
-      ...(body.role === 'readonly' && access.length ? { initial_access: access } : {}),
+      ...((body.role === 'readonly' || body.role === 'tour_manager') && access.length ? { initial_access: access } : {}),
       token,
       invited_by_user_id: user.id,
     })

@@ -7,7 +7,9 @@
 
 import type { GrantInput, ResourcePermission, ResourceType } from './resources';
 
-export type WorkspaceRole = 'admin' | 'manager' | 'readonly';
+/** 'tour_manager' (migration 298): only their tours, everything on them, plus
+ *  workspace templates. Between Member ('readonly') and Manager. */
+export type WorkspaceRole = 'admin' | 'manager' | 'tour_manager' | 'readonly';
 
 export interface Member {
   member_id: string;

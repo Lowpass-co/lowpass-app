@@ -18,7 +18,7 @@ interface MemberRow {
   email: string | null;
   display_name: string | null;
   avatar_url: string | null;
-  role: 'admin' | 'manager' | 'readonly';
+  role: 'admin' | 'manager' | 'tour_manager' | 'readonly';
   is_workspace_owner: boolean;
   joined_at: string;
   last_sign_in_at: string | null;
@@ -33,7 +33,7 @@ interface MemberRow {
 interface InviteRow {
   id: string;
   invited_email: string;
-  invited_role: 'admin' | 'manager' | 'readonly';
+  invited_role: 'admin' | 'manager' | 'tour_manager' | 'readonly';
   initial_tags: string[];
   initial_grants: unknown;
   invited_by_user_id: string | null;
@@ -106,7 +106,7 @@ export async function GET() {
   const invitesOut: InviteRow[] = ((invites ?? []) as Array<{
     id: string;
     invited_email: string;
-    invited_role: 'admin' | 'manager' | 'readonly';
+    invited_role: 'admin' | 'manager' | 'tour_manager' | 'readonly';
     initial_tags: string[] | null;
     initial_grants: unknown;
     invited_by_user_id: string | null;

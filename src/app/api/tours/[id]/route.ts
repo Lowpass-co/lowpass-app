@@ -41,7 +41,9 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const supabase = await createServerSupabaseClient();
-  const auth = await requireWrite(supabase);
+  // Runs this tour: admin / manager, or its Tour manager (298) — whose
+  // writes stop at details + dates (Money and the artist stay with you).
+  const auth = await requireWrite(supabase, { runsTour: true, tourId: (await params).id });
   if ('error' in auth) return auth.error;
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) {
@@ -56,6 +58,12 @@ export async function PATCH(
     'custom_day_types', 'default_advance_template_id',
   ];
   const updates: Record<string, unknown> = {};
+  if (auth.membership.role === 'tour_manager' && (body.currency !== undefined || body.artist_id !== undefined)) {
+    return NextResponse.json(
+      { error: 'Only an admin or manager can change the tour’s currency or artist.', code: 'MANAGER_ONLY' },
+      { status: 403 },
+    );
+  }
   for (const key of allowed) {
     if (body[key] !== undefined) updates[key] = body[key];
   }

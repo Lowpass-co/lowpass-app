@@ -56,7 +56,7 @@ export async function POST(
     id: string;
     workspace_id: string;
     invited_email: string;
-    invited_role: 'admin' | 'manager' | 'readonly';
+    invited_role: 'admin' | 'manager' | 'tour_manager' | 'readonly';
     initial_tags: string[] | null;
     initial_grants: unknown;
     accepted_at: string | null;
