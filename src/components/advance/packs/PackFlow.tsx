@@ -18,9 +18,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { X, FileUp, Check } from 'lucide-react';
 import type { Extra, Suggestion } from '@/lib/advance/packs';
-import { advanceCall, packFileUrl, saveAnswers } from '../api';
+import { advanceCall, getPackRead, markPackReadReviewed, packFileUrl, saveAnswers, startPackReads } from '../api';
 import { uploadDirect } from '@/lib/uploads/directUpload';
 import { fmtDay } from '../format';
+import { readPct, waitLine } from '@/lib/advance/packWait';
 import { RequestFlow } from '../RequestFlow';
 import { PackViewer } from './PackViewer';
 import '../advance.css';
@@ -35,6 +36,7 @@ interface FileInfo {
   pageCount: number | null;
   error: string | null;
   found?: number;
+  failedParts?: number;
   textPages?: { num: number; text: string }[] | null;
 }
 interface Extraction {
@@ -58,16 +60,19 @@ export function PackFlow({
   initialFiles,
   shows,
   fixedRoutingId,
+  resumeRead,
   onClose,
 }: {
   tourId: string;
   initialFiles: File[];
   shows: ShowLite[];
   fixedRoutingId?: string;
+  /** Open on a read started earlier (the "ready to review" banner). */
+  resumeRead?: { id: string; routingId: string };
   onClose: (saved?: boolean) => void;
 }) {
-  const [stage, setStage] = useState<Stage>(initialFiles.length ? 'reading' : 'add');
-  const [files, setFiles] = useState<File[]>(initialFiles);
+  const [stage, setStage] = useState<Stage>(initialFiles.length || resumeRead ? 'reading' : 'add');
+  const [files, setFiles] = useState<{ name: string; size: number }[]>(initialFiles);
   const [over, setOver] = useState(false);
   const [progress, setProgress] = useState<Record<number, { label: string; pct: number; done?: boolean; error?: string }>>({});
   const [uploaded, setUploaded] = useState<Uploaded[]>([]);
@@ -119,73 +124,157 @@ export function PackFlow({
     return () => window.removeEventListener('beforeunload', h);
   }, [dirty]);
 
-  /* ---- 1. upload, then identify (board) or read (show) ---- */
-  const extract = useCallback(
-    async (rid: string, paths: string[]) => {
+  /* ---- 1. upload, then identify (board) or read (show) ----
+     The read runs on the server (advance_pack_reads): started here, then
+     followed by polling. Closing this sheet doesn't stop it — the answers
+     wait on the show ("ready to review"). */
+  const readIds = useRef<Record<string, string>>({}); // routingId → read id
+  const readStart = useRef<Record<string, number>>({}); // read id → when (this browser's clock)
+  const currentRead = useRef<string | null>(null);
+  const alive = useRef(true);
+  const [estimate, setEstimate] = useState<number | null>(null);
+  const [readProg, setReadProg] = useState<{ done: number; total: number; startedAt: number } | null>(null);
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    alive.current = true;
+    return () => {
+      alive.current = false;
+    };
+  }, []);
+  useEffect(() => {
+    if (!readProg) return;
+    const t = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(t);
+  }, [readProg]);
+
+  const startReads = useCallback(
+    async (list: { routingId: string; paths: string[] }[]) => {
+      const want = new Set(list.flatMap((l) => l.paths));
+      const r = await startPackReads(
+        tourId,
+        list,
+        uploadedRef.current.filter((u) => want.has(u.path)).map((u) => ({ path: u.path, size: u.size, type: u.type })),
+      );
+      for (const x of r.reads) {
+        readIds.current[x.routingId] = x.id;
+        readStart.current[x.id] = Date.now();
+      }
+      setEstimate(r.estimateSeconds);
+    },
+    [tourId],
+  );
+
+  const applyResult = useCallback(
+    async (out: Extraction) => {
+      // Per-file outcome on the file rows, then the honest summary.
+      setProgress((p) => {
+        const next = { ...p };
+        for (const f of out.files) {
+          const i = uploadedRef.current.findIndex((u) => u.path === f.path);
+          if (i < 0) continue;
+          next[i] = f.error
+            ? { label: f.error, pct: 100, error: f.error }
+            : { label: f.found ? `${f.found} answer${f.found === 1 ? '' : 's'} found` : 'Read — nothing for these questions', pct: 100, done: true };
+        }
+        return next;
+      });
+      const failed = out.files.filter((f) => f.error);
+      const empty = out.files.filter((f) => !f.error && !f.found);
+      const partial = out.files.filter((f) => !f.error && f.failedParts);
+      const lines = [
+        ...failed.map((f) => `Couldn’t read ${f.name}: ${f.error}`),
+        ...partial.map((f) => `Part of ${f.name} couldn’t be read (${f.failedParts} ${f.failedParts === 1 ? 'section' : 'sections'}) — check it for anything missing.`),
+        ...(out.suggestions.length ? empty.map((f) => `${f.name} was read, but nothing in it answers these questions.`) : []),
+      ];
+      if (failed.length === out.files.length) {
+        // Nothing was read: stay on the file list (each row says why) rather
+        // than showing every question as "not in the packs".
+        setError(lines.join(' '));
+        setStage('reading');
+        return;
+      }
+      if (!out.suggestions.length && empty.length) lines.push(`Read ${empty.map((f) => f.name).join(', ')}, but found nothing that answers these questions.`);
+      setNotice(lines.length ? lines.join(' ') : null);
+      setEx(out);
+      const d: Record<string, Decision> = {};
+      for (const s of out.suggestions) d[kk(s)] = { status: undefined as never, value: show(s.value) };
+      setDec(d);
+      const g: Record<string, { mode: 'ask' | 'answer' | 'skip'; value: string }> = {};
+      for (const u of out.unanswered) g[kk(u)] = { mode: u.tmOnly ? 'skip' : 'ask', value: '' };
+      setGaps(g);
+      setExtras({});
+      setSel(0);
+      const signed: Record<string, string> = {};
+      await Promise.all(
+        out.files.filter((f) => !f.error && !f.textPages).map(async (f) => {
+          try {
+            signed[f.path] = (await packFileUrl(tourId, { path: f.path })).url;
+          } catch {
+            /* the viewer says it couldn't show it */
+          }
+        }),
+      );
+      setUrls((u) => ({ ...u, ...signed }));
+      setStage(out.suggestions.length ? 'review' : 'gaps');
+    },
+    [tourId],
+  );
+
+  /** Follow one read until it's done, then show its answers. */
+  const follow = useCallback(
+    async (readId: string) => {
       setBusy(true);
       setError(null);
+      setStage('reading');
+      currentRead.current = readId;
       setProgress((p) => Object.fromEntries(Object.entries(p).map(([k, v]) => [k, v.error ? v : { label: 'Reading with AI…', pct: 60 }])));
       try {
-        const out = await advanceCall<Extraction>(`/api/tours/${tourId}/advance/packs/read`, {
-          method: 'POST',
-          body: JSON.stringify({ mode: 'extract', routingId: rid, paths }),
-        });
-        // Per-file outcome on the file rows, then the honest summary.
-        setProgress((p) => {
-          const next = { ...p };
-          for (const f of out.files) {
-            const i = uploadedRef.current.findIndex((u) => u.path === f.path);
-            if (i < 0) continue;
-            next[i] = f.error
-              ? { label: f.error, pct: 100, error: f.error }
-              : { label: f.found ? `${f.found} answer${f.found === 1 ? '' : 's'} found` : 'Read — nothing for these questions', pct: 100, done: true };
+        for (;;) {
+          if (!alive.current || currentRead.current !== readId) return;
+          const st = await getPackRead<Extraction>(tourId, readId);
+          if (!uploadedRef.current.length) {
+            // Opened from the banner: the file list comes from the read.
+            const ups = st.files.map((f) => ({ name: f.name, path: f.path, size: f.size ?? 0, type: f.type ?? '' }));
+            uploadedRef.current = ups;
+            setUploaded(ups);
+            setFiles(ups.map((u) => ({ name: u.name, size: u.size })));
           }
-          return next;
-        });
-        const failed = out.files.filter((f) => f.error);
-        const empty = out.files.filter((f) => !f.error && !f.found);
-        const lines = [
-          ...failed.map((f) => `Couldn’t read ${f.name}: ${f.error}`),
-          ...(out.suggestions.length ? empty.map((f) => `${f.name} was read, but nothing in it answers these questions.`) : []),
-        ];
-        if (failed.length === out.files.length) {
-          // Nothing was read: stay on the file list (each row says why) rather
-          // than showing every question as "not in the packs".
-          setError(lines.join(' '));
-          setStage('reading');
-          return;
+          setReadProg({ done: st.partsDone, total: st.partsTotal, startedAt: readStart.current[readId] ?? Date.parse(st.startedAt) });
+          if (st.status === 'failed') throw new Error(st.error ?? 'The read stopped part-way. Try again — the files are kept.');
+          if (st.status === 'done' && st.result) {
+            setReadProg(null);
+            await applyResult(st.result);
+            return;
+          }
+          await new Promise((r) => window.setTimeout(r, 1500));
         }
-        if (!out.suggestions.length && empty.length) lines.push(`Read ${empty.map((f) => f.name).join(', ')}, but found nothing that answers these questions.`);
-        setNotice(lines.length ? lines.join(' ') : null);
-        setEx(out);
-        const d: Record<string, Decision> = {};
-        for (const s of out.suggestions) d[kk(s)] = { status: undefined as never, value: show(s.value) };
-        setDec(d);
-        const g: Record<string, { mode: 'ask' | 'answer' | 'skip'; value: string }> = {};
-        for (const u of out.unanswered) g[kk(u)] = { mode: u.tmOnly ? 'skip' : 'ask', value: '' };
-        setGaps(g);
-        setExtras({});
-        setSel(0);
-        const signed: Record<string, string> = {};
-        await Promise.all(
-          out.files.filter((f) => !f.error && !f.textPages).map(async (f) => {
-            try {
-              signed[f.path] = (await packFileUrl(tourId, { path: f.path })).url;
-            } catch {
-              /* the viewer says it couldn't show it */
-            }
-          }),
-        );
-        setUrls((u) => ({ ...u, ...signed }));
-        setStage(out.suggestions.length ? 'review' : 'gaps');
       } catch (e) {
+        setReadProg(null);
         setError(e instanceof Error ? e.message : 'Couldn’t read the files');
         setStage('add');
       } finally {
         setBusy(false);
       }
     },
-    [tourId],
+    [tourId, applyResult],
+  );
+
+  const extract = useCallback(
+    async (rid: string, paths: string[]) => {
+      if (!readIds.current[rid]) {
+        try {
+          setBusy(true);
+          await startReads([{ routingId: rid, paths }]);
+        } catch (e) {
+          setError(e instanceof Error ? e.message : 'Couldn’t start reading');
+          setStage('add');
+          setBusy(false);
+          return;
+        }
+      }
+      await follow(readIds.current[rid]);
+    },
+    [startReads, follow],
   );
 
   const start = useCallback(
@@ -242,6 +331,15 @@ export function PackFlow({
   );
 
   useEffect(() => {
+    if (started.current || !resumeRead) return;
+    started.current = true;
+    readIds.current[resumeRead.routingId] = resumeRead.id;
+    setQueue([resumeRead.routingId]);
+    void follow(resumeRead.id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
     if (started.current || !initialFiles.length) return;
     started.current = true;
     void start(initialFiles).then((r) => {
@@ -269,7 +367,18 @@ export function PackFlow({
     }
     setQueue(ids);
     setQi(0);
-    void extract(ids[0], uploaded.filter((u) => assign[u.path] === ids[0]).map((u) => u.path));
+    // Every show's read starts NOW, side by side — the next show is usually
+    // ready by the time this one's reviewed.
+    const pathsFor = (rid: string) => uploaded.filter((u) => assign[u.path] === rid).map((u) => u.path);
+    setBusy(true);
+    setStage('reading');
+    void startReads(ids.map((rid) => ({ routingId: rid, paths: pathsFor(rid) })))
+      .then(() => extract(ids[0], pathsFor(ids[0])))
+      .catch((e) => {
+        setError(e instanceof Error ? e.message : 'Couldn’t start reading');
+        setStage('match');
+        setBusy(false);
+      });
   };
 
   /* ---- 3. review ---- */
@@ -353,6 +462,7 @@ export function PackFlow({
         (typed[sid] ??= {})[fid] = g.value.trim();
       }
       if (Object.keys(typed).length) await saveAnswers(tourId, routingId, typed);
+      if (currentRead.current) void markPackReadReviewed(tourId, currentRead.current).catch(() => null);
       setSavedAny(true);
       setStage('saved');
     } catch (e) {
@@ -515,6 +625,33 @@ export function PackFlow({
                   <button type="button" className="adv-btn adv-btn-primary" disabled={busy} onClick={beginReview}>Start reviewing</button>
                 </div>
               ) : null}
+            </section>
+          ) : null}
+
+          {stage === 'reading' && readProg ? (
+            <section
+              aria-live="polite"
+              aria-label="Reading progress"
+              style={{ border: '1px solid var(--lp-border)', borderRadius: 12, background: 'var(--lp-surface)', padding: '16px', display: 'flex', flexDirection: 'column', gap: 10 }}
+            >
+              <div className="adv-row-flex">
+                <span className="adv-grow" style={{ fontSize: 'var(--lp-text-md)', fontWeight: 600 }}>
+                  Reading with AI{readProg.total ? ` · ${readProg.done} of ${readProg.total} ${readProg.total === 1 ? 'part' : 'parts'} read` : ''}
+                </span>
+                <span className="adv-muted" style={{ fontSize: 'var(--lp-text-sm)' }}>{waitLine(readProg.startedAt, now, estimate)}</span>
+              </div>
+              <span className="adv-bar" data-busy={true}>
+                <span style={{ width: `${readPct(readProg, now, estimate)}%` }} />
+              </span>
+              <div className="adv-row-flex" style={{ gap: 12 }}>
+                <span className="adv-grow" style={{ fontSize: 'var(--lp-text-sm)', lineHeight: 1.5 }}>
+                  You don’t have to wait here — close this and carry on. The read keeps going, and the answers will be waiting on{' '}
+                  {queue.length > 1 ? 'each show’s advance' : `${current?.venue ?? 'the show'}’s advance`} when you come back.
+                </span>
+                <button type="button" className="adv-btn" onClick={() => onClose(false)}>
+                  Close — I’ll come back
+                </button>
+              </div>
             </section>
           ) : null}
         </div>

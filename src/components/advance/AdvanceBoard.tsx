@@ -11,10 +11,12 @@
 
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { CalendarPlus, Search, FileUp, LayoutTemplate, Send } from 'lucide-react';
 import type { BoardData, BoardShowRow } from '@/server/advance/board';
 import { useSpineNavigate } from '@/lib/nav/viewTransitionNav';
 import { PackFlow } from './packs/PackFlow';
+import { PackReadsBanner } from './packs/PackReadsBanner';
 import { RequestFlow } from './RequestFlow';
 import { cellText, fmtDay, fmtRange, stateWord } from './format';
 import './advance.css';
@@ -52,9 +54,12 @@ function Marked({ text, words }: { text: string; words: string[] }) {
 export function AdvanceBoard({ data }: { data: BoardData }) {
   const tourId = data.tour.id;
   const navigate = useSpineNavigate();
+  const router = useRouter();
   const [filter, setFilter] = useState<Filter>('all');
   const [q, setQ] = useState('');
   const [packs, setPacks] = useState<File[] | null>(null);
+  const [resumeRead, setResumeRead] = useState<{ id: string; routingId: string } | null>(null);
+  const [packKey, setPackKey] = useState(0); // re-asks the banner after the sheet closes
   const [requesting, setRequesting] = useState<string[] | null>(null);
   const searchRef = useRef<HTMLInputElement>(null);
 
@@ -145,6 +150,13 @@ export function AdvanceBoard({ data }: { data: BoardData }) {
           </button>
         ) : null}
       </div>
+
+      <PackReadsBanner
+        key={packKey}
+        tourId={tourId}
+        shows={shows.map((r) => ({ routingId: r.routingId, date: r.date, venue: r.venue, city: r.city }))}
+        onReview={setResumeRead}
+      />
 
       {!data.templates.length ? (
         <div className="adv-banner adv-banner-info">
@@ -279,12 +291,18 @@ export function AdvanceBoard({ data }: { data: BoardData }) {
         <span style={{ marginLeft: 'auto' }}>Drop venue packs anywhere on this page</span>
       </div>
 
-      {packs ? (
+      {packs || resumeRead ? (
         <PackFlow
           tourId={tourId}
-          initialFiles={packs}
+          initialFiles={packs ?? []}
+          resumeRead={resumeRead ?? undefined}
           shows={shows.map((r) => ({ routingId: r.routingId, date: r.date, venue: r.venue, city: r.city }))}
-          onClose={() => setPacks(null)}
+          onClose={(saved) => {
+            setPacks(null);
+            setResumeRead(null);
+            setPackKey((k) => k + 1);
+            if (saved) router.refresh();
+          }}
         />
       ) : null}
       {requesting ? <RequestFlow tourId={tourId} routingIds={requesting} shows={shows} onClose={() => setRequesting(null)} /> : null}

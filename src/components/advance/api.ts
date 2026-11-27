@@ -67,3 +67,42 @@ export function packFileUrl(tourId: string, q: { path?: string; doc?: string }) 
 }
 
 export { call as advanceCall };
+
+/* ---- info pack reads (background, migration 300) ---- */
+export type PackReadStatus = 'reading' | 'done' | 'failed';
+export interface PackReadFile { path: string; name: string; size: number | null; type: string | null }
+export interface PackReadState<R> {
+  id: string;
+  routingId: string;
+  status: PackReadStatus;
+  files: PackReadFile[];
+  partsTotal: number;
+  partsDone: number;
+  startedAt: string;
+  error: string | null;
+  result?: R;
+}
+const packsRead = (tourId: string) => `/api/tours/${tourId}/advance/packs/read`;
+
+export function startPackReads(
+  tourId: string,
+  reads: { routingId: string; paths: string[] }[],
+  files: { path: string; size: number; type: string }[],
+): Promise<{ reads: { id: string; routingId: string }[]; estimateSeconds: number }> {
+  return call(packsRead(tourId), { method: 'POST', body: JSON.stringify({ mode: 'extract', reads, files }) });
+}
+
+export function getPackRead<R>(tourId: string, readId: string): Promise<PackReadState<R>> {
+  return call(`${packsRead(tourId)}?read=${encodeURIComponent(readId)}`, { method: 'GET' });
+}
+
+export function pendingPackReads(
+  tourId: string,
+  routingId?: string,
+): Promise<{ reads: { id: string; routingId: string; status: PackReadStatus; createdAt: string; found: number }[] }> {
+  return call(`${packsRead(tourId)}?pending=1${routingId ? `&routingId=${encodeURIComponent(routingId)}` : ''}`, { method: 'GET' });
+}
+
+export function markPackReadReviewed(tourId: string, readId: string): Promise<unknown> {
+  return call(packsRead(tourId), { method: 'PATCH', body: JSON.stringify({ read: readId, reviewed: true }) });
+}

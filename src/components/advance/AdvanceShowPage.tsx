@@ -24,6 +24,7 @@ import { CustomiseDrawer } from './CustomiseDrawer';
 import { LinkedFilesPanel } from '@/components/files/LinkedFilesPanel';
 import { RequestFlow } from './RequestFlow';
 import { PackFlow } from './packs/PackFlow';
+import { PackReadsBanner } from './packs/PackReadsBanner';
 import { ExportButton } from '@/components/export/ExportButton';
 import { SourceViewer } from './packs/SourceViewer';
 import { dayTypeLabel, fmtDay, fmtLong, fmtWhen } from './format';
@@ -58,6 +59,8 @@ export function AdvanceShowPage({ show, rail, templates }: { show: AdvanceShowDa
   const [customise, setCustomise] = useState(false);
   const [requesting, setRequesting] = useState(false);
   const [packs, setPacks] = useState<File[] | null>(null);
+  const [resumeRead, setResumeRead] = useState<{ id: string; routingId: string } | null>(null);
+  const [packKey, setPackKey] = useState(0); // re-asks the banner after the sheet closes
   const [viewing, setViewing] = useState<{ src: FieldSource; label: string } | null>(null);
   const [current, setCurrent] = useState<string | null>(show.sections[0]?.template_id ?? null);
   const fileInput = useRef<HTMLInputElement>(null);
@@ -264,6 +267,14 @@ export function AdvanceShowPage({ show, rail, templates }: { show: AdvanceShowDa
           </span>
         </div>
 
+        <PackReadsBanner
+          key={packKey}
+          tourId={tourId}
+          routingId={routingId}
+          shows={[{ routingId, date: show.routing.date, venue: show.venue.name, city: show.venue.city }]}
+          onReview={setResumeRead}
+        />
+
         {pending.length ? (
           <div className="adv-banner">
             <span className="adv-grow" style={{ fontSize: 'var(--lp-text-sm)' }}>
@@ -461,14 +472,17 @@ export function AdvanceShowPage({ show, rail, templates }: { show: AdvanceShowDa
           }}
         />
       ) : null}
-      {packs ? (
+      {packs || resumeRead ? (
         <PackFlow
           tourId={tourId}
-          initialFiles={packs}
+          initialFiles={packs ?? []}
           fixedRoutingId={routingId}
+          resumeRead={resumeRead ?? undefined}
           shows={[{ routingId, date: show.routing.date, venue: show.venue.name, city: show.venue.city }]}
           onClose={(saved) => {
             setPacks(null);
+            setResumeRead(null);
+            setPackKey((k) => k + 1);
             if (fileInput.current) fileInput.current.value = '';
             if (saved) router.refresh();
           }}
