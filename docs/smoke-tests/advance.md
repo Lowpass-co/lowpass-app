@@ -383,14 +383,51 @@ Day sheet tests (DAY-*, ROLE-*) are retired with day sheets — see
 
 - [ ] **ADV-TPL-03 — The tour's choice beats the workspace.** With the workspace
   mapping show days → "Show day", the new tour's show opens with the Support
-  show day sections (Key Contacts, Schedule, Venue Info, Production, …). A
+  show day sections (Key Contacts, Schedule, Arrival & Parking, Production, …). A
   festival date opens with the festival sections. An older tour still opens
   with "Show day".
 
 - [ ] **ADV-TPL-04 — Days off.** With "Advance days off too" ticked, an off day
-  on the board has an advance with Local Info, Airport and Local Distances,
-  Personal Vehicle Parking, Bus and Trailer. Without it, off days have no
+  on the board has an advance with Local Info (since 303). Without it, off days have no
   advance (unchanged behaviour).
 
 - [ ] **ADV-TPL-05 — Editing a starter.** Edit "Day off" in Templates (remove a
   section). Days off that are neither customised nor sent pick up the change.
+
+## Curated advance catalogue (Nov 2026 — needs migration 303)
+
+- [ ] **ADV-146 — One of everything.** Open any show's advance. Each subject is
+  asked once: one Dressing Rooms section (rooms, lockable, showers, towel cost,
+  production office, wifi, laundry), meal times only under Catering &
+  Hospitality, doors / curfew only under Schedule, runner hours only under
+  Runner. No Venue Info, Settlement, Deal Info, Hotel or Flights sections
+  (Hotel / Flights / Deal still show read-only from their own pages).
+
+- [ ] **ADV-147 — Answers survive the rebuild.** On a show answered before 303,
+  open the advance after pasting it: answers to kept questions are still there
+  (e.g. Hospitality → now "Catering & Hospitality"; Comps and Ticketing → now
+  "Guests & Credentials"; Bus and Trailer → "Arrival & Parking").
+
+- [ ] **ADV-148 — Weather only when it's outside.** Show → Indoor / outdoor =
+  Indoor: no Weather & Outdoor section, and the "N to answer" count doesn't
+  include it. Set it to Outdoor or Covered: the section appears at once. On a
+  Festival day it is always shown. The venue form behaves the same way.
+
+- [ ] **ADV-149 — Upload a lighting patch.** Production → Lighting patch →
+  Upload: pick a PDF or image (≤ 25 MB). It lists by name and size; click it
+  to open. Up to 5 per question; remove one with ×. A .zip or a renamed .exe
+  is refused. From the venue link (/advance-intake/…) the venue can upload
+  too, and the TM sees the file after they submit.
+
+- [ ] **ADV-150 — Towels are a price, not a number.** Dressing Rooms → Towel
+  cost takes "$1 per towel" or "$10 per bundle" as typed.
+
+- [ ] **ADV-151 — Starters.** Support show day = Key Contacts, Schedule,
+  Arrival & Parking, Production, Dressing Rooms, Catering & Hospitality, Merch,
+  Guests & Credentials, Documents Received. Festival day has a Festival section
+  (getting to the stage, artist transport, catering system, meal numbers).
+  Day off = Local Info only.
+
+- [ ] **ADV-152 — Guest list goes to someone.** Guests & Credentials → "Send
+  guest list to" takes an email; Settlement has only the Settlement contact in
+  Key Contacts.

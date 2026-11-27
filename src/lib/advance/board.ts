@@ -18,6 +18,7 @@
    each fact). Their old answers stay in the stored JSON untouched.
    ============================================ */
 
+import { sectionShown } from './sectionVisibility';
 import { isEmptyAnswer } from './intake';
 
 export interface AdvField {
@@ -38,6 +39,16 @@ export interface AdvSection {
   fields: AdvField[];
   order?: number;
   tm_only?: boolean;
+  /** Shown only when another question's answer is one of these (Weather &
+   *  Outdoor: Indoor / outdoor is Outdoor or Covered). lib/advance/sectionVisibility.ts */
+  show_when?: ShowWhen;
+}
+
+/** A section's condition: the question `field` (in any section of the day)
+ *  answered with one of `in`. */
+export interface ShowWhen {
+  field: string;
+  in: string[];
 }
 
 export type AdvData = Record<string, Record<string, unknown>>;
@@ -48,8 +59,8 @@ export type CellState = 'done' | 'review' | 'asked' | 'partial' | 'none' | 'off'
 const LINKED_LABELS = new Set(['hotel', 'flights', 'deal info']);
 /** Venue contacts render as a card, not a section of questions. */
 const CONTACT_LABELS = new Set(['key contacts']);
-/** Field types that aren't a question you answer in a box. */
-const UNCOUNTED_TYPES = new Set(['contact', 'labor_call', 'file']);
+/** Not questions: contact cards render as their own card; labor calls have their own block. (Upload questions ARE questions since Nov 2026.) */
+const UNCOUNTED_TYPES = new Set(['contact', 'labor_call']);
 
 const norm = (s: string | null | undefined) => (s ?? '').trim().toLowerCase();
 
@@ -59,10 +70,14 @@ export function isLinkedSection(s: Pick<AdvSection, 'label'>): boolean {
 export function isContactSection(s: Pick<AdvSection, 'label'>): boolean {
   return CONTACT_LABELS.has(norm(s.label));
 }
-/** The sections the new Advance shows as questions, in order. */
-export function questionSections(sections: AdvSection[] | null | undefined): AdvSection[] {
-  return [...(sections ?? [])]
+/** The sections the new Advance shows as questions, in order. Given the
+ *  day's answers, a section whose show-when condition isn't met is left out
+ *  (sectionVisibility.ts) — so it isn't counted, searched or printed. */
+export function questionSections(sections: AdvSection[] | null | undefined, data?: AdvData | null): AdvSection[] {
+  const all = sections ?? [];
+  return [...all]
     .filter((s) => !isLinkedSection(s) && !isContactSection(s))
+    .filter((s) => data === undefined || sectionShown(s, all, data))
     .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
 }
 
@@ -185,7 +200,7 @@ export function summariseShow(
   pendingBySection: Record<string, number>,
   requestLive: boolean,
 ): ShowSummary {
-  const ps = questionSections(sections).map((s) => sectionProgress(s, data, pendingBySection, requestLive));
+  const ps = questionSections(sections, data ?? null).map((s) => sectionProgress(s, data, pendingBySection, requestLive));
   const total = ps.reduce((n, p) => n + p.total, 0);
   const answered = ps.reduce((n, p) => n + p.answered, 0);
   const toReview = ps.reduce((n, p) => n + p.toReview, 0);
@@ -231,7 +246,7 @@ export function searchShow(
   if (!words.length) return { match: true, hits: [] };
   const hits: SearchHit[] = [];
   const hay: string[] = [...extra.map(norm)];
-  for (const s of questionSections(sections)) {
+  for (const s of questionSections(sections, data ?? null)) {
     for (const f of s.fields ?? []) {
       const v = data?.[s.template_id]?.[f.id];
       if (isEmptyAnswer(v)) continue;

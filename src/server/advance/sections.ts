@@ -6,6 +6,7 @@
    section, and nothing that isn't a known field type gets in.
    ============================================ */
 
+import { parseShowWhen } from '@/lib/advance/sectionVisibility';
 import type { AdvField, AdvSection } from '@/lib/advance/board';
 
 export const FIELD_TYPES = new Set([
@@ -46,7 +47,8 @@ export function cleanSections(input: unknown): { sections: AdvSection[] } | { er
       if (f.day_only === true) field.day_only = true;
       fields.push(field);
     }
-    out.push({ template_id: id, label: String(s.label).trim(), fields, order: i, ...(s.tm_only === true ? { tm_only: true } : {}) });
+    const when = parseShowWhen(s.show_when);
+    out.push({ template_id: id, label: String(s.label).trim(), fields, order: i, ...(s.tm_only === true ? { tm_only: true } : {}), ...(when ? { show_when: when } : {}) });
   }
   return { sections: out };
 }

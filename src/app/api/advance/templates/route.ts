@@ -30,9 +30,8 @@ export async function GET() {
 
   const { data: templates, error } = await supabase
     .from('advance_templates')
-    .select(
-      'id, name, description, icon, fields, suggested_for_day_types, workspace_id, sort_order, tm_only, forked_from_id',
-    )
+    // '*': show_when (303) is read when present; naming it would fail before 303 is pasted.
+    .select('*')
     .or(`workspace_id.is.null,workspace_id.eq.${workspaceId}`)
     .order('workspace_id', { ascending: true, nullsFirst: true })
     .order('sort_order', { ascending: true, nullsFirst: false })

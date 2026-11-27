@@ -12,6 +12,8 @@ import {
   tourDayStarters,
   type CatalogSection,
 } from './tourTemplates';
+import { catalogSectionByName } from './advanceCatalog';
+import { budgetTemplatesSql } from './budgetTemplatesSql';
 
 describe('budget templates', () => {
   it('are the six scales Adam asked for, in order', () => {
@@ -36,17 +38,21 @@ describe('budget templates', () => {
     }
   });
 
-  it('migration 280 seeds exactly these lists (generated from this file)', () => {
+  it('migration 280 seeded the six templates and retired the old presets', () => {
     const sql = readFileSync(join(process.cwd(), 'database/migrations/280_tour_templates.sql'), 'utf8');
     const esc = (s: string) => s.replace(/'/g, "''");
-    for (const t of BUDGET_TEMPLATES) {
-      expect(sql).toContain(`('${esc(t.name)}', '${t.tier}', '${esc(t.description)}'`);
-      t.sections.forEach((s, si) => {
-        expect(sql).toContain(`('${esc(t.name)}', '${esc(s.name)}', ${si})`);
-        s.lines.forEach((l, li) => expect(sql).toContain(`('${esc(t.name)}', '${esc(s.name)}', '${esc(l)}', ${li})`));
-      });
-    }
+    for (const t of BUDGET_TEMPLATES) expect(sql).toContain(`('${esc(t.name)}', '${t.tier}', '${esc(t.description)}'`);
     for (const old of RETIRED_SYSTEM_TEMPLATES) expect(sql).toContain(`'${esc(old)}'`);
+  });
+
+  it('migration 304 carries exactly these sections and lines (npx tsx scripts/templates/gen304.ts)', () => {
+    const sql = readFileSync(join(process.cwd(), 'database/migrations/304_budget_templates_admin.sql'), 'utf8');
+    expect(sql).toBe(budgetTemplatesSql());
+  });
+
+  it('every template but Press tour has Admin; Support and Club rehearse', () => {
+    for (const t of BUDGET_TEMPLATES) expect(t.sections.some((s) => s.name === 'Admin'), t.name).toBe(t.name !== 'Press tour');
+    for (const n of ['Support tour', 'Club']) expect(BUDGET_TEMPLATES.find((t) => t.name === n)!.sections.find((s) => s.name === 'Production')!.lines).toContain('Rehearsals');
   });
 });
 
@@ -98,13 +104,32 @@ describe('advance starters', () => {
   });
 
   it('build from the catalog, preferring your own copy of a section, and report what is missing', () => {
-    const starter = starterByKey('day_off')!;
-    const out = composeStarter(starter, [cat('Local Info'), cat('Local Info', 'ws'), cat('Bus and Trailer', null, { tm_only: true })]);
-    expect(out.sections.map((s) => [s.label, s.template_id, s.order, s.tm_only ?? false])).toEqual([
-      ['Local Info', 'ws-Local Info', 0, false],
-      ['Bus and Trailer', 'p-Bus and Trailer', 1, true],
+    const starter = starterByKey('support')!;
+    const out = composeStarter(starter, [
+      cat('Key Contacts'),
+      cat('Schedule'),
+      cat('Schedule', 'ws'),
+      cat('Documents Received', null, { tm_only: true }),
     ]);
-    expect(out.missing).toEqual(['Airport and Local Distances', 'Personal Vehicle Parking']);
+    expect(out.sections.map((s) => [s.label, s.template_id, s.order, s.tm_only ?? false])).toEqual([
+      ['Key Contacts', 'p-Key Contacts', 0, false],
+      ['Schedule', 'ws-Schedule', 1, false],
+      ['Documents Received', 'p-Documents Received', 2, true],
+    ]);
+    expect(out.missing).toEqual(['Arrival & Parking', 'Production', 'Dressing Rooms', 'Catering & Hospitality', 'Merch', 'Guests & Credentials']);
+  });
+
+  it('carry a section’s show-when condition — except where the starter always asks it (festival weather)', () => {
+    const when = { field: 'indoor_outdoor', in: ['Outdoor', 'Covered'] };
+    const rows = [cat('Weather & Outdoor', null, { show_when: when })];
+    const headline = composeStarter(starterByKey('headline')!, rows).sections.find((s) => s.label === 'Weather & Outdoor');
+    const festival = composeStarter(starterByKey('festival')!, rows).sections.find((s) => s.label === 'Weather & Outdoor');
+    expect(headline?.show_when).toEqual(when);
+    expect(festival?.show_when).toBeUndefined();
+  });
+
+  it('only use sections the catalogue has (advanceCatalog.ts)', () => {
+    for (const st of ADVANCE_STARTERS) for (const n of st.sections) expect(catalogSectionByName(n), `${st.name}: ${n}`).toBeTruthy();
   });
 
   it('a tour maps show days to its pick, festival dates to the festival set, and off days only when asked', () => {

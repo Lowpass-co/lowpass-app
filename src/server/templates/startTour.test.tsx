@@ -20,8 +20,8 @@ function world() {
   ]);
   const field = [{ id: 'q', label: 'Question', type: 'text' }];
   db.seed('advance_templates', [
-    'Key Contacts', 'Schedule', 'Venue Info', 'Production', 'Personal Vehicle Parking', 'Dressing Rooms', 'Hospitality', 'Merch',
-    'Comps and Ticketing', 'Local Info', 'Event Basics', 'Transport', 'Security', 'Airport and Local Distances',
+    'Key Contacts', 'Schedule', 'Show', 'Arrival & Parking', 'Production', 'Dressing Rooms', 'Catering & Hospitality',
+    'Merch', 'Guests & Credentials', 'Local Info', 'Runner', 'Security & Safety',
   ].map((name) => ({ id: `cat-${name}`, workspace_id: null, template_type: 'section', name, fields: field, tm_only: false })));
   return db;
 }
@@ -71,11 +71,11 @@ describe('startTourFromTemplates', () => {
     // Support show day was built from the catalog, in its order.
     const support = db.t('advance_layout_templates').find((t) => t.name === 'Support show day')!;
     expect((support.sections as { label: string }[]).map((s) => s.label)).toEqual([
-      'Key Contacts', 'Schedule', 'Venue Info', 'Production', 'Personal Vehicle Parking', 'Dressing Rooms', 'Hospitality', 'Merch',
-      'Comps and Ticketing', 'Local Info',
+      'Key Contacts', 'Schedule', 'Arrival & Parking', 'Production', 'Dressing Rooms', 'Catering & Hospitality', 'Merch',
+      'Guests & Credentials',
     ]);
     // Sections the starters want that this catalog lacks are reported, not invented.
-    expect([...out.missingSections].sort()).toEqual(['Bus and Trailer', 'Documents and Maps', 'Outdoor Venue and Final Confirmation']);
+    expect([...out.missingSections].sort()).toEqual(['Documents Received', 'Festival', 'Weather & Outdoor']);
 
     const set = await loadTemplateSet(db.client(), WS, TOUR);
     expect(templateForDay(set, 'show')?.name).toBe('Support show day');

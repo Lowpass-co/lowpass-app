@@ -1109,6 +1109,46 @@ rebuild sections / cover pages / variables.
   `tour_roles` / `tour_role_links` tables are left in place, unread. Don't
   rebuild a per-day page beside the advance.
 
+
+### Advance catalogue — one of everything (Nov 2026, Adam — migrations 303 + 304)
+
+Adam: "useful and curated… dressing rooms appears twice which is bad". Lean;
+expand where needed.
+
+- **ONE list**: `ADVANCE_CATALOG` (`src/lib/templates/advanceCatalog.ts`) — 15
+  sections with FIXED ids (`30300000-…-0000000000NN`), each subject asked once.
+  Migration 303 is GENERATED from it (`npx tsx scripts/templates/gen303.ts`,
+  parity-tested — never hand-edit 303). A section can take over an old row
+  (`from`) so kept questions keep their answers (answers live at
+  `data[section row id][field id]`). Retired: Venue Info, Settlement, Deal
+  Info, Hotel, Flights, Driver and Hotels, Venue Amenities, Airport and Local
+  Distances, Personal Vehicle Parking (`RETIRED_ADVANCE_SECTIONS`). 303 deletes
+  workspace forks of catalogue sections and rebuilds the starter layouts
+  (affects everything — Adam: "site isn't being used yet").
+- **Contact questions only in Key Contacts** (076). Settlement is just a
+  contact there (Adam). "Send guest list to" is an email question.
+- **Conditional sections**: `show_when {field, in}` on the section (column
+  added by 303). `sectionShown` / `shownSections` (`src/lib/advance/
+  sectionVisibility.ts`) is THE rule — the show page, the venue form, the
+  counts (`questionSections(sections, data)`) and the PDF all use it. Weather &
+  Outdoor shows only when Show › Indoor / outdoor is Outdoor or Covered; a
+  starter can force a section on (`always` — Festival day always shows it).
+- **Upload questions** (type `file`, e.g. Production › Lighting patch): files
+  at `advance-files/<ws>/<tour>/<routing>/<uuid>.<ext>` in tour-files, through
+  storage grants (282) — never through a function. Sniffed on complete (PDF or
+  image), 25 MB, 5 per question. `fileBelongs` gates signing; `cleanFileChanges`
+  cleans the value on BOTH the TM save and the venue submit (a path outside
+  this show is dropped). Routes: `/api/tours/[id]/advance/[routingId]/files`
+  (Advance VIEW to open, EDIT to upload) and
+  `/api/public/advance-intake/[token]/files` (token grant; signs only paths in
+  that link's submitted answers; 40 uploads / link / hour).
+- **Starters** (`tourTemplates.ts`): Headline, Support (incl. Arrival &
+  Parking — Adam), Festival (+ Festival section, Weather always), Day off
+  (Local Info). Rider starters (`src/lib/riders/starters.ts`): Headline
+  Hospitality is by room; Festival Tech / Hospitality exist.
+- **Budget templates** gained an Admin section (visas, passes, phones, bank
+  fees) on every touring scale, Rehearsals on Support / Club; migration 304 is
+  generated (`gen304.ts`) and additive.
 ### Auth + RLS
 
 - Site admin gating: `getUserAndAdminStatus()` from `@/lib/site-admin`. Mirror the pattern used in `src/app/(app)/bugs/page.tsx` for any admin-only page.

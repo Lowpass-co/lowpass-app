@@ -14,6 +14,8 @@
    ============================================ */
 
 import { useEffect, useRef, useState } from 'react';
+import { shownSections } from '@/lib/advance/sectionVisibility';
+import { FileAnswerField } from '@/components/advance/FileAnswerField';
 import { TechPackUpload } from '@/components/advance/TechPackUpload';
 import { Send, CheckCircle2, MapPin, Calendar } from 'lucide-react';
 import type { IntakeFormSchema, IntakeField, AdvanceData } from '@/lib/advance/intake';
@@ -80,6 +82,9 @@ export function VenueIntakeForm({
     }
     return seeded;
   });
+  // Sections with a show-when condition (Weather & Outdoor) follow the
+  // venue's own answers — "Outdoor" shows the weather questions at once.
+  const visible = shownSections(schema.sections, answers);
   const [submitterName, setSubmitterName] = useState('');
   const [submitterEmail, setSubmitterEmail] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -129,7 +134,7 @@ export function VenueIntakeForm({
 
   const missingRequired = (): string[] => {
     const missing: string[] = [];
-    for (const section of schema.sections) {
+    for (const section of visible) {
       for (const field of section.fields) {
         if (field.required && isEmpty(answers[section.template_id]?.[field.id])) {
           missing.push(field.label);
@@ -208,7 +213,7 @@ export function VenueIntakeForm({
   const subParts = [show.city, show.dateLabel].filter(Boolean).join(' · ');
 
   // Checkpoint D — progress (answered / total fillable) for the sticky bar.
-  const fillable = schema.sections.flatMap((s) => s.fields.map((f) => [s.template_id, f.id] as const));
+  const fillable = visible.flatMap((s) => s.fields.map((f) => [s.template_id, f.id] as const));
   const answeredCount = fillable.filter(([sid, fid]) => !isEmpty(answers[sid]?.[fid])).length;
   const totalCount = fillable.length;
   const answeredInSection = (sid: string) => {
@@ -305,7 +310,7 @@ export function VenueIntakeForm({
       <TechPackUpload token={token} />
 
       {/* Sections — accordion, single column, big touch inputs (Checkpoint D). */}
-      {schema.sections.map((section) => (
+      {visible.map((section) => (
         <details key={section.template_id} open style={cardStyle}>
           <summary
             className="flex cursor-pointer list-none items-center justify-between border-b px-5 py-3 [&::-webkit-details-marker]:hidden"
@@ -334,6 +339,7 @@ export function VenueIntakeForm({
                 value={answers[section.template_id]?.[field.id]}
                 onChange={(v) => setField(section.template_id, field.id, v)}
                 provenance={proposals[section.template_id]?.[field.id]?.provenance}
+                token={token}
               />
             ))}
           </div>
@@ -444,10 +450,13 @@ function FieldInput({
   value,
   onChange,
   provenance,
+  token,
 }: {
   field: IntakeField;
   value: unknown;
   onChange: (v: unknown) => void;
+  /** The link's token — upload questions post to its files route. */
+  token: string;
   /** P7 Checkpoint B — prefill provenance ("From your Mar 2026 show …"). */
   provenance?: string;
 }) {
@@ -457,7 +466,15 @@ function FieldInput({
   const str = value === null || value === undefined ? '' : String(value);
 
   let control: React.ReactNode;
-  if (field.type === 'textarea') {
+  if (field.type === 'file') {
+    control = (
+      <FileAnswerField
+        value={value}
+        endpoint={`/api/public/advance-intake/${encodeURIComponent(token)}/files`}
+        onChange={(files) => onChange(files.length ? files : null)}
+      />
+    );
+  } else if (field.type === 'textarea') {
     control = (
       <textarea
         value={str}

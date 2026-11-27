@@ -12,6 +12,7 @@ import { loadAdvanceSections } from '@/server/advance/advanceSections';
 import { mergeAnswers, validateChanges, type AnswerChanges, type SourceChanges } from '@/server/advance/answers';
 import { advanceError, readJson, tourGate } from '@/server/advance/routeGuard';
 import type { AdvSection } from '@/lib/advance/board';
+import { cleanFileChanges } from '@/lib/advance/fileAnswers';
 
 export async function POST(request: Request, { params }: { params: Promise<{ id: string; routingId: string }> }) {
   const { id: tourId, routingId } = await params;
@@ -28,7 +29,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     const sections = (await loadAdvanceSections(client, adv.formConfigId)) as unknown as AdvSection[];
     const bad = validateChanges(sections, body.changes, body.sources);
     if (bad) return NextResponse.json({ error: bad }, { status: 400 });
-    const out = await mergeAnswers(client, adv.instanceId, body.changes as AnswerChanges, (body.sources ?? {}) as SourceChanges);
+    // An upload question keeps only files inside THIS show's folder.
+    const changes = cleanFileChanges(sections, body.changes as AnswerChanges, { ws: auth.workspaceId, tourId, routingId });
+    const out = await mergeAnswers(client, adv.instanceId, changes, (body.sources ?? {}) as SourceChanges);
     return NextResponse.json({ instanceId: adv.instanceId, ...out });
   } catch (e) {
     return advanceError(e);

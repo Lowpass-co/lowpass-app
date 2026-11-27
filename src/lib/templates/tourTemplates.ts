@@ -17,12 +17,13 @@
    contingency and merch COG come with suggestions.
 
    ADVANCE — four starter question sets built from the question catalog
-   (advance_templates): Headline show day, Support show day, Festival day,
-   Day off. A tour chooses which its show days use and whether its days off
+   (advanceCatalog.ts → advance_templates, migration 303): Headline show
+   day, Support show day, Festival day, Day off. A tour chooses which its show days use and whether its days off
    get an advance.
    ============================================ */
 
 import type { AdvSection } from '@/lib/advance/board';
+import { parseShowWhen } from '@/lib/advance/sectionVisibility';
 
 /* ---------------------------------------------------------------- budget */
 
@@ -43,6 +44,9 @@ const AUTO_SECTIONS = [
   { name: 'Hotels', lines: [] as string[] },
 ];
 
+/** Costs that had no home and ended up in Misc (Nov 2026, Adam: "yes"). */
+const ADMIN = { name: 'Admin', lines: ['Visas & work permits', 'Passes & laminates', 'Phones & data', 'Bank & card fees'] };
+
 export const BUDGET_TEMPLATES: BudgetTemplateDef[] = [
   {
     name: 'Support tour',
@@ -52,7 +56,8 @@ export const BUDGET_TEMPLATES: BudgetTemplateDef[] = [
     sections: [
       ...AUTO_SECTIONS,
       { name: 'Transport', lines: ['Van hire', 'Fuel', 'Parking', 'Tolls & vignettes', 'Ferries & crossings', 'Taxis', 'Travel agent'] },
-      { name: 'Production', lines: ['Backline hire', 'Equipment & consumables', 'Freight & excess baggage', 'Misc'] },
+      { name: 'Production', lines: ['Backline hire', 'Equipment & consumables', 'Freight & excess baggage', 'Rehearsals', 'Misc'] },
+      ADMIN,
     ],
   },
   {
@@ -63,7 +68,8 @@ export const BUDGET_TEMPLATES: BudgetTemplateDef[] = [
     sections: [
       ...AUTO_SECTIONS,
       { name: 'Transport', lines: ['Van & trailer hire', 'Fuel', 'Parking', 'Tolls & vignettes', 'Ferries & crossings', 'Taxis', 'Travel agent'] },
-      { name: 'Production', lines: ['Audio & backline hire', 'Equipment & consumables', 'Freight & excess baggage', 'Set & wardrobe', 'Misc'] },
+      { name: 'Production', lines: ['Audio & backline hire', 'Equipment & consumables', 'Freight & excess baggage', 'Set & wardrobe', 'Rehearsals', 'Misc'] },
+      ADMIN,
     ],
   },
   {
@@ -78,6 +84,7 @@ export const BUDGET_TEMPLATES: BudgetTemplateDef[] = [
         name: 'Production',
         lines: ['Audio & backline hire', 'Lighting hire', 'Programming + set-up', 'Freight, cartage & baggage', 'Equipment purchase', 'Set & wardrobe', 'Production rehearsals', 'Misc'],
       },
+      ADMIN,
     ],
   },
   {
@@ -96,6 +103,7 @@ export const BUDGET_TEMPLATES: BudgetTemplateDef[] = [
           'Equipment purchase', 'Wardrobe', 'Misc',
         ],
       },
+      ADMIN,
     ],
   },
   {
@@ -114,6 +122,7 @@ export const BUDGET_TEMPLATES: BudgetTemplateDef[] = [
           'Security', 'Advance & site visits', 'Equipment purchase', 'Wardrobe', 'Misc',
         ],
       },
+      ADMIN,
     ],
   },
   {
@@ -124,7 +133,7 @@ export const BUDGET_TEMPLATES: BudgetTemplateDef[] = [
     sections: [
       ...AUTO_SECTIONS,
       { name: 'Transport', lines: ['Trains', 'Cars & drivers', 'Taxis', 'Travel agent'] },
-      { name: 'Press & promo', lines: ['Hair & makeup', 'Styling & wardrobe', 'Content & photography', 'Rehearsal / performance space', 'Gifts & hospitality', 'Misc'] },
+      { name: 'Press & promo', lines: ['Hair & makeup', 'Styling & wardrobe', 'Content & photography', 'Rehearsal / performance space', 'Gifts & hospitality', 'Visas & work permits', 'Misc'] },
     ],
   },
 ];
@@ -240,39 +249,45 @@ export type AdvanceStarterKey = 'headline' | 'support' | 'festival' | 'day_off';
 export interface AdvanceStarterDef {
   key: AdvanceStarterKey;
   name: string;
-  /** Question-catalog sections, by name, in order. */
+  /** Question-catalog sections (advanceCatalog.ts), by name, in order. */
   sections: string[];
+  /** Sections asked on every day of this kind, whatever their show-when
+   *  condition (a festival always asks about the weather). */
+  always?: string[];
 }
 
+/* The starters are LEAN (Nov 2026, Adam: "lean, then we can expand where
+   needed") and every question in them is asked once — see advanceCatalog.ts. */
 export const ADVANCE_STARTERS: AdvanceStarterDef[] = [
   {
     key: 'headline',
     name: 'Headline show day',
     sections: [
-      'Key Contacts', 'Event Basics', 'Schedule', 'Venue Info', 'Production', 'Bus and Trailer', 'Dressing Rooms', 'Hospitality',
-      'Venue Amenities', 'Runner', 'Merch', 'Comps and Ticketing', 'Security', 'Settlement', 'Local Info', 'Documents and Maps',
+      'Key Contacts', 'Show', 'Schedule', 'Arrival & Parking', 'Production', 'Dressing Rooms', 'Catering & Hospitality',
+      'Runner', 'Merch', 'Guests & Credentials', 'Security & Safety', 'Weather & Outdoor', 'Local Info', 'Documents Received',
     ],
   },
   {
     key: 'support',
     name: 'Support show day',
     sections: [
-      'Key Contacts', 'Schedule', 'Venue Info', 'Production', 'Personal Vehicle Parking', 'Dressing Rooms', 'Hospitality', 'Merch',
-      'Comps and Ticketing', 'Local Info',
+      'Key Contacts', 'Schedule', 'Arrival & Parking', 'Production', 'Dressing Rooms', 'Catering & Hospitality', 'Merch',
+      'Guests & Credentials', 'Documents Received',
     ],
   },
   {
     key: 'festival',
     name: 'Festival day',
     sections: [
-      'Key Contacts', 'Event Basics', 'Schedule', 'Production', 'Transport', 'Dressing Rooms', 'Hospitality', 'Security',
-      'Comps and Ticketing', 'Airport and Local Distances', 'Outdoor Venue and Final Confirmation', 'Documents and Maps',
+      'Key Contacts', 'Show', 'Schedule', 'Arrival & Parking', 'Production', 'Dressing Rooms', 'Catering & Hospitality',
+      'Festival', 'Guests & Credentials', 'Security & Safety', 'Weather & Outdoor', 'Local Info', 'Documents Received',
     ],
+    always: ['Weather & Outdoor'],
   },
   {
     key: 'day_off',
     name: 'Day off',
-    sections: ['Local Info', 'Airport and Local Distances', 'Personal Vehicle Parking', 'Bus and Trailer'],
+    sections: ['Local Info'],
   },
 ];
 
@@ -285,6 +300,8 @@ export interface CatalogSection {
   workspace_id: string | null;
   fields: unknown;
   tm_only?: boolean | null;
+  /** advance_templates.show_when (303). */
+  show_when?: unknown;
 }
 
 const norm = (s: string) => s.trim().toLowerCase();
@@ -310,12 +327,15 @@ export function composeStarter(
     const row = pick.get(norm(name));
     if (!row) { missing.push(name); continue; }
     const fields = Array.isArray(row.fields) ? (row.fields as AdvSection['fields']) : [];
+    const always = (starter.always ?? []).some((a) => norm(a) === norm(name));
+    const when = always ? null : parseShowWhen(row.show_when);
     sections.push({
       template_id: row.id,
       label: row.name,
       fields: fields.map((f) => ({ ...f })),
       order: sections.length,
       ...(row.tm_only ? { tm_only: true } : {}),
+      ...(when ? { show_when: when } : {}),
     });
   }
   return { sections, missing };

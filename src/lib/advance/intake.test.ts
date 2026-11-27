@@ -146,13 +146,13 @@ check('non-empty array is NOT empty', isEmptyAnswer([1]) === false);
   check('tm_only section excluded from venue form', !ids.includes('internal'));
   check('fillable section included', ids.includes('load_in'));
   check(
-    'section with only non-fillable fields excluded',
-    !ids.includes('files_only'),
+    'a section of upload questions is on the venue form (Nov 2026)',
+    ids.includes('files_only'),
   );
   const loadIn = schema.sections.find((s) => s.template_id === 'load_in');
   const fieldIds = (loadIn?.fields ?? []).map((f) => f.id);
   check('text field kept', fieldIds.includes('power'));
-  check('file field dropped', !fieldIds.includes('contract'));
+  check('upload question kept', fieldIds.includes('contract'));
   check('contact field dropped', !fieldIds.includes('promoter'));
 }
 

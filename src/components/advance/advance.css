@@ -279,3 +279,13 @@ textarea.adv-input { resize: vertical; min-height: 36px; }
   .adv-board-row, .adv-gap, .adv-section, .adv-card, .adv-banner, .adv-file, .adv-sheet, .adv-pane-enter, .adv-saved, .adv-page-wash { animation: none !important; }
   .adv-hl, .adv-hl-tag, .adv-progress span, .adv-bar span, .adv-collapse, .adv-switch span { transition: none !important; }
 }
+
+/* ---------- upload questions (FileAnswerField) ---------- */
+.adv-files { display: flex; flex-wrap: wrap; align-items: center; gap: var(--lp-space-2); padding: var(--lp-space-1) 0; }
+.adv-file { display: inline-flex; align-items: center; max-width: 100%; border: 1px solid var(--lp-border); border-radius: var(--lp-radius-md); background: var(--lp-surface); }
+.adv-file-open { display: inline-flex; align-items: center; gap: var(--lp-space-2); min-width: 0; padding: var(--lp-space-1) var(--lp-space-2); border: 0; background: none; color: var(--lp-text); font-size: var(--lp-text-sm); cursor: pointer; }
+.adv-file-open:hover .adv-file-name { color: var(--lp-orange); }
+.adv-file-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 22em; }
+.adv-file-x { display: inline-flex; align-items: center; padding: var(--lp-space-1); border: 0; border-left: 1px solid var(--lp-border); background: none; color: var(--lp-text-tertiary); cursor: pointer; }
+.adv-file-x:hover { color: var(--color-lp-error); }
+.adv-file-err { flex-basis: 100%; font-size: var(--lp-text-xs); color: var(--color-lp-error); }
