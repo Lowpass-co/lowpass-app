@@ -15,8 +15,8 @@
 
 'use client';
 
-import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useEffect, useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { Pencil } from 'lucide-react';
 import {
   ArtistEditSlideOver,
@@ -29,7 +29,17 @@ export function EditArtistButton({
   artist: ArtistEditSlideOverArtist;
 }) {
   const router = useRouter();
-  const [open, setOpen] = useState(false);
+  // ?edit=profile opens the panel straight away (the rider editor's "Add the
+  // artist's logo" lands here); the param is then dropped from the address so
+  // a refresh doesn't reopen it.
+  const searchParams = useSearchParams();
+  const [open, setOpen] = useState(() => searchParams.get('edit') === 'profile');
+  useEffect(() => {
+    const url = new URL(window.location.href);
+    if (url.searchParams.get('edit') !== 'profile') return;
+    url.searchParams.delete('edit');
+    window.history.replaceState(window.history.state, '', url.toString());
+  }, []);
 
   return (
     <>

@@ -215,17 +215,19 @@ builder rider is gone from the tab and the bundled PDF.
 from "Headline show — Tech" (or + Input list / + Stage plot on an existing one).
 **Expect**: under "Input list & stage plot" the channel list shows as a table
 (channel number first, the editor's own columns, "N inputs") and the plot as
-a picture, each headed with its document name + version and **Edit in
-Channel list ↗ / Edit in Stage plot ↗**. No channel list yet → "Make the
-channel list ↗" and the promoter sees "The input list will follow." The two
+a picture, each headed with its document name + version; hovering one shows
+**Open the channel list → / Open the stage plot →**. No channel list yet →
+"Make the channel list" and the promoter sees "The input list will follow." The two
 blocks are not offered on the Hospitality document.
 
-#### RID-33 — Edit in the tool, come back
+#### RID-33 — Click through to the tool, come back
 
-**Do**: Click **Edit in Channel list ↗**, change a mic in the new tab, switch
-back to the Riders tab.
-**Expect**: the table shows the new mic within a moment (no reload); Changes
-tab lists "Input list · Ch N Name: SM57 → Beta 57A"; Publish is enabled.
+**Do**: Click anywhere on the input list in the rider (hover shows "Open the
+channel list →"); change a mic; press Back. Then click the stage plot.
+**Expect**: the input list click lands on the tour's Channel list, the plot
+click on that plot's own editor (same tab, ⌘-click = new tab). Back on the
+Riders page the table shows the new mic within a moment (no reload); Changes
+lists "Input list · Ch N Name: SM57 → Beta 57A"; Publish is enabled.
 
 #### RID-34 — Frozen with the version
 
@@ -280,6 +282,49 @@ with a photo does NOT delete the line.
 exact item ↗ <shop>** and **Reply on this line** (opens that line's reply
 box). In the PDF the item name is a link to the shop page; no photos in the
 PDF.
+
+#### RID-41 — The PDF looks like a rider
+
+**Do**: An artist with a logo (Artists › the artist › Edit profile → Logo).
+Riders → ⋯ → Download draft PDF. Then remove the logo and download again.
+**Expect**: each document opens on a cover — the logo large, the title, the
+tour, the version stamp in orange italics, the opening paragraph, a numbered
+contents list (each entry jumps to its section), the live link on a show's
+PDF. Every page after the cover has the logo centred at the top and "Page x
+of y" + the stamp at the foot. Section headings are centred capitals;
+requests read "☐ (24) Still water"; a section with nothing in it (e.g. Key
+contacts left empty) isn't printed or listed. Without a logo the cover sets
+the artist's name in spaced capitals and the pages carry it small at the top;
+the ⋯ menu offers "Add the artist's logo (heads the PDF)…". The PDF has
+bookmarks for each section.
+
+#### RID-42 — If possible on every line; per person only where it fits
+
+**Do**: Open the details (the chevron) of a Tech line "DI box", a
+Hospitality line "Bath towels", and a line under a "Catering" heading.
+**Expect**: every line offers "if possible". "Per person" shows on the towels
+and the Catering line, not on the DI box (a line already ticked per person
+keeps its box). The details toggle is a chevron (˅ / ˄), never dots next to
+the block's ⋮.
+
+#### RID-43 — The printed contents says which page
+
+**Do**: Download a published rider PDF with more than two sections.
+**Expect**: each cover's Contents lists the sections with a dotted leader and
+a page number; open those pages — each section starts there. Footer: "Page x
+of y" left, "Generated with Lowpass" small in the middle, the version stamp
+right.
+
+#### RID-44 — The artist's logo everywhere; the name when there's none
+
+**Do**: With a logo set (artist → Edit profile → Logo): open the rider editor,
+the promoter link (/r/…), the show link's Rider tab and the PDF. Then on an
+artist with no logo, open the rider editor and click "Add the artist's logo".
+**Expect**: the logo heads every one of them (promoter page: also small in the
+top bar). With no logo: the artist's name in its place everywhere, and the
+editor shows "Add the artist's logo" beside it, which lands on the artist page
+with Edit profile already open. "Generated with Lowpass" sits small under the
+promoter page.
 
 ---
 

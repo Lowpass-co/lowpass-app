@@ -21,7 +21,7 @@ import type { LineStateView } from '@/lib/riders/render';
 import { photoPathsIn } from '@/lib/riders/photos';
 import { parseSnapshot } from '@/lib/riders/snapshot';
 import type { RiderChange, RiderSnapshot } from '@/lib/riders/types';
-import { REPLY_COLS, VERSION_COLS, toReply, toShow, toVersion, type RiderReplyRow } from './data';
+import { REPLY_COLS, VERSION_COLS, hasLogo, toReply, toShow, toVersion, type RiderReplyRow } from './data';
 import { RiderError } from './errors';
 import { signPhotos } from './photos';
 
@@ -41,6 +41,8 @@ export interface PublicRider {
   linkId: string;
   tourId: string;
   artist: string | null;
+  /** The artist has a logo set — the page loads it from /logo. */
+  hasLogo: boolean;
   tourName: string;
   show: { routingId: string; date: string; venue: string | null; city: string | null } | null;
   /** Newest first; [0] is the version shown. Empty = nothing published yet. */
@@ -64,6 +66,11 @@ async function linkFor(service: SupabaseClient, token: string): Promise<LinkRow 
   if (!TOKEN_RE.test(token)) return null;
   const { data } = await service.from('rider_links').select('id, tour_id, workspace_id, routing_id').eq('token', token).is('revoked_at', null).maybeSingle();
   return (data as LinkRow | null) ?? null;
+}
+
+/** The tour a live rider link belongs to, or null. */
+export async function tourForRiderToken(service: SupabaseClient, token: string): Promise<string | null> {
+  return (await linkFor(service, token))?.tour_id ?? null;
 }
 
 /** A live link from the OLD builder (rider_web_links). Channel-list documents
@@ -106,7 +113,7 @@ export async function loadPublicRider(service: SupabaseClient, token: string, op
   const link = await linkFor(service, token);
   if (!link) return null;
   const [tourRes, versionsRes, latestRes, showRes, statesRes, repliesRes, acksRes] = await Promise.all([
-    service.from('tours').select('name, artist:artists(name)').eq('id', link.tour_id).maybeSingle(),
+    service.from('tours').select('name, artist:artists(name, branding)').eq('id', link.tour_id).maybeSingle(),
     service.from('rider_versions').select(VERSION_COLS).eq('tour_id', link.tour_id).order('major', { ascending: false }).order('minor', { ascending: false }).limit(30),
     service.from('rider_versions').select('id, snapshot').eq('tour_id', link.tour_id).order('major', { ascending: false }).order('minor', { ascending: false }).limit(1).maybeSingle(),
     link.routing_id ? service.from('routing').select(`${ROUTING_VENUE_SELECT}, tour_id`).eq('id', link.routing_id).maybeSingle() : Promise.resolve({ data: null }),
@@ -114,7 +121,7 @@ export async function loadPublicRider(service: SupabaseClient, token: string, op
     service.from('rider_replies').select(REPLY_COLS).eq('link_id', link.id).order('created_at', { ascending: true }).limit(1000),
     service.from('rider_acks').select('version_id, name, company, acked_at').eq('link_id', link.id).order('acked_at', { ascending: false }).limit(50),
   ]);
-  const t = tourRes.data as { name: string | null; artist: { name: string | null } | { name: string | null }[] | null } | null;
+  const t = tourRes.data as { name: string | null; artist: { name: string | null; branding: unknown } | { name: string | null; branding: unknown }[] | null } | null;
   if (!t) return null;
   const artist = Array.isArray(t.artist) ? t.artist[0] : t.artist;
   const versions: PublicVersion[] = ((versionsRes.data ?? []) as Record<string, unknown>[]).map((r) => {
@@ -155,6 +162,7 @@ export async function loadPublicRider(service: SupabaseClient, token: string, op
     linkId: link.id,
     tourId: link.tour_id,
     artist: artist?.name ?? null,
+    hasLogo: hasLogo(artist?.branding),
     tourName: t.name ?? 'Tour',
     show: show ? { routingId: show.routingId, date: show.date, venue: show.venue, city: show.city } : null,
     versions,
@@ -258,6 +266,8 @@ export interface ShowRider {
   routingId: string;
   linkToken: string | null;
   photos: Record<string, string>;
+  /** The artist has a logo set — shown via the live link's /logo (needs `linkToken`). */
+  hasLogo: boolean;
 }
 
 export async function loadShowRider(service: SupabaseClient, tourId: string, routingId: string): Promise<ShowRider | null> {
@@ -266,7 +276,7 @@ export async function loadShowRider(service: SupabaseClient, tourId: string, rou
     service.from('routing').select('date').eq('id', routingId).eq('tour_id', tourId).maybeSingle(),
     service.from('rider_line_states').select('block_id, state, note').eq('tour_id', tourId).eq('routing_id', routingId),
     service.from('rider_links').select('token, routing_id').eq('tour_id', tourId).is('revoked_at', null).order('created_at', { ascending: false }).limit(200),
-    service.from('tours').select('workspace_id').eq('id', tourId).maybeSingle(),
+    service.from('tours').select('workspace_id, artist:artists(branding)').eq('id', tourId).maybeSingle(),
   ]);
   const latest = latestRes.data as { major: number; minor: number; published_at: string; snapshot: unknown } | null;
   if (!latest) return null;
@@ -275,7 +285,9 @@ export async function loadShowRider(service: SupabaseClient, tourId: string, rou
   const links = (linksRes.data ?? []) as { token: string; routing_id: string | null }[];
   const link = links.find((l) => l.routing_id === routingId) ?? links.find((l) => l.routing_id === null) ?? null;
   const snapshot = parseSnapshot(latest.snapshot);
-  const ws = (tourRes.data as { workspace_id: string } | null)?.workspace_id;
+  const tourRow = tourRes.data as { workspace_id: string; artist: { branding: unknown } | { branding: unknown }[] | null } | null;
+  const ws = tourRow?.workspace_id;
+  const showArtist = Array.isArray(tourRow?.artist) ? tourRow?.artist[0] : tourRow?.artist;
   return {
     version: { label: `${latest.major}.${latest.minor}`, publishedAt: latest.published_at },
     snapshot,
@@ -284,5 +296,6 @@ export async function loadShowRider(service: SupabaseClient, tourId: string, rou
     routingId,
     linkToken: link?.token ?? null,
     photos: ws ? await signPhotos(service, ws, tourId, photoPathsIn(snapshot.docs.flatMap((d) => d.blocks))) : {},
+    hasLogo: hasLogo(showArtist?.branding),
   };
 }

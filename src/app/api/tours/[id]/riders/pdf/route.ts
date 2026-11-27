@@ -79,7 +79,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     }
     const snap = snapshot;
     const shown = show ? changes.filter((c) => changeReaches(c, show!, snap.embeds)) : changes;
-    return exportPdfResponse('rider', () => riderPdfDoc({ snapshot: snap, version, show, states, changes: shown, linkUrl: null, kinds }));
+    return exportPdfResponse('rider', () => riderPdfDoc({ tourId, snapshot: snap, version, show, states, changes: shown, linkUrl: null, kinds }));
   } catch (e) {
     return exportErrorResponse('rider', e);
   }

@@ -969,7 +969,10 @@ rebuild sections / cover pages / variables.
 - **Input list + stage plot IN the tech rider** (Nov 2026, Adam: "standalone
   tools but ALSO need to integrate into the tech rider" — migration 302): the
   `input_list` / `stage_plot` blocks SHOW the documents; they are edited only
-  in their own tools ("Edit in … ↗"; the Riders tab refreshes on focus). Which
+  in their own tools — clicking the block goes there (same tab; the plot to
+  its own editor, `embedLinks`), and coming back (Back restores the page from
+  the router cache) or refocusing re-reads just the copies
+  (`GET /riders?part=embeds` → `refreshEmbeds`). Which
   document: a show's own attachment → the tour's → the newest on the tour —
   `buildEmbeds` (src/server/riders/embeds.ts) reads with the SERVICE ROLE,
   pinned to the tour (show attachments are manager-only rows under RLS), so
@@ -997,6 +1000,51 @@ rebuild sections / cover pages / variables.
   item ↗", reply. PDF: the item name links; no photos. Known: a photo taken
   off a line stays in storage (a published version may still show it).
   DB test: `302_rider_embed_blocks.test.mjs`. Smoke: RID-32…40.
+- **If possible on any line; per person only where it means something**
+  (Nov 2026, Adam: "can be on tech. per person only on relevant things"):
+  `perPersonFits(item, section)` (src/lib/riders/perPerson.ts) — food, drink,
+  towels, buyouts, passes, beds…, by the item's words or the heading it sits
+  under (`sectionAbove`); a ticked box always shows. The line's details toggle
+  is a chevron, never dots (the block's ⋮ menu sits beside it).
+- **The PDF is dressed like Adam's own riders** (Nov 2026: "a refined version
+  of my rider with logo"): per document a COVER (the artist's logo — Edit
+  profile → Logo, `loadRiderLogo`, src/server/riders/logo.ts: our own upload
+  read from Storage, anything else only through `safeFetch`; no logo → the
+  name set as a wordmark — title, tour, show, the version stamp in the accent,
+  the prose before the first heading as the opening statement, a contents
+  list linking to the sections), then the body inside `.rp-frame`, a table
+  whose `<thead>` repeats the logo at the head of EVERY page after the cover;
+  centred capital headings; request lines as a checklist "☐ (24) …"; footer
+  "Page x of y · Version 1.3 · Updated 26 Nov 2026" (`riderFooterTemplate`,
+  via `ExportDoc.page` — the rider brings its own page furniture + PDF
+  bookmarks). The dress is `RIDER_PRINT_CSS`, scoped to `body.rp`: same
+  items as the page, only the print differs. Fonts are Inter + Montserrat
+  latin variable woff2 in public/fonts (OFL), embedded by
+  `documentFontCss()` — listed in next.config's `outputFileTracingIncludes`.
+  A section with nothing in it (`dropEmptySections`) is never printed,
+  listed or shown to a promoter. **The contents carries page numbers**
+  (Adam: "a lot of folk will print this PDF"): `ExportDoc.page.withPageNumbers`
+  renders TWICE — `anchorPages` (src/lib/export/pdfAnchors.ts) reads the page
+  each `#h-<id>` landed on from Chromium's named destinations, the second pass
+  fills them into a fixed-width cell (so pagination can't move); any failure
+  keeps the first render. Footer centre: "Generated with Lowpass"
+  (`LOWPASS_CREDIT`, small, grey — also under the promoter page).
+- **The artist's logo heads the rider EVERYWHERE** (Nov 2026, Adam): PDF cover
+  + every page, promoter page (paper + top bar), show link, editor. Screens
+  load it from a same-origin route — `/api/public/riders/[token]/logo` (show
+  link: via its live rider link) and `/api/tours/[id]/riders/logo` (Production
+  VIEW) — both `loadRiderLogo` + `logoResponse`, so the screen shows exactly
+  what prints and no outside host sees a page whose URL is a grant. Never put
+  `branding.logo_url` in a public page's `<img>`. No logo → the artist's name
+  (`<DocBrand>`), and in the editor an "Add the artist's logo" prompt →
+  `/artists/[id]?edit=profile` (opens Edit profile).
+- **Exports never touch the network from user strings** (Nov 2026): the shared
+  `fetchLogoDataUri` goes through `safeFetch` + `logoBytesDataUri` (bytes must
+  sniff as PNG / JPEG / WebP / GIF; SVG refused), and every PDF page is
+  `newRenderPage` (src/lib/rider-packs/puppeteer.ts): Chromium loads data: /
+  about: / blob: only — the advance packet also our Storage object URLs
+  (`storageObjectPrefix`). Inline assets as data URIs; a new export that needs
+  the network is a design smell.
 
 ### A city is not a venue (Nov 2026, Adam)
 

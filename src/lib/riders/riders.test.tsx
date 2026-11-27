@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { blockLabel, dateTag, dayBefore, inForce, parseContent, parseQty, requestLine } from './blocks';
 import { notifyEmail } from './email';
+import { perPersonFits, sectionAbove } from './perPerson';
 import { convertLegacyPack, htmlToText } from './legacy';
 import { byPosition, isPositionKey, keyAfter, keyBetween, keysBetween } from './position';
 import { cleanDoc, docFromText, proseHtml, proseText } from './prose';
@@ -277,5 +278,42 @@ describe('pasted lists → request lines', () => {
     expect(parseRequestText('Honey + fresh lemon')).toEqual({ qty: null, item: 'Honey + fresh lemon' });
     expect(parseRequestText('5 Gum (blue only)')).toEqual({ qty: 5, item: 'Gum (blue only)' });
     expect(parseRequestText('   ')).toBeNull();
+  });
+});
+
+/* ---------- per person: only where it means something (Nov 2026, Adam) ---------- */
+
+describe('perPersonFits', () => {
+  it.each([
+    ['Bath towels', ''],
+    ['Hot meal', ''],
+    ['Bottles of still water', ''],
+    ['Buyout', ''],
+    ['Laminates', ''],
+    ['Anything vegan', 'Catering'],
+    ['Local craft selection', 'Drinks'],
+  ])('offers it for %s (under "%s")', (item, section) => {
+    expect(perPersonFits(item, section)).toBe(true);
+  });
+  it.each([
+    ['DI box', 'Backline'],
+    ['Sofa', 'Dressing room'],
+    ['Cable wraps', 'Stage'],
+    ['High pass filter on vocal', 'Audio'],
+    ['Lighting bar', 'Lighting'],
+    ['Full-length mirror', ''],
+  ])('not for %s (under "%s")', (item, section) => {
+    expect(perPersonFits(item, section)).toBe(false);
+  });
+  it('the section is the nearest heading above', () => {
+    const blocks = [
+      { kind: 'heading', content: { text: 'Catering', level: 1 } },
+      { kind: 'request', content: {} },
+      { kind: 'heading', content: { text: 'Dressing room', level: 1 } },
+      { kind: 'request', content: {} },
+    ];
+    expect(sectionAbove(blocks, 1)).toBe('Catering');
+    expect(sectionAbove(blocks, 3)).toBe('Dressing room');
+    expect(sectionAbove(blocks, 0)).toBe('');
   });
 });

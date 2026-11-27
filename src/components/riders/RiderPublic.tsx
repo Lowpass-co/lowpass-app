@@ -14,7 +14,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Check, ChevronDown, ExternalLink, FileDown, MessageSquare, X } from 'lucide-react';
 import { fmtDay } from '@/lib/riders/blocks';
 import { linkHost } from '@/lib/riders/photos';
-import { docModel, versionLine, type DocItem } from '@/lib/riders/render';
+import { LOWPASS_CREDIT, docModel, versionLine, type DocItem } from '@/lib/riders/render';
 import { changeLine, changeReaches } from '@/lib/riders/summary';
 import { RIDER_KIND_LABEL, type ResolvedAttachment, type RiderChange } from '@/lib/riders/types';
 import type { PublicRider } from '@/server/riders/public';
@@ -87,7 +87,8 @@ export function RiderPublic({ data, token }: { data: PublicRider; token: string 
   const [acks, setAcks] = useState(data.acks);
   const [openLine, setOpenLine] = useState<string | null>(null);
   const showLine = data.show ? `For ${[data.show.venue, data.show.city].filter(Boolean).join(', ') || 'your show'} — ${fmtDay(data.show.date, true)}` : 'Every show on the tour';
-  const header = { artist: data.artist, version: versionLine(version.label, version.publishedAt), show: showLine };
+  // The logo comes from this link's own /logo route (same image as the PDF).
+  const header = { artist: data.artist, logo: data.hasLogo ? `/api/public/riders/${token}/logo` : null, version: versionLine(version.label, version.publishedAt), show: showLine };
   const models = useMemo(
     () =>
       snap.docs.map((d) =>
@@ -126,7 +127,13 @@ export function RiderPublic({ data, token }: { data: PublicRider; token: string 
       <div className="rdp-bar">
         <div className="rdp-bar-in">
           <div className="rdp-who">
-            <span className="rdp-artist">{data.artist ?? data.tourName}</span>
+            <span className="rdp-artist">
+              {header.logo ? (
+                // eslint-disable-next-line @next/next/no-img-element -- same-origin logo route
+                <img className="rdp-barlogo" src={header.logo} alt="" referrerPolicy="no-referrer" onError={(e) => (e.currentTarget.style.display = 'none')} />
+              ) : null}
+              {data.artist ?? data.tourName}
+            </span>
             <span className="rdp-ver">
               Version {version.label} · {fmtDay(version.publishedAt.slice(0, 10), true)}
             </span>
@@ -228,6 +235,7 @@ export function RiderPublic({ data, token }: { data: PublicRider; token: string 
         <p className="rdp-foot">
           This page always shows the current version of the rider{data.show ? ' for your show' : ''}. Can’t do something? Reply on the line — the tour manager sees it straight away.
         </p>
+        <p className="rdp-credit">{LOWPASS_CREDIT}</p>
       </div>
     </main>
   );

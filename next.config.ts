@@ -35,6 +35,9 @@ const nextConfig: NextConfig = {
      largest function stays well under Vercel's 250 MB). */
   outputFileTracingIncludes: {
     '/api/**/*': [
+      // Document fonts the rider PDF embeds (src/lib/export/fonts.ts reads them
+      // by a runtime path the tracer can't follow).
+      './public/fonts/*.woff2',
       './node_modules/pdfjs-dist/legacy/build/pdf.worker.mjs',
       './node_modules/@napi-rs/canvas/**/*',
       './node_modules/@napi-rs/canvas-linux-x64-gnu/**/*',

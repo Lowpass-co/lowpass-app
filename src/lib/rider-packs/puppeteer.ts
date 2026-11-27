@@ -64,3 +64,36 @@ export async function closePage(page: Awaited<ReturnType<Browser['newPage']>>): 
     /* swallow — the request is already responding */
   }
 }
+
+/** May the PDF renderer load this URL? (Nov 2026 — security.) The HTML we
+ *  print carries strings users typed (logo URLs, links), and this Chromium sits
+ *  inside the server's network, so by default it loads NOTHING from the
+ *  network: data: / about: / blob: only — every export inlines its images and
+ *  fonts. `allowPrefixes` opens exact URL prefixes (the advance packet's signed
+ *  Storage URLs). */
+export function rendererMayLoad(url: string, allowPrefixes: readonly string[] = []): boolean {
+  if (/^(data|about|blob):/i.test(url)) return true;
+  return allowPrefixes.some((p) => url.startsWith(p));
+}
+
+/** Our Storage's object URLs (signed or public), as a prefix — or none. */
+export function storageObjectPrefix(): string[] {
+  try {
+    const origin = new URL(process.env.NEXT_PUBLIC_SUPABASE_URL ?? '').origin;
+    return origin.startsWith('https://') || origin.startsWith('http://') ? [`${origin}/storage/v1/object/`] : [];
+  } catch {
+    return [];
+  }
+}
+
+/** A new page that refuses every request `rendererMayLoad` doesn't allow. */
+export async function newRenderPage(browser: Browser, allowPrefixes: readonly string[] = []) {
+  const page = await browser.newPage();
+  await page.setRequestInterception(true);
+  page.on('request', (req) => {
+    if (req.isInterceptResolutionHandled()) return;
+    if (rendererMayLoad(req.url(), allowPrefixes)) void req.continue();
+    else void req.abort('blockedbyclient');
+  });
+  return page;
+}
