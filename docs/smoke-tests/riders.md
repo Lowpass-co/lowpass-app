@@ -328,6 +328,16 @@ promoter page.
 
 ---
 
+
+#### RID-45 — Starters say what a show really needs
+**Do**: Production › Riders on a new tour → Start from a template. Open the
+Headline Tech, Headline Hospitality, Festival Tech and Festival Hospitality
+starters.
+**Expect**: Headline Tech has a load-in request line and a Power section.
+Headline Hospitality is laid out room by room (Artist room, Band room, Prod
+office), then Showers & towels, If budget is tight, Catering. The two Festival
+starters exist and are short — changeover, stage access, artist transport,
+catering system — not a club rider with the word "festival" added.
 ## Retired (old builder — deleted in the Nov 2026 rebuild)
 
 - RID-01 — Open a pack from the riders list (the pack list is gone).

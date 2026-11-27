@@ -35,7 +35,7 @@ export async function installStarter(
 
   const { data: catalog, error: cErr } = await client
     .from('advance_templates')
-    .select('id, name, workspace_id, fields, tm_only')
+    .select('*') // '*': show_when only exists once 303 is pasted
     .eq('template_type', 'section')
     .or(`workspace_id.is.null,workspace_id.eq.${workspaceId}`);
   if (cErr) throw new Error(`question catalog: ${cErr.message}`);

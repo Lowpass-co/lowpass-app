@@ -77,6 +77,10 @@ export function displayValue(v: unknown): string | null {
     const parts = v.map((x) => displayValue(x)).filter((x): x is string => !!x);
     return parts.length ? parts.join(', ') : null;
   }
+  // An uploaded file (upload questions) prints its name.
+  if (v && typeof v === 'object' && typeof (v as { name?: unknown }).name === 'string' && typeof (v as { path?: unknown }).path === 'string') {
+    return (v as { name: string }).name;
+  }
   return null;
 }
 
@@ -113,7 +117,7 @@ async function loadHead(client: SupabaseClient, show: AdvanceShowData): Promise<
 
 /** Pure: the show's question groups as printable rows. */
 export function answerGroups(show: Pick<AdvanceShowData, 'sections' | 'data' | 'sources'>, withSources: boolean): AdvanceExportData['groups'] {
-  return questionSections(show.sections).map((s) => {
+  return questionSections(show.sections, show.data).map((s) => {
     const rows = countedFields(s).map((f) => {
       const value = displayValue(show.data[s.template_id]?.[f.id]);
       return {

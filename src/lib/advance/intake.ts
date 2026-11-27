@@ -15,6 +15,8 @@
    at the route layer — no separate token util here.
    ============================================================ */
 
+import { parseShowWhen } from './sectionVisibility';
+
 /** advance_instances.data shape: { sectionTemplateId: { fieldId: value } }. */
 export type AdvanceData = Record<string, Record<string, unknown>>;
 
@@ -50,6 +52,7 @@ export interface IntakeSection {
   fields: IntakeField[];
   order?: number;
   tm_only?: boolean;
+  show_when?: { field: string; in: string[] };
 }
 
 export interface IntakeFormSchema {
@@ -57,12 +60,14 @@ export interface IntakeFormSchema {
     template_id: string;
     label: string;
     fields: IntakeField[];
+    show_when?: { field: string; in: string[] };
   }[];
 }
 
-/** Field types a venue can't meaningfully fill on a public form. File
- *  uploads + structured contact cards are excluded from intake v1. */
-const NON_FILLABLE_TYPES = new Set(['file', 'contact']);
+/** Field types a venue can't fill on a public form: structured contact
+ *  cards. (File questions ARE fillable since Nov 2026 — the venue uploads
+ *  through its link; lib/advance/fileAnswers.ts.) */
+const NON_FILLABLE_TYPES = new Set(['contact']);
 
 /**
  * Build the venue-facing form from the advance instance's sections.
@@ -82,9 +87,11 @@ export function buildIntakeFormSchema(
       (f) => !NON_FILLABLE_TYPES.has(f.type),
     );
     if (fields.length === 0) continue;
+    const when = parseShowWhen(section.show_when);
     out.push({
       template_id: section.template_id,
       label: section.label,
+      ...(when ? { show_when: when } : {}),
       fields: fields.map((f) => ({
         id: f.id,
         label: f.label,

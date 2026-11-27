@@ -2601,3 +2601,10 @@ section" (it used to fail silently).
 The budget grid has no Status column, and a line's panel has no Status field.
 More → Group by offers Section (and Phase when the tour tracks phases), not
 Status. Line statuses stay in the database, unshown.
+
+#### BUD-99 — Admin costs on every touring template (needs migration 304)
+New tour → Budget & advance → pick any template except Press tour. The budget
+has an **Admin** section: Visas & work permits, Passes & laminates, Phones &
+data, Bank & card fees. Support tour and Club also have **Rehearsals** before
+Misc. Press tour has "Visas & work permits" in its own section before Misc.
+Paste 304 twice: nothing doubles.

@@ -9,6 +9,8 @@
    days already sent to a venue (the venue keeps what it was asked).
    ============================================ */
 
+import { parseShowWhen } from '@/lib/advance/sectionVisibility';
+import { starterByKey } from '@/lib/templates/tourTemplates';
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -65,8 +67,13 @@ export function TemplatesPage({ tourId, initial }: { tourId: string | null; init
   useEffect(() => {
     fetch('/api/advance/templates')
       .then((r) => (r.ok ? r.json() : { templates: [] }))
-      .then((j: { templates?: { id: string; name: string; fields: AdvField[]; tm_only?: boolean }[] }) =>
-        setLibrary((j.templates ?? []).map((t) => ({ template_id: t.id, label: t.name, fields: t.fields ?? [], tm_only: t.tm_only === true }))),
+      .then((j: { templates?: { id: string; name: string; fields: AdvField[]; tm_only?: boolean; show_when?: unknown }[] }) =>
+        setLibrary(
+          (j.templates ?? []).map((t) => {
+            const when = parseShowWhen(t.show_when);
+            return { template_id: t.id, label: t.name, fields: t.fields ?? [], tm_only: t.tm_only === true, ...(when ? { show_when: when } : {}) };
+          }),
+        ),
       )
       .catch(() => {});
   }, []);
@@ -325,7 +332,8 @@ export function TemplatesPage({ tourId, initial }: { tourId: string | null; init
 
 /** A new blank template starts with the usual show-day sections from the library. */
 function starterSections(library: AdvSection[]): AdvSection[] {
-  const want = ['Schedule', 'Production', 'Hospitality', 'Dressing Rooms', 'Security', 'Comps and Ticketing', 'Merch', 'Settlement'];
+  // The Headline show day starter's sections (tourTemplates.ts) — one list.
+  const want = starterByKey('headline')?.sections ?? [];
   return want
     .map((w) => library.find((l) => l.label.toLowerCase() === w.toLowerCase()))
     .filter((x): x is AdvSection => !!x)

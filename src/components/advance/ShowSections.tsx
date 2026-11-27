@@ -15,7 +15,9 @@ import { isEmptyAnswer } from '@/lib/advance/intake';
 import { countedFields, sectionProgress, type AdvField, type AdvSection, type AdvData } from '@/lib/advance/board';
 import type { FieldSource, PendingAnswer } from '@/server/advance/show';
 import { coerceValue } from '@/lib/advance/packs';
+import { shownSections } from '@/lib/advance/sectionVisibility';
 import { fmtWhen } from './format';
+import { FileAnswerField } from './FileAnswerField';
 
 export interface SectionsProps {
   sections: AdvSection[];
@@ -28,10 +30,18 @@ export interface SectionsProps {
   onOpenSource: (src: FieldSource, label: string) => void;
   /** Rendered after the Schedule section (local crew calls). */
   afterSchedule?: React.ReactNode;
+  /** The show's upload endpoint (upload questions). */
+  filesEndpoint: string;
 }
 
 function display(v: unknown): string {
   if (typeof v === 'boolean') return v ? 'Yes' : 'No';
+  if (Array.isArray(v)) {
+    return v
+      .map((x) => (x && typeof x === 'object' && typeof (x as { name?: unknown }).name === 'string' ? (x as { name: string }).name : ''))
+      .filter(Boolean)
+      .join(', ');
+  }
   if (v === null || v === undefined) return '';
   return typeof v === 'string' ? v : String(v);
 }
@@ -55,7 +65,7 @@ function SourceChip({ src, onOpen, label }: { src: FieldSource | undefined; onOp
   return <span>You{src.at ? ` · ${fmtWhen(src.at)}` : ''}</span>;
 }
 
-function Editor({ field, value, onCommit, id }: { field: AdvField; value: unknown; onCommit: (v: unknown) => void; id: string }) {
+function Editor({ field, value, onCommit, id, filesEndpoint }: { field: AdvField; value: unknown; onCommit: (v: unknown) => void; id: string; filesEndpoint: string }) {
   const [v, setV] = useState<string>(display(value));
   const last = useRef(display(value));
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -97,6 +107,9 @@ function Editor({ field, value, onCommit, id }: { field: AdvField; value: unknow
     timer.current = setTimeout(() => commit(next), 800);
   };
 
+  if (field.type === 'file') {
+    return <FileAnswerField id={id} value={value} endpoint={filesEndpoint} onChange={(files) => onCommit(files.length ? files : null)} />;
+  }
   if (field.type === 'boolean' || field.type === 'checkbox') {
     const cur = value === true ? 'yes' : value === false ? 'no' : '';
     return (
@@ -222,7 +235,7 @@ function Question({
         {field.day_only ? <span className="adv-pill adv-pill-add" style={{ marginLeft: 6 }}>This day</span> : null}
       </label>
       <span>
-        <Editor field={field} value={value} onCommit={(v) => void save(v)} id={id} />
+        <Editor field={field} value={value} onCommit={(v) => void save(v)} id={id} filesEndpoint={props.filesEndpoint} />
         {field.helpText ? <span className="adv-muted" style={{ display: 'block', fontSize: 'var(--lp-text-xs)', padding: '2px 10px' }}>{field.helpText}</span> : null}
       </span>
       <span className="adv-src">
@@ -236,10 +249,13 @@ export function ShowSections(props: SectionsProps) {
   const pendBySection: Record<string, number> = {};
   for (const p of props.pending) pendBySection[p.section_id] = (pendBySection[p.section_id] ?? 0) + 1;
 
-  const schedIdx = Math.max(0, props.sections.findIndex((s) => s.label.trim().toLowerCase() === 'schedule'));
+  // A section with a show-when condition (Weather & Outdoor) appears the
+  // moment its question is answered that way — read from the live answers.
+  const sections = shownSections(props.sections, props.data);
+  const schedIdx = Math.max(0, sections.findIndex((s) => s.label.trim().toLowerCase() === 'schedule'));
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16, minWidth: 0 }}>
-      {props.sections.map((s, i) => {
+      {sections.map((s, i) => {
         const prog = sectionProgress(s, props.data, pendBySection, props.requestLive);
         const fields = countedFields(s);
         const head = (

@@ -28,6 +28,7 @@ import {
   type AdvanceData,
 } from '@/lib/advance/intake';
 import { flattenToPending } from '@/lib/advance/intake-pending';
+import { cleanFileChanges } from '@/lib/advance/fileAnswers';
 import { markVenueCompleted } from '@/lib/intake/reminders-server';
 
 export const dynamic = 'force-dynamic';
@@ -35,6 +36,7 @@ export const dynamic = 'force-dynamic';
 interface LinkRow {
   id: string;
   workspace_id: string;
+  tour_id: string;
   routing_id: string;
   advance_instance_id: string | null;
   status: string;
@@ -126,7 +128,13 @@ export async function POST(
     return NextResponse.json({ error: 'Could not save right now — please try again.' }, { status: 500 });
   }
   const schema = limitSchemaToAsked(buildIntakeFormSchema(sections), link.ask_fields);
-  const clean = sanitizeSubmission(schema, rawData);
+  // Upload questions keep only files inside this show's own folder (the
+  // venue's link uploads there; a forged path is dropped, never signed).
+  const clean = cleanFileChanges(sections, sanitizeSubmission(schema, rawData) as Record<string, Record<string, unknown>>, {
+    ws: link.workspace_id,
+    tourId: link.tour_id,
+    routingId: link.routing_id,
+  }) as AdvanceData;
   const pending = flattenToPending(clean);
 
   const nowIso = new Date().toISOString();

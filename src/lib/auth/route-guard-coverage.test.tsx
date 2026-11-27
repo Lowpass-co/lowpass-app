@@ -85,6 +85,7 @@ const UNGUARDED: Record<string, string> = {
   '/profile': /* PATCH */ 'PERMANENT — self-scoped. A member edits their OWN profile row; readonly must keep this.',
   '/profile/avatar': /* POST */ 'PERMANENT — self-scoped. Own avatar upload; same rule as /profile.',
   '/public/advance-intake/[token]/submit': /* POST */ 'PERMANENT — public. Authorization IS the unguessable token; the submitter has no session to have a role.',
+  '/public/advance-intake/[token]/files': /* POST */ 'PERMANENT — public. Same token grant as the intake submit; upload-url issues a one-time signed upload for a server-chosen advance-files path (25 MB, sniffed on complete, capped per link per hour); urls signs only paths already in the link\'s submitted answers.',
   '/public/advance-intake/[token]/tech-pack': /* POST */ 'PERMANENT — public. Same token grant as the intake submit above.',
   '/public/advance-packet/[token]': /* POST */ 'PERMANENT — public. Venue opens a packet with no account; the token is the grant.',
   '/public/rider/[token]': /* POST */ 'PERMANENT — public. Tokenised rider view for people outside the workspace.',
