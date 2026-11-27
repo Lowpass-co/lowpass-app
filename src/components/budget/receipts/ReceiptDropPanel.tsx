@@ -258,6 +258,33 @@ export function AddReceiptsButton() {
   );
 }
 
+/** The Receipts page's drop bar (Nov 2026, Adam: "should have a receipt drop
+ *  bar here too!"). A wide target to drop onto or click; the whole page still
+ *  takes a drop (the provider's window listener). On the Budget sheet the
+ *  title-line button is enough — never add this under the grid. */
+export function ReceiptDropBar() {
+  const d = useDrop();
+  return (
+    <button
+      type="button"
+      data-testid="receipt-drop-bar"
+      className={`rd-bar${d.dragging ? ' is-dragging' : ''}`}
+      onClick={d.browse}
+      onDragOver={(e) => { if (hasFiles(e)) e.preventDefault(); }}
+      onDrop={(e) => {
+        if (!hasFiles(e)) return;
+        e.preventDefault();
+        d.addFiles(Array.from(e.dataTransfer?.files ?? []));
+      }}
+    >
+      <Upload className="h-4 w-4" aria-hidden />
+      <span>
+        <strong>Drop receipts here</strong> or click to choose — photos or PDFs, as many as you like
+      </span>
+    </button>
+  );
+}
+
 /** "N need details" beside the button — the way to the receipts bank. */
 export function ReceiptsNeedDetailsLink({ tourId, count }: { tourId: string; count: number }) {
   return (

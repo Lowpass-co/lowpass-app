@@ -35,6 +35,7 @@ import {
   AddReceiptsButton,
   BudgetReceiptDrop,
   ReceiptDropActivity,
+  ReceiptDropBar,
   ReceiptsNeedDetailsLink,
 } from '@/components/budget/receipts/ReceiptDropPanel';
 import { ReceiptsBank } from '@/components/budget/receipts/ReceiptsBank';
@@ -476,7 +477,7 @@ export default async function BudgetTourPage({
             <BudgetBurnBar> row is gone; the meter rides inside the band. The
             Receipts badge lives on the rail item (ShellV3Mount). */}
         <BudgetReceiptDrop
-          enabled={tab === 'budget' && (lines.length > 0 || sections.length > 0)}
+          enabled={(tab === 'budget' && (lines.length > 0 || sections.length > 0)) || tab === 'receipts'}
           tourId={tourId}
           tourCurrency={tourCurrency}
           lineItems={receiptLineOptions}
@@ -579,6 +580,12 @@ export default async function BudgetTourPage({
             )
           ) : null}
 
+          {tab === 'receipts' ? (
+            <div className="flex flex-col" style={{ gap: 'var(--lp-space-3)', marginBottom: 'var(--lp-space-4)' }}>
+              <ReceiptDropBar />
+              <ReceiptDropActivity />
+            </div>
+          ) : null}
           {tab === 'receipts' ? (
             <ReceiptsBank
               tourId={tourId}
