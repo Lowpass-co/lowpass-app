@@ -17,7 +17,7 @@
    ============================================ */
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ExternalLink, FileDown, Plus, Send, Upload } from 'lucide-react';
+import { ExternalLink, FileDown, ImagePlus, Plus, Send, Upload } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { ContextMenu } from '@/components/ui/ContextMenu';
 import { PageTitle } from '@/components/ui/PageHeader';
@@ -80,17 +80,19 @@ export function RidersEditor({
   const openReplies = useMemo(() => repliesToAnswer(data.replies), [data.replies]);
   const insertable = insertableFor(kind);
 
-  // The input list / stage plot are edited in their own tools ("Edit in …"
-  // opens a new tab): coming back to this one picks up what changed.
-  const { refresh } = store;
+  // The input list / stage plot are edited in their own tools (clicking one
+  // goes there): coming back — Back restores this page from the router's
+  // cache, or another tab regains focus — picks up what changed.
+  const { refreshEmbeds } = store;
   const showsEmbeds = useMemo(() => store.draftDocs.some((d) => d.blocks.some((b) => b.kind === 'input_list' || b.kind === 'stage_plot')), [store.draftDocs]);
   useEffect(() => {
     if (!showsEmbeds) return;
+    void refreshEmbeds();
     let last = Date.now();
     const back = () => {
       if (document.visibilityState !== 'visible' || Date.now() - last < 5000) return;
       last = Date.now();
-      void refresh();
+      void refreshEmbeds();
     };
     document.addEventListener('visibilitychange', back);
     window.addEventListener('focus', back);
@@ -98,7 +100,7 @@ export function RidersEditor({
       document.removeEventListener('visibilitychange', back);
       window.removeEventListener('focus', back);
     };
-  }, [showsEmbeds, refresh]);
+  }, [showsEmbeds, refreshEmbeds]);
 
   const jump = useCallback(
     (blockId: string, k?: RiderKind | null) => {
@@ -141,6 +143,7 @@ export function RidersEditor({
         party: store.party,
         canEdit,
         tourId,
+        kind,
         onDates: (block, mode) => setDates({ block, mode }),
         onInsertMenu: (afterId, anchor) => {
           const r = anchor.getBoundingClientRect();
@@ -186,6 +189,8 @@ export function RidersEditor({
     ...(canEdit && rider && list.length ? [{ label: 'Save as a template…', onClick: () => setTemplating(true) }] : []),
     { label: 'Download draft PDF', icon: FileDown, onClick: () => window.open(store.api.pdfUrl({ version: 'draft' }), '_blank') },
     ...(latest ? [{ label: `Download v${latest.label} PDF`, icon: FileDown, onClick: () => window.open(store.api.pdfUrl({}), '_blank') }] : []),
+    // The PDF is headed by the artist's logo; without one it sets their name.
+    ...(!data.artistLogo && data.tour.artistId ? [{ label: 'Add the artist’s logo (heads the PDF)…', icon: ImagePlus, onClick: () => window.location.assign(`/artists/${data.tour.artistId}`) }] : []),
   ];
 
   const statusText = { saved: 'Saved', saving: 'Saving…', error: 'Not saved — retrying', offline: 'Offline — will save' }[store.status];

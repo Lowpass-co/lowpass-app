@@ -28,7 +28,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ toke
     const snapshot = r.snapshot;
     const linkUrl = `${new URL(request.url).origin}/r/${token}`;
     return exportPdfResponse('rider-public', () =>
-      riderPdfDoc({ snapshot, version: { label: v.label, publishedAt: v.publishedAt }, show: r.show, states: r.states, changes: r.show ? v.changes.filter((c) => changeReaches(c, r.show!, snapshot.embeds)) : v.changes, linkUrl }),
+      riderPdfDoc({ tourId: r.tourId, snapshot, version: { label: v.label, publishedAt: v.publishedAt }, show: r.show, states: r.states, changes: r.show ? v.changes.filter((c) => changeReaches(c, r.show!, snapshot.embeds)) : v.changes, linkUrl }),
     );
   } catch (e) {
     return exportErrorResponse('rider-public', e);

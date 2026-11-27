@@ -24,7 +24,7 @@ import { createServerSupabaseClient, createServiceSupabaseClient } from '@/lib/s
 import { requireUserAndWorkspace, requireWrite } from '@/lib/auth/workspace-check';
 import { readJson, tourGate } from '@/server/advance/routeGuard';
 import { getViewerAccess, viewerAllows } from '@/lib/permissions/tourAccess';
-import { loadRiderEditor } from '@/server/riders/data';
+import { loadEditorEmbeds, loadRiderEditor, loadRiderShows } from '@/server/riders/data';
 import {
   RiderError,
   answerReply,
@@ -46,7 +46,7 @@ export const dynamic = 'force-dynamic';
 
 type Params = { params: Promise<{ id: string }> };
 
-export async function GET(_req: Request, { params }: Params) {
+export async function GET(req: Request, { params }: Params) {
   const { id: tourId } = await params;
   const supabase = await createServerSupabaseClient();
   const auth = await requireUserAndWorkspace(supabase);
@@ -58,6 +58,16 @@ export async function GET(_req: Request, { params }: Params) {
   const access = await getViewerAccess(supabase as unknown as SupabaseClient, auth.user.id, tourId);
   if (!viewerAllows(access, 'production', 'view')) return NextResponse.json({ error: 'You can’t see this tour’s riders.' }, { status: 403 });
   try {
+    // ?part=embeds — just the input list / stage plot (coming back from
+    // their tools), not the whole editor.
+    if (new URL(req.url).searchParams.get('part') === 'embeds') {
+      const client = supabase as unknown as SupabaseClient;
+      const { data: tour } = await client.from('tours').select('workspace_id, artist_id').eq('id', tourId).maybeSingle();
+      const t = tour as { workspace_id: string; artist_id: string | null } | null;
+      if (!t) return NextResponse.json({ error: 'Tour not found' }, { status: 404 });
+      const shows = await loadRiderShows(client, tourId);
+      return NextResponse.json(await loadEditorEmbeds(createServiceSupabaseClient() as unknown as SupabaseClient, { tourId, workspaceId: t.workspace_id, artistId: t.artist_id, shows }));
+    }
     const data = await loadRiderEditor(supabase as unknown as SupabaseClient, tourId);
     if (!data) return NextResponse.json({ error: 'Tour not found' }, { status: 404 });
     return NextResponse.json(data);

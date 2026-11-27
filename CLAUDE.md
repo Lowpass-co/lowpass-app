@@ -969,7 +969,10 @@ rebuild sections / cover pages / variables.
 - **Input list + stage plot IN the tech rider** (Nov 2026, Adam: "standalone
   tools but ALSO need to integrate into the tech rider" — migration 302): the
   `input_list` / `stage_plot` blocks SHOW the documents; they are edited only
-  in their own tools ("Edit in … ↗"; the Riders tab refreshes on focus). Which
+  in their own tools — clicking the block goes there (same tab; the plot to
+  its own editor, `embedLinks`), and coming back (Back restores the page from
+  the router cache) or refocusing re-reads just the copies
+  (`GET /riders?part=embeds` → `refreshEmbeds`). Which
   document: a show's own attachment → the tour's → the newest on the tour —
   `buildEmbeds` (src/server/riders/embeds.ts) reads with the SERVICE ROLE,
   pinned to the tour (show attachments are manager-only rows under RLS), so
@@ -997,6 +1000,27 @@ rebuild sections / cover pages / variables.
   item ↗", reply. PDF: the item name links; no photos. Known: a photo taken
   off a line stays in storage (a published version may still show it).
   DB test: `302_rider_embed_blocks.test.mjs`. Smoke: RID-32…40.
+- **Per person / if possible are Hospitality's** (Nov 2026, Adam: "only makes
+  sense in certain areas"): offered on Hospitality request lines; a Tech line
+  shows one only if it's already ticked. The line's details toggle is a
+  chevron, never dots (the block's ⋮ menu sits beside it).
+- **The PDF is dressed like Adam's own riders** (Nov 2026: "a refined version
+  of my rider with logo"): per document a COVER (the artist's logo — Edit
+  profile → Logo, `loadRiderLogo`, src/server/riders/logo.ts: our own upload
+  read from Storage, anything else only through `safeFetch`; no logo → the
+  name set as a wordmark — title, tour, show, the version stamp in the accent,
+  the prose before the first heading as the opening statement, a contents
+  list linking to the sections), then the body inside `.rp-frame`, a table
+  whose `<thead>` repeats the logo at the head of EVERY page after the cover;
+  centred capital headings; request lines as a checklist "☐ (24) …"; footer
+  "Page x of y · Version 1.3 · Updated 26 Nov 2026" (`riderFooterTemplate`,
+  via `ExportDoc.page` — the rider brings its own page furniture + PDF
+  bookmarks). The dress is `RIDER_PRINT_CSS`, scoped to `body.rp`: same
+  items as the page, only the print differs. Fonts are Inter + Montserrat
+  latin variable woff2 in public/fonts (OFL), embedded by
+  `documentFontCss()` — listed in next.config's `outputFileTracingIncludes`.
+  A section with nothing in it (`dropEmptySections`) is never printed,
+  listed or shown to a promoter.
 
 ### A city is not a venue (Nov 2026, Adam)
 

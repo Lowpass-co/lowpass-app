@@ -11,7 +11,7 @@
 
 import { memo, useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import Link from 'next/link';
-import { CalendarRange, Copy, ExternalLink, GripVertical, ImagePlus, Plus, Star, Trash2, X } from 'lucide-react';
+import { ArrowRight, CalendarRange, ChevronDown, Copy, ExternalLink, GripVertical, ImagePlus, Plus, Star, Trash2, X } from 'lucide-react';
 import { ContextMenu, type ContextMenuItem } from '@/components/ui/ContextMenu';
 import { blockLabel, dateTag, fmtQty, parseQty, parseRequestText, requestLine } from '@/lib/riders/blocks';
 import { embedFor, othersFor } from '@/lib/riders/embeds';
@@ -66,6 +66,8 @@ export interface RowContext {
   party: number | null;
   canEdit: boolean;
   tourId: string;
+  /** Which document the row is in (some request options are Hospitality's). */
+  kind: RiderKind;
   onDates: (b: RiderBlock, mode: 'set' | 'change') => void;
   onInsertMenu: (afterId: string, anchor: HTMLElement) => void;
   drag: { id: string | null; over: { id: string; side: 'before' | 'after' } | null; start: (id: string) => void; overAt: (id: string, side: 'before' | 'after') => void; drop: () => void; end: () => void };
@@ -224,9 +226,9 @@ function BlockBody({ block, ctx, focused }: { block: RiderBlock; ctx: RowContext
     case 'files':
       return <FilesEditor block={block} ctx={ctx} />;
     case 'input_list':
-      return <InputListBlock blockId={block.id} outputs={block.content.outputs} embeds={ctx.store.data.embeds} tourId={ctx.tourId} canEdit={ctx.canEdit} edit={ctx.store.edit} />;
+      return <InputListBlock blockId={block.id} outputs={block.content.outputs} embeds={ctx.store.data.embeds} href={`/operations/${ctx.tourId}/channel-list`} canEdit={ctx.canEdit} edit={ctx.store.edit} />;
     case 'stage_plot':
-      return <StagePlotBlock blockId={block.id} embeds={ctx.store.data.embeds} tourId={ctx.tourId} />;
+      return <StagePlotBlock blockId={block.id} embeds={ctx.store.data.embeds} href={ctx.store.data.embedLinks?.stagePlot ?? `/operations/${ctx.tourId}/stage-plot`} />;
     case 'break':
       return <div className="rdx-break">Page break</div>;
     default:
@@ -372,8 +374,8 @@ function RequestEditor({ block, ctx, focused }: { block: Extract<RiderBlock, { k
         >
           <Star size={15} fill={c.summary ? 'currentColor' : 'none'} aria-hidden />
         </button>
-        <button type="button" className="rdx-star" aria-expanded={showSub} aria-label="Alternatives, note, link, photo" title="Alternatives, note, link to the exact item, photo" onClick={() => setMore((m) => !m)}>
-          <span aria-hidden style={{ fontSize: 'var(--lp-text-sm)', fontWeight: 'var(--lp-weight-bold)' }}>···</span>
+        <button type="button" className="rdx-star rdx-disclose" aria-expanded={showSub} aria-label="Details: alternatives, note, link, photo" title="Details — alternatives, note, link to the exact item, photo" onClick={() => setMore((m) => !m)}>
+          <ChevronDown size={15} aria-hidden />
         </button>
         {showSub ? (
           <div className="rdx-req-sub">
@@ -385,13 +387,17 @@ function RequestEditor({ block, ctx, focused }: { block: Extract<RiderBlock, { k
               <i>Note</i>
               <input className="rdx-in" placeholder="anything else" value={c.note} readOnly={!ctx.canEdit} onChange={(e) => set({ note: e.target.value })} aria-label="Note" />
             </span>
-            <label>
-              <input type="checkbox" className="lp-checkbox" checked={c.perPerson} disabled={!ctx.canEdit} onChange={(e) => set({ perPerson: e.target.checked })} /> per person
-              {c.perPerson && c.qty !== null ? <span className="rdx-mini"> = {requestLine(c, ctx.party).match(/^\(([^)]+)\)/)?.[1] ?? '—'}</span> : null}
-            </label>
-            <label>
-              <input type="checkbox" className="lp-checkbox" checked={c.optional} disabled={!ctx.canEdit} onChange={(e) => set({ optional: e.target.checked })} /> if possible
-            </label>
+            {ctx.kind === 'hospitality' || c.perPerson ? (
+              <label>
+                <input type="checkbox" className="lp-checkbox" checked={c.perPerson} disabled={!ctx.canEdit} onChange={(e) => set({ perPerson: e.target.checked })} /> per person
+                {c.perPerson && c.qty !== null ? <span className="rdx-mini"> = {requestLine(c, ctx.party).match(/^\(([^)]+)\)/)?.[1] ?? '—'}</span> : null}
+              </label>
+            ) : null}
+            {ctx.kind === 'hospitality' || c.optional ? (
+              <label>
+                <input type="checkbox" className="lp-checkbox" checked={c.optional} disabled={!ctx.canEdit} onChange={(e) => set({ optional: e.target.checked })} /> if possible
+              </label>
+            ) : null}
             {more || c.link || c.photo ? <ExactItem blockId={block.id} link={c.link} photo={c.photo} photoUrl={thumb} ctx={ctx} /> : null}
           </div>
         ) : null}
@@ -529,16 +535,17 @@ function ExactItem({ blockId, link, photo, photoUrl, ctx }: { blockId: string; l
 
 /* ---------- the input list + stage plot (their own tools write them) ---------- */
 
-/** "Edit in …" opens the tool in a new tab; coming back refreshes the copy
- *  (RidersEditor refreshes on focus while the rider shows one). */
-function EmbedActions({ href, label, children }: { href: string; label: string; children?: ReactNode }) {
+/** The input list / stage plot are edited in their own tools: the whole
+ *  preview is the way there (same tab; Back returns here and RidersEditor
+ *  picks up the change). */
+function EmbedOpen({ href, label, children }: { href: string; label: string; children: ReactNode }) {
   return (
-    <div className="rdx-row-actions rdx-embed-actions">
-      <a className="rdx-link" href={href} target="_blank" rel="noopener" title="Opens in a new tab. Each version you publish keeps the copy it was published with.">
-        {label} <ExternalLink size={12} aria-hidden />
-      </a>
+    <Link href={href} className="rdx-embed-open" aria-label={label} title={label}>
       {children}
-    </div>
+      <span className="rdx-embed-go" aria-hidden>
+        {label} <ArrowRight size={13} />
+      </span>
+    </Link>
   );
 }
 
@@ -546,14 +553,14 @@ const InputListBlock = memo(function InputListBlock({
   blockId,
   outputs,
   embeds,
-  tourId,
+  href,
   canEdit,
   edit,
 }: {
   blockId: string;
   outputs: boolean;
   embeds: RiderEmbeds;
-  tourId: string;
+  href: string;
   canEdit: boolean;
   edit: RiderEditorStore['edit'];
 }) {
@@ -562,24 +569,27 @@ const InputListBlock = memo(function InputListBlock({
   const hasOutputs = !!list?.outputs?.rows.length;
   return (
     <div className="rdx-embed">
-      <InputsView it={{ t: 'inputs', id: blockId, list, outputs, others, tag: null }} />
-      <EmbedActions href={`/operations/${tourId}/channel-list`} label={list ? 'Edit in Channel list' : 'Make the channel list'}>
-        {hasOutputs ? (
+      <EmbedOpen href={href} label={list ? 'Open the channel list' : 'Make the channel list'}>
+        <InputsView it={{ t: 'inputs', id: blockId, list, outputs, others, tag: null }} />
+      </EmbedOpen>
+      {hasOutputs ? (
+        <div className="rdx-row-actions rdx-embed-actions">
           <label className="rdx-mini">
             <input type="checkbox" className="lp-checkbox" checked={outputs} disabled={!canEdit} onChange={(e) => edit(blockId, { content: { outputs: e.target.checked } })} /> with outputs (IEM / mixes)
           </label>
-        ) : null}
-      </EmbedActions>
+        </div>
+      ) : null}
     </div>
   );
 });
 
-const StagePlotBlock = memo(function StagePlotBlock({ blockId, embeds, tourId }: { blockId: string; embeds: RiderEmbeds; tourId: string }) {
+const StagePlotBlock = memo(function StagePlotBlock({ blockId, embeds, href }: { blockId: string; embeds: RiderEmbeds; href: string }) {
   const plot = embedFor(embeds, 'stagePlot', null);
   return (
     <div className="rdx-embed">
-      <PlotView it={{ t: 'plot', id: blockId, plot, others: othersFor(embeds, 'stagePlot'), tag: null }} />
-      <EmbedActions href={`/operations/${tourId}/stage-plot`} label={plot ? 'Edit in Stage plot' : 'Make the stage plot'} />
+      <EmbedOpen href={href} label={plot ? 'Open the stage plot' : 'Make the stage plot'}>
+        <PlotView it={{ t: 'plot', id: blockId, plot, others: othersFor(embeds, 'stagePlot'), tag: null }} />
+      </EmbedOpen>
     </div>
   );
 });

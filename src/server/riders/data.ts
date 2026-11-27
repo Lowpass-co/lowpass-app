@@ -117,8 +117,38 @@ export interface RiderEditorData {
   /** The tour's input list(s) / stage plot(s) as they stand now (the live
    *  copies the Input list / Stage plot blocks show; Publish freezes them). */
   embeds: RiderEmbeds;
+  /** Where clicking the tour's stage plot goes: its own editor, when known. */
+  embedLinks: EmbedLinks;
+  /** The artist has a logo (it heads the PDF; else the artist's name). */
+  artistLogo: boolean;
   /** Signed URLs for the item photos in the blocks (path → URL, ~1 h). */
   photoUrls: Record<string, string>;
+}
+
+/** artists.branding.logo_url is set (the uploader writes it). */
+export function hasLogo(branding: unknown): boolean {
+  const url = branding && typeof branding === 'object' ? (branding as { logo_url?: unknown }).logo_url : null;
+  return typeof url === 'string' && url.trim().length > 0;
+}
+
+export interface EmbedLinks {
+  stagePlot: string | null;
+}
+
+/** The live input lists / stage plots + where the tour's plot is edited.
+ *  Service role, pinned to this tour — callers check Production VIEW first. */
+export async function loadEditorEmbeds(
+  service: SupabaseClient,
+  t: { tourId: string; workspaceId: string; artistId: string | null; shows: RiderShow[] },
+): Promise<{ embeds: RiderEmbeds; embedLinks: EmbedLinks }> {
+  const embeds = await buildEmbeds(service, { tourId: t.tourId, workspaceId: t.workspaceId, shows: t.shows });
+  let stagePlot: string | null = null;
+  if (embeds.tour.stagePlot && t.artistId) {
+    const { data } = await service.from('stage_plots').select('id').eq('rider_pack_id', embeds.tour.stagePlot).limit(1).maybeSingle();
+    const id = (data as { id: string } | null)?.id;
+    if (id) stagePlot = `/artists/${t.artistId}/stage-plots/${id}`;
+  }
+  return { embeds, embedLinks: { stagePlot } };
 }
 
 const NOT_SHOW_DAYS = new Set(['off', 'travel']);
@@ -236,11 +266,11 @@ export async function loadRiderEditor(
   service: SupabaseClient = createServiceSupabaseClient() as unknown as SupabaseClient,
 ): Promise<RiderEditorData | null> {
   // Shared by the fan-out and the embeds (Promise.resolve runs each query once).
-  const tourP = Promise.resolve(client.from('tours').select('id, name, workspace_id, artist_id, artist:artists(name)').eq('id', tourId).maybeSingle());
+  const tourP = Promise.resolve(client.from('tours').select('id, name, workspace_id, artist_id, artist:artists(name, branding)').eq('id', tourId).maybeSingle());
   const showsP = loadRiderShows(client, tourId);
   const embedsP = Promise.all([tourP, showsP]).then(([t, shows]) => {
-    const ws = (t.data as { workspace_id?: string } | null)?.workspace_id;
-    return ws ? buildEmbeds(service, { tourId, workspaceId: ws, shows }) : null;
+    const row = t.data as { workspace_id?: string; artist_id?: string | null } | null;
+    return row?.workspace_id ? loadEditorEmbeds(service, { tourId, workspaceId: row.workspace_id, artistId: row.artist_id ?? null, shows }) : null;
   });
   const [tourRes, ridersRes, blocksRes, settingsRes, versionsRes, latestRes, shows, linksRes, sendsRes, acksRes, repliesRes, statesRes, filesRes, crew, plot, channel, templatesRes, intakeRes, crewList, embeds] =
     await Promise.all([
@@ -265,7 +295,8 @@ export async function loadRiderEditor(
       loadCrew(client, tourId).catch(() => [] as RiderEditorData['crew']),
       embedsP.catch(() => null),
     ]);
-  const tour = tourRes.data as { id: string; name: string | null; workspace_id: string; artist_id: string | null; artist: { name: string | null } | { name: string | null }[] | null } | null;
+  type ArtistRef = { name: string | null; branding?: unknown };
+  const tour = tourRes.data as { id: string; name: string | null; workspace_id: string; artist_id: string | null; artist: ArtistRef | ArtistRef[] | null } | null;
   if (!tour) return null;
   const artist = Array.isArray(tour.artist) ? tour.artist[0] : tour.artist;
 
@@ -317,7 +348,9 @@ export async function loadRiderEditor(
     templates: ((templatesRes.data ?? []) as { id: string; name: string; kind: string; artist_id: string | null }[])
       .filter((t): t is { id: string; name: string; kind: RiderKind; artist_id: string | null } => (RIDER_KINDS as readonly string[]).includes(t.kind))
       .map((t) => ({ id: t.id, name: t.name, kind: t.kind, artistId: t.artist_id })),
-    embeds: embeds ?? emptyEmbeds(),
+    embeds: embeds?.embeds ?? emptyEmbeds(),
+    embedLinks: embeds?.embedLinks ?? { stagePlot: null },
+    artistLogo: hasLogo(artist?.branding),
     photoUrls,
   };
 }

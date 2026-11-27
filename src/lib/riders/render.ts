@@ -167,7 +167,30 @@ export function docModel(doc: SnapDoc, ctx: ModelContext): DocModel {
         break;
     }
   }
-  return { kind: doc.kind, title: doc.title, items };
+  return { kind: doc.kind, title: doc.title, items: dropEmptySections(items) };
+}
+
+/** A heading with nothing under it (its contacts not filled in, or — on a
+ *  show's copy — every line dated for other shows) says nothing: it isn't
+ *  printed, listed in the contents, or shown to the promoter. A section runs
+ *  to the next heading of its level or above; page breaks don't count. */
+export function dropEmptySections(items: DocItem[]): DocItem[] {
+  const keep = items.map(() => true);
+  for (let i = 0; i < items.length; i++) {
+    const h = items[i];
+    if (h.t !== 'heading') continue;
+    let filled = false;
+    for (let j = i + 1; j < items.length; j++) {
+      const it = items[j];
+      if (it.t === 'heading' && it.level <= h.level) break;
+      if (it.t !== 'heading' && it.t !== 'break') {
+        filled = true;
+        break;
+      }
+    }
+    if (!filled) keep[i] = false;
+  }
+  return items.filter((_, i) => keep[i]);
 }
 
 /** Consecutive request lines print as one list. */
@@ -273,6 +296,93 @@ export const RIDER_DOC_CSS = `
 }
 `;
 
+/** The printed rider's dress (body.rp only — the page keeps RIDER_DOC_CSS). */
+export const RIDER_PRINT_CSS = `
+body.rp { font-family: 'Inter', -apple-system, 'Helvetica Neue', Helvetica, Arial, sans-serif; color: var(--lp-text); font-feature-settings: 'cv11', 'ss01'; }
+.rp .rd-doc { font-size: 9.6pt; line-height: 1.5; }
+.rp a { color: inherit; }
+
+/* cover */
+.rp-cover { display: flex; flex-direction: column; align-items: center; text-align: center; padding-top: 4mm; break-after: page; }
+.rp-frame + .rp-cover { break-before: page; }
+.rp-brand { display: flex; align-items: center; justify-content: center; min-height: 30mm; margin-bottom: 9mm; }
+.rp-logo { display: block; max-width: 118mm; max-height: 64mm; object-fit: contain; }
+.rp-wordmark { font-family: 'Montserrat', sans-serif; font-weight: 700; font-size: 28pt; letter-spacing: 0.16em; text-transform: uppercase; line-height: 1.15; }
+.rp-title { margin: 0; font-family: 'Montserrat', sans-serif; font-weight: 500; font-size: 23pt; line-height: 1.15; letter-spacing: -0.01em; }
+.rp-tour { margin-top: 2.5mm; font-family: 'Montserrat', sans-serif; font-weight: 400; font-size: 14pt; color: var(--lp-text-secondary); }
+.rp-show { margin-top: 4mm; font-size: 10.5pt; font-weight: 600; }
+.rp-version { margin-top: 5mm; font-style: italic; font-size: 10.5pt; color: var(--lp-orange); }
+.rp-intro { margin-top: 11mm; max-width: 142mm; font-size: 9.6pt; color: var(--lp-text-secondary); }
+.rp-intro .rd-prose p { margin: 0 0 2mm; }
+.rp-intro .rd-prose ul, .rp-intro .rd-prose ol { text-align: left; display: inline-block; }
+.rp-contents { margin-top: 12mm; }
+.rp-contents-title { font-family: 'Montserrat', sans-serif; font-weight: 500; font-size: 12pt; letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 3.5mm; }
+.rp-contents ol { list-style: none; margin: 0 auto; padding: 0; counter-reset: rp; text-align: left; display: inline-block; }
+.rp-contents ol.rp-two { columns: 2; column-gap: 14mm; }
+.rp-contents li { counter-increment: rp; padding: 0.9mm 0; font-size: 10.5pt; break-inside: avoid; }
+.rp-contents li::before { content: counter(rp, decimal-leading-zero); display: inline-block; width: 8mm; color: var(--lp-orange); font-variant-numeric: tabular-nums; font-size: 9pt; }
+.rp-contents a { text-decoration: none; }
+.rp-live { margin-top: 12mm; font-size: 8.5pt; color: var(--lp-text-tertiary); }
+.rp-live a { color: var(--lp-text-secondary); }
+
+/* every page after the cover: the logo at its head (a repeating thead) */
+.rp-frame { width: 100%; border-collapse: collapse; }
+.rp-frame > thead > tr > th, .rp-frame > tbody > tr > td { padding: 0; font-weight: inherit; text-align: left; }
+.rp-runhead { display: flex; justify-content: center; align-items: center; height: 15mm; margin-bottom: 5mm; }
+.rp-runlogo { display: block; max-height: 15mm; max-width: 58mm; object-fit: contain; }
+.rp-runname { font-family: 'Montserrat', sans-serif; font-weight: 600; font-size: 9pt; letter-spacing: 0.2em; text-transform: uppercase; color: var(--lp-text-secondary); }
+
+/* headings: centred capitals */
+.rp .rd-h1 { display: block; text-align: center; font-family: 'Montserrat', sans-serif; font-weight: 500; font-size: 14.5pt; letter-spacing: 0.06em; text-transform: uppercase; margin: 9mm 0 3mm; padding: 0; border: 0; }
+.rp .rd-doc > .rd-h1:first-child { margin-top: 0; }
+.rp .rd-h1 .rd-tag, .rp .rd-h2 .rd-tag { vertical-align: middle; margin-left: 2mm; text-transform: none; letter-spacing: 0; font-family: 'Inter', sans-serif; }
+.rp .rd-h2 { display: block; font-family: 'Montserrat', sans-serif; font-weight: 600; font-size: 10.5pt; margin: 5mm 0 1.5mm; }
+.rp .rd-prose { margin: 1.5mm 0; }
+.rp .rd-prose a { color: var(--lp-orange); }
+
+/* requests: a checklist */
+.rp .rd-reqs { border-top: 0; margin: 1.5mm 0 3mm; }
+.rp .rd-req { grid-template-columns: 5mm 2.9em minmax(0, 1fr) auto; column-gap: 1.6mm; padding: 1.15mm 0; border-bottom: 0; }
+.rp .rd-req::before { content: ''; width: 3mm; height: 3mm; margin-top: 0.75mm; border: 0.8pt solid var(--lp-text-secondary); border-radius: 0.6mm; align-self: start; }
+.rp .rd-qty { text-align: left; font-weight: 600; }
+.rp .rd-qty::before { content: '('; }
+.rp .rd-qty::after { content: ')'; }
+.rp .rd-qty-none { display: none; }
+.rp .rd-qty-none + .rd-item { grid-column: 2 / 4; }
+.rp .rd-item { font-weight: 500; }
+.rp .rd-item a { text-decoration-color: color-mix(in srgb, var(--lp-orange) 55%, transparent); }
+.rp .rd-sub { grid-column: 3 / 5; font-size: 8.6pt; }
+.rp .rd-qty-none ~ .rd-sub { grid-column: 2 / 5; }
+.rp .rd-who { border: 0; padding: 0; font-size: 6.8pt; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; color: var(--lp-text-tertiary); }
+.rp .rd-who[data-who="artist"] { color: var(--lp-text-secondary); }
+.rp .rd-opt { font-size: 7.6pt; }
+
+/* summary, tables, contacts: hairlines, no fills */
+.rp .rd-summary { background: none; border: 0.75pt solid var(--lp-border-strong); border-radius: 1.5mm; padding: 4.5mm 5.5mm; margin: 3mm 0 4mm; }
+.rp .rd-summary-title { justify-content: center; gap: 4mm; font-family: 'Montserrat', sans-serif; font-weight: 500; font-size: 11pt; letter-spacing: 0.08em; color: var(--lp-text); margin-bottom: 3.5mm; }
+.rp .rd-summary-party { font-family: 'Inter', sans-serif; font-size: 9pt; font-weight: 500; color: var(--lp-text-secondary); }
+.rp .rd-summary-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 3mm 6mm; }
+.rp .rd-summary-grid h4 { color: var(--lp-orange); font-size: 7pt; letter-spacing: 0.1em; }
+.rp .rd-summary-grid ul { font-size: 8.8pt; line-height: 1.4; }
+.rp .rd-table, .rp .rd-contacts { font-size: 9pt; margin: 2mm 0 4mm; }
+.rp .rd-table th, .rp .rd-contacts th { color: var(--lp-text-secondary); font-size: 7pt; letter-spacing: 0.08em; border-bottom: 0.75pt solid var(--lp-text-secondary); padding: 1mm 2mm; }
+.rp .rd-table td, .rp .rd-contacts td { border-bottom: 0.5pt solid var(--lp-border); padding: 1.4mm 2mm; }
+.rp .rd-contacts td:first-child { font-weight: 600; }
+.rp .rd-inputs { font-size: 8pt; }
+.rp .rd-inputs td, .rp .rd-inputs th { padding: 0.8mm 2mm; }
+.rp .rd-inputs tbody tr:nth-child(even) td { background: color-mix(in srgb, var(--lp-text) 3%, transparent); }
+.rp .rd-embed-title { font-family: 'Montserrat', sans-serif; font-weight: 600; letter-spacing: 0.1em; color: var(--lp-text); }
+.rp .rd-plot { border-radius: 1.5mm; }
+.rp .rd-plot img { max-height: 200mm; }
+.rp .rd-files { font-size: 9pt; }
+.rp .rd-break { border: 0; margin: 0; }
+
+/* what changed */
+.rp-changes { margin-top: 10mm; break-inside: avoid; font-size: 9pt; }
+.rp-changes ul { margin: 0 auto; max-width: 150mm; padding-left: 5mm; }
+.rp-changes li { margin: 0.8mm 0; }
+`;
+
 /* ---------- HTML (the PDF) ---------- */
 
 /** Light paper tokens for the standalone PDF (a Chromium page doesn't load
@@ -288,7 +398,6 @@ const PDF_TOKENS = `
   --lp-weight-regular: 400; --lp-weight-medium: 500; --lp-weight-semibold: 600; --lp-weight-bold: 700;
 }
 html, body { margin: 0; background: var(--lp-bg); font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', Helvetica, Arial, sans-serif; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-.rd-pdf-doc + .rd-pdf-doc { break-before: page; }
 a { color: inherit; }
 `;
 
@@ -341,10 +450,10 @@ export function inputsCount(l: EmbedInputList): string {
   return `${i} ${i === 1 ? 'input' : 'inputs'}${o ? ` · ${o} ${o === 1 ? 'output' : 'outputs'}` : ''}`;
 }
 
-export function docBodyHtml(model: DocModel, header: RiderHeader, linkUrl: string | null): string {
+/** One document's items as HTML — the same model the page renders. */
+function itemsHtml(items: DocItem[], linkUrl: string | null): string {
   const parts: string[] = [];
-  parts.push(`<header class="rd-head">${header.artist ? `<div class="rd-artist">${esc(header.artist)}</div>` : ''}<h1 class="rd-title">${esc(model.title)}</h1><div class="rd-meta"><b>${esc(header.version)}</b>${header.show ? ` · ${esc(header.show)}` : ''}</div></header>`);
-  for (const run of runsOf(model.items)) {
+  for (const run of runsOf(items)) {
     if (run.t === 'requests') {
       parts.push(
         `<ul class="rd-reqs">${run.items
@@ -370,7 +479,7 @@ export function docBodyHtml(model: DocModel, header: RiderHeader, linkUrl: strin
     const it = run.item;
     switch (it.t) {
       case 'heading':
-        parts.push(`<h2 class="${it.level === 1 ? 'rd-h1' : 'rd-h2'}">${esc(it.text)}${tagHtml(it.tag)}</h2>`);
+        parts.push(`<h2 id="h-${esc(it.id)}" class="${it.level === 1 ? 'rd-h1' : 'rd-h2'}">${esc(it.text)}${tagHtml(it.tag)}</h2>`);
         break;
       case 'prose':
         parts.push(`<div class="rd-prose">${it.tag ? `<p>${tagHtml(it.tag)}</p>` : ''}${proseHtml(it.doc)}</div>`);
@@ -412,16 +521,80 @@ export function docBodyHtml(model: DocModel, header: RiderHeader, linkUrl: strin
         break;
     }
   }
-  return `<article class="rd-doc rd-pdf-doc">${parts.join('')}</article>`;
+  return parts.join('');
 }
 
-/** The whole PDF document: each rider on its own pages, then what changed. */
-export function riderPdfHtml(input: { header: RiderHeader; models: DocModel[]; changes: RiderChange[]; linkUrl: string | null; title: string }): string {
+/* ---------- the printed rider (PDF) ----------
+
+   Modelled on Adam's own riders: each document opens on a cover — the
+   artist's logo, the title, the tour, the version stamp in the accent, the
+   opening statement (prose before the first heading — his "disclaimer") and
+   a contents list that links to each section — and every page after carries
+   the logo at its head (a repeating <thead>, so the cover stays clean).
+   Section headings are centred capitals; request lines read as a checklist
+   ("☐ (24) Cans of …"). The footer (page x of y · the stamp) is the PDF
+   footer template (server/riders/pdf.ts). Same items as the page — only the
+   dress differs, in RIDER_PRINT_CSS, scoped to body.rp. */
+
+export interface RiderPrintInput {
+  title: string;
+  header: RiderHeader;
+  models: DocModel[];
+  changes: RiderChange[];
+  linkUrl: string | null;
+  /** "Satellite Tour USA '26" — under the title on each cover. */
+  tourName?: string | null;
+  /** The artist's logo as a data URI: the cover, and the head of every page. */
+  logo?: string | null;
+  /** @font-face rules (Inter + Montserrat) — lib/export/fonts.ts. */
+  fontCss?: string;
+}
+
+function brandHtml(input: RiderPrintInput, where: 'cover' | 'page'): string {
+  const name = input.header.artist;
+  if (input.logo) return `<img class="${where === 'cover' ? 'rp-logo' : 'rp-runlogo'}" src="${esc(input.logo)}" alt="${esc(name ?? 'Logo')}">`;
+  return name ? `<div class="${where === 'cover' ? 'rp-wordmark' : 'rp-runname'}">${esc(name)}</div>` : '';
+}
+
+function printDocHtml(model: DocModel, input: RiderPrintInput, tail: string): string {
+  // Prose before the first heading is the document's opening statement: it
+  // sits on the cover, under the title.
+  let lead = 0;
+  while (lead < model.items.length && model.items[lead].t === 'prose') lead++;
+  const intro = model.items.slice(0, lead);
+  const rest = model.items.slice(lead);
+  const sections = rest.filter((it): it is Extract<DocItem, { t: 'heading' }> => it.t === 'heading' && it.level === 1);
+  const contents =
+    sections.length >= 2
+      ? `<nav class="rp-contents"><div class="rp-contents-title">Contents</div><ol${sections.length > 9 ? ' class="rp-two"' : ''}>${sections
+          .map((h) => `<li><a href="#h-${esc(h.id)}">${esc(h.text)}</a></li>`)
+          .join('')}</ol></nav>`
+      : '';
+  const live = input.linkUrl ? `<div class="rp-live">The live version of this rider: <a href="${esc(input.linkUrl)}">${esc(input.linkUrl.replace(/^https?:\/\//, ''))}</a></div>` : '';
+  const cover = `<section class="rp-cover"><div class="rp-brand">${brandHtml(input, 'cover')}</div><h1 class="rp-title">${esc(model.title)}</h1>${
+    input.tourName ? `<div class="rp-tour">${esc(input.tourName)}</div>` : ''
+  }${input.header.show ? `<div class="rp-show">${esc(input.header.show)}</div>` : ''}<div class="rp-version">${esc(input.header.version)}</div>${
+    intro.length ? `<div class="rp-intro rd-doc">${itemsHtml(intro, input.linkUrl)}</div>` : ''
+  }${contents}${live}</section>`;
+  const run = brandHtml(input, 'page');
+  return `${cover}<table class="rp-frame"><thead><tr><th>${run ? `<div class="rp-runhead">${run}</div>` : ''}</th></tr></thead><tbody><tr><td><article class="rd-doc">${itemsHtml(rest, input.linkUrl)}</article>${tail}</td></tr></tbody></table>`;
+}
+
+/** The whole PDF: each document from its own cover, then what changed. */
+export function riderPdfHtml(input: RiderPrintInput): string {
   const changes = input.changes.length
-    ? `<section class="rd-changes"><h3>Changes in this version</h3><ul>${input.changes.map((c) => `<li>${esc(changeLine(c))}</li>`).join('')}</ul></section>`
+    ? `<section class="rp-changes"><h2 class="rd-h1">Changes in this version</h2><ul>${input.changes.map((c) => `<li>${esc(changeLine(c))}</li>`).join('')}</ul></section>`
     : '';
-  const body = input.models.map((m) => docBodyHtml(m, input.header, input.linkUrl)).join('');
-  return `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><title>${esc(input.title)}</title><style>${PDF_TOKENS}${RIDER_DOC_CSS}</style></head><body>${body}${changes}</body></html>`;
+  const docs = input.models.map((m, i) => printDocHtml(m, input, i === input.models.length - 1 ? changes : ''));
+  return `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><title>${esc(input.title)}</title><style>${input.fontCss ?? ''}${PDF_TOKENS}${RIDER_DOC_CSS}${RIDER_PRINT_CSS}</style></head><body class="rp">${docs.length ? docs.join('') : changes}</body></html>`;
+}
+
+/** The PDF footer (Chromium's footer template — inline styles only, no page
+ *  CSS or variables reach it, so the colours are the PDF_TOKENS values):
+ *  "Page 2 of 6" left, the version stamp right in the accent, as on Adam's
+ *  riders. */
+export function riderFooterTemplate(stamp: string): string {
+  return `<div style="width:100%;padding:0 18mm;display:flex;justify-content:space-between;align-items:center;font-family:Inter,Helvetica,Arial,sans-serif;font-size:7.5px;color:#6b645d;"><span>Page <span class="pageNumber"></span> of <span class="totalPages"></span></span><span style="color:#FF4500;font-style:italic;">${esc(stamp)}</span></div>`;
 }
 
 export function versionLine(label: string, publishedAt: string | null): string {

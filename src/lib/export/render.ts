@@ -58,6 +58,10 @@ export interface ExportDoc {
   runningHeader?: string | null;
   /** Honour the document's own @page sizes (mixed portrait / landscape). */
   cssPageSize?: boolean;
+  /** A document that draws its own page furniture (the rider PDF): these
+   *  replace the shared header / footer templates and margins, and the PDF
+   *  gets bookmarks from its headings. Absent → the shared ones above. */
+  page?: { headerTemplate: string; footerTemplate: string; margin: { top: string; right: string; bottom: string; left: string } };
 }
 
 /** Build the doc (loaders + html) then render + stream it. The `build` callback is
@@ -73,6 +77,16 @@ export async function renderPdfBuffer(surface: string, doc: ExportDoc): Promise<
   const page = await browser.newPage();
   try {
     await page.setContent(html, { waitUntil: 'load', timeout: 20_000 });
+    if (doc.page) {
+      const own = { format: 'A4' as const, printBackground: true, displayHeaderFooter: true, ...doc.page, preferCSSPageSize: cssPageSize === true };
+      try {
+        // Bookmarks (the PDF's outline) from the headings, for a long rider.
+        return await page.pdf({ ...own, tagged: true, outline: true });
+      } catch (outlineErr) {
+        console.error(`[export:${surface}] outline render failed, retrying without:`, outlineErr instanceof Error ? outlineErr.message : outlineErr);
+        return await page.pdf(own);
+      }
+    }
     // Footer: show:false → a minimal non-empty template (Chromium needs one to
     // honour the bottom margin) with no mark/note/numbers.
     const footerTemplate =

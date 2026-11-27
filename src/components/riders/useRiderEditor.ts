@@ -343,6 +343,17 @@ export function useRiderEditor(initial: RiderEditorData, opts: { tourId: string;
     }
   }, [api, onError, setB]);
 
+  /** Only the input list / stage plot — edited in their own tools, so they
+   *  can change under an open rider. Quiet on failure (the copy just stays). */
+  const refreshEmbeds = useCallback(async () => {
+    try {
+      const got = await api.embeds();
+      setData((d) => ({ ...d, embeds: got.embeds, embedLinks: got.embedLinks }));
+    } catch {
+      /* keep the copy we have */
+    }
+  }, [api]);
+
   const action = useCallback(
     async <T = unknown>(body: Record<string, unknown>, opts2: { reloadOthers?: boolean } = {}): Promise<T> => {
       const out = await api.action<T>(body);
@@ -473,6 +484,7 @@ export function useRiderEditor(initial: RiderEditorData, opts: { tourId: string;
     setFocus,
     edit,
     patchContent,
+    refreshEmbeds,
     insertAfter,
     insertFirst,
     remove,

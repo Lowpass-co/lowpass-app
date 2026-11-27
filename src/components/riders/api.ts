@@ -2,7 +2,8 @@
 
 /* LOWPASS — Riders: the client's calls (one error shape: ApiError). */
 
-import type { RiderEditorData } from '@/server/riders/data';
+import type { EmbedLinks, RiderEditorData } from '@/server/riders/data';
+import type { RiderEmbeds } from '@/lib/riders/types';
 import type { RiderBlock } from '@/lib/riders/types';
 
 export class ApiError extends Error {
@@ -38,6 +39,8 @@ export function ridersApi(tourId: string) {
   const base = `/api/tours/${tourId}/riders`;
   return {
     load: () => call<RiderEditorData>(base, { method: 'GET' }),
+    /** Just the live input list / stage plot (back from their tools). */
+    embeds: () => call<{ embeds: RiderEmbeds; embedLinks: EmbedLinks }>(`${base}?part=embeds`, { method: 'GET' }),
     action: <T = unknown>(body: Record<string, unknown>) => call<T>(base, { method: 'POST', body: JSON.stringify(body) }),
     insert: (riderId: string, blocks: Record<string, unknown>[]) => call<{ blocks: RiderBlock[] }>(`${base}/blocks`, { method: 'POST', body: JSON.stringify({ riderId, blocks }) }),
     patch: (body: Record<string, unknown>, keepalive = false) => call<{ block: RiderBlock }>(`${base}/blocks`, { method: 'PATCH', body: JSON.stringify(body), keepalive }),

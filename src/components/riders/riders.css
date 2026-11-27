@@ -114,12 +114,23 @@
 .rdx-exact-img img { width: 100%; height: 100%; object-fit: contain; display: block; }
 .rdx-exact-problem { color: var(--lp-text-secondary); }
 
-/* ---- input list / stage plot (shown, edited in their own tools) ---- */
-.rdx-embed .rd-embed { margin-bottom: var(--lp-space-2); }
+/* ---- input list / stage plot (shown here, edited in their own tools: the
+   whole preview is the link there) ---- */
+.rdx-embed .rd-embed { margin: 0; }
 .rdx-embed .rd-scroll { max-height: 420px; overflow: auto; }
-.rdx-embed-actions { align-items: center; flex-wrap: wrap; gap: var(--lp-space-2) var(--lp-space-4); }
-.rdx-embed-actions a.rdx-link { display: inline-flex; align-items: center; gap: var(--lp-space-1); text-decoration: none; }
+.rdx-embed-open { position: relative; display: block; padding: var(--lp-space-3); margin: calc(-1 * var(--lp-space-3)); border: 1px solid transparent; border-radius: var(--lp-radius-md); color: inherit; text-decoration: none; cursor: pointer; }
+.rdx-embed-open:hover, .rdx-embed-open:focus-visible { border-color: var(--lp-border-strong); background: var(--lp-bg-secondary); outline: none; }
+.rdx-embed-go { position: absolute; bottom: var(--lp-space-3); right: var(--lp-space-3); display: inline-flex; align-items: center; gap: var(--lp-space-1); padding: var(--lp-space-1) var(--lp-space-2); border-radius: var(--lp-radius-sm); background: var(--lp-bg); border: 1px solid var(--lp-border); font-size: var(--lp-text-xs); font-weight: var(--lp-weight-semibold); color: var(--lp-orange); opacity: 0; transition: opacity 120ms ease; }
+.rdx-embed-open:hover .rdx-embed-go, .rdx-embed-open:focus-visible .rdx-embed-go { opacity: 1; }
+.rdx-embed-actions { align-items: center; flex-wrap: wrap; gap: var(--lp-space-2) var(--lp-space-4); margin-top: var(--lp-space-3); }
 .rdx-embed-actions label { display: inline-flex; align-items: center; gap: var(--lp-space-1); }
+@media (hover: none) { .rdx-embed-go { opacity: 1; } }
+
+/* The request line's details toggle: a chevron, so it never reads as the
+   block's ⋮ menu beside it. */
+.rdx-disclose svg { transition: transform 120ms ease; }
+.rdx-disclose[aria-expanded="true"] svg { transform: rotate(180deg); }
+.rdx-disclose[aria-expanded="true"] { color: var(--lp-text-secondary); }
 
 /* ---- table / contacts ---- */
 .rdx-grid { width: 100%; border-collapse: collapse; margin: var(--lp-space-2) 0; font-size: var(--lp-text-sm); }
