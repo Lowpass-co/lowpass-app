@@ -2608,3 +2608,9 @@ has an **Admin** section: Visas & work permits, Passes & laminates, Phones &
 data, Bank & card fees. Support tour and Club also have **Rehearsals** before
 Misc. Press tour has "Visas & work permits" in its own section before Misc.
 Paste 304 twice: nothing doubles.
+#### BUD-100 — Drop receipts on the Receipts page
+Budget › Receipts. Under the title: a dashed "Drop receipts here" bar. Drag a
+photo or PDF over the page: the bar turns orange. Drop it on the bar, or
+anywhere on the page: "Adding receipts" appears under the bar, and when it
+finishes the receipt is in the list. Click the bar: a file picker opens. The
+empty state no longer mentions an "Expenses tab".

@@ -311,6 +311,8 @@ recreate a `_legacy/` tree: delete dead code instead of parking it.
   `ReceiptDropActivity`). A file dropped ANYWHERE on the page is a receipt
   unless a grid row took it (`defaultPrevented`) — never re-add a drop box
   under the grid, and never let a row drop upload twice (tested).
+  The Receipts tab (`?tab=receipts`) has the same drop plus a dashed
+  `<ReceiptDropBar>` under its title (Nov 2026, Adam) — that page only.
 - **Receipts land in real sections** (Nov 2026, Adam): a hotel bill attaches
   to its hotel's automatic line (`matchHotel`, src/lib/budget/hotelMatch.ts —
   by name, else by date inside exactly one stay); the apply route ALWAYS sends

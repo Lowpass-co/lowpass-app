@@ -301,7 +301,7 @@ export function ReceiptsBank({ tourId, tourCurrency, receipts, lines }: Receipts
           style={{ fontSize: 'var(--lp-text-sm)', color: 'var(--lp-text-tertiary)', margin: 0 }}
         >
           {receipts.length === 0
-            ? 'No receipts yet. Drop one on the Expenses tab and it will appear here — scanned or not.'
+            ? 'No receipts yet. Drop them on the bar above or anywhere on this page — each one lands here, scanned or not.'
             : `Nothing in ${FILTERS.find((f) => f.key === filter)?.label}.`}
         </p>
       ) : (

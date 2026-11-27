@@ -20,6 +20,29 @@
   box-shadow: var(--lp-shadow-focus-ring);
 }
 
+.rd-bar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--lp-space-2);
+  width: 100%;
+  padding: var(--lp-space-5) var(--lp-space-4);
+  font-size: var(--lp-text-sm);
+  color: var(--color-lp-text-secondary);
+  background: transparent;
+  border: 1px dashed var(--lp-border-strong);
+  border-radius: var(--lp-radius-lg);
+  cursor: pointer;
+  transition: border-color 120ms, background 120ms, color 120ms;
+}
+.rd-bar strong { color: var(--color-lp-text); font-weight: var(--lp-weight-semibold); }
+.rd-bar:hover,
+.rd-bar.is-dragging {
+  border-color: var(--lp-orange);
+  color: var(--color-lp-text);
+  background: color-mix(in srgb, var(--lp-orange) 6%, transparent);
+}
+
 .rd-need {
   display: inline-flex;
   align-items: center;
