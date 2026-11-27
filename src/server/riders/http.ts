@@ -1,6 +1,6 @@
 /* LOWPASS — Riders: one error shape for every rider route. */
 import { NextResponse } from 'next/server';
-import { RiderError } from './actions';
+import { RiderError } from './errors';
 
 export function riderErrorResponse(e: unknown, where: string): NextResponse {
   if (e instanceof RiderError) {

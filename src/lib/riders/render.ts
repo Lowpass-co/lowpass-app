@@ -10,9 +10,23 @@
    ============================================ */
 
 import { dateTag, fmtDay, fmtQty, inForce, providerShort, requestQty } from './blocks';
+import { embedFor, embedName, othersFor, svgDataUri } from './embeds';
 import { esc, proseHtml } from './prose';
 import { buildSummary, changeLine, type SummaryGroup } from './summary';
-import type { Contact, LineState, ProseDoc, Provider, ResolvedAttachment, RiderChange, RiderKind, SnapBlock, SnapDoc } from './types';
+import type {
+  Contact,
+  EmbedInputList,
+  EmbedStagePlot,
+  LineState,
+  ProseDoc,
+  Provider,
+  ResolvedAttachment,
+  RiderChange,
+  RiderEmbeds,
+  RiderKind,
+  SnapBlock,
+  SnapDoc,
+} from './types';
 
 export interface LineStateView {
   state: LineState;
@@ -35,11 +49,18 @@ export type DocItem =
       perPerson: string | null;
       tag: string | null;
       state: LineStateView | null;
+      /** The exact item: a shop / product page, and a photo (storage path). */
+      link: string | null;
+      photo: string | null;
     }
   | { t: 'table'; id: string; columns: string[]; rows: string[][]; tag: string | null }
   | { t: 'contacts'; id: string; people: Contact[]; tag: string | null }
   | { t: 'summary'; id: string; title: string; party: string | null; groups: SummaryGroup[]; tag: string | null }
   | { t: 'files'; id: string; items: ResolvedAttachment[]; tag: string | null }
+  /** The input list / stage plot this show (or the tour) gets; null = none on
+   *  the tour yet. `others` (whole-tour view only): shows with their own. */
+  | { t: 'inputs'; id: string; list: EmbedInputList | null; outputs: boolean; others: string[]; tag: string | null }
+  | { t: 'plot'; id: string; plot: EmbedStagePlot | null; others: string[]; tag: string | null }
   | { t: 'break'; id: string };
 
 export interface DocModel {
@@ -57,6 +78,10 @@ export interface ModelContext {
   attachments: readonly ResolvedAttachment[];
   /** Per-show settled lines, by block id. */
   states?: Record<string, LineStateView>;
+  /** The input lists / stage plots (live in the editor, frozen in a version). */
+  embeds?: RiderEmbeds | null;
+  /** The show being read — picks its own input list / plot. null = the tour. */
+  routingId?: string | null;
 }
 
 function attachmentsFor(items: { kind: string; id?: string; label?: string }[], resolved: readonly ResolvedAttachment[]): ResolvedAttachment[] {
@@ -96,6 +121,8 @@ export function docModel(doc: SnapDoc, ctx: ModelContext): DocModel {
           perPerson: c.perPerson && c.qty !== null ? `${fmtQty(c.qty)} per person${ctx.party ? ` × ${ctx.party}` : ''}` : null,
           tag,
           state: ctx.states?.[b.id] ?? null,
+          link: c.link || null,
+          photo: c.photo,
         });
         break;
       }
@@ -121,6 +148,19 @@ export function docModel(doc: SnapDoc, ctx: ModelContext): DocModel {
         break;
       case 'files':
         if (b.content.items.length) items.push({ t: 'files', id: b.id, items: attachmentsFor(b.content.items, ctx.attachments), tag });
+        break;
+      case 'input_list':
+        items.push({
+          t: 'inputs',
+          id: b.id,
+          list: embedFor(ctx.embeds, 'inputList', ctx.routingId ?? null),
+          outputs: b.content.outputs,
+          others: ctx.routingId ? [] : othersFor(ctx.embeds, 'inputList'),
+          tag,
+        });
+        break;
+      case 'stage_plot':
+        items.push({ t: 'plot', id: b.id, plot: embedFor(ctx.embeds, 'stagePlot', ctx.routingId ?? null), others: ctx.routingId ? [] : othersFor(ctx.embeds, 'stagePlot'), tag });
         break;
       case 'break':
         items.push({ t: 'break', id: b.id });
@@ -201,6 +241,27 @@ export const RIDER_DOC_CSS = `
 .rd-file a { color: var(--lp-orange); font-weight: var(--lp-weight-semibold); text-decoration: none; }
 .rd-file-missing { color: var(--lp-text-tertiary); }
 .rd-break { border: 0; border-top: 1px dashed var(--lp-border); margin: var(--lp-space-6) 0; break-after: page; }
+.rd-itembtn { display: inline-flex; align-items: center; gap: var(--lp-space-2); padding: 0; border: 0; background: none; font: inherit; color: inherit; text-align: left; cursor: pointer; }
+.rd-itembtn span { text-decoration: underline; text-decoration-color: color-mix(in srgb, var(--lp-orange) 55%, transparent); text-underline-offset: 2px; }
+.rd-itembtn:hover span { text-decoration-color: var(--lp-orange); }
+.rd-thumb { width: 28px; height: 28px; flex-shrink: 0; object-fit: cover; border-radius: var(--lp-radius-sm); border: 1px solid var(--lp-border); vertical-align: middle; background: var(--lp-bg-secondary); }
+.rd-item > .rd-thumb { margin-right: var(--lp-space-2); }
+.rd-item a { color: inherit; text-decoration: underline; text-decoration-color: color-mix(in srgb, var(--lp-orange) 55%, transparent); text-underline-offset: 2px; }
+.rd-embed { margin: var(--lp-space-3) 0 var(--lp-space-5); }
+.rd-embed-head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--lp-space-3); flex-wrap: wrap; margin-bottom: var(--lp-space-2); break-after: avoid; }
+.rd-embed-plot { break-inside: avoid; }
+.rd-embed-title { font-size: var(--lp-text-xs); font-weight: var(--lp-weight-bold); letter-spacing: 0.08em; text-transform: uppercase; color: var(--lp-text-secondary); }
+.rd-embed-meta { font-size: var(--lp-text-xs); color: var(--lp-text-tertiary); }
+.rd-embed-sub { margin: var(--lp-space-3) 0 var(--lp-space-1); font-size: var(--lp-text-xs); font-weight: var(--lp-weight-semibold); color: var(--lp-text-secondary); }
+.rd-embed-none { padding: var(--lp-space-3) var(--lp-space-4); border: 1px dashed var(--lp-border); border-radius: var(--lp-radius-md); font-size: var(--lp-text-sm); color: var(--lp-text-tertiary); }
+.rd-embed-note { margin-top: var(--lp-space-2); font-size: var(--lp-text-xs); color: var(--lp-text-tertiary); }
+.rd-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+.rd-inputs { margin: 0; font-size: var(--lp-text-xs); }
+.rd-inputs th, .rd-inputs td { padding: var(--lp-space-1) var(--lp-space-2); white-space: nowrap; }
+.rd-inputs td:first-child, .rd-inputs th:first-child { text-align: right; font-variant-numeric: tabular-nums; font-weight: var(--lp-weight-bold); width: 2.6em; }
+.rd-inputs tbody tr:nth-child(even) td { background: color-mix(in srgb, var(--lp-text) 3%, transparent); }
+.rd-plot { margin: 0; padding: var(--lp-space-3); border: 1px solid var(--lp-border); border-radius: var(--lp-radius-md); background: var(--lp-map-paper); break-inside: avoid; }
+.rd-plot img { display: block; width: 100%; height: auto; max-height: 70vh; object-fit: contain; }
 .rd-changes { margin: var(--lp-space-6) 0 0; padding: var(--lp-space-4) var(--lp-space-5); border: 1px solid var(--lp-border); border-radius: var(--lp-radius-md); font-size: var(--lp-text-sm); break-inside: avoid; }
 .rd-changes h3 { margin: 0 0 var(--lp-space-2); font-size: var(--lp-text-xs); letter-spacing: 0.08em; text-transform: uppercase; color: var(--lp-text-secondary); }
 .rd-changes ul { margin: 0; padding-left: var(--lp-space-5); }
@@ -220,7 +281,7 @@ const PDF_TOKENS = `
 :root {
   --lp-orange: #FF4500; --lp-text: #14110f; --lp-text-secondary: #46413c; --lp-text-tertiary: #8a837b;
   --lp-border: #e4ded6; --lp-border-strong: #cfc7bc; --lp-bg: #ffffff; --lp-bg-secondary: #f6f3ef;
-  --color-lp-success: #16a34a; --color-lp-warning: #d97706;
+  --color-lp-success: #16a34a; --color-lp-warning: #d97706; --lp-map-paper: #FFFFFF;
   --lp-text-xs: 8.5pt; --lp-text-sm: 9pt; --lp-text-base: 10pt; --lp-text-md: 10.5pt; --lp-text-lg: 12pt; --lp-text-xl: 15pt; --lp-text-2xl: 19pt;
   --lp-space-1: 2pt; --lp-space-2: 4pt; --lp-space-3: 6pt; --lp-space-4: 9pt; --lp-space-5: 12pt; --lp-space-6: 15pt; --lp-space-8: 20pt;
   --lp-radius-sm: 3px; --lp-radius-md: 5px; --lp-radius-full: 999px;
@@ -249,6 +310,37 @@ function fileLine(a: ResolvedAttachment, linkUrl: string | null): string {
   return `<li class="rd-file"><span>${name}</span>${linkUrl ? ` <span class="rd-file-missing">— on the live rider: ${esc(linkUrl)}</span>` : ''}</li>`;
 }
 
+function tableHtml(t: { columns: string[]; rows: string[][] }, cls: string): string {
+  return `<div class="rd-scroll"><table class="rd-table ${cls}"><thead><tr>${t.columns.map((c) => `<th>${esc(c)}</th>`).join('')}</tr></thead><tbody>${t.rows
+    .map((r) => `<tr>${r.map((c) => `<td>${esc(c)}</td>`).join('')}</tr>`)
+    .join('')}</tbody></table></div>`;
+}
+
+function embedHead(title: string, meta: string | null): string {
+  return `<div class="rd-embed-head"><span class="rd-embed-title">${esc(title)}</span>${meta ? `<span class="rd-embed-meta">${esc(meta)}</span>` : ''}</div>`;
+}
+
+function inputsHtml(it: Extract<DocItem, { t: 'inputs' }>): string {
+  const note = it.others.length ? `<div class="rd-embed-note">Different for: ${esc(it.others.join(' · '))}</div>` : '';
+  if (!it.list) return `<section class="rd-embed">${embedHead('Input list', null)}<div class="rd-embed-none">The input list will follow.</div>${note}</section>`;
+  const l = it.list;
+  const outputs = it.outputs && l.outputs && l.outputs.rows.length ? `<div class="rd-embed-sub">Outputs (IEM / mixes)</div>${tableHtml(l.outputs, 'rd-inputs')}` : '';
+  return `<section class="rd-embed">${embedHead('Input list', `${embedName(l)} · ${inputsCount(l)}`)}${tableHtml(l.inputs, 'rd-inputs')}${outputs}${note}</section>`;
+}
+
+function plotHtml(it: Extract<DocItem, { t: 'plot' }>): string {
+  const note = it.others.length ? `<div class="rd-embed-note">Different for: ${esc(it.others.join(' · '))}</div>` : '';
+  if (!it.plot) return `<section class="rd-embed">${embedHead('Stage plot', null)}<div class="rd-embed-none">The stage plot will follow.</div>${note}</section>`;
+  return `<section class="rd-embed rd-embed-plot">${embedHead('Stage plot', embedName(it.plot))}<figure class="rd-plot"><img alt="Stage plot" src="${esc(svgDataUri(it.plot.svg))}"></figure>${note}</section>`;
+}
+
+/** "32 inputs · 6 outputs" */
+export function inputsCount(l: EmbedInputList): string {
+  const i = l.inputs.rows.length;
+  const o = l.outputs?.rows.length ?? 0;
+  return `${i} ${i === 1 ? 'input' : 'inputs'}${o ? ` · ${o} ${o === 1 ? 'output' : 'outputs'}` : ''}`;
+}
+
 export function docBodyHtml(model: DocModel, header: RiderHeader, linkUrl: string | null): string {
   const parts: string[] = [];
   parts.push(`<header class="rd-head">${header.artist ? `<div class="rd-artist">${esc(header.artist)}</div>` : ''}<h1 class="rd-title">${esc(model.title)}</h1><div class="rd-meta"><b>${esc(header.version)}</b>${header.show ? ` · ${esc(header.show)}` : ''}</div></header>`);
@@ -268,7 +360,8 @@ export function docBodyHtml(model: DocModel, header: RiderHeader, linkUrl: strin
               r.perPerson ? `<span>${esc(r.perPerson)}</span>` : '',
               r.note ? `<span>${esc(r.note)}</span>` : '',
             ].join('');
-            return `<li class="rd-req"${r.state ? ` data-state="${r.state.state}"` : ''}><span class="rd-qty${r.qty ? '' : ' rd-qty-none'}">${r.qty ? esc(r.qty) : '—'}</span><span class="rd-item">${esc(r.item)}</span><span class="rd-side">${side}</span>${sub ? `<span class="rd-sub">${sub}</span>` : ''}</li>`;
+            const item = r.link ? `<a href="${esc(r.link)}">${esc(r.item)}</a>` : esc(r.item);
+            return `<li class="rd-req"${r.state ? ` data-state="${r.state.state}"` : ''}><span class="rd-qty${r.qty ? '' : ' rd-qty-none'}">${r.qty ? esc(r.qty) : '—'}</span><span class="rd-item">${item}</span><span class="rd-side">${side}</span>${sub ? `<span class="rd-sub">${sub}</span>` : ''}</li>`;
           })
           .join('')}</ul>`,
       );
@@ -307,6 +400,12 @@ export function docBodyHtml(model: DocModel, header: RiderHeader, linkUrl: strin
         break;
       case 'files':
         parts.push(`<ul class="rd-files">${it.items.map((a) => fileLine(a, linkUrl)).join('')}</ul>`);
+        break;
+      case 'inputs':
+        parts.push(inputsHtml(it));
+        break;
+      case 'plot':
+        parts.push(plotHtml(it));
         break;
       case 'break':
         parts.push('<hr class="rd-break">');

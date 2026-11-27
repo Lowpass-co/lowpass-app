@@ -16,7 +16,7 @@
    side panel to answer and settle per show.
    ============================================ */
 
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ExternalLink, FileDown, Plus, Send, Upload } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { ContextMenu } from '@/components/ui/ContextMenu';
@@ -28,7 +28,7 @@ import { docModel } from '@/lib/riders/render';
 import { repliesToAnswer } from '@/lib/riders/status';
 import { RIDER_DEFAULT_TITLE, RIDER_KIND_LABEL, RIDER_KINDS, type BlockKind, type RiderBlock, type RiderKind } from '@/lib/riders/types';
 import type { RiderEditorData } from '@/server/riders/data';
-import { BlockRow, INSERTABLE, KIND_LABEL, type RowContext } from './BlockRow';
+import { BlockRow, KIND_LABEL, insertableFor, type RowContext } from './BlockRow';
 import { DatesDialog, PublishDialog, SendPanel, StartPanel, TemplateDialog, type OtherRider } from './RiderDialogs';
 import { RiderDocStyles, RiderDocView } from './RiderDocView';
 import { SidePanel, linkUrl, useDraftChanges, type SideTab } from './RiderPanels';
@@ -78,6 +78,27 @@ export function RidersEditor({
   const draft = useDraftChanges(store);
   const latest = data.latest;
   const openReplies = useMemo(() => repliesToAnswer(data.replies), [data.replies]);
+  const insertable = insertableFor(kind);
+
+  // The input list / stage plot are edited in their own tools ("Edit in …"
+  // opens a new tab): coming back to this one picks up what changed.
+  const { refresh } = store;
+  const showsEmbeds = useMemo(() => store.draftDocs.some((d) => d.blocks.some((b) => b.kind === 'input_list' || b.kind === 'stage_plot')), [store.draftDocs]);
+  useEffect(() => {
+    if (!showsEmbeds) return;
+    let last = Date.now();
+    const back = () => {
+      if (document.visibilityState !== 'visible' || Date.now() - last < 5000) return;
+      last = Date.now();
+      void refresh();
+    };
+    document.addEventListener('visibilitychange', back);
+    window.addEventListener('focus', back);
+    return () => {
+      document.removeEventListener('visibilitychange', back);
+      window.removeEventListener('focus', back);
+    };
+  }, [showsEmbeds, refresh]);
 
   const jump = useCallback(
     (blockId: string, k?: RiderKind | null) => {
@@ -291,7 +312,7 @@ export function RidersEditor({
                 <BlockRow key={b.id} block={b} index={i} ctx={ctx} />
               ))}
               <div className="rdx-add" aria-label="Add to the rider">
-                {INSERTABLE.map((k) => (
+                {insertable.map((k) => (
                   <button key={k} type="button" className="rdx-chip" onClick={() => add(k)}>
                     <Plus size={13} aria-hidden /> {KIND_LABEL[k]}
                   </button>
@@ -301,8 +322,9 @@ export function RidersEditor({
           ) : (
             <div className="rdx-paper">
               <RiderDocView
-                model={docModel(store.draftDocs.find((d) => d.kind === kind)!, { date: null, party: store.party, docs: store.draftDocs, attachments: latest?.snapshot.attachments ?? [] })}
+                model={docModel(store.draftDocs.find((d) => d.kind === kind)!, { date: null, party: store.party, docs: store.draftDocs, attachments: latest?.snapshot.attachments ?? [], embeds: data.embeds })}
                 header={{ artist: data.tour.artistName, version: latest ? `Draft after version ${latest.label}` : 'Draft — not published', show: null }}
+                photoUrl={(p) => store.photoUrls[p] ?? null}
               />
             </div>
           )}
@@ -311,7 +333,7 @@ export function RidersEditor({
       </div>
 
       {insertAt ? (
-        <InsertPopover at={insertAt} onPick={(k) => add(k, insertAt.afterId)} onClose={() => setInsertAt(null)} />
+        <InsertPopover at={insertAt} kinds={insertable} onPick={(k) => add(k, insertAt.afterId)} onClose={() => setInsertAt(null)} />
       ) : null}
       <PublishDialog
         open={publishing}
@@ -351,12 +373,12 @@ function TitleInput({ value, onSave }: { value: string; onSave: (t: string) => v
   );
 }
 
-function InsertPopover({ at, onPick, onClose }: { at: { top: number; left: number }; onPick: (k: BlockKind) => void; onClose: () => void }) {
+function InsertPopover({ at, kinds, onPick, onClose }: { at: { top: number; left: number }; kinds: BlockKind[]; onPick: (k: BlockKind) => void; onClose: () => void }) {
   return (
     <>
       <div style={{ position: 'fixed', inset: 0, zIndex: 'var(--lp-z-dropdown)' as unknown as number }} onClick={onClose} aria-hidden />
       <div className="rdx-pop" role="menu" style={{ position: 'fixed', top: at.top, left: at.left }} onKeyDown={(e) => e.key === 'Escape' && onClose()}>
-        {INSERTABLE.map((k, i) => (
+        {kinds.map((k, i) => (
           <button key={k} type="button" role="menuitem" autoFocus={i === 0} onClick={() => onPick(k)}>
             {KIND_LABEL[k]}
           </button>

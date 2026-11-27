@@ -7,17 +7,25 @@
    the shows, their links / sends / acknowledgements / replies / settled
    lines, the tour's files for the attachment picker, the templates.
    Reads only, through the caller's client: the database decides what they
-   see (production area).
+   see (production area) — except the embedded input list / stage plot and
+   the item photos, read with the service role pinned to this tour
+   (server/riders/embeds.ts, photos.ts), after the caller's own read of the
+   tour has succeeded.
    ============================================ */
 
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { createServiceSupabaseClient } from '@/lib/supabase-server';
 import { ROUTING_VENUE_SELECT } from '@/server/advance/board';
+import { emptyEmbeds } from '@/lib/riders/embeds';
+import { photoPathsIn } from '@/lib/riders/photos';
+import { buildEmbeds } from './embeds';
+import { signPhotos } from './photos';
 import { resolveVenue, type RoutingVenueSource } from '@/lib/venues/resolveVenue';
 import { blockFromRow } from '@/lib/riders/blocks';
 import { parseSnapshot } from '@/lib/riders/snapshot';
 import { versionLabel } from '@/lib/riders/summary';
 import { byPosition } from '@/lib/riders/position';
-import { RIDER_KINDS, type LineState, type RiderBlock, type RiderChange, type RiderKind, type RiderSnapshot } from '@/lib/riders/types';
+import { RIDER_KINDS, type LineState, type RiderBlock, type RiderChange, type RiderEmbeds, type RiderKind, type RiderSnapshot } from '@/lib/riders/types';
 
 export interface RiderDocRow {
   id: string;
@@ -106,6 +114,11 @@ export interface RiderEditorData {
   crew: { personId: string; name: string; role: string; email: string; phone: string }[];
   has: { channelList: boolean; stagePlot: boolean };
   templates: { id: string; name: string; kind: RiderKind; artistId: string | null }[];
+  /** The tour's input list(s) / stage plot(s) as they stand now (the live
+   *  copies the Input list / Stage plot blocks show; Publish freezes them). */
+  embeds: RiderEmbeds;
+  /** Signed URLs for the item photos in the blocks (path → URL, ~1 h). */
+  photoUrls: Record<string, string>;
 }
 
 const NOT_SHOW_DAYS = new Set(['off', 'travel']);
@@ -217,16 +230,27 @@ export async function crewCount(client: SupabaseClient, tourId: string): Promise
   return count ?? 0;
 }
 
-export async function loadRiderEditor(client: SupabaseClient, tourId: string): Promise<RiderEditorData | null> {
-  const [tourRes, ridersRes, blocksRes, settingsRes, versionsRes, latestRes, shows, linksRes, sendsRes, acksRes, repliesRes, statesRes, filesRes, crew, plot, channel, templatesRes, intakeRes, crewList] =
+export async function loadRiderEditor(
+  client: SupabaseClient,
+  tourId: string,
+  service: SupabaseClient = createServiceSupabaseClient() as unknown as SupabaseClient,
+): Promise<RiderEditorData | null> {
+  // Shared by the fan-out and the embeds (Promise.resolve runs each query once).
+  const tourP = Promise.resolve(client.from('tours').select('id, name, workspace_id, artist_id, artist:artists(name)').eq('id', tourId).maybeSingle());
+  const showsP = loadRiderShows(client, tourId);
+  const embedsP = Promise.all([tourP, showsP]).then(([t, shows]) => {
+    const ws = (t.data as { workspace_id?: string } | null)?.workspace_id;
+    return ws ? buildEmbeds(service, { tourId, workspaceId: ws, shows }) : null;
+  });
+  const [tourRes, ridersRes, blocksRes, settingsRes, versionsRes, latestRes, shows, linksRes, sendsRes, acksRes, repliesRes, statesRes, filesRes, crew, plot, channel, templatesRes, intakeRes, crewList, embeds] =
     await Promise.all([
-      client.from('tours').select('id, name, workspace_id, artist_id, artist:artists(name)').eq('id', tourId).maybeSingle(),
+      tourP,
       client.from('riders').select('id, kind, title').eq('tour_id', tourId),
       client.from('rider_blocks').select(BLOCK_COLS).eq('tour_id', tourId).limit(5000),
       client.from('rider_settings').select('party_size').eq('tour_id', tourId).maybeSingle(),
       client.from('rider_versions').select(VERSION_COLS).eq('tour_id', tourId).order('major', { ascending: false }).order('minor', { ascending: false }).limit(100),
       client.from('rider_versions').select(`${VERSION_COLS}, snapshot`).eq('tour_id', tourId).order('major', { ascending: false }).order('minor', { ascending: false }).limit(1).maybeSingle(),
-      loadRiderShows(client, tourId),
+      showsP,
       client.from('rider_links').select(LINK_COLS).eq('tour_id', tourId).is('revoked_at', null),
       client.from('rider_sends').select('link_id, version_id, sent_at').eq('tour_id', tourId).order('sent_at', { ascending: false }).limit(1000),
       client.from('rider_acks').select('id, link_id, routing_id, version_id, name, company, email, acked_at').eq('tour_id', tourId).order('acked_at', { ascending: false }).limit(1000),
@@ -239,6 +263,7 @@ export async function loadRiderEditor(client: SupabaseClient, tourId: string): P
       client.from('rider_templates').select('id, name, kind, artist_id').order('name', { ascending: true }),
       client.from('advance_intake_links').select('routing_id, recipient_name, recipient_email, created_at').eq('tour_id', tourId).order('created_at', { ascending: false }).limit(500),
       loadCrew(client, tourId).catch(() => [] as RiderEditorData['crew']),
+      embedsP.catch(() => null),
     ]);
   const tour = tourRes.data as { id: string; name: string | null; workspace_id: string; artist_id: string | null; artist: { name: string | null } | { name: string | null }[] | null } | null;
   if (!tour) return null;
@@ -255,10 +280,13 @@ export async function loadRiderEditor(client: SupabaseClient, tourId: string): P
     if (r.routing_id && r.recipient_email && !advanceRecipients[r.routing_id]) advanceRecipients[r.routing_id] = { name: r.recipient_name, email: r.recipient_email };
   }
 
+  const blocks = ((blocksRes.data ?? []) as Record<string, unknown>[]).map(toBlock).filter((b): b is RiderBlock => !!b).sort(byPosition);
+  const photoUrls = await signPhotos(service, tour.workspace_id, tour.id, photoPathsIn(blocks)).catch(() => ({}));
+
   return {
     tour: { id: tour.id, name: tour.name ?? 'Tour', workspaceId: tour.workspace_id, artistId: tour.artist_id, artistName: artist?.name ?? null },
     riders,
-    blocks: ((blocksRes.data ?? []) as Record<string, unknown>[]).map(toBlock).filter((b): b is RiderBlock => !!b).sort(byPosition),
+    blocks,
     party: { setting: (settingsRes.data as { party_size: number | null } | null)?.party_size ?? null, crew },
     latest: latestRow ? { ...toVersion(latestRow), snapshot: parseSnapshot(latestRow.snapshot) } : null,
     versions: ((versionsRes.data ?? []) as Record<string, unknown>[]).map(toVersion),
@@ -289,5 +317,7 @@ export async function loadRiderEditor(client: SupabaseClient, tourId: string): P
     templates: ((templatesRes.data ?? []) as { id: string; name: string; kind: string; artist_id: string | null }[])
       .filter((t): t is { id: string; name: string; kind: RiderKind; artist_id: string | null } => (RIDER_KINDS as readonly string[]).includes(t.kind))
       .map((t) => ({ id: t.id, name: t.name, kind: t.kind, artistId: t.artist_id })),
+    embeds: embeds ?? emptyEmbeds(),
+    photoUrls,
   };
 }

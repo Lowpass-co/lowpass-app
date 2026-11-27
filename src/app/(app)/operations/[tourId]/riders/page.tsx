@@ -37,10 +37,14 @@ export default async function RidersPage({
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) notFound();
-  const [data, membership, access, profileRes, othersRes] = await Promise.all([
+  // Production VIEW first: the input list / stage plot are read with the
+  // service role (a show's own document is a manager-only row), so the page
+  // must not load for someone the database wouldn't show them to.
+  const access = await getViewerAccess(supabase, user.id, tourId);
+  if (!viewerAllows(access, 'production', 'view')) notFound();
+  const [data, membership, profileRes, othersRes] = await Promise.all([
     loadRiderEditor(supabase, tourId),
     getActiveMembership(supabase, user.id),
-    getViewerAccess(supabase, user.id, tourId),
     supabase.from('profiles').select('name').eq('id', user.id).maybeSingle(),
     supabase.from('riders').select('id, kind, title, tour_id, tour:tours(name)').neq('tour_id', tourId).order('updated_at', { ascending: false }).limit(200),
   ]);

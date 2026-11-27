@@ -209,6 +209,78 @@ channel lists / stage plots (open their pages). No old builder packs.
 as `/r/`), with **Open the live rider ↗** when the team made a link; the old
 builder rider is gone from the tab and the bundled PDF.
 
+#### RID-32 — Input list + stage plot in the tech rider (migration 302)
+
+**Do**: A tour with a channel list and a stage plot. Riders → Tech → start
+from "Headline show — Tech" (or + Input list / + Stage plot on an existing one).
+**Expect**: under "Input list & stage plot" the channel list shows as a table
+(channel number first, the editor's own columns, "N inputs") and the plot as
+a picture, each headed with its document name + version and **Edit in
+Channel list ↗ / Edit in Stage plot ↗**. No channel list yet → "Make the
+channel list ↗" and the promoter sees "The input list will follow." The two
+blocks are not offered on the Hospitality document.
+
+#### RID-33 — Edit in the tool, come back
+
+**Do**: Click **Edit in Channel list ↗**, change a mic in the new tab, switch
+back to the Riders tab.
+**Expect**: the table shows the new mic within a moment (no reload); Changes
+tab lists "Input list · Ch N Name: SM57 → Beta 57A"; Publish is enabled.
+
+#### RID-34 — Frozen with the version
+
+**Do**: Publish. Change the channel list again; don't publish. Open the show's
+`/r/` link and download its PDF.
+**Expect**: both show the PUBLISHED input list, not today's edit. After the
+next Publish, only shows that read a changed list are offered for resending.
+
+#### RID-35 — A show with its own channel list
+
+**Do**: Channel list → attach a different list to one show ("Attach to show…").
+**Expect**: editor + whole-tour link say "Different for: <date · venue>: <list
+name>"; that show's own link shows ITS list; other shows the tour's. A Member
+with Production VIEW sees the same (the copy is read server-side).
+
+#### RID-36 — Outputs on / off
+
+**Do**: On the Input list block untick "with outputs (IEM / mixes)".
+**Expect**: the outputs table leaves the preview, promoter page and PDF;
+Changes says "Input list — outputs left out".
+
+#### RID-37 — Old attachments move into the rider
+
+**Do**: A rider made before 302 with an Attachments block holding "Input list".
+**Expect**: it reads "a PDF of the live channel list" with **Show it in the
+rider**; clicking it adds the Input list block after it and removes the item
+(the block goes when it was the last item). Attachments can no longer add a
+new input list / stage plot item — tour files only.
+
+#### RID-38 — The exact item: link → shop photo
+
+**Do**: A hospitality line "Oat milk" → ··· → paste a product page link
+(e.g. a supermarket's oat-milk page) → Tab out.
+**Expect**: "Getting the shop's photo…", then a thumbnail on the line and in
+the panel. A bare "tesco.com/…" gets https://. A shop that blocks robots says
+so ("…add a photo yourself") and nothing breaks. A link to `localhost`,
+`192.168.x.x`, `169.254.169.254` or an odd port is refused.
+
+#### RID-39 — The exact item: upload a photo
+
+**Do**: ··· → **Photo** → pick a 12 MB phone photo; then a PNG with a
+transparent background; then a text file renamed `.jpg`.
+**Expect**: the big photo arrives shrunk (long side ≤ 1600 px); the PNG keeps
+its transparency; the fake is refused ("isn't a photo Lowpass can use") and
+nothing is left on the line. Replace / Remove work; Backspace on an empty line
+with a photo does NOT delete the line.
+
+#### RID-40 — Promoter taps the item
+
+**Do**: Publish; open the show's `/r/` link on a phone; tap "Oat milk".
+**Expect**: a sheet with the photo, qty + item, alternatives / note, **See the
+exact item ↗ <shop>** and **Reply on this line** (opens that line's reply
+box). In the PDF the item name is a link to the shop page; no photos in the
+PDF.
+
 ---
 
 ## Retired (old builder — deleted in the Nov 2026 rebuild)

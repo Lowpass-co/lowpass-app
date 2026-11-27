@@ -7,13 +7,14 @@
 
 import { NextResponse } from 'next/server';
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { createServerSupabaseClient } from '@/lib/supabase-server';
+import { createServerSupabaseClient, createServiceSupabaseClient } from '@/lib/supabase-server';
 import { requireUserAndWorkspace } from '@/lib/auth/workspace-check';
 import { exportErrorResponse, exportPdfResponse } from '@/lib/export/render';
 import { tourGate } from '@/server/advance/routeGuard';
+import { getViewerAccess, viewerAllows } from '@/lib/permissions/tourAccess';
 import { isUuid } from '@/lib/riders/blocks';
 import { parseSnapshot } from '@/lib/riders/snapshot';
-import { diffSnapshots } from '@/lib/riders/summary';
+import { changeReaches, diffSnapshots } from '@/lib/riders/summary';
 import type { LineStateView } from '@/lib/riders/render';
 import type { RiderKind } from '@/lib/riders/types';
 import { VERSION_COLS, loadRiderShows, toVersion } from '@/server/riders/data';
@@ -33,6 +34,10 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     const gate = await tourGate(supabase, tourId, auth.workspaceId);
     if (gate) return gate;
     const client = supabase as unknown as SupabaseClient;
+    // The draft's input list / stage plot are read with the service role.
+    if (!viewerAllows(await getViewerAccess(client, auth.user.id, tourId), 'production', 'view')) {
+      return NextResponse.json({ error: 'You can’t see this tour’s riders.' }, { status: 403 });
+    }
     const versionParam = url.searchParams.get('version');
     const routingId = url.searchParams.get('routingId');
     const kind = url.searchParams.get('kind');
@@ -42,7 +47,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     let version: { label: string; publishedAt: string } | null = null;
     let changes: ReturnType<typeof diffSnapshots> = [];
     if (versionParam === 'draft') {
-      const [draft, prev] = await Promise.all([draftSnapshot(client, tourId), latestVersion(client, tourId)]);
+      const [draft, prev] = await Promise.all([draftSnapshot(client, tourId, createServiceSupabaseClient() as unknown as SupabaseClient), latestVersion(client, tourId)]);
       snapshot = draft;
       changes = diffSnapshots(prev?.snapshot ?? null, draft);
     } else if (versionParam && isUuid(versionParam)) {
@@ -60,7 +65,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
       changes = latest.changes;
     }
 
-    let show: { date: string; venue: string | null; city: string | null } | null = null;
+    let show: { date: string; venue: string | null; city: string | null; routingId: string } | null = null;
     const states: Record<string, LineStateView> = {};
     if (routingId && isUuid(routingId)) {
       const [shows, { data: st }] = await Promise.all([
@@ -69,11 +74,12 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
       ]);
       const s = shows.find((x) => x.routingId === routingId);
       if (!s) return NextResponse.json({ error: 'Show not found' }, { status: 404 });
-      show = { date: s.date, venue: s.venue, city: s.city };
+      show = { date: s.date, venue: s.venue, city: s.city, routingId: s.routingId };
       for (const r of (st ?? []) as { block_id: string; state: LineStateView['state']; note: string | null }[]) states[r.block_id] = { state: r.state, note: r.note };
     }
     const snap = snapshot;
-    return exportPdfResponse('rider', () => riderPdfDoc({ snapshot: snap, version, show, states, changes, linkUrl: null, kinds }));
+    const shown = show ? changes.filter((c) => changeReaches(c, show!, snap.embeds)) : changes;
+    return exportPdfResponse('rider', () => riderPdfDoc({ snapshot: snap, version, show, states, changes: shown, linkUrl: null, kinds }));
   } catch (e) {
     return exportErrorResponse('rider', e);
   }

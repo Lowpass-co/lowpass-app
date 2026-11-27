@@ -5,7 +5,6 @@
 import type { RiderEditorData } from '@/server/riders/data';
 import type { RiderBlock } from '@/lib/riders/types';
 
-
 export class ApiError extends Error {
   constructor(
     message: string,
@@ -43,6 +42,11 @@ export function ridersApi(tourId: string) {
     insert: (riderId: string, blocks: Record<string, unknown>[]) => call<{ blocks: RiderBlock[] }>(`${base}/blocks`, { method: 'POST', body: JSON.stringify({ riderId, blocks }) }),
     patch: (body: Record<string, unknown>, keepalive = false) => call<{ block: RiderBlock }>(`${base}/blocks`, { method: 'PATCH', body: JSON.stringify(body), keepalive }),
     remove: (ids: string[]) => call<{ deleted: number }>(`${base}/blocks`, { method: 'DELETE', body: JSON.stringify({ ids }) }),
+    /** Item photos: signed URLs, an upload grant + finish, or "get it from the link". */
+    photoUrls: (paths: string[]) => call<{ urls: Record<string, string> }>(`${base}/photos`, { method: 'POST', body: JSON.stringify({ action: 'urls', paths }) }),
+    photoUpload: (type: string, size: number) => call<{ bucket: string; path: string; token: string }>(`${base}/photos`, { method: 'POST', body: JSON.stringify({ action: 'upload-url', type, size }) }),
+    photoDone: (path: string) => call<{ path: string; url: string | null }>(`${base}/photos`, { method: 'POST', body: JSON.stringify({ action: 'complete', path }) }),
+    photoFromLink: (url: string) => call<{ path: string; url: string | null; title: string | null }>(`${base}/photos`, { method: 'POST', body: JSON.stringify({ action: 'from-link', url }) }),
     pdfUrl: (o: { version?: string; routingId?: string; kind?: string } = {}) => {
       const q = new URLSearchParams(Object.entries(o).filter(([, v]) => !!v) as [string, string][]);
       return `${base}/pdf${q.toString() ? `?${q}` : ''}`;

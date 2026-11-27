@@ -9,16 +9,20 @@
    one removes it. Everything saves itself (useRiderEditor).
    ============================================ */
 
-import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
+import { memo, useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import Link from 'next/link';
-import { CalendarRange, Copy, GripVertical, Plus, Star, Trash2, X } from 'lucide-react';
+import { CalendarRange, Copy, ExternalLink, GripVertical, ImagePlus, Plus, Star, Trash2, X } from 'lucide-react';
 import { ContextMenu, type ContextMenuItem } from '@/components/ui/ContextMenu';
 import { blockLabel, dateTag, fmtQty, parseQty, parseRequestText, requestLine } from '@/lib/riders/blocks';
+import { embedFor, othersFor } from '@/lib/riders/embeds';
+import { linkHost, typedLink } from '@/lib/riders/photos';
 import { docFromText, proseText } from '@/lib/riders/prose';
 import { keyAfter } from '@/lib/riders/position';
 import { buildSummary } from '@/lib/riders/summary';
-import { PROVIDERS, type BlockContentMap, type BlockKind, type RiderBlock } from '@/lib/riders/types';
+import { PROVIDERS, type BlockContentMap, type BlockKind, type RiderBlock, type RiderEmbeds, type RiderKind } from '@/lib/riders/types';
 import { ProseEditor } from './ProseEditor';
+import { InputsView, PlotView } from './RiderDocView';
+import { uploadPhoto } from './photoUpload';
 import type { RiderEditorStore } from './useRiderEditor';
 
 export const KIND_LABEL: Record<BlockKind, string> = {
@@ -30,8 +34,19 @@ export const KIND_LABEL: Record<BlockKind, string> = {
   summary: 'Advance summary',
   files: 'Attachments',
   break: 'Page break',
+  input_list: 'Input list',
+  stage_plot: 'Stage plot',
 };
-export const INSERTABLE: BlockKind[] = ['request', 'text', 'heading', 'table', 'contacts', 'summary', 'files', 'break'];
+/** What can be added to a document. The input list and stage plot are the
+ *  tech rider's (their own tools write them; the block shows them). */
+export function insertableFor(kind: RiderKind): BlockKind[] {
+  return kind === 'tech'
+    ? ['request', 'text', 'heading', 'table', 'contacts', 'summary', 'input_list', 'stage_plot', 'files', 'break']
+    : ['request', 'text', 'heading', 'table', 'contacts', 'summary', 'files', 'break'];
+}
+
+/** A fresh request line after `c` keeps who provides it — nothing else. */
+const NEXT_LINE = { qty: null, item: '', alternatives: '', note: '', summary: false, optional: false, perPerson: false, link: '', photo: null } as const;
 
 /** Focus `ref` when the store says this block (and field) should have it. */
 function useFocusWhen(active: boolean, at: number | undefined, ref: React.RefObject<HTMLInputElement | HTMLTextAreaElement | null>) {
@@ -77,7 +92,7 @@ export function BlockRow({ block, index, ctx }: { block: RiderBlock; index: numb
                   const lines = proseText(block.content.doc).split('\n').map((l) => parseRequestText(l.replace(/^•\s*/, ''))).filter((x): x is { qty: number | null; item: string } => !!x);
                   if (!lines.length) return;
                   let after: string | null = block.id;
-                  for (const l of lines) after = store.insertAfter(riderId, after, 'request', { qty: l.qty, item: l.item, provider: 'venue', alternatives: '', note: '', optional: false, perPerson: false, summary: false }, { from: block.from, until: block.until });
+                  for (const l of lines) after = store.insertAfter(riderId, after, 'request', { ...NEXT_LINE, provider: 'venue', qty: l.qty, item: l.item }, { from: block.from, until: block.until });
                   void store.remove([block.id]);
                 },
               },
@@ -208,6 +223,10 @@ function BlockBody({ block, ctx, focused }: { block: RiderBlock; ctx: RowContext
       return <SummaryEditor block={block} ctx={ctx} />;
     case 'files':
       return <FilesEditor block={block} ctx={ctx} />;
+    case 'input_list':
+      return <InputListBlock blockId={block.id} outputs={block.content.outputs} embeds={ctx.store.data.embeds} tourId={ctx.tourId} canEdit={ctx.canEdit} edit={ctx.store.edit} />;
+    case 'stage_plot':
+      return <StagePlotBlock blockId={block.id} embeds={ctx.store.data.embeds} tourId={ctx.tourId} />;
     case 'break':
       return <div className="rdx-break">Page break</div>;
     default:
@@ -256,7 +275,8 @@ function RequestEditor({ block, ctx, focused }: { block: Extract<RiderBlock, { k
   const shownQty = c.qty === null ? '' : fmtQty(c.qty);
   const [qtyDraft, setQtyDraft] = useState<string | null>(null);
   const [more, setMore] = useState(false);
-  const showSub = more || !!c.alternatives || !!c.note || c.perPerson || c.optional;
+  const showSub = more || !!c.alternatives || !!c.note || c.perPerson || c.optional || !!c.link || !!c.photo;
+  const thumb = c.photo ? ctx.store.photoUrls[c.photo] ?? null : null;
   const set = (patch: Partial<BlockContentMap['request']>) => ctx.store.edit(block.id, { content: { ...c, ...patch } });
   const prevId = () => {
     const i = ctx.list.findIndex((b) => b.id === block.id);
@@ -266,8 +286,8 @@ function RequestEditor({ block, ctx, focused }: { block: Extract<RiderBlock, { k
   const onItemKey = (e: KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter' && !e.metaKey && !e.ctrlKey) {
       e.preventDefault();
-      ctx.store.insertAfter(ctx.riderId, block.id, 'request', { ...c, qty: null, item: '', alternatives: '', note: '', summary: false, optional: false, perPerson: false }, { from: block.from, until: block.until }, 'item');
-    } else if (e.key === 'Backspace' && !c.item && c.qty === null && !c.alternatives && !c.note) {
+      ctx.store.insertAfter(ctx.riderId, block.id, 'request', { ...c, ...NEXT_LINE }, { from: block.from, until: block.until }, 'item');
+    } else if (e.key === 'Backspace' && !c.item && c.qty === null && !c.alternatives && !c.note && !c.link && !c.photo) {
       e.preventDefault();
       const p = prevId();
       void ctx.store.remove([block.id]);
@@ -299,25 +319,33 @@ function RequestEditor({ block, ctx, focused }: { block: Extract<RiderBlock, { k
             }
           }}
         />
-        <input
-          ref={itemRef}
-          className="rdx-in rdx-item"
-          aria-label="Requested item"
-          placeholder="What you need — e.g. 8x8x1 rolling drum riser"
-          value={c.item}
-          readOnly={!ctx.canEdit}
-          onChange={(e) => set({ item: e.target.value })}
-          onKeyDown={onItemKey}
-          onPaste={(e) => {
-            const text = e.clipboardData.getData('text/plain');
-            const lines = text.split(/\r?\n/).map(parseRequestText).filter((x): x is { qty: number | null; item: string } => !!x);
-            if (lines.length < 2 || c.item) return;
-            e.preventDefault();
-            set({ qty: lines[0].qty, item: lines[0].item });
-            let after: string | null = block.id;
-            for (const l of lines.slice(1)) after = ctx.store.insertAfter(ctx.riderId, after, 'request', { ...c, qty: l.qty, item: l.item, alternatives: '', note: '', summary: false }, { from: block.from, until: block.until });
-          }}
-        />
+        <span className="rdx-itemwrap">
+          {c.photo ? (
+            <button type="button" className="rdx-thumb" onClick={() => setMore(true)} title="The photo on this line" aria-label="The photo on this line">
+              {/* eslint-disable-next-line @next/next/no-img-element -- a signed storage URL, sized by CSS */}
+              {thumb ? <img src={thumb} alt="" /> : null}
+            </button>
+          ) : null}
+          <input
+            ref={itemRef}
+            className="rdx-in rdx-item"
+            aria-label="Requested item"
+            placeholder="What you need — e.g. 8x8x1 rolling drum riser"
+            value={c.item}
+            readOnly={!ctx.canEdit}
+            onChange={(e) => set({ item: e.target.value })}
+            onKeyDown={onItemKey}
+            onPaste={(e) => {
+              const text = e.clipboardData.getData('text/plain');
+              const lines = text.split(/\r?\n/).map(parseRequestText).filter((x): x is { qty: number | null; item: string } => !!x);
+              if (lines.length < 2 || c.item) return;
+              e.preventDefault();
+              set({ qty: lines[0].qty, item: lines[0].item });
+              let after: string | null = block.id;
+              for (const l of lines.slice(1)) after = ctx.store.insertAfter(ctx.riderId, after, 'request', { ...c, ...NEXT_LINE, optional: c.optional, perPerson: c.perPerson, qty: l.qty, item: l.item }, { from: block.from, until: block.until });
+            }}
+          />
+        </span>
         <select
           className="rdx-who"
           aria-label="Who provides it"
@@ -344,7 +372,7 @@ function RequestEditor({ block, ctx, focused }: { block: Extract<RiderBlock, { k
         >
           <Star size={15} fill={c.summary ? 'currentColor' : 'none'} aria-hidden />
         </button>
-        <button type="button" className="rdx-star" aria-expanded={showSub} aria-label="Alternatives, note, per person" title="Alternatives, note, per person" onClick={() => setMore((m) => !m)}>
+        <button type="button" className="rdx-star" aria-expanded={showSub} aria-label="Alternatives, note, link, photo" title="Alternatives, note, link to the exact item, photo" onClick={() => setMore((m) => !m)}>
           <span aria-hidden style={{ fontSize: 'var(--lp-text-sm)', fontWeight: 'var(--lp-weight-bold)' }}>···</span>
         </button>
         {showSub ? (
@@ -364,12 +392,197 @@ function RequestEditor({ block, ctx, focused }: { block: Extract<RiderBlock, { k
             <label>
               <input type="checkbox" className="lp-checkbox" checked={c.optional} disabled={!ctx.canEdit} onChange={(e) => set({ optional: e.target.checked })} /> if possible
             </label>
+            {more || c.link || c.photo ? <ExactItem blockId={block.id} link={c.link} photo={c.photo} photoUrl={thumb} ctx={ctx} /> : null}
           </div>
         ) : null}
       </div>
     </>
   );
 }
+
+/* ---------- the exact item: a link + a photo ---------- */
+
+function ExactItem({ blockId, link, photo, photoUrl, ctx }: { blockId: string; link: string; photo: string | null; photoUrl: string | null; ctx: RowContext }) {
+  const { store, canEdit } = ctx;
+  // What's typed, until it's committed (blur / Enter): a half-typed link
+  // isn't a link, and the server drops anything that isn't one.
+  const [linkDraft, setLinkDraft] = useState<string | null>(null);
+  const [busy, setBusy] = useState<null | 'upload' | 'link'>(null);
+  const [problem, setProblem] = useState<string | null>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  const fromLink = async (url: string) => {
+    setBusy('link');
+    setProblem(null);
+    try {
+      const got = await store.api.photoFromLink(url);
+      if (got.url) store.addPhotoUrl(got.path, got.url);
+      store.patchContent(blockId, { photo: got.path });
+    } catch (e) {
+      setProblem((e as Error).message);
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const commitLink = () => {
+    if (linkDraft === null) return;
+    const raw = linkDraft;
+    setLinkDraft(null);
+    if (!raw.trim()) {
+      if (link) store.patchContent(blockId, { link: '' });
+      setProblem(null);
+      return;
+    }
+    const next = typedLink(raw);
+    if (!next) {
+      setProblem('That doesn’t look like a web link.');
+      return;
+    }
+    setProblem(null);
+    if (next === link) return;
+    store.patchContent(blockId, { link: next });
+    // A new link and no photo yet: take the shop's own product photo.
+    if (!photo) void fromLink(next);
+  };
+
+  const onFile = async (file: File | undefined) => {
+    if (!file) return;
+    setBusy('upload');
+    setProblem(null);
+    try {
+      const got = await uploadPhoto(store.api, file);
+      if (got.url) store.addPhotoUrl(got.path, got.url);
+      store.patchContent(blockId, { photo: got.path });
+    } catch (e) {
+      setProblem((e as Error).message);
+    } finally {
+      setBusy(null);
+      if (fileRef.current) fileRef.current.value = '';
+    }
+  };
+
+  return (
+    <span className="rdx-exact">
+      <span className="rdx-or rdx-exact-link">
+        <i>Link</i>
+        <input
+          className="rdx-in"
+          inputMode="url"
+          placeholder="the exact item — a shop or product page"
+          value={linkDraft ?? link}
+          readOnly={!canEdit}
+          aria-label="Link to the exact item"
+          onChange={(e) => setLinkDraft(e.target.value)}
+          onBlur={commitLink}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault();
+              (e.target as HTMLInputElement).blur();
+            }
+          }}
+        />
+        {link && linkDraft === null ? (
+          <a className="rdx-exact-open" href={link} target="_blank" rel="noopener noreferrer nofollow" title={`Open ${linkHost(link)}`} aria-label={`Open ${linkHost(link)}`}>
+            <ExternalLink size={13} aria-hidden />
+          </a>
+        ) : null}
+      </span>
+      <span className="rdx-exact-photo">
+        {photo ? (
+          <span className="rdx-exact-img">
+            {/* eslint-disable-next-line @next/next/no-img-element -- a signed storage URL, sized by CSS */}
+            {photoUrl ? <img src={photoUrl} alt="The item" /> : null}
+          </span>
+        ) : null}
+        {busy ? (
+          <span className="rdx-mini" role="status">
+            {busy === 'link' ? 'Getting the shop’s photo…' : 'Uploading the photo…'}
+          </span>
+        ) : canEdit ? (
+          <>
+            <button type="button" className="rdx-link" onClick={() => fileRef.current?.click()}>
+              <ImagePlus size={13} aria-hidden /> {photo ? 'Replace photo' : 'Photo'}
+            </button>
+            {!photo && link ? (
+              <button type="button" className="rdx-link" onClick={() => void fromLink(link)}>
+                Use the shop’s photo
+              </button>
+            ) : null}
+            {photo ? (
+              <button type="button" className="rdx-link" onClick={() => store.patchContent(blockId, { photo: null })}>
+                Remove photo
+              </button>
+            ) : null}
+          </>
+        ) : null}
+        {problem ? (
+          <span className="rdx-mini rdx-exact-problem" role="alert">
+            {problem}
+          </span>
+        ) : null}
+        <input ref={fileRef} type="file" accept="image/jpeg,image/png,image/webp,image/gif" hidden onChange={(e) => void onFile(e.target.files?.[0])} />
+      </span>
+    </span>
+  );
+}
+
+/* ---------- the input list + stage plot (their own tools write them) ---------- */
+
+/** "Edit in …" opens the tool in a new tab; coming back refreshes the copy
+ *  (RidersEditor refreshes on focus while the rider shows one). */
+function EmbedActions({ href, label, children }: { href: string; label: string; children?: ReactNode }) {
+  return (
+    <div className="rdx-row-actions rdx-embed-actions">
+      <a className="rdx-link" href={href} target="_blank" rel="noopener" title="Opens in a new tab. Each version you publish keeps the copy it was published with.">
+        {label} <ExternalLink size={12} aria-hidden />
+      </a>
+      {children}
+    </div>
+  );
+}
+
+const InputListBlock = memo(function InputListBlock({
+  blockId,
+  outputs,
+  embeds,
+  tourId,
+  canEdit,
+  edit,
+}: {
+  blockId: string;
+  outputs: boolean;
+  embeds: RiderEmbeds;
+  tourId: string;
+  canEdit: boolean;
+  edit: RiderEditorStore['edit'];
+}) {
+  const list = embedFor(embeds, 'inputList', null);
+  const others = othersFor(embeds, 'inputList');
+  const hasOutputs = !!list?.outputs?.rows.length;
+  return (
+    <div className="rdx-embed">
+      <InputsView it={{ t: 'inputs', id: blockId, list, outputs, others, tag: null }} />
+      <EmbedActions href={`/operations/${tourId}/channel-list`} label={list ? 'Edit in Channel list' : 'Make the channel list'}>
+        {hasOutputs ? (
+          <label className="rdx-mini">
+            <input type="checkbox" className="lp-checkbox" checked={outputs} disabled={!canEdit} onChange={(e) => edit(blockId, { content: { outputs: e.target.checked } })} /> with outputs (IEM / mixes)
+          </label>
+        ) : null}
+      </EmbedActions>
+    </div>
+  );
+});
+
+const StagePlotBlock = memo(function StagePlotBlock({ blockId, embeds, tourId }: { blockId: string; embeds: RiderEmbeds; tourId: string }) {
+  const plot = embedFor(embeds, 'stagePlot', null);
+  return (
+    <div className="rdx-embed">
+      <PlotView it={{ t: 'plot', id: blockId, plot, others: othersFor(embeds, 'stagePlot'), tag: null }} />
+      <EmbedActions href={`/operations/${tourId}/stage-plot`} label={plot ? 'Edit in Stage plot' : 'Make the stage plot'} />
+    </div>
+  );
+});
 
 /* ---------- table ---------- */
 
@@ -564,13 +777,13 @@ function FilesEditor({ block, ctx }: { block: Extract<RiderBlock, { kind: 'files
   const items = block.content.items;
   const { data } = ctx.store;
   const set = (next: typeof items) => ctx.store.edit(block.id, { content: { items: next } });
-  const has = (k: 'channel_list' | 'stage_plot') => items.some((i) => i.kind === k);
   const ro = !ctx.canEdit;
-  const line = (label: string, status: ReactNode, onRemove: () => void, key: string) => (
+  const line = (label: string, status: ReactNode, onRemove: () => void, key: string, extra?: ReactNode) => (
     <div className="rdx-file" key={key}>
       <span className="grow">
         <b>{label}</b> <span className="rdx-mini">{status}</span>
       </span>
+      {extra}
       {!ro ? (
         <button type="button" className="rdx-gbtn" aria-label={`Remove ${label}`} onClick={onRemove}>
           <X size={13} aria-hidden />
@@ -578,46 +791,54 @@ function FilesEditor({ block, ctx }: { block: Extract<RiderBlock, { kind: 'files
       ) : null}
     </div>
   );
+  // An input list / stage plot attached here (riders made before the blocks
+  // existed) is a PDF of the live document. One click moves it into the
+  // rider as its block — shown, and frozen with each version.
+  const toBlock = (i: number, kind: 'input_list' | 'stage_plot') => {
+    ctx.store.insertAfter(ctx.riderId, block.id, kind, kind === 'input_list' ? { outputs: true } : {}, { from: block.from, until: block.until });
+    const rest = items.filter((_, j) => j !== i);
+    if (rest.length) set(rest);
+    else void ctx.store.remove([block.id]);
+  };
+  const moveBtn = (i: number, kind: 'input_list' | 'stage_plot') =>
+    !ro ? (
+      <button type="button" className="rdx-link" onClick={() => toBlock(i, kind)}>
+        Show it in the rider
+      </button>
+    ) : null;
   const unused = data.files.filter((f) => !items.some((i) => i.kind === 'file' && i.id === f.id));
   return (
     <div className="rdx-files">
       {items.map((it, i) =>
         it.kind === 'channel_list'
-          ? line('Input list', data.has.channelList ? 'this tour’s channel list, as a PDF' : <Link href={`/operations/${ctx.tourId}/channel-list`}>no channel list on this tour yet</Link>, () => set(items.filter((_, j) => j !== i)), 'cl')
+          ? line('Input list', data.has.channelList ? 'a PDF of the live channel list' : <Link href={`/operations/${ctx.tourId}/channel-list`}>no channel list on this tour yet</Link>, () => set(items.filter((_, j) => j !== i)), 'cl', moveBtn(i, 'input_list'))
           : it.kind === 'stage_plot'
-            ? line('Stage plot', data.has.stagePlot ? 'this tour’s stage plot, as a PDF' : <Link href={`/operations/${ctx.tourId}/stage-plot`}>no stage plot on this tour yet</Link>, () => set(items.filter((_, j) => j !== i)), 'sp')
+            ? line('Stage plot', data.has.stagePlot ? 'a PDF of the live stage plot' : <Link href={`/operations/${ctx.tourId}/stage-plot`}>no stage plot on this tour yet</Link>, () => set(items.filter((_, j) => j !== i)), 'sp', moveBtn(i, 'stage_plot'))
             : line(it.label, data.files.some((f) => f.id === it.id) ? 'tour file' : 'no longer in tour files', () => set(items.filter((_, j) => j !== i)), it.id),
       )}
-      {!ro ? (
+      {!items.length && !data.files.length ? (
+        <div className="rdx-mini">
+          No tour files to attach yet — <Link href={`/operations/${ctx.tourId}/files`}>add them in Files</Link>.
+        </div>
+      ) : null}
+      {!ro && unused.length ? (
         <div className="rdx-row-actions">
-          {!has('channel_list') ? (
-            <button type="button" className="rdx-link" onClick={() => set([...items, { kind: 'channel_list' }])}>
-              + Input list
-            </button>
-          ) : null}
-          {!has('stage_plot') ? (
-            <button type="button" className="rdx-link" onClick={() => set([...items, { kind: 'stage_plot' }])}>
-              + Stage plot
-            </button>
-          ) : null}
-          {unused.length ? (
-            <select
-              className="rdx-who"
-              value=""
-              aria-label="Attach a tour file"
-              onChange={(e) => {
-                const f = data.files.find((x) => x.id === e.target.value);
-                if (f) set([...items, { kind: 'file', id: f.id, label: f.name }]);
-              }}
-            >
-              <option value="">+ A tour file…</option>
-              {unused.map((f) => (
-                <option key={f.id} value={f.id}>
-                  {f.name}
-                </option>
-              ))}
-            </select>
-          ) : null}
+          <select
+            className="rdx-who"
+            value=""
+            aria-label="Attach a tour file"
+            onChange={(e) => {
+              const f = data.files.find((x) => x.id === e.target.value);
+              if (f) set([...items, { kind: 'file', id: f.id, label: f.name }]);
+            }}
+          >
+            <option value="">+ A tour file…</option>
+            {unused.map((f) => (
+              <option key={f.id} value={f.id}>
+                {f.name}
+              </option>
+            ))}
+          </select>
         </div>
       ) : null}
     </div>

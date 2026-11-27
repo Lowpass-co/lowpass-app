@@ -98,6 +98,29 @@
 .rdx-tool { border: 0; background: none; width: 26px; height: 26px; border-radius: var(--lp-radius-sm); display: inline-flex; align-items: center; justify-content: center; color: var(--lp-text-secondary); cursor: pointer; }
 .rdx-tool:hover, .rdx-tool[aria-pressed="true"] { background: var(--lp-surface); color: var(--lp-text); }
 
+/* ---- the exact item (link + photo) ---- */
+.rdx-itemwrap { display: flex; align-items: center; gap: var(--lp-space-2); min-width: 0; }
+.rdx-itemwrap .rdx-item { flex: 1; min-width: 0; }
+.rdx-thumb { flex: none; width: 26px; height: 26px; padding: 0; border: 1px solid var(--lp-border); border-radius: var(--lp-radius-sm); background: var(--lp-bg-secondary); overflow: hidden; cursor: pointer; }
+.rdx-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.rdx-exact { flex: 1 1 100%; display: flex; flex-wrap: wrap; align-items: center; gap: var(--lp-space-1) var(--lp-space-4); }
+.rdx-exact-link { flex: 1 1 18em; align-items: center; }
+.rdx-exact-link .rdx-in { flex: 1; min-width: 0; }
+.rdx-exact-open { display: inline-flex; color: var(--lp-text-tertiary); }
+.rdx-exact-open:hover { color: var(--lp-orange); }
+.rdx-exact-photo { display: inline-flex; align-items: center; gap: var(--lp-space-3); flex-wrap: wrap; }
+.rdx-exact-photo .rdx-link { display: inline-flex; align-items: center; gap: var(--lp-space-1); }
+.rdx-exact-img { width: 56px; height: 56px; border: 1px solid var(--lp-border); border-radius: var(--lp-radius-md); background: var(--lp-bg-secondary); overflow: hidden; }
+.rdx-exact-img img { width: 100%; height: 100%; object-fit: contain; display: block; }
+.rdx-exact-problem { color: var(--lp-text-secondary); }
+
+/* ---- input list / stage plot (shown, edited in their own tools) ---- */
+.rdx-embed .rd-embed { margin-bottom: var(--lp-space-2); }
+.rdx-embed .rd-scroll { max-height: 420px; overflow: auto; }
+.rdx-embed-actions { align-items: center; flex-wrap: wrap; gap: var(--lp-space-2) var(--lp-space-4); }
+.rdx-embed-actions a.rdx-link { display: inline-flex; align-items: center; gap: var(--lp-space-1); text-decoration: none; }
+.rdx-embed-actions label { display: inline-flex; align-items: center; gap: var(--lp-space-1); }
+
 /* ---- table / contacts ---- */
 .rdx-grid { width: 100%; border-collapse: collapse; margin: var(--lp-space-2) 0; font-size: var(--lp-text-sm); }
 .rdx-grid th, .rdx-grid td { border-bottom: 1px solid var(--lp-border); padding: 2px var(--lp-space-1); vertical-align: top; }

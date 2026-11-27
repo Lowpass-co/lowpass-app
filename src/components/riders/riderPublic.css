@@ -74,6 +74,20 @@
 .rdp-compose textarea { resize: vertical; }
 .rdp-compose-actions { display: flex; justify-content: flex-end; gap: var(--lp-space-2); }
 
+/* ---- a request line's card (photo + the exact item) ---- */
+.rdp-sheet-back { position: fixed; inset: 0; z-index: var(--lp-z-modal); display: flex; align-items: flex-end; justify-content: center; background: color-mix(in srgb, var(--lp-text) 45%, transparent); }
+.rdp-sheet { position: relative; width: 100%; max-width: 520px; max-height: 92vh; overflow-y: auto; background: var(--lp-bg); border-radius: var(--lp-radius-xl) var(--lp-radius-xl) 0 0; box-shadow: var(--lp-shadow-overlay); }
+@media (min-width: 640px) { .rdp-sheet-back { align-items: center; } .rdp-sheet { border-radius: var(--lp-radius-xl); } }
+.rdp-sheet-x { position: absolute; top: var(--lp-space-3); right: var(--lp-space-3); width: 36px; height: 36px; display: inline-flex; align-items: center; justify-content: center; border: 0; border-radius: var(--lp-radius-full); background: color-mix(in srgb, var(--lp-bg) 85%, transparent); color: var(--lp-text); cursor: pointer; box-shadow: var(--lp-shadow-sm); }
+.rdp-sheet-photo { display: block; width: 100%; max-height: 52vh; object-fit: contain; background: var(--lp-map-paper); border-bottom: 1px solid var(--lp-border); }
+.rdp-sheet-body { display: flex; flex-direction: column; gap: var(--lp-space-2); padding: var(--lp-space-5) var(--lp-space-5) var(--lp-space-6); font-size: var(--lp-text-sm); }
+.rdp-sheet-body p { margin: 0; }
+.rdp-sheet-title { display: flex; align-items: baseline; gap: var(--lp-space-2); padding-right: var(--lp-space-10); font-size: var(--lp-text-lg); font-weight: var(--lp-weight-semibold); }
+.rdp-sheet-qty { font-variant-numeric: tabular-nums; font-weight: var(--lp-weight-bold); }
+.rdp-sheet-tags { display: flex; flex-wrap: wrap; gap: var(--lp-space-1); }
+.rdp-sheet-actions { display: flex; flex-wrap: wrap; gap: var(--lp-space-2); margin-top: var(--lp-space-2); }
+.rdp-sheet-host { font-weight: var(--lp-weight-regular); opacity: 0.85; }
+
 /* ---- a link that can't show a rider ---- */
 .rdp-notice { max-width: 520px; margin: 0 auto; padding: var(--lp-space-16) var(--lp-space-6); text-align: center; }
 .rdp-notice h1 { margin: 0 0 var(--lp-space-2); font-size: var(--lp-text-xl); font-weight: var(--lp-weight-bold); }
@@ -81,6 +95,6 @@
 
 @media print {
   .rdp-page { background: none; padding: 0; }
-  .rdp-bar, .rdp-history, .rdp-ack, .rdp-tabs, .rdp-reply, .rdp-compose, .rdp-foot { display: none; }
+  .rdp-bar, .rdp-history, .rdp-ack, .rdp-tabs, .rdp-reply, .rdp-compose, .rdp-foot, .rdp-sheet-back { display: none; }
   .rdp-paper { border: 0; box-shadow: none; padding: 0; }
 }

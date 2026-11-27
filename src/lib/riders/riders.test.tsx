@@ -11,7 +11,7 @@ import { buildSummary, changeLine, diffSnapshots, nextVersion, showsAffected, ve
 import type { RequestContent, RiderBlock, RiderSnapshot, SnapBlock, SnapDoc } from './types';
 
 const req = (item: string, o: Partial<RequestContent> = {}): RequestContent => ({
-  qty: null, item, provider: 'venue', alternatives: '', note: '', optional: false, perPerson: false, summary: false, ...o,
+  qty: null, item, provider: 'venue', alternatives: '', note: '', optional: false, perPerson: false, summary: false, link: '', photo: null, ...o,
 });
 const sb = (id: string, b: Omit<SnapBlock, 'id' | 'from' | 'until'> & { from?: string | null; until?: string | null }): SnapBlock =>
   ({ id, from: null, until: null, ...b }) as SnapBlock;
@@ -77,7 +77,7 @@ describe('prose', () => {
 describe('blocks', () => {
   it('the content gate trims, clamps and drops', () => {
     const c = parseContent('request', { qty: '12', item: ' Guinness \n cans ', provider: 'nobody', optional: 'yes', extra: 1 });
-    expect(c).toEqual({ qty: 12, item: ' Guinness   cans', provider: null, alternatives: '', note: '', optional: false, perPerson: false, summary: false });
+    expect(c).toEqual({ qty: 12, item: ' Guinness   cans', provider: null, alternatives: '', note: '', optional: false, perPerson: false, summary: false, link: '', photo: null });
     expect(parseQty(-1)).toBeNull();
     expect(parseQty('1e9')).toBe(99_999);
     const t = parseContent('table', { columns: ['A', 'B'], rows: [['1'], ['2', '3', '4']] });

@@ -15,6 +15,7 @@ import { useToast } from '@/components/ui/Toast';
 import { showsToSend } from '@/lib/riders/status';
 import { fmtDay, inForce } from '@/lib/riders/blocks';
 import { STATE_LABEL } from '@/lib/riders/render';
+import { pickEmbeds, sameEmbeds, usesEmbed } from '@/lib/riders/embeds';
 import { changeLine, diffSnapshots } from '@/lib/riders/summary';
 import type { LineState, RiderBlock, RiderChange, RiderKind } from '@/lib/riders/types';
 import type { RiderReplyRow, RiderShow } from '@/server/riders/data';
@@ -28,14 +29,20 @@ export function linkUrl(token: string): string {
 
 export function useDraftChanges(store: RiderEditorStore): { changes: RiderChange[]; layoutOnly: boolean; unpublished: boolean } {
   const { data, draftDocs, party } = store;
+  // The input list / plot the draft would freeze — worked out only when the
+  // copies or whether a block shows them change, never per keystroke (a plot
+  // can be megabytes of SVG).
+  const use = { inputList: usesEmbed(draftDocs, 'inputList'), stagePlot: usesEmbed(draftDocs, 'stagePlot') };
+  const draftEmbeds = useMemo(() => pickEmbeds(data.embeds, { inputList: use.inputList, stagePlot: use.stagePlot }), [data.embeds, use.inputList, use.stagePlot]);
+  const latest = data.latest?.snapshot ?? null;
+  const embedsDiffer = useMemo(() => !latest || !sameEmbeds(latest.embeds, draftEmbeds), [latest, draftEmbeds]);
   return useMemo(() => {
-    const latest = data.latest?.snapshot ?? null;
-    const next = { docs: draftDocs, party };
+    const next = { docs: draftDocs, party, embeds: draftEmbeds };
     const changes = diffSnapshots(latest, next);
-    const differs = !latest || JSON.stringify({ d: latest.docs, p: latest.party }) !== JSON.stringify({ d: draftDocs, p: party });
+    const differs = !latest || embedsDiffer || JSON.stringify({ d: latest.docs, p: latest.party }) !== JSON.stringify({ d: draftDocs, p: party });
     const anything = draftDocs.some((d) => d.blocks.length);
     return { changes, layoutOnly: !!latest && differs && !changes.length, unpublished: anything && differs };
-  }, [data.latest, draftDocs, party]);
+  }, [latest, draftDocs, party, draftEmbeds, embedsDiffer]);
 }
 
 export function showLabel(s: RiderShow): string {

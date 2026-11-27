@@ -9,9 +9,11 @@
    ============================================ */
 
 import { randomBytes, randomUUID } from 'node:crypto';
+import { RiderError } from './errors';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { isBlockKind, isUuid, parseContent, parseDates } from '@/lib/riders/blocks';
 import { isPositionKey, keyBetween } from '@/lib/riders/position';
+import { sameEmbeds, usesEmbed } from '@/lib/riders/embeds';
 import { attachmentsWanted, buildSnapshot, parseSnapshot, toSnapDoc } from '@/lib/riders/snapshot';
 import { parseTemplateBlocks, placeBlocks, starterById, type TemplateBlock } from '@/lib/riders/starters';
 import { diffSnapshots, nextVersion, showsAffected, versionLabel } from '@/lib/riders/summary';
@@ -33,17 +35,9 @@ import {
   type RiderReplyRow,
   type RiderVersionMeta,
 } from './data';
+import { buildEmbeds } from './embeds';
 
-export class RiderError extends Error {
-  constructor(
-    public status: number,
-    message: string,
-    public code?: string,
-    public data?: unknown,
-  ) {
-    super(message);
-  }
-}
+export { RiderError };
 
 const isKind = (v: unknown): v is RiderKind => typeof v === 'string' && (RIDER_KINDS as readonly string[]).includes(v);
 export const newToken = (): string => randomBytes(24).toString('base64url');
@@ -291,29 +285,38 @@ export async function resolveAttachments(client: SupabaseClient, tourId: string,
   return out;
 }
 
-/** The documents as they stand (the draft), ready to freeze. */
-export async function draftSnapshot(client: SupabaseClient, tourId: string): Promise<RiderSnapshot> {
+/** The documents as they stand (the draft), ready to freeze — with the
+ *  input list / stage plot they show, read now (`service`: see embeds.ts). */
+export async function draftSnapshot(client: SupabaseClient, tourId: string, service?: SupabaseClient): Promise<RiderSnapshot> {
   const [{ data: tour }, { data: riders }, { data: rows }, { data: settings }, crew] = await Promise.all([
-    client.from('tours').select('name, artist:artists(name)').eq('id', tourId).maybeSingle(),
+    client.from('tours').select('name, workspace_id, artist:artists(name)').eq('id', tourId).maybeSingle(),
     client.from('riders').select('id, kind, title').eq('tour_id', tourId),
     client.from('rider_blocks').select(BLOCK_COLS).eq('tour_id', tourId).limit(5000),
     client.from('rider_settings').select('party_size').eq('tour_id', tourId).maybeSingle(),
     crewCount(client, tourId),
   ]);
   if (!tour) throw new RiderError(404, 'Tour not found');
-  const t = tour as { name: string | null; artist: { name: string | null } | { name: string | null }[] | null };
+  const t = tour as { name: string | null; workspace_id: string; artist: { name: string | null } | { name: string | null }[] | null };
   const artist = Array.isArray(t.artist) ? t.artist[0] : t.artist;
   const blocks = ((rows ?? []) as Record<string, unknown>[]).map(toBlock).filter((b): b is RiderBlock => !!b);
   const docs = ((riders ?? []) as { id: string; kind: string; title: string | null }[])
     .filter((r) => isKind(r.kind))
     .map((r) => toSnapDoc({ kind: r.kind as RiderKind, title: r.title ?? '' }, blocks.filter((b) => b.riderId === r.id)));
   const setting = (settings as { party_size: number | null } | null)?.party_size ?? null;
+  const want = { inputList: usesEmbed(docs, 'inputList'), stagePlot: usesEmbed(docs, 'stagePlot') };
+  const [attachments, embeds] = await Promise.all([
+    resolveAttachments(client, tourId, docs),
+    want.inputList || want.stagePlot
+      ? loadRiderShows(client, tourId).then((shows) => buildEmbeds(service ?? client, { tourId, workspaceId: t.workspace_id, shows, want }))
+      : Promise.resolve(null),
+  ]);
   return buildSnapshot({
     tourName: t.name ?? 'Tour',
     artistName: artist?.name ?? null,
     party: setting ?? (crew > 0 ? crew : null),
     docs,
-    attachments: await resolveAttachments(client, tourId, docs),
+    attachments,
+    embeds,
   });
 }
 
@@ -337,11 +340,12 @@ export async function publish(
   workspaceId: string,
   input: { bump?: unknown; note?: unknown },
   userId: string,
+  service?: SupabaseClient,
 ): Promise<{ version: RiderVersionMeta; affected: string[] }> {
-  const [next, prev, shows] = await Promise.all([draftSnapshot(client, tourId), latestVersion(client, tourId), loadRiderShows(client, tourId)]);
+  const [next, prev, shows] = await Promise.all([draftSnapshot(client, tourId, service), latestVersion(client, tourId), loadRiderShows(client, tourId)]);
   if (!next.docs.some((d) => d.blocks.length)) throw new RiderError(400, 'There’s nothing in the rider to publish yet.', 'EMPTY');
   const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
-  if (prev && same({ d: prev.snapshot.docs, p: prev.snapshot.party, a: prev.snapshot.attachments }, { d: next.docs, p: next.party, a: next.attachments })) {
+  if (prev && same({ d: prev.snapshot.docs, p: prev.snapshot.party, a: prev.snapshot.attachments }, { d: next.docs, p: next.party, a: next.attachments }) && sameEmbeds(prev.snapshot.embeds, next.embeds)) {
     throw new RiderError(409, `Nothing has changed since version ${prev.label}.`, 'UNCHANGED');
   }
   const bump = input.bump === 'major' ? 'major' : 'minor';

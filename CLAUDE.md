@@ -897,7 +897,7 @@ rebuild sections / cover pages / variables.
   `/artists/[id]/riders` (each tour's documents + templates).
 - **Model**: `riders` (one per tour × Tech / Hospitality) → `rider_blocks`
   (heading, text (Tiptap, `cleanDoc`), request, table, contacts, summary,
-  files, break). `parseContent` is THE gate for block content. Order is a
+  files, break, input_list, stage_plot — the last two since 302). `parseContent` is THE gate for block content. Order is a
   fractional `position` (`COLLATE "C"`, lib/riders/position.ts). A block can
   be DATED (`applies_from` / `applies_until`) — that's how a mid-tour change
   works ("Change from a show…" ends the old block the day before and starts a
@@ -946,6 +946,37 @@ rebuild sections / cover pages / variables.
   (library editors write); `rider_legacy_imports` manager. 301's rules block
   is GENERATED between its markers by `gen293.mjs` — never hand-edit it.
   DB tests: `database/tests/301_riders.test.mjs`. Smoke: RID-07…31.
+- **Input list + stage plot IN the tech rider** (Nov 2026, Adam: "standalone
+  tools but ALSO need to integrate into the tech rider" — migration 302): the
+  `input_list` / `stage_plot` blocks SHOW the documents; they are edited only
+  in their own tools ("Edit in … ↗"; the Riders tab refreshes on focus). Which
+  document: a show's own attachment → the tour's → the newest on the tour —
+  `buildEmbeds` (src/server/riders/embeds.ts) reads with the SERVICE ROLE,
+  pinned to the tour (show attachments are manager-only rows under RLS), so
+  every caller checks Production VIEW first (the page, GET route, publish,
+  PDF). Publish freezes copies into `snapshot.embeds` — only what the blocks
+  show (`embedsInUse` / `pickEmbeds`), through the gate `parseEmbeds`, maps
+  key-sorted: JSONB reorders keys, so compare with `sameEmbeds` /
+  `embedKey`, NEVER `JSON.stringify` of embeds (and never stringify a plot
+  per keystroke — it can be megabytes). The plot is ONLY ever an `<img>`
+  data URI (custom icons are uploaded SVG — inline it and it can run
+  script). "What changed" names channels (`diffEmbeds`). Attachments-block
+  items `channel_list` / `stage_plot` (riders made before 302) are PDFs of the
+  LIVE documents — kept, "Show it in the rider" moves one into its block; new
+  ones can't be added.
+- **The exact item** (request lines, Nov 2026): `link` (`cleanLink`;
+  typed → `typedLink`) and `photo` — a path `rider-photos/<ws>/<tour>/<uuid>.<ext>`
+  in tour-files, signed only after `photoBelongs` (the promoter routes are
+  service role). Uploads: `/riders/photos` upload-url → `uploadDirect` →
+  complete (sniffs the bytes; the stored content-type must equal them). "Use
+  the shop's photo": `safeFetch` (src/server/net/safeFetch.ts — THE only
+  server fetch of a user-typed URL: public addresses only, DNS pinned,
+  every redirect re-checked, size capped after unzip; never use `fetch` for
+  one) + `productFromHtml` (lib/riders/linkPreview.ts), and a COPY is stored
+  (shop images move). Promoter page: tap the item → photo, "See the exact
+  item ↗", reply. PDF: the item name links; no photos. Known: a photo taken
+  off a line stays in storage (a published version may still show it).
+  DB test: `302_rider_embed_blocks.test.mjs`. Smoke: RID-32…40.
 
 ### A city is not a venue (Nov 2026, Adam)
 

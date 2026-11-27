@@ -11,6 +11,7 @@ import { createServiceSupabaseClient } from '@/lib/supabase-server';
 import { exportErrorResponse, exportPdfResponse } from '@/lib/export/render';
 import { loadPublicRider, TOKEN_RE } from '@/server/riders/public';
 import { riderPdfDoc } from '@/server/riders/pdf';
+import { changeReaches } from '@/lib/riders/summary';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
@@ -27,7 +28,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ toke
     const snapshot = r.snapshot;
     const linkUrl = `${new URL(request.url).origin}/r/${token}`;
     return exportPdfResponse('rider-public', () =>
-      riderPdfDoc({ snapshot, version: { label: v.label, publishedAt: v.publishedAt }, show: r.show, states: r.states, changes: v.changes, linkUrl }),
+      riderPdfDoc({ snapshot, version: { label: v.label, publishedAt: v.publishedAt }, show: r.show, states: r.states, changes: r.show ? v.changes.filter((c) => changeReaches(c, r.show!, snapshot.embeds)) : v.changes, linkUrl }),
     );
   } catch (e) {
     return exportErrorResponse('rider-public', e);
