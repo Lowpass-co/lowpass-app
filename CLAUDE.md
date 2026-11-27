@@ -487,6 +487,27 @@ recreate a `_legacy/` tree: delete dead code instead of parking it.
   reset reconciled → pending).
 - Status rules are pure in `src/lib/income/showMoney.ts` — untouched shows are
   Upcoming / To settle, never "Settled" or a green 0.
+- **Edits show at once; saves queue behind** (Nov 2026, Adam: "data entry is
+  super slow… if I edit before the new thing displays, it overwrites it").
+  `ShowMoneyClient` keeps its own income + walks and applies every edit
+  locally (`applySettlementPatch` / `recomputeWalk`, showMoney.ts — same maths
+  as the server); it NEVER `router.refresh()`es after a save (only after an
+  error, and after Catch up). Every write for a show — deal, VIP, settlement,
+  lines, the Σ deductions push — goes through ONE queue per show
+  (`createSaveQueue`, src/lib/income/saveQueue.ts): in order, edits typed
+  meanwhile folded into the next save. Reason: `/api/budget/income` rewrites
+  the WHOLE row from what it read, and the settlement route writes `actual_*`
+  onto that same row — two saves in flight clobbered each other. Don't add a
+  write on this page that bypasses the queue. (Two people editing one show at
+  once can still race on the server — the income route isn't atomic.)
+- **Boxes are text** (`NumInput` / `NumField`, moneyUi.tsx): no spinners;
+  formatted at rest (`kind`: money "US$4,500" / pct "37%" / count), plain
+  while typing; a 0 that means "not set" shows "—" (`zeroIsBlank`, off for
+  comps / tickets sold). Rules: src/lib/income/amountText.ts.
+- **Withholding on the night**: Expected takes withholding off; the night only
+  subtracts deduction LINES. `withholdingToAdd` offers "+ Withholding X" on the
+  Deductions row when the deal has a % and the night has no withholding line;
+  Fill from the deal (`fillPlan`) adds it too.
 - Known, unchanged: the income POST still pre-fills `actual_guarantee` from the
   deal on first save (#4), so the budget's ACTUAL income counts a show's
   guarantee before it's played. The page ignores that for status.

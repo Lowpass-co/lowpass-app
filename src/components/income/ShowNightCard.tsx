@@ -16,8 +16,8 @@
    ============================================ */
 
 import type { ReactNode } from 'react';
-import { BO_FEE_KINDS, computeBoxOffice, computeWalk } from '@/lib/settlement/walk';
-import { fillFromDeal, hasNightFigures, type ShowMoneyRow } from '@/lib/income/showMoney';
+import { BO_FEE_KINDS, computeBoxOffice } from '@/lib/settlement/walk';
+import { fillPlan, hasNightFigures, recomputeWalk, withholdingToAdd, type ShowMoneyRow } from '@/lib/income/showMoney';
 import { Button, Card, HUE_ACTUAL, HUE_BAD, HUE_NEEDS, LineAdder, LinkButton, NumField, NumInput, fmtMoney, moneyFormat } from './moneyUi';
 
 export type LineType = 'deduction' | 'expense' | 'payment';
@@ -45,7 +45,6 @@ const methodLabel = (m: string) => PAYMENT_METHODS.find((p) => p.value === m)?.l
 const COLS = 'minmax(0, 1fr) 7.5rem 8.5rem';
 
 export interface NightHandlers {
-  busy: boolean;
   onSave: (patch: Record<string, unknown>) => void;
   onAddLine: (type: LineType, fields: Record<string, unknown>) => void;
   onRemoveLine: (type: LineType, id: string) => void;
@@ -54,17 +53,7 @@ export interface NightHandlers {
 
 /** The walk recomputed from the loaded show, so the totals follow edits. */
 export function liveWalk(show: ShowMoneyRow) {
-  const w = show.walk;
-  if (!w) return null;
-  return computeWalk({
-    guarantee: w.guarantee,
-    deductions: w.deductions.length > 0 ? w.deductions : w.deductionsAreLegacy ? [{ amount: w.walk.deductionsTotal }] : [],
-    expenses: w.expenses,
-    overage: w.overage,
-    merch: w.merch,
-    depositReceived: w.depositReceived,
-    payments: w.payments,
-  });
+  return show.walk ? recomputeWalk(show.walk).walk : null;
 }
 
 export function ShowNightCard({ show, h }: { show: ShowMoneyRow; h: NightHandlers }) {
@@ -73,7 +62,14 @@ export function ShowNightCard({ show, h }: { show: ShowMoneyRow; h: NightHandler
   const e = show.expected;
   const walk = liveWalk(show);
   const typed = hasNightFigures(w);
-  const fill = fillFromDeal(e, w);
+  const cur = show.currency;
+  const plan = fillPlan(e, w);
+  const canFill = Object.keys(plan.patch).length > 0 || plan.withholding != null;
+  // Withholding the deal takes off that the night hasn't yet (Adam: "it
+  // shows tax but calculates without tax as the final number").
+  const owedWithholding = typed ? withholdingToAdd(e, w) : null;
+  const addWithholding = (amount: number) => h.onAddLine('deduction', { kind: 'withholding', label: `${e.withholdingPct}%`, amount });
+  const expensesTotal = (w?.expenses ?? []).reduce((n, x) => n + x.amount, 0);
   const boFees = (w?.deductions ?? []).filter((d) => isBoFee(d.kind));
   const otherDeductions = (w?.deductions ?? []).filter((d) => !isBoFee(d.kind));
   const inc = show.income;
@@ -101,8 +97,14 @@ export function ShowNightCard({ show, h }: { show: ShowMoneyRow; h: NightHandler
       hint="What the show actually paid, from the settlement. Blank means not typed yet."
       accent={HUE_ACTUAL}
       action={
-        Object.keys(fill).length > 0 ? (
-          <Button onClick={() => h.onSave(fill)} disabled={h.busy} title="Types the deal's guarantee, overage and merch into the blank actual boxes">
+        canFill ? (
+          <Button
+            onClick={() => {
+              if (Object.keys(plan.patch).length > 0) h.onSave(plan.patch);
+              if (plan.withholding != null) addWithholding(plan.withholding);
+            }}
+            title="Types the deal's guarantee, overage and merch into the blank actual boxes, and its withholding as a deduction"
+          >
             Fill from the deal
           </Button>
         ) : undefined
@@ -111,7 +113,7 @@ export function ShowNightCard({ show, h }: { show: ShowMoneyRow; h: NightHandler
       <HeaderRow />
 
       <Row label="Guarantee" expected={fmtMoney(fmt, e.guarantee)}>
-        <NumInput ariaLabel="Actual guarantee" actual value={w?.guarantee || null} disabled={h.busy} onCommit={(v) => h.onSave({ reconciled_guarantee: v })} />
+        <NumInput ariaLabel="Actual guarantee" actual currency={cur} value={w?.guarantee || null} onCommit={(v) => h.onSave({ reconciled_guarantee: v })} />
       </Row>
 
       <Group
@@ -119,19 +121,25 @@ export function ShowNightCard({ show, h }: { show: ShowMoneyRow; h: NightHandler
         expected={e.withholding ? `−${fmt.format(e.withholding)} withholding` : undefined}
         lines={otherDeductions.map((d) => ({ id: d.id, left: `${kindLabel(d.kind)}${d.label ? ` · ${d.label}` : ''}`, amount: d.amount }))}
         legacy={w?.deductionsAreLegacy ? `${fmtMoney(fmt, -w.walk.deductionsTotal)} as one figure — add lines to break it down` : undefined}
+        actual={
+          owedWithholding != null ? (
+            <LinkButton onClick={() => addWithholding(owedWithholding)}>+ Withholding {fmt.format(owedWithholding)}</LinkButton>
+          ) : otherDeductions.length > 0 ? (
+            fmtMoney(fmt, -otherDeductions.reduce((n, d) => n + d.amount, 0))
+          ) : undefined
+        }
         fmt={fmt}
-        busy={h.busy}
         onRemove={(id) => h.onRemoveLine('deduction', id)}
-        adder={<LineAdder addLabel="Add deduction" busy={h.busy} kinds={DEDUCTION_KINDS} onAdd={(f) => h.onAddLine('deduction', { kind: f.kind, label: f.label, amount: f.amount })} />}
+        adder={<LineAdder addLabel="Add deduction" kinds={DEDUCTION_KINDS} onAdd={(f) => h.onAddLine('deduction', { kind: f.kind, label: f.label, amount: f.amount })} />}
       />
 
       <Group
         title="Show expenses"
         lines={(w?.expenses ?? []).map((x) => ({ id: x.id, left: x.label || 'Expense', amount: x.amount }))}
+        actual={expensesTotal ? fmtMoney(fmt, -expensesTotal) : undefined}
         fmt={fmt}
-        busy={h.busy}
         onRemove={(id) => h.onRemoveLine('expense', id)}
-        adder={<LineAdder addLabel="Add expense" busy={h.busy} placeholder="Expense" onAdd={(f) => h.onAddLine('expense', { label: f.label, amount: f.amount })} />}
+        adder={<LineAdder addLabel="Add expense" placeholder="Expense" onAdd={(f) => h.onAddLine('expense', { label: f.label, amount: f.amount })} />}
       />
 
       {/* Box office — the night's facts; the % deals work their overage out. */}
@@ -140,14 +148,14 @@ export function ShowNightCard({ show, h }: { show: ShowMoneyRow; h: NightHandler
           Box office
         </div>
         <div className="grid" style={{ gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 'var(--lp-space-3)' }}>
-          <NumField label="Tickets sold" actual value={w?.ticketsSold ?? null} disabled={h.busy} onCommit={(v) => h.onSave({ reconciled_tickets_sold: v })} />
-          <NumField label="Comps" actual value={w?.comps ?? null} disabled={h.busy} onCommit={(v) => h.onSave({ comps: v })} />
-          <NumField label="Gross box office" suffix={show.currency} actual value={w?.grossBO ?? null} disabled={h.busy} onCommit={(v) => h.onSave({ reconciled_gross: v })} />
+          <NumField label="Tickets sold" kind="count" zeroIsBlank={false} actual value={w?.ticketsSold ?? null} onCommit={(v) => h.onSave({ reconciled_tickets_sold: v })} />
+          <NumField label="Comps" kind="count" zeroIsBlank={false} actual value={w?.comps ?? null} onCommit={(v) => h.onSave({ comps: v })} />
+          <NumField label="Gross box office" currency={cur} actual value={w?.grossBO ?? null} onCommit={(v) => h.onSave({ reconciled_gross: v })} />
         </div>
         {boFees.length > 0 ? (
           <div style={{ marginTop: 'var(--lp-space-2)' }}>
             {boFees.map((d) => (
-              <LineItem key={d.id} left={`${kindLabel(d.kind)}${d.label ? ` · ${d.label}` : ''}`} amount={d.amount} fmt={fmt} busy={h.busy} onRemove={() => h.onRemoveLine('deduction', d.id)} />
+              <LineItem key={d.id} left={`${kindLabel(d.kind)}${d.label ? ` · ${d.label}` : ''}`} amount={d.amount} fmt={fmt} onRemove={() => h.onRemoveLine('deduction', d.id)} />
             ))}
           </div>
         ) : null}
@@ -166,7 +174,7 @@ export function ShowNightCard({ show, h }: { show: ShowMoneyRow; h: NightHandler
                 Works out at <strong className="lp-mono">{fmt.format(bo.resolvedOverage)}</strong> overage on top of the guarantee
               </span>
               {Math.round(bo.resolvedOverage) !== Math.round(w?.overage ?? 0) ? (
-                <Button onClick={() => h.onSave({ reconciled_overage: Math.round(bo.resolvedOverage * 100) / 100 })} disabled={h.busy}>
+                <Button onClick={() => h.onSave({ reconciled_overage: Math.round(bo.resolvedOverage * 100) / 100 })}>
                   Use as overage
                 </Button>
               ) : (
@@ -184,10 +192,10 @@ export function ShowNightCard({ show, h }: { show: ShowMoneyRow; h: NightHandler
       </div>
 
       <Row label="+ Overage" expected={fmtMoney(fmt, e.overage)}>
-        <NumInput ariaLabel="Actual overage" actual value={w?.overage || null} disabled={h.busy} onCommit={(v) => h.onSave({ reconciled_overage: v })} />
+        <NumInput ariaLabel="Actual overage" actual currency={cur} value={w?.overage || null} onCommit={(v) => h.onSave({ reconciled_overage: v })} />
       </Row>
       <Row label="+ Merch" expected={fmtMoney(fmt, e.merch)}>
-        <NumInput ariaLabel="Actual merch" actual value={w?.merch || null} disabled={h.busy} onCommit={(v) => h.onSave({ reconciled_merch: v })} />
+        <NumInput ariaLabel="Actual merch" actual currency={cur} value={w?.merch || null} onCommit={(v) => h.onSave({ reconciled_merch: v })} />
       </Row>
 
       <div className="grid items-center" style={{ gridTemplateColumns: COLS, gap: 'var(--lp-space-2)', borderTop: `2px solid color-mix(in srgb, ${HUE_ACTUAL} 50%, transparent)`, marginTop: 'var(--lp-space-2)', paddingTop: 'var(--lp-space-2)' }}>
@@ -205,7 +213,7 @@ export function ShowNightCard({ show, h }: { show: ShowMoneyRow; h: NightHandler
 
       <div style={{ marginTop: 'var(--lp-space-3)' }}>
         <Row label="VIP (paid separately)" expected={fmtMoney(fmt, e.vip)}>
-          <NumInput ariaLabel="Actual VIP" actual value={inc?.actual_vip || null} disabled={h.busy} onCommit={h.onSaveVip} />
+          <NumInput ariaLabel="Actual VIP" actual currency={cur} value={inc?.actual_vip || null} onCommit={h.onSaveVip} />
         </Row>
       </div>
     </Card>
@@ -223,15 +231,15 @@ export function ShowPaymentCard({ show, h }: { show: ShowMoneyRow; h: NightHandl
     <Card title="Payment" hint="What's been paid against the settlement.">
       <div className="grid items-center" style={{ gridTemplateColumns: 'minmax(0, 1fr) 8.5rem', gap: 'var(--lp-space-2)' }}>
         <span className="text-lp-text-secondary" style={{ fontSize: 'var(--lp-text-sm)' }}>− Deposit already received</span>
-        <NumInput ariaLabel="Deposit received" actual value={w?.depositReceived || null} disabled={h.busy} onCommit={(v) => h.onSave({ deposit_received: v })} />
+        <NumInput ariaLabel="Deposit received" actual currency={show.currency} value={w?.depositReceived || null} onCommit={(v) => h.onSave({ deposit_received: v })} />
         <span className="text-lp-text" style={{ fontSize: 'var(--lp-text-sm)', fontWeight: 'var(--lp-weight-semibold)' }}>= Balance due on the night</span>
         <span className="lp-mono text-lp-text" style={{ textAlign: 'right', fontSize: 'var(--lp-text-sm)' }}>{typed && walk ? fmtMoney(fmt, walk.balanceDue) : '—'}</span>
       </div>
       <div style={{ marginTop: 'var(--lp-space-2)' }}>
         {(w?.payments ?? []).map((p) => (
-          <LineItem key={p.id} left={`${methodLabel(p.method)}${p.paid_on ? ` · ${p.paid_on}` : ''}`} amount={p.amount} fmt={fmt} busy={h.busy} onRemove={() => h.onRemoveLine('payment', p.id)} />
+          <LineItem key={p.id} left={`${methodLabel(p.method)}${p.paid_on ? ` · ${p.paid_on}` : ''}`} amount={p.amount} fmt={fmt} onRemove={() => h.onRemoveLine('payment', p.id)} />
         ))}
-        <LineAdder addLabel="Log a payment" busy={h.busy} kinds={PAYMENT_METHODS} withDate onAdd={(f) => h.onAddLine('payment', { method: f.kind, amount: f.amount, paid_on: f.date })} />
+        <LineAdder addLabel="Log a payment" kinds={PAYMENT_METHODS} withDate onAdd={(f) => h.onAddLine('payment', { method: f.kind, amount: f.amount, paid_on: f.date })} />
       </div>
       <div className="flex items-center justify-between" style={{ borderTop: '1px solid var(--lp-border)', marginTop: 'var(--lp-space-3)', paddingTop: 'var(--lp-space-2)' }}>
         <span className="text-lp-text" style={{ fontSize: 'var(--lp-text-sm)', fontWeight: 'var(--lp-weight-semibold)' }}>Still owed</span>
@@ -267,19 +275,20 @@ function Row({ label, expected, children }: { label: string; expected: string; c
 function Group({
   title,
   expected,
+  actual,
   lines,
   legacy,
   fmt,
-  busy,
   onRemove,
   adder,
 }: {
   title: string;
   expected?: string;
+  /** The Actual column: the lines' total, or a one-click add. */
+  actual?: ReactNode;
   lines: { id: string; left: string; amount: number }[];
   legacy?: string;
   fmt: Intl.NumberFormat;
-  busy: boolean;
   onRemove: (id: string) => void;
   adder: ReactNode;
 }) {
@@ -288,12 +297,12 @@ function Group({
       <div className="grid items-center" style={{ gridTemplateColumns: COLS, gap: 'var(--lp-space-2)' }}>
         <span className="text-lp-text-secondary" style={{ fontSize: 'var(--lp-text-sm)' }}>− {title}</span>
         <span className="lp-mono text-lp-text-tertiary" style={{ textAlign: 'right', fontSize: 'var(--lp-text-xs)' }}>{expected ?? ''}</span>
-        <span />
+        <span className="lp-mono text-lp-text" style={{ textAlign: 'right', fontSize: 'var(--lp-text-sm)' }}>{actual ?? ''}</span>
       </div>
       <div style={{ paddingLeft: 'var(--lp-space-3)' }}>
         {legacy ? <div className="text-lp-text-tertiary" style={{ fontSize: 'var(--lp-text-xs)' }}>{legacy}</div> : null}
         {lines.map((l) => (
-          <LineItem key={l.id} left={l.left} amount={l.amount} fmt={fmt} busy={busy} onRemove={() => onRemove(l.id)} />
+          <LineItem key={l.id} left={l.left} amount={l.amount} fmt={fmt} onRemove={() => onRemove(l.id)} />
         ))}
         {adder}
       </div>
@@ -301,13 +310,13 @@ function Group({
   );
 }
 
-function LineItem({ left, amount, fmt, busy, onRemove }: { left: string; amount: number; fmt: Intl.NumberFormat; busy: boolean; onRemove: () => void }) {
+function LineItem({ left, amount, fmt, onRemove }: { left: string; amount: number; fmt: Intl.NumberFormat; onRemove: () => void }) {
   return (
     <div className="flex items-center justify-between" style={{ gap: 'var(--lp-space-2)', padding: 'var(--lp-space-1) 0' }}>
       <span className="min-w-0 truncate text-lp-text-secondary" style={{ fontSize: 'var(--lp-text-sm)' }}>{left}</span>
       <span className="flex items-center" style={{ gap: 'var(--lp-space-2)' }}>
         <span className="lp-mono text-lp-text" style={{ fontSize: 'var(--lp-text-sm)' }}>{fmtMoney(fmt, -amount)}</span>
-        <LinkButton muted disabled={busy} onClick={onRemove}>Remove</LinkButton>
+        <LinkButton muted onClick={onRemove}>Remove</LinkButton>
       </span>
     </div>
   );

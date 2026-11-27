@@ -15,18 +15,20 @@
    Rules: src/lib/income/showMoney.ts. The picked show is in the URL (?show=).
    ============================================ */
 
-import { useCallback, useMemo, useState, useTransition } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import type { IncomeRow } from '@/lib/budget/income';
 import type { ShowWalk } from '@/lib/settlement/loadWalk';
-import { buildShowList, defaultShowId, NEEDS_YOU, STATUS_LABEL, statusSummary, type ShowMoneyRow, type ShowStatus } from '@/lib/income/showMoney';
+import { applySettlementPatch, blankWalk, buildShowList, defaultShowId, NEEDS_YOU, recomputeWalk, STATUS_LABEL, statusSummary, type ShowMoneyRow, type ShowStatus } from '@/lib/income/showMoney';
+import { createSaveQueue } from '@/lib/income/saveQueue';
 import { dealLabel } from '@/lib/income/deal';
 import { useToast } from '@/components/ui/Toast';
 import { VersionLockModal } from '@/components/budget/versioning/VersionLockModal';
 import type { BudgetVersionVm, VersionStatus } from '@/components/budget/versioning/versionApi';
-import { Button, Chip, HUE_ACTUAL, HUE_NEEDS, LinkButton, fmtMoney, moneyFormat } from './moneyUi';
+import { Button, Chip, HUE_ACTUAL, HUE_BAD, HUE_NEEDS, LinkButton, fmtMoney, moneyFormat } from './moneyUi';
 import { ShowDealCard } from './ShowDealCard';
 import { ShowNightCard, ShowPaymentCard, liveWalk, type LineType, type NightHandlers } from './ShowNightCard';
+import type { SettlementDeduction, SettlementExpense, SettlementPayment } from '@/lib/settlement/loadWalk';
 
 const STD_CURRENCIES = ['GBP', 'USD', 'EUR', 'CAD', 'AUD', 'JPY', 'CHF', 'SEK', 'NOK', 'DKK', 'PLN', 'CZK', 'NZD', 'MXN'];
 
@@ -67,22 +69,37 @@ export function ShowMoneyClient({
 }) {
   const router = useRouter();
   const { showToast } = useToast();
-  const [pending, startTransition] = useTransition();
-  const [busy, setBusy] = useState(false);
   const [lockOpen, setLockOpen] = useState(false);
   const [income, setIncome] = useState<IncomeRow[]>(initialIncome);
-  // A server refresh (after a settlement save) brings new income rows too —
-  // the settlement carries actuals onto them. (State-from-props, React's
-  // documented pattern — no effect.)
-  const [seenIncome, setSeenIncome] = useState(initialIncome);
-  if (seenIncome !== initialIncome) {
-    setSeenIncome(initialIncome);
+  const [walkState, setWalkState] = useState<ShowWalk[]>(walks);
+  // A server refresh (Catch up, an error) brings the server's rows back.
+  // (State-from-props, React's documented pattern — no effect.)
+  const [seen, setSeen] = useState({ initialIncome, walks });
+  if (seen.initialIncome !== initialIncome || seen.walks !== walks) {
+    setSeen({ initialIncome, walks });
     setIncome(initialIncome);
+    setWalkState(walks);
   }
+
+  /* Saves (Nov 2026, Adam: "data entry is super slow… if I edit before the
+     new thing displays, it overwrites it"). An edit changes the page AT
+     ONCE; the save goes out behind it through ONE queue per show (in order,
+     edits made meanwhile folded into the next save — saveQueue.ts). Nothing
+     waits for, or reloads, the whole page. walksRef is the same list as
+     walkState, kept in step synchronously so a queued save (deduction
+     totals, the settlement id) reads what's on screen now. */
+  const walksRef = useRef<ShowWalk[]>(walks);
+  useEffect(() => {
+    walksRef.current = walks;
+  }, [walks]);
+  const realIds = useRef(new Map<string, string>());
+  const [saving, setSaving] = useState(0);
+  const [saveError, setSaveError] = useState(false);
+  const [queue] = useState(() => createSaveQueue((n) => setSaving(n)));
 
   const native = (tourCurrency || 'GBP').toUpperCase();
   const today = useMemo(() => new Date().toISOString().slice(0, 10), []);
-  const rows = useMemo(() => buildShowList(income, walks, native, today), [income, walks, native, today]);
+  const rows = useMemo(() => buildShowList(income, walkState, native, today), [income, walkState, native, today]);
   const [selectedId, setSelectedId] = useState<string | null>(() =>
     initialShowId && rows.some((r) => r.routingId === initialShowId) ? initialShowId : defaultShowId(rows),
   );
@@ -116,59 +133,105 @@ export function ShowMoneyClient({
     });
   }, []);
 
-  const refresh = () => startTransition(() => router.refresh());
+  function updateWalk(show: ShowMoneyRow, fn: (w: ShowWalk) => ShowWalk) {
+    const prev = walksRef.current;
+    const i = prev.findIndex((w) => w.routingId === show.routingId);
+    const cur = i >= 0 ? prev[i] : blankWalk({ ...show, venue: show.venue });
+    const next = i >= 0 ? prev.map((w, j) => (j === i ? fn(cur) : w)) : [...prev, fn(cur)];
+    walksRef.current = next;
+    setWalkState(next);
+  }
+  const walkOf = (routingId: string) => walksRef.current.find((w) => w.routingId === routingId) ?? null;
 
-  async function post(url: string, body: unknown, method = 'POST') {
-    setBusy(true);
-    try {
-      const res = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-      const j = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error((j as { error?: string }).error ?? 'Could not save');
-      return j as Record<string, unknown>;
-    } finally {
-      setBusy(false);
+  /** A save failed: say so and put the page back to what the server has. */
+  const fail = (e: unknown) => {
+    if (e instanceof LockedError) return;
+    setSaveError(true);
+    showToast(e instanceof Error ? e.message : 'Could not save', 'error');
+    router.refresh();
+  };
+
+  async function send(url: string, body: unknown, method = 'POST'): Promise<Record<string, unknown>> {
+    const res = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    const j = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+    if (res.status === 423) {
+      setLockOpen(true);
+      throw new LockedError();
     }
+    if (!res.ok) throw new Error((j.error as string | undefined) ?? 'Could not save');
+    setSaveError(false);
+    return j;
   }
 
-  async function ensureSettlement(show: ShowMoneyRow): Promise<string | null> {
-    if (show.walk?.settlementId) return show.walk.settlementId;
-    const row = await post('/api/budget/settlement', { routing_id: show.routingId });
-    return (row?.id as string | undefined) ?? null;
+  /** The deal (and Actual VIP) — budget_income. */
+  function saveIncome(routingId: string, patch: Record<string, unknown>) {
+    onMerged(routingId, patch as Partial<IncomeRow>);
+    queue
+      .patch(routingId, 'income', patch, async (all) => {
+        const row = await send('/api/budget/income', { routing_id: routingId, ...all });
+        // The server's row (engine outputs: overage, merch, VIP) with any
+        // edit typed since laid back on top.
+        onMerged(routingId, { ...(row as Partial<IncomeRow>), ...((queue.pending(routingId, 'income') ?? {}) as Partial<IncomeRow>) });
+      })
+      .catch(fail);
   }
 
-  /** Σ itemized deductions → reconciled_deductions, so the settlement carries
-   *  the itemized total to the income row (unchanged money invariant: ALL
-   *  kinds, box-office fees included). */
-  async function pushDeductionSum(show: ShowMoneyRow, add: number, excludeId?: string) {
-    const sum = (show.walk?.deductions ?? []).filter((d) => d.id !== excludeId).reduce((n, d) => n + d.amount, 0) + add;
-    await post('/api/budget/settlement', { routing_id: show.routingId, reconciled_deductions: sum });
+  /** Inside a queued task: the settlement's id, made first if needed. */
+  async function settlementIdFor(show: ShowMoneyRow): Promise<string> {
+    const have = walkOf(show.routingId)?.settlementId;
+    if (have) return have;
+    const row = await send('/api/budget/settlement', { routing_id: show.routingId });
+    const id = row.id as string | undefined;
+    if (!id) throw new Error('Could not start the settlement');
+    updateWalk(show, (w) => ({ ...w, settlementId: id }));
+    return id;
   }
 
-  const guard = (fn: () => Promise<void>) => () =>
-    void fn()
-      .then(refresh)
-      .catch((e: unknown) => showToast(e instanceof Error ? e.message : 'Could not save', 'error'));
+  /** Inside a queued task: Σ itemised deductions (as on screen) →
+   *  reconciled_deductions, so the settlement carries the itemised total to
+   *  the income row (ALL kinds, box-office fees included). */
+  async function pushDeductionSum(show: ShowMoneyRow) {
+    const sum = (walkOf(show.routingId)?.deductions ?? []).reduce((n, d) => n + d.amount, 0);
+    await send('/api/budget/settlement', { routing_id: show.routingId, reconciled_deductions: sum });
+  }
 
   const handlers = (show: ShowMoneyRow): NightHandlers => ({
-    busy: busy || pending,
-    onSave: (patch) => guard(async () => void (await post('/api/budget/settlement', { routing_id: show.routingId, ...patch })))(),
-    onAddLine: (type: LineType, fields) =>
-      guard(async () => {
-        const sid = await ensureSettlement(show);
-        if (!sid) throw new Error('Could not start the settlement');
-        await post('/api/budget/settlement/lines', { type, settlement_id: sid, ...fields });
-        if (type === 'deduction') await pushDeductionSum(show, Number(fields.amount) || 0);
-      })(),
-    onRemoveLine: (type: LineType, id) =>
-      guard(async () => {
-        await post('/api/budget/settlement/lines', { type, id }, 'DELETE');
-        if (type === 'deduction') await pushDeductionSum(show, 0, id);
-      })(),
-    onSaveVip: (v) =>
-      guard(async () => {
-        const merged = await post('/api/budget/income', { routing_id: show.routingId, actual_vip: v });
-        onMerged(show.routingId, merged as Partial<IncomeRow>);
-      })(),
+    onSave: (patch) => {
+      updateWalk(show, (w) => applySettlementPatch(w, patch));
+      queue
+        .patch(show.routingId, 'settlement', patch, async (all) => {
+          const row = await send('/api/budget/settlement', { routing_id: show.routingId, ...all });
+          const id = row.id as string | undefined;
+          if (id) updateWalk(show, (w) => (w.settlementId ? w : { ...w, settlementId: id }));
+        })
+        .catch(fail);
+    },
+    onAddLine: (type: LineType, fields) => {
+      const tmp = `tmp-${crypto.randomUUID()}`;
+      updateWalk(show, (w) => recomputeWalk(addLine(w, type, tmp, fields)));
+      queue
+        .run(show.routingId, async () => {
+          const sid = await settlementIdFor(show);
+          const row = await send('/api/budget/settlement/lines', { type, settlement_id: sid, ...fields });
+          const id = row.id as string;
+          realIds.current.set(tmp, id);
+          updateWalk(show, (w) => renameLine(w, type, tmp, id));
+          if (type === 'deduction') await pushDeductionSum(show);
+        })
+        .catch(fail);
+    },
+    onRemoveLine: (type: LineType, id) => {
+      updateWalk(show, (w) => recomputeWalk(dropLine(w, type, id)));
+      queue
+        .run(show.routingId, async () => {
+          // A line still being added has a stand-in id; its add ran first.
+          const real = id.startsWith('tmp-') ? realIds.current.get(id) : id;
+          if (real) await send('/api/budget/settlement/lines', { type, id: real }, 'DELETE');
+          if (type === 'deduction') await pushDeductionSum(show);
+        })
+        .catch(fail);
+    },
+    onSaveVip: (v) => saveIncome(show.routingId, { actual_vip: v }),
   });
 
   const toSettle = rows.filter((r) => r.status === 'to_settle');
@@ -179,10 +242,13 @@ export function ShowMoneyClient({
         <p className="text-lp-text" style={{ margin: 0, fontSize: 'var(--lp-text-sm)' }} data-testid="show-money-summary">
           {statusSummary(rows)}
         </p>
-        <Legend />
+        <span className="flex flex-wrap items-center" style={{ gap: 'var(--lp-space-3)' }}>
+          <SaveState saving={saving > 0} error={saveError} />
+          <Legend />
+        </span>
       </div>
 
-      {toSettle.length > 0 ? <CatchUp shows={toSettle} onDone={refresh} /> : null}
+      {toSettle.length > 0 ? <CatchUp shows={toSettle} onDone={() => router.refresh()} /> : null}
 
       {rows.length === 0 ? (
         <p className="text-lp-text-secondary" style={{ fontSize: 'var(--lp-text-sm)' }}>
@@ -199,7 +265,7 @@ export function ShowMoneyClient({
               currencyOptions={currencyOptions}
               versionLocked={versionLocked}
               onLockedEdit={() => setLockOpen(true)}
-              onMerged={onMerged}
+              onSaveDeal={(patch) => saveIncome(selected.routingId, patch)}
               h={handlers(selected)}
             />
           ) : null}
@@ -217,6 +283,60 @@ export function ShowMoneyClient({
         onClose={() => setLockOpen(false)}
       />
     </section>
+  );
+}
+
+class LockedError extends Error {}
+
+/* Lines on the local walk (ids: a stand-in `tmp-…` until the save returns). */
+function addLine(w: ShowWalk, type: LineType, id: string, f: Record<string, unknown>): ShowWalk {
+  const amount = Number(f.amount) || 0;
+  if (type === 'deduction') {
+    const d: SettlementDeduction = { id, kind: String(f.kind ?? 'other'), label: (f.label as string | null) ?? null, amount, currency: null };
+    return { ...w, deductions: [...w.deductions, d], deductionsAreLegacy: false };
+  }
+  if (type === 'expense') {
+    const x: SettlementExpense = { id, label: (f.label as string | null) ?? null, amount, currency: null };
+    return { ...w, expenses: [...w.expenses, x] };
+  }
+  const p: SettlementPayment = { id, method: String(f.method ?? 'wire'), amount, currency: null, paid_on: (f.paid_on as string | null) ?? null, note: null };
+  return { ...w, payments: [...w.payments, p] };
+}
+function renameLine(w: ShowWalk, type: LineType, from: string, to: string): ShowWalk {
+  const re = <T extends { id: string }>(xs: T[]) => xs.map((x) => (x.id === from ? { ...x, id: to } : x));
+  if (type === 'deduction') return { ...w, deductions: re(w.deductions) };
+  if (type === 'expense') return { ...w, expenses: re(w.expenses) };
+  return { ...w, payments: re(w.payments) };
+}
+function dropLine(w: ShowWalk, type: LineType, id: string): ShowWalk {
+  const rm = <T extends { id: string }>(xs: T[]) => xs.filter((x) => x.id !== id);
+  if (type === 'deduction') return { ...w, deductions: rm(w.deductions) };
+  if (type === 'expense') return { ...w, expenses: rm(w.expenses) };
+  return { ...w, payments: rm(w.payments) };
+}
+
+function SaveState({ saving, error }: { saving: boolean; error: boolean }) {
+  const [shown, setShown] = useState<'saving' | 'saved' | null>(null);
+  const [was, setWas] = useState(saving);
+  if (was !== saving) {
+    setWas(saving);
+    setShown(saving ? 'saving' : 'saved');
+  }
+  useEffect(() => {
+    if (shown !== 'saved') return;
+    const t = window.setTimeout(() => setShown(null), 2000);
+    return () => window.clearTimeout(t);
+  }, [shown]);
+  const text = error && !saving ? 'Not saved' : shown === 'saving' ? 'Saving…' : shown === 'saved' ? 'Saved' : '';
+  return (
+    <span
+      role="status"
+      aria-live="polite"
+      className="lp-mono"
+      style={{ fontSize: 'var(--lp-text-xs)', minWidth: '4.5rem', textAlign: 'right', color: error && !saving ? HUE_BAD : 'var(--lp-text-tertiary)' }}
+    >
+      {text}
+    </span>
   );
 }
 
@@ -284,7 +404,7 @@ function ShowPanel({
   currencyOptions,
   versionLocked,
   onLockedEdit,
-  onMerged,
+  onSaveDeal,
   h,
 }: {
   show: ShowMoneyRow;
@@ -292,7 +412,7 @@ function ShowPanel({
   currencyOptions: string[];
   versionLocked: boolean;
   onLockedEdit: () => void;
-  onMerged: (routingId: string, merged: Partial<IncomeRow>) => void;
+  onSaveDeal: (patch: Record<string, unknown>) => void;
   h: NightHandlers;
 }) {
   const fmt = moneyFormat(show.currency);
@@ -319,7 +439,6 @@ function ShowPanel({
             </Button>
             <Button
               primary={ff ? HUE_ACTUAL : undefined}
-              disabled={h.busy}
               onClick={() => h.onSave(ff ? { full_and_final: false, status: 'pending' } : { full_and_final: true, status: 'reconciled' })}
               title={ff ? 'Reopen this settlement' : 'The settlement is agreed and final'}
             >
@@ -341,7 +460,6 @@ function ShowPanel({
 
       <div className="grid min-w-0" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(26rem, 1fr))', gap: 'var(--lp-space-4)', alignItems: 'start' }}>
         <ShowDealCard
-          routingId={show.routingId}
           row={show.income}
           expected={show.expected}
           currency={show.currency}
@@ -349,7 +467,7 @@ function ShowPanel({
           currencyOptions={currencyOptions}
           versionLocked={versionLocked}
           onLockedEdit={onLockedEdit}
-          onMerged={onMerged}
+          onSave={onSaveDeal}
         />
         <div className="flex min-w-0 flex-col" style={{ gap: 'var(--lp-space-4)' }}>
           <ShowNightCard show={show} h={h} />

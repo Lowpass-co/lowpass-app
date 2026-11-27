@@ -18,6 +18,7 @@
 
 import type { IncomeRow } from '@/lib/budget/income';
 import type { ShowWalk } from '@/lib/settlement/loadWalk';
+import { computeWalk } from '@/lib/settlement/walk';
 
 const n = (v: unknown): number => {
   const x = Number(v);
@@ -182,4 +183,93 @@ export function fillFromDeal(e: Expected, w: ShowWalk | null): { reconciled_guar
   if (!w || w.overage === 0) if (e.overage) out.reconciled_overage = e.overage;
   if (!w || w.merch === 0) if (e.merch) out.reconciled_merch = e.merch;
   return out;
+}
+
+/* ── Local edits (Nov 2026, Adam: "data entry is super slow") ──────────────
+   The page applies an edit to its own copy of the walk AT ONCE and saves in
+   the background — it no longer waits for a save and a whole-page refresh.
+   These are the rules for that copy; the server keeps the same maths
+   (computeWalk). */
+
+/** The walk's totals, recomputed from its figures and lines. Legacy (one
+ *  un-itemised deductions figure) counts until a line is added. */
+export function recomputeWalk(w: ShowWalk): ShowWalk {
+  const deductions = w.deductions.length > 0 ? w.deductions : w.deductionsAreLegacy ? [{ amount: w.walk.deductionsTotal }] : [];
+  return {
+    ...w,
+    walk: computeWalk({
+      guarantee: w.guarantee,
+      deductions,
+      expenses: w.expenses,
+      overage: w.overage,
+      merch: w.merch,
+      depositReceived: w.depositReceived,
+      payments: w.payments,
+    }),
+  };
+}
+
+/** An empty walk, for a day that has none loaded yet. */
+export function blankWalk(base: { routingId: string; currency: string; date: string | null; city: string | null; venue: string | null; dayType: string | null }): ShowWalk {
+  return recomputeWalk({
+    settlementId: null,
+    routingId: base.routingId,
+    currency: base.currency,
+    guarantee: 0,
+    overage: 0,
+    merch: 0,
+    depositReceived: 0,
+    fullAndFinal: false,
+    comps: null,
+    ticketsSold: null,
+    grossBO: null,
+    contractedGuarantee: 0,
+    deductionsAreLegacy: false,
+    deductions: [],
+    expenses: [],
+    payments: [],
+    walk: computeWalk({ guarantee: 0, deductions: [], expenses: [], overage: 0, merch: 0, depositReceived: 0, payments: [] }),
+    date: base.date,
+    city: base.city,
+    venue_name: base.venue,
+    day_type: base.dayType,
+  });
+}
+
+const money = (v: unknown) => (v == null ? 0 : Number(v) || 0);
+const numOrNull = (v: unknown) => (v == null ? null : Number(v) || 0);
+
+/** A settlement POST body applied to the walk — what the page shows while it
+ *  saves (and after: the server stores exactly these fields). */
+export function applySettlementPatch(w: ShowWalk, patch: Record<string, unknown>): ShowWalk {
+  const next: ShowWalk = { ...w };
+  if ('reconciled_guarantee' in patch) next.guarantee = money(patch.reconciled_guarantee);
+  if ('reconciled_overage' in patch) next.overage = money(patch.reconciled_overage);
+  if ('reconciled_merch' in patch) next.merch = money(patch.reconciled_merch);
+  if ('deposit_received' in patch) next.depositReceived = money(patch.deposit_received);
+  if ('full_and_final' in patch) next.fullAndFinal = !!patch.full_and_final;
+  if ('comps' in patch) next.comps = numOrNull(patch.comps);
+  if ('reconciled_tickets_sold' in patch) next.ticketsSold = numOrNull(patch.reconciled_tickets_sold);
+  if ('reconciled_gross' in patch) next.grossBO = numOrNull(patch.reconciled_gross);
+  return recomputeWalk(next);
+}
+
+/** Withholding to take off on the night, when the deal has a withholding %
+ *  and the night has no withholding line yet: pct × (actual guarantee +
+ *  actual overage), to the cent. `after` = figures about to be typed (Fill
+ *  from the deal). Null = nothing to suggest. */
+export function withholdingToAdd(e: Expected, w: ShowWalk | null, after: { guarantee?: number; overage?: number } = {}): number | null {
+  if (!(e.withholdingPct > 0)) return null;
+  if (w && (w.deductionsAreLegacy || w.deductions.some((d) => d.kind === 'withholding'))) return null;
+  const base = (after.guarantee ?? (w?.guarantee || 0)) + (after.overage ?? (w?.overage || 0));
+  if (!(base > 0)) return null;
+  return Math.round(base * e.withholdingPct) / 100;
+}
+
+/** Everything "Fill from the deal" types: the blank figures AND the
+ *  withholding line the deal takes off (it used to fill the guarantee only,
+ *  so Actual read $750 over an Expected that had withholding off). */
+export function fillPlan(e: Expected, w: ShowWalk | null): { patch: ReturnType<typeof fillFromDeal>; withholding: number | null } {
+  const patch = fillFromDeal(e, w);
+  return { patch, withholding: withholdingToAdd(e, w, { guarantee: patch.reconciled_guarantee, overage: patch.reconciled_overage }) };
 }
