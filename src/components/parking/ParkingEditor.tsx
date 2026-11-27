@@ -842,8 +842,10 @@ export function ParkingEditor({ show, tourName, initial, canEdit }: ParkingEdito
       if (canEdit) {
         try {
           const file = await uploadToFiles({ scope: 'tour', scopeId: show.tourId, folder: 'Parking maps', file: new File([out.blob], out.fileName, { type: 'application/pdf' }) });
-          const link = await fetch('/api/file-links', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ fileId: file.id, type: 'show', entityId: show.routingId }) });
-          const r = await fetch(base, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pdfFileId: file.id }) });
+          // The canvas id is "ref:<uuid>"; the link and the map want the uuid.
+          const fileId = file.id.replace(/^ref:/, '');
+          const link = await fetch('/api/file-links', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ fileId, type: 'show', entityId: show.routingId }) });
+          const r = await fetch(base, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pdfFileId: fileId }) });
           const j = (await r.json().catch(() => ({}))) as { map?: SavedParkingMap };
           if (j.map?.pdf) setPdf(j.map.pdf);
           setPdfJob((job) => (job?.phase === 'ready' && job.url === url ? { ...job, saved: link.ok ? 'saved' : 'unlinked' } : job));

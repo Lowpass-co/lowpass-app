@@ -9,12 +9,13 @@
    READ CHECK: session + active membership; everything scoped to that
    workspace in src/server/files/entityLinks.ts (venues are shared across
    workspaces, so the workspace filter is what keeps files private).
-   WRITES: requireWrite — same gate as uploading to Files.
+   WRITES: Files EDIT on the file's tour (writeGate.ts) — same gate as uploading to Files.
    ============================================ */
 
 import { NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { requireWrite } from '@/lib/auth/workspace-check';
+import { fileRefId, filesWrite, tourOfFile, tourOfLink } from '@/server/files/writeGate';
 import { getActiveMembership } from '@/lib/permissions/server';
 import { ENTITY_TYPES, LinkError, addLink, linkedFiles, linksOfFile, removeLink, showVenue, type EntityType } from '@/server/files/entityLinks';
 import { readJson, str } from '@/server/files/shareResponse';
@@ -52,10 +53,11 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   const supabase = await createServerSupabaseClient();
-  const auth = await requireWrite(supabase);
-  if ('error' in auth) return auth.error;
   const body = await readJson(request);
-  const fileId = str(body.fileId);
+  const raw = str(body.fileId);
+  const fileId = raw ? fileRefId(raw) : raw;
+  const auth = await requireWrite(supabase, filesWrite(fileId ? await tourOfFile(supabase, fileId) : null));
+  if ('error' in auth) return auth.error;
   const entityId = str(body.entityId);
   if (!fileId || !entityId || !isType(body.type)) return NextResponse.json({ error: 'Send { fileId, type: show|venue|person, entityId }' }, { status: 400 });
   try {
@@ -67,10 +69,10 @@ export async function POST(request: Request) {
 
 export async function DELETE(request: Request) {
   const supabase = await createServerSupabaseClient();
-  const auth = await requireWrite(supabase);
-  if ('error' in auth) return auth.error;
   const id = new URL(request.url).searchParams.get('id');
   if (!id) return NextResponse.json({ error: 'id is required' }, { status: 400 });
+  const auth = await requireWrite(supabase, filesWrite(await tourOfLink(supabase, id)));
+  if ('error' in auth) return auth.error;
   try {
     await removeLink(supabase, { workspaceId: auth.workspaceId, id });
     return NextResponse.json({ ok: true });

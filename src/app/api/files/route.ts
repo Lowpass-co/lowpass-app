@@ -24,6 +24,7 @@
 
 import { NextResponse } from 'next/server';
 import { requireWrite } from '@/lib/auth/workspace-check';
+import { filesWrite, tourOfFile } from '@/server/files/writeGate';
 // One copy of the folder rule, shared with file share links.
 import { sanitizeFolder } from '@/lib/files/shareLinks';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
@@ -72,17 +73,18 @@ export async function GET(request: Request) {
 
 export async function PATCH(request: Request) {
   const supabase = await createServerSupabaseClient();
-  const auth = await requireWrite(supabase);
-  if ('error' in auth) return auth.error;
-  const ctx = await getWorkspaceId(supabase);
-  if (!ctx) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-
   let body: { id?: string; file_name?: unknown; metadata?: unknown };
   try {
     body = (await request.json()) as { id?: string; file_name?: unknown; metadata?: unknown };
   } catch {
     return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
   }
+  // Rename / move a tour's file: Files EDIT on that tour (writeGate.ts).
+  // DELETE below stays admin / manager.
+  const auth = await requireWrite(supabase, filesWrite(typeof body.id === 'string' ? await tourOfFile(supabase, body.id) : null));
+  if ('error' in auth) return auth.error;
+  const ctx = await getWorkspaceId(supabase);
+  if (!ctx) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   const id = typeof body.id === 'string' ? body.id.trim() : '';
   if (!id) return NextResponse.json({ error: 'id is required' }, { status: 400 });
 
