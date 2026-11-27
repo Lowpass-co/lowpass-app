@@ -1005,7 +1005,10 @@ rebuild sections / cover pages / variables.
   `perPersonFits(item, section)` (src/lib/riders/perPerson.ts) — food, drink,
   towels, buyouts, passes, beds…, by the item's words or the heading it sits
   under (`sectionAbove`); a ticked box always shows. The line's details toggle
-  is a chevron, never dots (the block's ⋮ menu sits beside it).
+  is a chevron, never dots. **The block's ⋮ menu is in the LEFT gutter** with
+  + and the drag handle (`.rdx-gmenu`) — on the right it sat on the line's
+  star / chevron and caught clicks meant for them. Keep the right edge for the
+  line's own controls.
 - **The PDF is dressed like Adam's own riders** (Nov 2026: "a refined version
   of my rider with logo"): per document a COVER (the artist's logo — Edit
   profile → Logo, `loadRiderLogo`, src/server/riders/logo.ts: our own upload
@@ -1037,7 +1040,12 @@ rebuild sections / cover pages / variables.
   what prints and no outside host sees a page whose URL is a grant. Never put
   `branding.logo_url` in a public page's `<img>`. No logo → the artist's name
   (`<DocBrand>`), and in the editor an "Add the artist's logo" prompt →
-  `/artists/[id]?edit=profile` (opens Edit profile).
+  `/artists/[id]?edit=profile` (opens Edit profile). **Logo / banner uploads
+  write Storage AS THE SERVER** (`/api/artists/[id]/image/[kind]`): admin /
+  manager of the artist's OWN workspace, bytes sniffed (JPEG / PNG / WebP,
+  ≤ 4 MB), the path fixed by the server — the bucket's user write rule (278)
+  checks the caller's current workspace and refused real uploads ("new row
+  violates row-level security policy").
 - **Exports never touch the network from user strings** (Nov 2026): the shared
   `fetchLogoDataUri` goes through `safeFetch` + `logoBytesDataUri` (bytes must
   sniff as PNG / JPEG / WebP / GIF; SVG refused), and every PDF page is
