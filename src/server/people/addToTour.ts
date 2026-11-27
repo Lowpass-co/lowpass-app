@@ -88,6 +88,10 @@ export async function addPersonToTour(supabase: SupabaseClient, input: AddInput)
   if (error || !inserted) {
     // UNIQUE (tour_id, person_id, role)
     if (error?.code === '23505') return { ok: false, status: 409, error: 'Already on this tour in that role' };
+    // 23503 on person_id: the People record has no `persons` copy — 285's
+    // trigger is missing (Nov 2026; migration 305 repairs it). Say so plainly
+    // rather than show the constraint name.
+    if (error?.code === '23503') return { ok: false, status: 500, error: 'Couldn’t add them — their People record isn’t set up for tours yet (database repair 305 needed).' };
     return { ok: false, status: 500, error: error?.message ?? 'Could not add' };
   }
   const id = (inserted as { id: string }).id;

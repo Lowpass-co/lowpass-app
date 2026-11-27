@@ -980,6 +980,17 @@ takes them off this tour only). The "Read-only · edit in Payroll ↗" line on
 the Rates panel is a link to Payroll. A viewer who can't edit gets only Copy
 email.
 
+
+#### CREW-13 — Add someone brand new (needs migration 305)
+Payroll (or Crew) → Add crew → type a name nobody has → "+ Add 'X' as new" →
+Add. They're on the tour (no "tour_personnel_person_id_fkey" error) and in
+People. If an add ever fails, no half-made People record is left behind, and
+the message is plain words, not a constraint name.
+
+#### CREW-14 — Whole tour is a switch
+Add crew → pick someone. "Whole tour" is orange. Click it: it goes grey,
+STAYS where it was, and a "From … to …" line appears underneath (no calendar
+pops open). Click it again: orange, the dates line goes.
 #### TRV-06 — Find flight (needs migration 299 + AVIATIONSTACK_KEY)
 Travel › Add flight: type a flight number flying TODAY (e.g. one you can see
 on the departures board) and today's date → **Find flight** → Airline, From,

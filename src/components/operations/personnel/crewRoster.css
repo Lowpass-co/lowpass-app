@@ -32,6 +32,15 @@
 }
 .cr-chip:hover { border-color: var(--lp-border-strong); color: var(--lp-text); }
 .cr-chip.is-on { border-color: var(--lp-orange); color: var(--lp-text); }
+/* A chip that is a switch (Whole tour): orange when on, plain grey when off. */
+.cr-chip.cr-toggle { color: var(--lp-text-tertiary); }
+.cr-chip.cr-toggle.is-on {
+  border-color: var(--lp-orange);
+  background: color-mix(in srgb, var(--lp-orange) 14%, transparent);
+  color: var(--lp-orange);
+}
+.cr-chip.cr-toggle.is-on:hover { color: var(--lp-orange); }
+.cr-dates-label { font-size: var(--lp-text-xs); color: var(--lp-text-tertiary); }
 .cr-chip select {
   appearance: none;
   border: 0;
