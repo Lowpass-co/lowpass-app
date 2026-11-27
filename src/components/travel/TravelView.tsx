@@ -25,7 +25,7 @@
 
 import { useCallback, useEffect, useId, useMemo, useState } from 'react';
 import type { FormEvent } from 'react';
-import { Plane, Plus, X } from 'lucide-react';
+import { Plane, Plus, Search, X } from 'lucide-react';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { Button } from '@/components/ui/Button';
 import { TextInput } from '@/components/ui/TextInput';
@@ -40,6 +40,8 @@ export interface TravelViewProps {
   tourId: string;
   tourCurrency: string;
   crewNames: string[];
+  /** Flight search is set up (AVIATIONSTACK_KEY) — show "Find flight". */
+  flightSearch?: boolean;
 }
 
 /** "2026-10-14T10:00:00+00:00" → "Tue 14 Oct" — from the string, no zone shift. */
@@ -80,7 +82,22 @@ export function sortForList(flights: Flight[]): Flight[] {
   return [...flights].sort((a, b) => key(a).localeCompare(key(b)) || (a.personName ?? '').localeCompare(b.personName ?? ''));
 }
 
-export function TravelView({ tourId, tourCurrency, crewNames }: TravelViewProps) {
+/** What a search found, as form fields (local date + time, airport codes). */
+export function formFromFound(f: {
+  airline: string | null; from: string | null; to: string | null; departLocal: string | null; flightNumber: string;
+}): Partial<typeof EMPTY_FORM> {
+  const out: Partial<typeof EMPTY_FORM> = { flightNumber: f.flightNumber };
+  if (f.airline) out.airline = f.airline;
+  if (f.from) out.from = f.from;
+  if (f.to) out.to = f.to;
+  if (f.departLocal) {
+    out.date = f.departLocal.slice(0, 10);
+    out.time = f.departLocal.slice(11, 16);
+  }
+  return out;
+}
+
+export function TravelView({ tourId, tourCurrency, crewNames, flightSearch = false }: TravelViewProps) {
   const [flights, setFlights] = useState<Flight[] | undefined>(undefined);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [openId, setOpenId] = useState<string | null>(null);
@@ -90,6 +107,38 @@ export function TravelView({ tourId, tourCurrency, crewNames }: TravelViewProps)
   const [people, setPeople] = useState<string[]>([]);
   const [formError, setFormError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  // Flight search (Nov 2026, Adam): number + date → the rest. Only on a click
+  // — each search may spend one of the month's 100.
+  const [finding, setFinding] = useState(false);
+  const [found, setFound] = useState<{ ok: boolean; text: string } | null>(null);
+  const canFind = !!form.flightNumber.trim() && !!form.date && !finding;
+  const findFlight = async () => {
+    if (!canFind) return;
+    setFinding(true);
+    setFound(null);
+    try {
+      const res = await fetch('/api/flights/lookup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ flight: form.flightNumber, date: form.date, tourId }),
+      });
+      const j = (await res.json().catch(() => null)) as
+        | { flight?: Parameters<typeof formFromFound>[0] & { fromName: string | null; toName: string | null }; error?: string }
+        | null;
+      if (res.ok && j?.flight) {
+        const f = j.flight;
+        setForm((prev) => ({ ...prev, ...formFromFound(f) }));
+        setFound({
+          ok: true,
+          text: `${f.flightNumber}${f.airline ? ` · ${f.airline}` : ''} · ${f.from ?? '?'} → ${f.to ?? '?'}${f.departLocal ? ` · departs ${f.departLocal.slice(11, 16)}` : ''}`,
+        });
+      } else setFound({ ok: false, text: j?.error ?? 'Could not search for that flight.' });
+    } catch {
+      setFound({ ok: false, text: 'Could not search for that flight.' });
+    } finally {
+      setFinding(false);
+    }
+  };
   const listId = useId();
 
   const load = useCallback(async () => {
@@ -277,7 +326,23 @@ export function TravelView({ tourId, tourCurrency, crewNames }: TravelViewProps)
             <TextInput label="Date" type="date" value={form.date} onChange={set('date')} required />
             <TextInput label="Departs" type="time" value={form.time} onChange={set('time')} helper="Local time — optional" />
             <TextInput label="Airline" placeholder="British Airways" value={form.airline} onChange={set('airline')} />
-            <TextInput label="Flight number" placeholder="BA117" value={form.flightNumber} onChange={set('flightNumber')} />
+            <div>
+              <TextInput label="Flight number" placeholder="BA117" value={form.flightNumber} onChange={set('flightNumber')} />
+              {flightSearch ? (
+                <div className="mt-1 flex items-center gap-2">
+                  <Button type="button" size="sm" variant="secondary" onClick={() => void findFlight()} disabled={!canFind} loading={finding}
+                    leadingIcon={<Search className="h-3.5 w-3.5" aria-hidden />}
+                    title={canFind ? 'Fill in the rest from the flight number + date' : 'Type the flight number and pick the date first'}>
+                    Find flight
+                  </Button>
+                  {found ? (
+                    <span role="status" className="text-xs" style={{ color: found.ok ? 'var(--lp-text-secondary)' : 'var(--color-lp-error)' }}>
+                      {found.text}
+                    </span>
+                  ) : null}
+                </div>
+              ) : null}
+            </div>
             <TextInput label="Booking ref" placeholder="ABC123" value={form.confirmation} onChange={set('confirmation')} />
             <TextInput
               label={people.length > 1 ? `Cost per ticket (${tourCurrency})` : `Cost (${tourCurrency})`} type="number" step="0.01" min="0" inputMode="decimal"

@@ -881,6 +881,26 @@ recreate a `_legacy/` tree: delete dead code instead of parking it.
 - Known: each export is a new file (share the Parking maps folder for a link
   that stays current).
 
+### Flight search (Nov 2026, Adam — migration 299)
+
+- Travel › New flight › **Find flight**: flight number + date → airline,
+  from / to, local departure date + time (`POST /api/flights/lookup`, Logistics
+  edit on the tour). Provider: Aviationstack, behind ONE adapter
+  (`src/server/flights/lookup.ts`; rules pure in `src/lib/flights/lookup.ts`).
+  NO alerts / change watching (Adam: "remove the notifs").
+- **Never burn the 100 / month**: only on a click; bad numbers refused before
+  any call; free plan (`AVIATIONSTACK_PLAN=free`, default) only asks for dates
+  within a day of today (`inPlanWindow` — the free plan can't look ahead,
+  FRAGILE, from the plan notes); answers cached in `flight_lookups` (`cacheFresh`:
+  flown = forever, found 6 h, miss 3 h); every provider call is RESERVED first
+  by `flight_lookup_reserve()` (atomic, counted in the DB): 90 / month in all
+  (`FLIGHT_LOOKUP_MONTHLY_CAP`), 30 per workspace (`FLIGHT_LOOKUP_WORKSPACE_CAP`).
+  Never call the provider anywhere else, and never on typing.
+- Env: `AVIATIONSTACK_KEY` (server only; no key → the button isn't shown),
+  `AVIATIONSTACK_BASE` (default https). If the free plan refuses HTTPS the
+  error says so — switching to http sends the key unencrypted; Adam's call.
+- `flight_lookups` has RLS on and no policies: service role only.
+
 ### Riders — two documents, numbered versions, one live link per show (Nov 2026, Adam — migration 301)
 
 Adam: "it is a document… legally binding… make requests and demands really
