@@ -6,38 +6,44 @@
    a signed/expired URL or a future private bucket would silently break the
    logo), and (2) page.pdf's footer template can't load app-relative assets.
 
-   Pure server-side (fetch + fs). Every failure degrades to null so a logo issue
+   Pure server-side (safeFetch + fs). Every failure degrades to null so a logo issue
    never breaks the export.
    ============================================ */
 
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { sniffImage } from '@/lib/riders/photos';
+import { safeFetch } from '@/server/net/safeFetch';
 
 const MAX_LOGO_BYTES = 3_000_000; // 3MB — a letterhead logo is never larger.
 const EXPORT_ASSETS_BUCKET = 'export-assets';
 
-/** Fetch a remote (artist) logo URL and inline it as a base64 data URI. Returns
- *  null for a non-http URL, a non-image response, an oversized asset, or any
- *  network error — the caller renders the initials fallback instead. */
+/** Logo bytes → a data URI, or null. The type comes from the bytes themselves
+ *  (`sniffImage`: JPEG / PNG / WebP / GIF), never from a server's header — and
+ *  SVG is refused (it can carry script). Empty or > 3 MB → null. */
+export function logoBytesDataUri(bytes: Uint8Array | null | undefined): string | null {
+  if (!bytes || !bytes.length || bytes.length > MAX_LOGO_BYTES) return null;
+  const type = sniffImage(bytes.subarray(0, 32));
+  return type ? `data:${type};base64,${Buffer.from(bytes).toString('base64')}` : null;
+}
+
+/** Fetch a remote (artist) logo URL and inline it as a base64 data URI.
+ *
+ *  SECURITY (Nov 2026): the URL is a STORED STRING anyone with artist edit can
+ *  set (PATCH /api/artists/[id] takes any logo_url), so a raw `fetch` here was a
+ *  server-side request forgery — point it at an internal address and the export
+ *  would read it. It goes through `safeFetch` (public addresses only, DNS
+ *  pinned, every redirect re-checked, size capped) and the bytes must sniff as
+ *  an image. Our own uploads live on the public Supabase host, so they pass.
+ *  Returns null for anything else — the caller renders the initials fallback. */
 export async function fetchLogoDataUri(url: string | null | undefined): Promise<string | null> {
   if (!url || !/^https?:\/\//i.test(url)) return null;
-  // Hard timeout — a slow/blocked logo host must never hold the whole export
-  // function open (it has no business pushing a PDF render toward maxDuration).
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 8_000);
   try {
-    const res = await fetch(url, { cache: 'no-store', signal: controller.signal });
-    if (!res.ok) return null;
-    const contentType = res.headers.get('content-type') ?? '';
-    if (!contentType.startsWith('image/')) return null;
-    const buf = Buffer.from(await res.arrayBuffer());
-    if (buf.byteLength === 0 || buf.byteLength > MAX_LOGO_BYTES) return null;
-    return `data:${contentType};base64,${buf.toString('base64')}`;
+    const got = await safeFetch(url, { maxBytes: MAX_LOGO_BYTES, accept: 'image/png,image/jpeg,image/webp,image/gif', timeoutMs: 6_000 });
+    return logoBytesDataUri(got.body);
   } catch {
-    return null; // abort / network / parse → initials fallback, never throws
-  } finally {
-    clearTimeout(timer);
+    return null; // refused / timeout / network → initials fallback, never throws
   }
 }
 

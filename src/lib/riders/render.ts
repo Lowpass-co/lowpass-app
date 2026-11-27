@@ -217,6 +217,8 @@ export function stateText(s: LineStateView): string {
 export const RIDER_DOC_CSS = `
 .rd-doc { color: var(--lp-text); font-size: var(--lp-text-base); line-height: 1.55; }
 .rd-head { display: flex; flex-direction: column; gap: var(--lp-space-1); padding-bottom: var(--lp-space-4); margin-bottom: var(--lp-space-6); border-bottom: 2px solid var(--lp-orange); }
+.rd-brand { display: flex; align-items: center; gap: var(--lp-space-3); flex-wrap: wrap; }
+.rd-logo { display: block; max-height: calc(var(--lp-space-6) * 2.5); max-width: 60%; object-fit: contain; object-position: left center; margin-bottom: var(--lp-space-2); }
 .rd-artist { font-size: var(--lp-text-xs); font-weight: var(--lp-weight-bold); letter-spacing: 0.08em; text-transform: uppercase; color: var(--lp-text-secondary); }
 .rd-title { font-size: var(--lp-text-2xl); font-weight: var(--lp-weight-bold); line-height: 1.2; letter-spacing: -0.01em; margin: 0; }
 .rd-meta { font-size: var(--lp-text-sm); color: var(--lp-text-tertiary); }
@@ -315,13 +317,17 @@ body.rp { font-family: 'Inter', -apple-system, 'Helvetica Neue', Helvetica, Aria
 .rp-intro { margin-top: 11mm; max-width: 142mm; font-size: 9.6pt; color: var(--lp-text-secondary); }
 .rp-intro .rd-prose p { margin: 0 0 2mm; }
 .rp-intro .rd-prose ul, .rp-intro .rd-prose ol { text-align: left; display: inline-block; }
-.rp-contents { margin-top: 12mm; }
+.rp-contents { margin-top: 12mm; width: 100%; max-width: 118mm; }
+.rp-contents.rp-two { max-width: 164mm; }
 .rp-contents-title { font-family: 'Montserrat', sans-serif; font-weight: 500; font-size: 12pt; letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 3.5mm; }
-.rp-contents ol { list-style: none; margin: 0 auto; padding: 0; counter-reset: rp; text-align: left; display: inline-block; }
-.rp-contents ol.rp-two { columns: 2; column-gap: 14mm; }
-.rp-contents li { counter-increment: rp; padding: 0.9mm 0; font-size: 10.5pt; break-inside: avoid; }
-.rp-contents li::before { content: counter(rp, decimal-leading-zero); display: inline-block; width: 8mm; color: var(--lp-orange); font-variant-numeric: tabular-nums; font-size: 9pt; }
-.rp-contents a { text-decoration: none; }
+.rp-contents ol { list-style: none; margin: 0; padding: 0; text-align: left; }
+.rp-contents.rp-two ol { columns: 2; column-gap: 12mm; }
+.rp-contents li { padding: 0.9mm 0; font-size: 10.5pt; break-inside: avoid; }
+.rp-contents a { display: flex; align-items: baseline; gap: 2mm; text-decoration: none; }
+.rp-ct { min-width: 0; }
+.rp-dots { flex: 1; min-width: 6mm; border-bottom: 0.7pt dotted var(--lp-border-strong); transform: translateY(-1mm); }
+.rp-pg-wait { visibility: hidden; }
+.rp-pg { flex: none; min-width: 7mm; text-align: right; font-variant-numeric: tabular-nums; color: var(--lp-orange); font-size: 9.6pt; }
 .rp-live { margin-top: 12mm; font-size: 8.5pt; color: var(--lp-text-tertiary); }
 .rp-live a { color: var(--lp-text-secondary); }
 
@@ -403,6 +409,10 @@ a { color: inherit; }
 
 export interface RiderHeader {
   artist: string | null;
+  /** The artist's logo, as a same-origin URL (a /logo route — never the
+   *  stored URL: an outside host would see the page's token in Referer).
+   *  Null → the artist's name heads the document instead. */
+  logo?: string | null;
   /** e.g. "Version 1.7 · 26 Nov 2026" */
   version: string;
   /** e.g. "For The Leadmill, Sheffield — 14 Dec 2026" */
@@ -548,6 +558,16 @@ export interface RiderPrintInput {
   logo?: string | null;
   /** @font-face rules (Inter + Montserrat) — lib/export/fonts.ts. */
   fontCss?: string;
+  /** The page each section starts on, by anchor (`h-<blockId>`) — read back
+   *  from a first render (lib/export/render.ts `pageNumbers`). Absent → the
+   *  contents prints without numbers, in the same space. */
+  pageOf?: Record<string, number> | null;
+}
+
+/** A contents page number. Always the same width (an invisible "00" when not
+ *  known yet) so pass 1 and pass 2 paginate identically. */
+function pageCell(n: number | undefined): string {
+  return typeof n === 'number' && n > 0 ? String(n) : '<span class="rp-pg-wait">00</span>';
 }
 
 function brandHtml(input: RiderPrintInput, where: 'cover' | 'page'): string {
@@ -566,8 +586,8 @@ function printDocHtml(model: DocModel, input: RiderPrintInput, tail: string): st
   const sections = rest.filter((it): it is Extract<DocItem, { t: 'heading' }> => it.t === 'heading' && it.level === 1);
   const contents =
     sections.length >= 2
-      ? `<nav class="rp-contents"><div class="rp-contents-title">Contents</div><ol${sections.length > 9 ? ' class="rp-two"' : ''}>${sections
-          .map((h) => `<li><a href="#h-${esc(h.id)}">${esc(h.text)}</a></li>`)
+      ? `<nav class="rp-contents${sections.length > 9 ? ' rp-two' : ''}"><div class="rp-contents-title">Contents</div><ol>${sections
+          .map((h) => `<li><a href="#h-${esc(h.id)}"><span class="rp-ct">${esc(h.text)}</span><span class="rp-dots"></span><span class="rp-pg">${pageCell(input.pageOf?.[`h-${h.id}`])}</span></a></li>`)
           .join('')}</ol></nav>`
       : '';
   const live = input.linkUrl ? `<div class="rp-live">The live version of this rider: <a href="${esc(input.linkUrl)}">${esc(input.linkUrl.replace(/^https?:\/\//, ''))}</a></div>` : '';
@@ -589,12 +609,16 @@ export function riderPdfHtml(input: RiderPrintInput): string {
   return `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><title>${esc(input.title)}</title><style>${input.fontCss ?? ''}${PDF_TOKENS}${RIDER_DOC_CSS}${RIDER_PRINT_CSS}</style></head><body class="rp">${docs.length ? docs.join('') : changes}</body></html>`;
 }
 
+/** Lowpass's own mark on a rider: small, never the artist's place (Adam:
+ *  "keep that small and subtle"). The PDF footer and the promoter page. */
+export const LOWPASS_CREDIT = 'Generated with Lowpass';
+
 /** The PDF footer (Chromium's footer template — inline styles only, no page
  *  CSS or variables reach it, so the colours are the PDF_TOKENS values):
  *  "Page 2 of 6" left, the version stamp right in the accent, as on Adam's
- *  riders. */
+ *  riders; the Lowpass credit small and grey between them. */
 export function riderFooterTemplate(stamp: string): string {
-  return `<div style="width:100%;padding:0 18mm;display:flex;justify-content:space-between;align-items:center;font-family:Inter,Helvetica,Arial,sans-serif;font-size:7.5px;color:#6b645d;"><span>Page <span class="pageNumber"></span> of <span class="totalPages"></span></span><span style="color:#FF4500;font-style:italic;">${esc(stamp)}</span></div>`;
+  return `<div style="width:100%;padding:0 18mm;display:flex;justify-content:space-between;align-items:center;font-family:Inter,Helvetica,Arial,sans-serif;font-size:7.5px;color:#6b645d;"><span style="flex:1;">Page <span class="pageNumber"></span> of <span class="totalPages"></span></span><span style="flex:none;font-size:6.5px;letter-spacing:0.04em;color:#8a837b;">${LOWPASS_CREDIT}</span><span style="flex:1;text-align:right;color:#FF4500;font-style:italic;">${esc(stamp)}</span></div>`;
 }
 
 export function versionLine(label: string, publishedAt: string | null): string {

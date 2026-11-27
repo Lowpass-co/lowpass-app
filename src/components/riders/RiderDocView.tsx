@@ -13,6 +13,7 @@
    ============================================ */
 
 import type { ReactNode } from 'react';
+import { DocBrand } from './DocBrand';
 import { embedName, svgDataUri } from '@/lib/riders/embeds';
 import { safeHref } from '@/lib/riders/prose';
 import { RIDER_DOC_CSS, inputsCount, runsOf, stateText, type DocItem, type DocModel, type RiderHeader } from '@/lib/riders/render';
@@ -266,9 +267,12 @@ export function RiderDocView({
   fileHref,
   photoUrl,
   onItem,
+  brandAction,
 }: {
   model: DocModel;
   header: RiderHeader;
+  /** Beside the artist's name when there's no logo (the editor's prompt). */
+  brandAction?: ReactNode;
   lineExtras?: (r: RequestItem) => ReactNode;
   fileHref?: (a: ResolvedAttachment) => string | null;
   photoUrl?: (path: string) => string | null;
@@ -277,7 +281,7 @@ export function RiderDocView({
   return (
     <article className="rd-doc">
       <header className="rd-head">
-        {header.artist ? <div className="rd-artist">{header.artist}</div> : null}
+        <DocBrand logo={header.logo ?? null} artist={header.artist} action={brandAction} />
         <h1 className="rd-title">{model.title}</h1>
         <div className="rd-meta">
           <b>{header.version}</b>

@@ -47,7 +47,7 @@ export async function riderPdfDoc(input: {
   const who = [s.artistName, s.tourName].filter(Boolean).join(' — ');
   const v = input.version ? `v${input.version.label}` : 'draft';
   const [logo, fontCss] = await Promise.all([loadRiderLogo(createServiceSupabaseClient() as unknown as SupabaseClient, input.tourId), documentFontCss()]);
-  const html = riderPdfHtml({
+  const print = {
     title: `${who} rider ${v}`,
     header: { artist: s.artistName, version: stamp, show: showText },
     tourName: s.tourName,
@@ -56,7 +56,8 @@ export async function riderPdfDoc(input: {
     linkUrl: input.linkUrl,
     logo,
     fontCss,
-  });
+  };
+  const html = riderPdfHtml(print);
   const fileWhere = input.show ? ` — ${where ? `${where} ` : ''}${input.show.date}` : '';
   return {
     html,
@@ -67,6 +68,8 @@ export async function riderPdfDoc(input: {
       headerTemplate: '<span></span>',
       footerTemplate: riderFooterTemplate(stamp),
       margin: { top: '14mm', right: '18mm', bottom: '18mm', left: '18mm' },
+      // Printed riders get read on paper: the contents says which page.
+      withPageNumbers: (pageOf) => riderPdfHtml({ ...print, pageOf }),
     },
   };
 }

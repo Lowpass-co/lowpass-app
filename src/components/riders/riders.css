@@ -213,3 +213,7 @@
 .rdx-radio[data-on="true"] { border-color: var(--lp-orange); background: color-mix(in srgb, var(--lp-orange) 5%, var(--lp-bg)); }
 .rdx-stack { display: flex; flex-direction: column; gap: var(--lp-space-3); }
 .rdx-changes-list { margin: 0; padding-left: var(--lp-space-5); font-size: var(--lp-text-sm); max-height: 14em; overflow: auto; }
+
+/* no artist logo yet: a quiet prompt beside the name (it heads the PDF) */
+.rdx-addlogo { display: inline-flex; align-items: center; gap: var(--lp-space-1); padding: var(--lp-space-1) var(--lp-space-2); border: 1px dashed var(--lp-border-strong); border-radius: var(--lp-radius-sm); font-size: var(--lp-text-xs); font-weight: var(--lp-weight-medium); color: var(--lp-text-secondary); text-decoration: none; }
+.rdx-addlogo:hover { color: var(--lp-orange); border-color: var(--lp-orange); }

@@ -15,17 +15,9 @@
    ============================================ */
 
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { sniffImage } from '@/lib/riders/photos';
-import { safeFetch } from '@/server/net/safeFetch';
+import { fetchLogoDataUri, logoBytesDataUri } from '@/lib/export/logo';
 
-const MAX_LOGO_BYTES = 3_000_000;
 const OUR_UPLOAD = /\/storage\/v1\/object\/public\/artist-assets\/([^?#]+)/;
-
-function dataUri(bytes: Uint8Array | null): string | null {
-  if (!bytes || !bytes.length || bytes.length > MAX_LOGO_BYTES) return null;
-  const type = sniffImage(bytes.subarray(0, 32));
-  return type ? `data:${type};base64,${Buffer.from(bytes).toString('base64')}` : null;
-}
 
 /** The tour's artist's logo as a data URI, or null. Service role, pinned to
  *  this tour; never throws. */
@@ -46,11 +38,23 @@ export async function loadRiderLogo(service: SupabaseClient, tourId: string): Pr
       // another workspace's file.
       if (!objectPath.startsWith(`${a.workspace_id}/${a.id}/`) || objectPath.includes('..')) return null;
       const { data } = await service.storage.from('artist-assets').download(objectPath);
-      return data ? dataUri(new Uint8Array(await data.arrayBuffer())) : null;
+      return data ? logoBytesDataUri(new Uint8Array(await data.arrayBuffer())) : null;
     }
-    const got = await safeFetch(url, { maxBytes: MAX_LOGO_BYTES, accept: 'image/png,image/jpeg,image/webp,image/gif', timeoutMs: 6000 });
-    return dataUri(got.body);
+    return await fetchLogoDataUri(url);
   } catch {
     return null;
   }
+}
+
+/** A data URI from `loadRiderLogo` → an image response (404 when none). The
+ *  screen surfaces load the logo from a same-origin route that sends this, so
+ *  the page shows exactly what the PDF prints and no outside host is ever
+ *  asked for it from a page whose URL is a grant. */
+export function logoResponse(dataUri: string | null, cacheControl: string): Response {
+  const m = dataUri ? /^data:(image\/(?:png|jpeg|webp|gif));base64,(.+)$/.exec(dataUri) : null;
+  if (!m) return new Response(null, { status: 404, headers: { 'Cache-Control': 'no-store' } });
+  return new Response(new Uint8Array(Buffer.from(m[2], 'base64')), {
+    status: 200,
+    headers: { 'Content-Type': m[1], 'Cache-Control': cacheControl, 'X-Content-Type-Options': 'nosniff', 'Content-Security-Policy': "default-src 'none'" },
+  });
 }

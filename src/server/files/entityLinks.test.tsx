@@ -20,12 +20,14 @@ beforeEach(() => {
     { id: 'tx', workspace_id: 'ws-2', name: 'Theirs' },
   ]);
   db.seed('canonical_venues', [{ id: VENUE, name: 'O2 Academy Brixton', city: 'London', country: 'GB', address: null, capacity: null }]);
+  // Upcoming shows are dated 2099: resolveVenue freezes a PAST show's venue
+  // to its typed name, so dates near "now" made this test fail once they passed.
   db.seed('routing', [
-    { id: 'show-1', tour_id: 't1', date: '2026-11-20', day_type: 'show', city: 'London', canonical_venue_id: VENUE, venue_name: 'Brixton (typed)', venue_frozen_at: null },
-    { id: 'show-2', tour_id: 't1', date: '2026-11-21', day_type: 'show', city: 'Leeds', canonical_venue_id: null, venue_name: 'Leeds Beckett', venue_frozen_at: null },
-    { id: 'off-1', tour_id: 't1', date: '2026-11-22', day_type: 'off', city: null, canonical_venue_id: null },
+    { id: 'show-1', tour_id: 't1', date: '2099-11-20', day_type: 'show', city: 'London', canonical_venue_id: VENUE, venue_name: 'Brixton (typed)', venue_frozen_at: null },
+    { id: 'show-2', tour_id: 't1', date: '2099-11-21', day_type: 'show', city: 'Leeds', canonical_venue_id: null, venue_name: 'Leeds Beckett', venue_frozen_at: null },
+    { id: 'off-1', tour_id: 't1', date: '2099-11-22', day_type: 'off', city: null, canonical_venue_id: null },
     { id: 'old-show', tour_id: 't0', date: '2025-04-02', day_type: 'show', city: 'London', canonical_venue_id: VENUE },
-    { id: 'their-show', tour_id: 'tx', date: '2026-11-20', day_type: 'show', city: 'London', canonical_venue_id: VENUE },
+    { id: 'their-show', tour_id: 'tx', date: '2099-11-20', day_type: 'show', city: 'London', canonical_venue_id: VENUE },
   ]);
   db.seed('persons', [{ id: 'p-sam', workspace_id: WS, full_name: 'Sam Jones', preferred_name: 'Sam' }, { id: 'p-x', workspace_id: 'ws-2', full_name: 'Other', preferred_name: null }]);
   db.seed('tour_personnel', [{ id: 'tp1', tour_id: 't1', person_id: 'p-sam', workspace_id: WS }]);
@@ -126,8 +128,8 @@ describe('targets', () => {
   it('a tour’s shows (not days off), the venues they’re at, and its crew — named via resolveVenue', async () => {
     const t = await linkTargets(db.client(), { workspaceId: WS, tourId: 't1' });
     expect(t.map((x) => [x.type, x.id, x.label])).toEqual([
-      ['show', 'show-1', '2026-11-20 · O2 Academy Brixton'],
-      ['show', 'show-2', '2026-11-21 · Leeds Beckett'],
+      ['show', 'show-1', '2099-11-20 · O2 Academy Brixton'],
+      ['show', 'show-2', '2099-11-21 · Leeds Beckett'],
       ['venue', VENUE, 'O2 Academy Brixton'],
       ['person', 'p-sam', 'Sam'],
     ]);

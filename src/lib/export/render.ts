@@ -23,7 +23,8 @@
    ============================================ */
 
 import { NextResponse } from 'next/server';
-import { getBrowser, closePage } from '@/lib/rider-packs/puppeteer';
+import { getBrowser, closePage, newRenderPage } from '@/lib/rider-packs/puppeteer';
+import { anchorPages } from '@/lib/export/pdfAnchors';
 import { PAGE_PDF_OPTIONS, PDF_HEADER_TEMPLATE, pdfFooterTemplate, pdfRunningHeaderTemplate } from '@/lib/export/shell';
 
 /** A header-safe `Content-Disposition` value (RFC 5987). HTTP header values must be
@@ -61,7 +62,15 @@ export interface ExportDoc {
   /** A document that draws its own page furniture (the rider PDF): these
    *  replace the shared header / footer templates and margins, and the PDF
    *  gets bookmarks from its headings. Absent → the shared ones above. */
-  page?: { headerTemplate: string; footerTemplate: string; margin: { top: string; right: string; bottom: string; left: string } };
+  page?: {
+    headerTemplate: string;
+    footerTemplate: string;
+    margin: { top: string; right: string; bottom: string; left: string };
+    /** A printed contents list: given the page each #anchor landed on in a
+     *  first render (`anchorPages`), the HTML again with the numbers filled
+     *  in — rendered a second time. Any failure keeps the first render. */
+    withPageNumbers?: (pageOf: Record<string, number>) => string;
+  };
 }
 
 /** Build the doc (loaders + html) then render + stream it. The `build` callback is
@@ -74,17 +83,32 @@ export interface ExportDoc {
 export async function renderPdfBuffer(surface: string, doc: ExportDoc): Promise<Uint8Array> {
   const { html, footerNote, markDataUri, footer, runningHeader, cssPageSize } = doc;
   const browser = await getBrowser();
-  const page = await browser.newPage();
+  // No network: every export inlines its assets (newRenderPage).
+  const page = await newRenderPage(browser);
   try {
     await page.setContent(html, { waitUntil: 'load', timeout: 20_000 });
     if (doc.page) {
-      const own = { format: 'A4' as const, printBackground: true, displayHeaderFooter: true, ...doc.page, preferCSSPageSize: cssPageSize === true };
+      const { withPageNumbers, ...furniture } = doc.page;
+      const own = { format: 'A4' as const, printBackground: true, displayHeaderFooter: true, ...furniture, preferCSSPageSize: cssPageSize === true };
+      const print = async (): Promise<Uint8Array> => {
+        try {
+          // Bookmarks (the PDF's outline) from the headings, for a long rider.
+          return await page.pdf({ ...own, tagged: true, outline: true });
+        } catch (outlineErr) {
+          console.error(`[export:${surface}] outline render failed, retrying without:`, outlineErr instanceof Error ? outlineErr.message : outlineErr);
+          return await page.pdf(own);
+        }
+      };
+      const first = await print();
+      if (!withPageNumbers) return first;
       try {
-        // Bookmarks (the PDF's outline) from the headings, for a long rider.
-        return await page.pdf({ ...own, tagged: true, outline: true });
-      } catch (outlineErr) {
-        console.error(`[export:${surface}] outline render failed, retrying without:`, outlineErr instanceof Error ? outlineErr.message : outlineErr);
-        return await page.pdf(own);
+        const pageOf = await anchorPages(first);
+        if (!Object.keys(pageOf).length) return first;
+        await page.setContent(withPageNumbers(pageOf), { waitUntil: 'load', timeout: 20_000 });
+        return await print();
+      } catch (numbersErr) {
+        console.error(`[export:${surface}] page-number pass failed, keeping the first render:`, numbersErr instanceof Error ? numbersErr.message : numbersErr);
+        return first;
       }
     }
     // Footer: show:false → a minimal non-empty template (Chromium needs one to

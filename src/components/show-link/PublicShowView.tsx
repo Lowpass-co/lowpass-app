@@ -312,6 +312,9 @@ function NewRider({ rider, artist, venue }: { rider: ShowRider; artist: string |
   const { snapshot, states, date, routingId, photos } = rider;
   const header = {
     artist,
+    // The logo loads through the show's live rider link (same image as its PDF);
+    // without a link, the artist's name heads it.
+    logo: rider.hasLogo && rider.linkToken ? `/api/public/riders/${rider.linkToken}/logo` : null,
     version: versionLine(rider.version.label, rider.version.publishedAt),
     show: date ? `For ${venue || 'this show'} — ${fmtDay(date, true)}` : null,
   };

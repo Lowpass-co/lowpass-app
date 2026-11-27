@@ -52,9 +52,26 @@ describe('the printed rider', () => {
     expect(cover).toContain('Version 1.3 · Updated 26 Nov 2026');
     expect(cover).toContain('This rider is part of the performance agreement.');
     // Contents link to the sections that have something in them — not Key contacts (empty).
-    expect(cover).toContain('<li><a href="#h-h-audio">Audio</a></li><li><a href="#h-h-lights">Lighting</a></li>');
+    expect(cover).toMatch(/<li><a href="#h-h-audio"><span class="rp-ct">Audio<\/span>.*<\/li><li><a href="#h-h-lights"><span class="rp-ct">Lighting<\/span>/);
+    // No page numbers until the first render has measured them — the cell
+    // keeps its width so the second pass paginates the same.
+    expect(cover).toContain('<span class="rp-pg"><span class="rp-pg-wait">00</span></span>');
     expect(cover).not.toContain('Key contacts');
     expect(h.match(/class="rp-cover"/g)?.length).toBe(2);
+  });
+
+  it('the contents carries the page each section starts on, once measured', () => {
+    const h = riderPdfHtml({
+      title: 'Rider',
+      header: { artist: 'A', version: 'v', show: null },
+      models: [model()],
+      changes: [],
+      linkUrl: null,
+      pageOf: { 'h-h-audio': 2, 'h-h-lights': 4 },
+    });
+    expect(h).toContain('<span class="rp-ct">Audio</span><span class="rp-dots"></span><span class="rp-pg">2</span>');
+    expect(h).toContain('<span class="rp-ct">Lighting</span><span class="rp-dots"></span><span class="rp-pg">4</span>');
+    expect(h).not.toContain('<span class="rp-pg-wait">');
   });
 
   it('every page after the cover carries the logo (a repeating table head); the name when there is none', () => {
@@ -73,10 +90,11 @@ describe('the printed rider', () => {
     expect(h).toContain('If possible');
   });
 
-  it('footer: page x of y, and the stamp', () => {
+  it('footer: page x of y, the small Lowpass credit, and the stamp', () => {
     const f = riderFooterTemplate('Version 1.3 · Updated 26 Nov 2026 <b>');
     expect(f).toContain('Page <span class="pageNumber"></span> of <span class="totalPages"></span>');
     expect(f).toContain('Version 1.3 · Updated 26 Nov 2026 &lt;b&gt;');
+    expect(f).toContain('Generated with Lowpass');
     expect(versionStamp({ label: '1.3', publishedAt: '2026-11-26T10:00:00Z' })).toBe('Version 1.3 · Updated 26 Nov 2026');
     expect(versionStamp(null)).toBe('Draft — not published');
   });

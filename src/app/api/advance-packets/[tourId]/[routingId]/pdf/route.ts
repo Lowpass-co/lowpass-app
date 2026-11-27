@@ -44,7 +44,7 @@ import {
   requireTourInWorkspace,
 } from '@/lib/auth/workspace-check';
 import { verifyPassword } from '@/lib/rider-packs/web-links';
-import { getBrowser, closePage } from '@/lib/rider-packs/puppeteer';
+import { getBrowser, closePage, newRenderPage, storageObjectPrefix } from '@/lib/rider-packs/puppeteer';
 import { buildPacketPdfHtml } from '@/lib/rider-packs/pdf-render';
 import { getPacketManifest, type PacketManifest } from '@/lib/advance-packet/manifest';
 import { getPacketRiderPayloads } from '@/lib/advance-packet/payloads';
@@ -154,7 +154,8 @@ async function renderBundle(
   const html = buildPacketPdfHtml(payloads, meta);
 
   const browser = await getBrowser();
-  const page = await browser.newPage();
+  // Signed Storage URLs only — a hand-typed cover_logo_url elsewhere is refused.
+  const page = await newRenderPage(browser, storageObjectPrefix());
   try {
     await page.setContent(html, { waitUntil: 'load', timeout: 20_000 });
     const buffer = await page.pdf({

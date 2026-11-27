@@ -17,6 +17,7 @@ import { blockLabel, dateTag, fmtQty, parseQty, parseRequestText, requestLine } 
 import { embedFor, othersFor } from '@/lib/riders/embeds';
 import { linkHost, typedLink } from '@/lib/riders/photos';
 import { docFromText, proseText } from '@/lib/riders/prose';
+import { perPersonFits, sectionAbove } from '@/lib/riders/perPerson';
 import { keyAfter } from '@/lib/riders/position';
 import { buildSummary } from '@/lib/riders/summary';
 import { PROVIDERS, type BlockContentMap, type BlockKind, type RiderBlock, type RiderEmbeds, type RiderKind } from '@/lib/riders/types';
@@ -66,7 +67,7 @@ export interface RowContext {
   party: number | null;
   canEdit: boolean;
   tourId: string;
-  /** Which document the row is in (some request options are Hospitality's). */
+  /** Which document the row is in. */
   kind: RiderKind;
   onDates: (b: RiderBlock, mode: 'set' | 'change') => void;
   onInsertMenu: (afterId: string, anchor: HTMLElement) => void;
@@ -279,6 +280,9 @@ function RequestEditor({ block, ctx, focused }: { block: Extract<RiderBlock, { k
   const [more, setMore] = useState(false);
   const showSub = more || !!c.alternatives || !!c.note || c.perPerson || c.optional || !!c.link || !!c.photo;
   const thumb = c.photo ? ctx.store.photoUrls[c.photo] ?? null : null;
+  // Per person only where it means something (food, drink, towels, passes…);
+  // a ticked box always shows so it can be unticked. If possible: any line.
+  const perPersonOk = c.perPerson || perPersonFits(c.item, sectionAbove(ctx.list, ctx.list.findIndex((b) => b.id === block.id)));
   const set = (patch: Partial<BlockContentMap['request']>) => ctx.store.edit(block.id, { content: { ...c, ...patch } });
   const prevId = () => {
     const i = ctx.list.findIndex((b) => b.id === block.id);
@@ -387,17 +391,15 @@ function RequestEditor({ block, ctx, focused }: { block: Extract<RiderBlock, { k
               <i>Note</i>
               <input className="rdx-in" placeholder="anything else" value={c.note} readOnly={!ctx.canEdit} onChange={(e) => set({ note: e.target.value })} aria-label="Note" />
             </span>
-            {ctx.kind === 'hospitality' || c.perPerson ? (
+            {perPersonOk ? (
               <label>
                 <input type="checkbox" className="lp-checkbox" checked={c.perPerson} disabled={!ctx.canEdit} onChange={(e) => set({ perPerson: e.target.checked })} /> per person
                 {c.perPerson && c.qty !== null ? <span className="rdx-mini"> = {requestLine(c, ctx.party).match(/^\(([^)]+)\)/)?.[1] ?? '—'}</span> : null}
               </label>
             ) : null}
-            {ctx.kind === 'hospitality' || c.optional ? (
-              <label>
-                <input type="checkbox" className="lp-checkbox" checked={c.optional} disabled={!ctx.canEdit} onChange={(e) => set({ optional: e.target.checked })} /> if possible
-              </label>
-            ) : null}
+            <label>
+              <input type="checkbox" className="lp-checkbox" checked={c.optional} disabled={!ctx.canEdit} onChange={(e) => set({ optional: e.target.checked })} /> if possible
+            </label>
             {more || c.link || c.photo ? <ExactItem blockId={block.id} link={c.link} photo={c.photo} photoUrl={thumb} ctx={ctx} /> : null}
           </div>
         ) : null}

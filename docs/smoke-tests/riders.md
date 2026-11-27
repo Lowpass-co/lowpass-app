@@ -298,14 +298,33 @@ the artist's name in spaced capitals and the pages carry it small at the top;
 the ⋯ menu offers "Add the artist's logo (heads the PDF)…". The PDF has
 bookmarks for each section.
 
-#### RID-42 — Per person / if possible only on Hospitality
+#### RID-42 — If possible on every line; per person only where it fits
 
-**Do**: Open a Tech request line's details (the chevron), then a
-Hospitality line's.
-**Expect**: Tech shows Or / Note / Link / Photo only (a Tech line already
-ticked "if possible" keeps that box); Hospitality also shows per person and
-if possible. The details toggle is a chevron (˅ / ˄), never dots next to the
-block's ⋮.
+**Do**: Open the details (the chevron) of a Tech line "DI box", a
+Hospitality line "Bath towels", and a line under a "Catering" heading.
+**Expect**: every line offers "if possible". "Per person" shows on the towels
+and the Catering line, not on the DI box (a line already ticked per person
+keeps its box). The details toggle is a chevron (˅ / ˄), never dots next to
+the block's ⋮.
+
+#### RID-43 — The printed contents says which page
+
+**Do**: Download a published rider PDF with more than two sections.
+**Expect**: each cover's Contents lists the sections with a dotted leader and
+a page number; open those pages — each section starts there. Footer: "Page x
+of y" left, "Generated with Lowpass" small in the middle, the version stamp
+right.
+
+#### RID-44 — The artist's logo everywhere; the name when there's none
+
+**Do**: With a logo set (artist → Edit profile → Logo): open the rider editor,
+the promoter link (/r/…), the show link's Rider tab and the PDF. Then on an
+artist with no logo, open the rider editor and click "Add the artist's logo".
+**Expect**: the logo heads every one of them (promoter page: also small in the
+top bar). With no logo: the artist's name in its place everywhere, and the
+editor shows "Add the artist's logo" beside it, which lands on the artist page
+with Edit profile already open. "Generated with Lowpass" sits small under the
+promoter page.
 
 ---
 

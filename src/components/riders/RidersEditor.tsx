@@ -30,6 +30,7 @@ import { RIDER_DEFAULT_TITLE, RIDER_KIND_LABEL, RIDER_KINDS, type BlockKind, typ
 import type { RiderEditorData } from '@/server/riders/data';
 import { BlockRow, KIND_LABEL, insertableFor, type RowContext } from './BlockRow';
 import { DatesDialog, PublishDialog, SendPanel, StartPanel, TemplateDialog, type OtherRider } from './RiderDialogs';
+import { DocBrand } from './DocBrand';
 import { RiderDocStyles, RiderDocView } from './RiderDocView';
 import { SidePanel, linkUrl, useDraftChanges, type SideTab } from './RiderPanels';
 import { useRiderEditor } from './useRiderEditor';
@@ -184,14 +185,26 @@ export function RidersEditor({
     }
   };
 
+  // The artist's logo heads the rider everywhere (editor, promoter page, PDF);
+  // none set → their name, with a prompt to add one beside it.
+  const logoHref = `/artists/${data.tour.artistId}?edit=profile`;
+  const logoSrc = data.artistLogo ? `/api/tours/${data.tour.id}/riders/logo` : null;
+  const addLogo =
+    canEdit && !data.artistLogo && data.tour.artistId ? (
+      <a className="rdx-addlogo" href={logoHref}>
+        <ImagePlus size={13} aria-hidden /> Add the artist’s logo
+      </a>
+    ) : null;
+
   const more = [
     ...(canEdit && rider ? [{ label: 'Start from… (replace)', onClick: () => setRestart(true) }] : []),
     ...(canEdit && rider && list.length ? [{ label: 'Save as a template…', onClick: () => setTemplating(true) }] : []),
     { label: 'Download draft PDF', icon: FileDown, onClick: () => window.open(store.api.pdfUrl({ version: 'draft' }), '_blank') },
     ...(latest ? [{ label: `Download v${latest.label} PDF`, icon: FileDown, onClick: () => window.open(store.api.pdfUrl({}), '_blank') }] : []),
     // The PDF is headed by the artist's logo; without one it sets their name.
-    ...(!data.artistLogo && data.tour.artistId ? [{ label: 'Add the artist’s logo (heads the PDF)…', icon: ImagePlus, onClick: () => window.location.assign(`/artists/${data.tour.artistId}`) }] : []),
+    ...(canEdit && !data.artistLogo && data.tour.artistId ? [{ label: 'Add the artist’s logo…', icon: ImagePlus, onClick: () => window.location.assign(logoHref) }] : []),
   ];
+
 
   const statusText = { saved: 'Saved', saving: 'Saving…', error: 'Not saved — retrying', offline: 'Offline — will save' }[store.status];
 
@@ -307,7 +320,7 @@ export function RidersEditor({
           ) : canEdit && ctx ? (
             <div className="rdx-paper">
               <header className="rd-head" style={{ marginBottom: 'var(--lp-space-4)' }}>
-                {data.tour.artistName ? <div className="rd-artist">{data.tour.artistName}</div> : null}
+                <DocBrand logo={logoSrc} artist={data.tour.artistName} action={addLogo} />
                 <TitleInput value={rider.title || RIDER_DEFAULT_TITLE[kind]} onSave={(t) => void store.action({ action: 'title', riderId: rider.id, title: t }, { reloadOthers: true })} />
                 <div className="rd-meta">
                   <b>{latest ? `Draft after version ${latest.label}` : 'Draft — not published'}</b> · {data.tour.name}
@@ -328,7 +341,8 @@ export function RidersEditor({
             <div className="rdx-paper">
               <RiderDocView
                 model={docModel(store.draftDocs.find((d) => d.kind === kind)!, { date: null, party: store.party, docs: store.draftDocs, attachments: latest?.snapshot.attachments ?? [], embeds: data.embeds })}
-                header={{ artist: data.tour.artistName, version: latest ? `Draft after version ${latest.label}` : 'Draft — not published', show: null }}
+                header={{ artist: data.tour.artistName, logo: logoSrc, version: latest ? `Draft after version ${latest.label}` : 'Draft — not published', show: null }}
+                brandAction={addLogo}
                 photoUrl={(p) => store.photoUrls[p] ?? null}
               />
             </div>
