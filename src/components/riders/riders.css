@@ -30,8 +30,8 @@
 .rdx-doctab[aria-selected="true"] { background: var(--lp-bg); color: var(--lp-text); box-shadow: var(--lp-shadow-xs); }
 .rdx-doctab small { margin-left: var(--lp-space-1); font-weight: var(--lp-weight-regular); color: var(--lp-text-tertiary); }
 
-.rdx-paper { position: relative; max-width: 860px; margin: 0 auto; background: var(--lp-bg); border: 1px solid var(--lp-border); border-radius: var(--lp-radius-xl); box-shadow: var(--lp-shadow-sm); padding: var(--lp-space-12) var(--lp-space-12) var(--lp-space-16) calc(var(--lp-space-12) + var(--lp-space-4)); }
-@container (max-width: 720px) { .rdx-paper { padding: var(--lp-space-6) var(--lp-space-4) var(--lp-space-8) var(--lp-space-8); } }
+.rdx-paper { position: relative; max-width: 860px; margin: 0 auto; background: var(--lp-bg); border: 1px solid var(--lp-border); border-radius: var(--lp-radius-xl); box-shadow: var(--lp-shadow-sm); padding: var(--lp-space-12) var(--lp-space-12) var(--lp-space-16) calc(var(--lp-space-12) + var(--lp-space-8)); }
+@container (max-width: 720px) { .rdx-paper { padding: var(--lp-space-6) var(--lp-space-4) var(--lp-space-8) var(--lp-space-10); } }
 
 .rdx-doc-title { width: 100%; border: 0; background: none; font: inherit; font-size: var(--lp-text-2xl); font-weight: var(--lp-weight-bold); letter-spacing: -0.01em; color: var(--lp-text); padding: 0; outline: none; }
 .rdx-doc-title:focus { box-shadow: 0 2px 0 var(--lp-orange); }
@@ -44,17 +44,20 @@
 .rdx-block[data-dragover="before"]::before, .rdx-block[data-dragover="after"]::after { content: ''; position: absolute; left: 0; right: 0; height: 2px; background: var(--lp-orange); border-radius: 2px; }
 .rdx-block[data-dragover="before"]::before { top: -1px; }
 .rdx-block[data-dragover="after"]::after { bottom: -1px; }
-.rdx-gutter { position: absolute; left: calc(-1 * var(--lp-space-10)); top: 2px; display: flex; gap: 1px; opacity: 0; transition: opacity var(--lp-duration-fast, 120ms); }
-.rdx-block:hover .rdx-gutter, .rdx-block[data-focus="true"] .rdx-gutter, .rdx-gutter:focus-within { opacity: 1; }
+.rdx-gutter { position: absolute; right: calc(100% + var(--lp-space-1)); top: 2px; display: flex; gap: 1px; opacity: 0; transition: opacity var(--lp-duration-fast, 120ms); }
+/* the gutter's ⋮ (ContextMenu's own trigger, shrunk to the gutter's size) */
+.rdx-gmenu > div > button { width: 22px; height: 24px; border-radius: var(--lp-radius-sm); }
+.rdx-gmenu svg { width: 14px; height: 14px; }
+/* narrow paper: the gutter stacks so it fits the margin */
+@container (max-width: 720px) { .rdx-gutter { flex-direction: column; } }
+.rdx-block:hover .rdx-gutter, .rdx-block[data-focus="true"] .rdx-gutter, .rdx-gutter:focus-within, .rdx-gutter:has([aria-expanded="true"]) { opacity: 1; }
 .rdx-gbtn { width: 22px; height: 24px; display: inline-flex; align-items: center; justify-content: center; border: 0; border-radius: var(--lp-radius-sm); background: none; color: var(--lp-text-tertiary); cursor: pointer; }
 .rdx-gbtn:hover { background: var(--lp-surface); color: var(--lp-text); }
 .rdx-gbtn[draggable="true"] { cursor: grab; }
 .rdx-aside { position: absolute; right: calc(-1 * var(--lp-space-2)); top: -10px; display: flex; gap: var(--lp-space-1); z-index: 1; pointer-events: none; }
 .rdx-aside > * { pointer-events: auto; }
-/* The block's ⋮ menu shows with the gutter (hover / the block in use / keyboard);
-   a date tag always shows — it says which shows the block applies to. */
-.rdx-aside > div { opacity: 0; transition: opacity var(--lp-duration-fast, 120ms); }
-.rdx-block:hover .rdx-aside > div, .rdx-block[data-focus="true"] .rdx-aside > div, .rdx-aside > div:focus-within { opacity: 1; }
+/* A date tag always shows top-right — it says which shows the block applies
+   to. (The block's ⋮ menu is in the left gutter.) */
 .rdx-peers { position: absolute; left: 0; top: -9px; display: flex; gap: 2px; z-index: 2; pointer-events: none; }
 .rdx-peer { font-size: var(--lp-text-2xs, var(--lp-text-xs)); line-height: 15px; font-weight: var(--lp-weight-semibold); padding: 0 var(--lp-space-2); border-radius: var(--lp-radius-sm) var(--lp-radius-sm) var(--lp-radius-sm) 0; background: var(--color-lp-info); color: var(--lp-text-inverse); white-space: nowrap; pointer-events: auto; }
 .rdx-datetag { font-size: var(--lp-text-xs); font-weight: var(--lp-weight-semibold); padding: 0 var(--lp-space-2); border-radius: var(--lp-radius-full); background: color-mix(in srgb, var(--lp-orange) 14%, var(--lp-bg)); color: var(--lp-orange); border: 0; cursor: pointer; }
