@@ -12,6 +12,7 @@
 import { NextResponse } from 'next/server';
 import { createServerSupabaseClient, createServiceSupabaseClient } from '@/lib/supabase-server';
 import { requireWrite } from '@/lib/auth/workspace-check';
+import { filesWrite } from '@/server/files/writeGate';
 import { FILE_SCOPES, startFileUpload, type FileScope } from '@/server/files/ownerUpload';
 import { supabaseGrantStorage } from '@/server/uploads/grants';
 import { NO_STORE, uploadErrorResponse } from '@/server/uploads/uploadResponse';
@@ -21,11 +22,13 @@ export const dynamic = 'force-dynamic';
 
 export async function POST(request: Request) {
   const supabase = await createServerSupabaseClient();
-  const auth = await requireWrite(supabase);
-  if ('error' in auth) return auth.error;
   const body = await readJson(request);
   const scope = str(body.scope) as FileScope | null;
   const scopeId = str(body.scopeId);
+  // A tour's files: Files EDIT on that tour (a Tour manager, a Member with
+  // Files edit). Artist files: admin / manager. (writeGate.ts)
+  const auth = await requireWrite(supabase, filesWrite(scope === 'tour' ? scopeId : null));
+  if ('error' in auth) return auth.error;
   if (!scope || !FILE_SCOPES.includes(scope) || !scopeId) {
     return NextResponse.json({ error: 'Send { scope: tour|artist, scopeId, name, size }' }, { status: 400 });
   }

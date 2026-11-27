@@ -490,3 +490,11 @@ Give a Member Parking EDIT on a tour (Team & roles, e.g. the Production or
 Tour manager preset). As them, open Production › Parking › a show: the map is
 editable and saves. (The page used to check for admin / manager only, so they
 got a read-only map while the server would have accepted their saves.)
+
+#### PRK-92 — A Tour manager's PDF lands in Files, linked to the show
+Sign in as a Tour manager (Ben) on one of his tours → Parking → a show →
+Export PDF. "Saved to Files › Parking maps and linked to this show." — no
+"Forbidden — your role cannot make this change". The PDF is in tour Files ›
+Parking maps, shows on the show's linked files, and the editor says "Last PDF
+… in Files › Parking maps". As him, upload a file to tour Files and rename /
+move it: both work. (Delete stays admin / manager.)
