@@ -1,0 +1,711 @@
+{
+ "SUMMARY": [
+  [
+   "Au/Ra"
+  ],
+  [],
+  [
+   "USA Headline Shows '26 | Budget\nUPDATED - 9Aug 1:28pm - AR"
+  ],
+  [
+   "",
+   "",
+   "",
+   "",
+   "RED DENOTES LIVE CURRENCY EXCHANGE"
+  ],
+  [
+   "",
+   "PROPOSED EXPENSES",
+   "ACTUAL EXPENSES",
+   "",
+   "",
+   "Paste links below to:"
+  ],
+  [
+   "SALARIES",
+   "$9,070.00",
+   "$0.00",
+   "",
+   "Rooming Sheet -",
+   "(link)"
+  ],
+  [
+   "PER DIEM",
+   "$567.00",
+   "$0.00",
+   "",
+   "Payroll Sheet - ",
+   "(link)"
+  ],
+  [
+   "HOTEL",
+   "$4,000.00",
+   "$0.00"
+  ],
+  [
+   "TRANSPORT",
+   "$5,830.00",
+   "$3,221.40"
+  ],
+  [
+   "PRODUCTION + MISC",
+   "$8,465.00",
+   "$0.00",
+   "",
+   "COMMISSIONS"
+  ],
+  [
+   "COMMISSIONS",
+   "$1,560.00",
+   "$1,560.00",
+   "",
+   "",
+   "%",
+   "ACTUAL",
+   "NOTES"
+  ],
+  [
+   "ACCOUNTANCY (0%)",
+   "$0.00",
+   "$0.00",
+   "",
+   "Management",
+   "0%",
+   "$0.00",
+   "Gross"
+  ],
+  [
+   "INSURANCE (3%)",
+   "$231.15",
+   "$137.55",
+   "",
+   "Agency",
+   "0%",
+   "$0.00",
+   "Gross"
+  ],
+  [
+   "Contingency (2%)",
+   "$594.46",
+   "",
+   "",
+   "Legal",
+   "0%",
+   "$0.00",
+   "Gross"
+  ],
+  [
+   "TOTAL EXPENSES",
+   "$30,317.61",
+   "$4,918.95",
+   "",
+   "Merch COG",
+   "50%",
+   "$1,560.00"
+  ],
+  [
+   "",
+   "",
+   "",
+   "",
+   "",
+   "TOTAL",
+   "$1,560"
+  ],
+  [
+   "",
+   "-$22,612.61",
+   "-$333.95"
+  ],
+  [],
+  [
+   "",
+   "TOUR SHOW DAYS",
+   "TOUR OFF DAYS"
+  ],
+  [
+   "",
+   "2",
+   "4"
+  ],
+  [
+   "SALARY CREW",
+   "SHOW RATE",
+   "OFF RATE",
+   "# SHOW DAY",
+   "# OFF DAY",
+   "PROJECTED",
+   "ACTUAL",
+   "%+/-OfProposed",
+   "#"
+  ],
+  [
+   "Tour Manager | Advance",
+   "$135.00",
+   "$135.00",
+   "2",
+   "4",
+   "$810.00",
+   "$0.00",
+   "100.00%"
+  ],
+  [
+   "Tour Manager",
+   "$540.00",
+   "$540.00",
+   "4",
+   "5",
+   "$4,860.00",
+   "$0.00",
+   "100.00%",
+   "ONE OFF FLAT RATE FOR THIS SHOW"
+  ],
+  [
+   "Production Manager | Advance",
+   "",
+   "",
+   "0",
+   "0",
+   "$0.00",
+   "$0.00",
+   "#DIV/0!"
+  ],
+  [
+   "Content",
+   "$200.00",
+   "$200.00",
+   "2",
+   "0",
+   "$400.00",
+   "$0.00",
+   "100.00%"
+  ],
+  [
+   "",
+   "",
+   "",
+   "",
+   "",
+   "$6,070.00",
+   "$0.00",
+   "-100.00%"
+  ],
+  [
+   "SALARY BAND",
+   "SHOW RATE",
+   "OFF RATE"
+  ],
+  [
+   "Drums",
+   "$250.00",
+   "$250.00",
+   "4",
+   "2",
+   "$1,500.00",
+   "$0.00",
+   "100.00%"
+  ],
+  [
+   "Keys",
+   "$250.00",
+   "$250.00",
+   "0",
+   "0",
+   "$0.00",
+   "$0.00",
+   "#DIV/0!"
+  ],
+  [
+   "",
+   "",
+   "",
+   "",
+   "",
+   "$3,000.00",
+   "$0.00",
+   "-100.00%"
+  ],
+  [
+   "PER DIEM"
+  ],
+  [
+   "Tour Manager",
+   "",
+   "$27.00",
+   "4",
+   "5",
+   "$243.00",
+   "$0.00",
+   "100.00%"
+  ],
+  [
+   "Drums",
+   "",
+   "$27.00",
+   "4",
+   "2",
+   "$162.00",
+   "$0.00",
+   "100.00%"
+  ],
+  [
+   "",
+   "",
+   "",
+   "",
+   "",
+   "$567.00",
+   "$0.00",
+   "-100.00%"
+  ],
+  [
+   "HOTELS"
+  ],
+  [
+   "SEE TAB FOR BREAKDOWN",
+   "AirBnB for this rate found",
+   "",
+   "",
+   "",
+   "$4,000.00",
+   "$0.00",
+   "100.00%"
+  ],
+  [
+   "TRANSPORTATION"
+  ],
+  [
+   "Flights",
+   "",
+   "",
+   "",
+   "",
+   "$3,780.00",
+   "$3,221.40",
+   "14.78%"
+  ]
+ ],
+ "ROUTING & INCOME": [
+  [
+   "Au/Ra"
+  ],
+  [],
+  [
+   "ROUTING & INCOME"
+  ],
+  [
+   "DATE",
+   "DAY TYPE",
+   "VENUE",
+   "CITY // COUNTRY",
+   "CAP",
+   "PRE-TX GUARANTEE $",
+   "WITHOLDING %",
+   "POST-TX GUARANTEE $",
+   "PRE-TX OVERAGE $",
+   "POST-TX OVERAGE $",
+   "MERCH $",
+   "DROP COUNT",
+   "$/Head",
+   "VIP $"
+  ],
+  [
+   "27-Nov-2026",
+   "OFF"
+  ],
+  [
+   "28-Nov-2026",
+   "REHEARSAL"
+  ],
+  [
+   "2-Dec-2026",
+   "SHOW",
+   "BABY'S ALL RIGHT",
+   "NYC, NY",
+   "280",
+   "$2,500.00",
+   "30.0%",
+   "$1,750.00",
+   "$0.00",
+   "$0.00",
+   "$1,649.92"
+  ],
+  [
+   "3-Dec-2026",
+   "OFF",
+   "-",
+   "LA, CA"
+  ],
+  [
+   "4-Dec-2026",
+   "SHOW",
+   "THE ROXY",
+   "LA, CA",
+   "500",
+   "$4,500.00",
+   "37.0%",
+   "$2,835.00",
+   "$0.00",
+   "$0.00",
+   "$1,649.92"
+  ],
+  [],
+  [
+   "TOTALS -   ",
+   "",
+   "",
+   "",
+   "780",
+   "$7,000.00",
+   "$2,415.00",
+   "$4,585.00",
+   "$0.00",
+   "$0.00",
+   "$3,299.84",
+   "$0.00",
+   "#DIV/0!",
+   "$0.00"
+  ]
+ ],
+ "HOTELS": [
+  [
+   "Au/Ra"
+  ],
+  [],
+  [
+   "HOTELS"
+  ],
+  [
+   "DATE IN",
+   "DATE OUT",
+   "CITY",
+   "COUNTRY/STATE",
+   "SHOW",
+   "ACCOM",
+   "# NIGHTS",
+   "# ROOMS",
+   "PROJECTED",
+   "ACTUAL"
+  ],
+  [
+   "WHOLE TOUR HOTELS BAND+CREW (ROOMING LIST LINKED HERE)",
+   "",
+   "",
+   "",
+   "",
+   "-",
+   "8",
+   "4",
+   "$4,000.00"
+  ],
+  [
+   "",
+   "",
+   "",
+   "",
+   "",
+   "Alex",
+   "(8)",
+   "(1)"
+  ],
+  [
+   "",
+   "",
+   "",
+   "",
+   "",
+   "Sam",
+   "(7)",
+   "(1)"
+  ],
+  [],
+  [],
+  [
+   "",
+   "",
+   "",
+   "",
+   "",
+   "",
+   "",
+   "TOTALS",
+   "$4,000.00",
+   "$0.00"
+  ]
+ ],
+ "FLIGHTS": [
+  [
+   "Au/Ra"
+  ],
+  [],
+  [
+   "FLIGHTS"
+  ],
+  [
+   "NAME",
+   "#",
+   "FROM",
+   "TO",
+   "PROPOSED",
+   "ACTUAL",
+   "FROM",
+   "TO",
+   "PROPOSED",
+   "ACTUAL",
+   "FROM",
+   "TO",
+   "PROPOSED",
+   "ACTUAL"
+  ],
+  [
+   "ALEX ONE",
+   "",
+   "BNA",
+   "BUR",
+   "$275.00",
+   "$270.70",
+   "LAX",
+   "LGA",
+   "$310.00",
+   "$335.00"
+  ],
+  [
+   "BAND",
+   "",
+   "",
+   "",
+   "",
+   "",
+   "LAX",
+   "LGA",
+   "$310.00",
+   "$335.00"
+  ],
+  [],
+  [
+   "",
+   "",
+   "",
+   "",
+   "$650.00",
+   "$270.70",
+   "",
+   "",
+   "$1,240.00",
+   "$1,340.00"
+  ],
+  [],
+  [
+   "",
+   "",
+   "",
+   "TOTAL",
+   "$3,780.00",
+   "$3,221.40"
+  ]
+ ],
+ "TRANSPORTATION": [
+  [
+   "Au/Ra"
+  ],
+  [],
+  [
+   "TRANSPORTATION"
+  ],
+  [],
+  [
+   "BUS + TRUCK",
+   "#",
+   "PROPOSED",
+   "COST",
+   "",
+   "TAXIS",
+   "#",
+   "PROPOSED",
+   "COST",
+   "",
+   "MISC TRANSPORT",
+   "#",
+   "PROPOSED",
+   "COST"
+  ],
+  [
+   "",
+   "",
+   "$0.00",
+   "$0.00",
+   "",
+   "Ubers @$30/day",
+   "",
+   "$210.00",
+   "$0.00",
+   "",
+   "Truck Rental NYC (3) Days",
+   "",
+   "$500.00",
+   "$0.00"
+  ],
+  [
+   "",
+   "",
+   "$0.00",
+   "$0.00",
+   "",
+   "",
+   "",
+   "$0.00",
+   "$0.00",
+   "",
+   "Car Rental LAX (5) Days",
+   "",
+   "$600.00",
+   "$0.00"
+  ],
+  [
+   "TOTAL",
+   "",
+   "$0.00",
+   "$0.00",
+   "",
+   "TOTAL",
+   "",
+   "$210.00",
+   "$0.00",
+   "",
+   "TOTAL",
+   "",
+   "$1,100.00",
+   "$0.00"
+  ],
+  [],
+  [
+   "FUEL",
+   "#",
+   "PROPOSED",
+   "COST",
+   "",
+   "PARKING",
+   "#",
+   "PROPOSED",
+   "COST",
+   "",
+   "TRAVEL AGENT",
+   "#",
+   "PROPOSED",
+   "COST"
+  ],
+  [
+   "NYC Fuel",
+   "",
+   "$30.00",
+   "$0.00",
+   "",
+   "NYC Parking @ $50/day",
+   "",
+   "$100.00",
+   "$0.00",
+   "",
+   "",
+   "",
+   "$0.00",
+   "$0.00"
+  ]
+ ],
+ "PROD & MISC EXPENSES": [
+  [
+   "Au/Ra"
+  ],
+  [],
+  [
+   "PRODUCTION"
+  ],
+  [
+   "AUDIO + BACKLINE",
+   "#",
+   "PROPOSED",
+   "ACTUAL",
+   "",
+   "PROGRAMMING + SET-UP",
+   "#",
+   "PROPOSED",
+   "ACTUAL"
+  ],
+  [
+   "Audio Hire (Lowpass Quoted)",
+   "",
+   "$2,720.00",
+   "$0.00",
+   "",
+   "Rehearsal Room (3) Days",
+   "",
+   "$900.00",
+   "$0.00"
+  ],
+  [
+   "Backline Hire (House in NY/Drummers in LA)",
+   "",
+   "$0.00",
+   "$0.00",
+   "",
+   "Musical Direction",
+   "",
+   "$1,200.00",
+   "$0.00"
+  ],
+  [
+   "TOTAL",
+   "",
+   "$2,720.00",
+   "$0.00",
+   "",
+   "TOTAL",
+   "",
+   "$2,100.00",
+   "$0.00"
+  ],
+  [
+   "FREIGHT + BAGGAGE",
+   "#",
+   "",
+   "",
+   "",
+   "MISC PROD",
+   "#",
+   "PROPOSED",
+   "ACTUAL"
+  ],
+  [
+   "NY Return Bags (Apprx for 7 fly cases @ media $70)",
+   "",
+   "$980.00",
+   "$0.00",
+   "",
+   "Carnet (If Au/Ra brings gear)",
+   "",
+   "$1,000.00",
+   "$0.00"
+  ],
+  [
+   "TOTAL",
+   "",
+   "$980.00",
+   "$0.00",
+   "",
+   "TOTAL",
+   "",
+   "$1,000.00",
+   "$0.00"
+  ],
+  [
+   "EQUIPMENT PURCHASES",
+   "#"
+  ],
+  [
+   "Consumables",
+   "",
+   "$75.00",
+   "$0.00"
+  ]
+ ]
+}
