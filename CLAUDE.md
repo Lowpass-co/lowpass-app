@@ -673,6 +673,11 @@ recreate a `_legacy/` tree: delete dead code instead of parking it.
   `removeTourLogin` takes this tour off. Workspace ADMINS only (invites +
   tour_access are admin-writable in the database); routes check up front.
   `tourLoginStates` feeds the list (managers see "Has login", no presets).
+- **A new person needs their `persons` copy** (tour_personnel.person_id →
+  persons). 285's trigger makes it; Adam's database was missing it (Nov 2026,
+  "violates foreign key constraint tour_personnel_person_id_fkey") — migration
+  305 reinstalls it + backfills. The batch add deletes a People record it made
+  itself when the add then fails.
 - Rules pure in `src/lib/personnel/crew.ts` (tags, departments, ranking,
   accessWrites). Smoke: CREW-01…09 (operations.md).
 

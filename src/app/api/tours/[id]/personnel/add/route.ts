@@ -105,6 +105,7 @@ async function postHandler(request: Request, { params }: { params: Promise<{ id:
   for (const e of people) {
     let personId = typeof e.person_id === 'string' ? e.person_id : '';
     let name = str(e.new?.name);
+    let madeHere = false;
 
     if (!personId) {
       const email = str(e.new?.email).toLowerCase();
@@ -134,6 +135,7 @@ async function postHandler(request: Request, { params }: { params: Promise<{ id:
           continue;
         }
         personId = made.id;
+        madeHere = true;
       }
     }
 
@@ -152,7 +154,10 @@ async function postHandler(request: Request, { params }: { params: Promise<{ id:
       name = (data as { full_name?: string } | null)?.full_name ?? 'Person';
     }
     if (!r.ok) {
-      results.push({ name, ok: false, error: r.error, person_id: personId });
+      // Don't leave a People record behind for someone who never made it
+      // onto the tour (a retry would make a second one).
+      if (madeHere) await supabase.from('personnel').delete().eq('id', personId).eq('workspace_id', workspaceId);
+      results.push({ name, ok: false, error: r.error, person_id: madeHere ? undefined : personId });
       continue;
     }
 

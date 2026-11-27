@@ -430,32 +430,40 @@ function TrayEntry({
             ))}
           </select>
         </label>
-        {e.wholeTour ? (
-          <button type="button" className="cr-chip" onClick={() => onChange({ wholeTour: false })}>
-            Whole tour
-          </button>
-        ) : (
-          <>
-            <input
-              className="cr-input is-small"
-              type="date"
-              value={e.starts}
-              onChange={(ev) => onChange({ starts: ev.target.value })}
-              aria-label={`First day for ${e.name}`}
-            />
-            <input
-              className="cr-input is-small"
-              type="date"
-              value={e.ends}
-              onChange={(ev) => onChange({ ends: ev.target.value })}
-              aria-label={`Last day for ${e.name}`}
-            />
-            <button type="button" className="cr-chip" onClick={() => onChange({ wholeTour: true })}>
-              Whole tour
-            </button>
-          </>
-        )}
+        {/* ONE toggle that never moves (Nov 2026, Adam: it used to swap
+            sides and drop a date box under the cursor, which opened a
+            calendar). Orange = on, grey = off; the dates sit on their own
+            line underneath when it's off. */}
+        <button
+          type="button"
+          className={`cr-chip cr-toggle${e.wholeTour ? ' is-on' : ''}`}
+          aria-pressed={e.wholeTour}
+          onClick={() => onChange({ wholeTour: !e.wholeTour })}
+          title={e.wholeTour ? 'On the whole tour — click to pick dates' : 'Click to put them on the whole tour'}
+        >
+          Whole tour
+        </button>
       </div>
+      {!e.wholeTour ? (
+        <div className="cr-entry-line">
+          <span className="cr-dates-label">From</span>
+          <input
+            className="cr-input is-small"
+            type="date"
+            value={e.starts}
+            onChange={(ev) => onChange({ starts: ev.target.value })}
+            aria-label={`First day for ${e.name}`}
+          />
+          <span className="cr-dates-label">to</span>
+          <input
+            className="cr-input is-small"
+            type="date"
+            value={e.ends}
+            onChange={(ev) => onChange({ ends: ev.target.value })}
+            aria-label={`Last day for ${e.name}`}
+          />
+        </div>
+      ) : null}
       {showEmail ? (
         <div className="cr-entry-line">
           <input
