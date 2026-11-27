@@ -51,3 +51,27 @@ and the **Full & Final / Open** state chip. One show per document; money is the 
 `computeWalk` as the on-screen Walk (WYSIWYG — the `/export/preview` route returns the
 identical body HTML). `buildSettlementExport` in the shared `build.ts`, surface added
 to `template-config` (`'settlement'`). **Code-verified**; **Needs-live**.
+
+#### SET-06 — Typing is instant; nothing gets overwritten (Nov 2026)
+Income & settlements → a show. Change Deal in the dropdown: it changes AT ONCE
+(no 2–5 s pause). Type a guarantee, Tab, type a withholding %, Tab, type a
+ticket price — quickly, without waiting. "Saving…" then "Saved" shows top
+right. Reload: all three are there (the second used to put the first back).
+Add an expense: it's on the page the moment you press Enter / Add, the
+Artist total moves with it, and the adder stays open for the next one. Add
+two deductions back to back, reload: the total is both (it used to sum from
+the stale list).
+
+#### SET-07 — Boxes read as money / % (Nov 2026)
+No up/down spinners anywhere on the page. At rest the boxes read "US$4,500",
+"37%", "1,250"; click in and it's the plain number to edit. An unset % (or a
+guarantee nobody typed) shows "—", not 0. Typing "$4,500" or "4500" both
+save 4500; typing letters turns the box red and saves nothing. Esc puts the
+old value back.
+
+#### SET-08 — Withholding on the night (Nov 2026)
+A deal with a 30% withholding on a $2,500 guarantee: Expected artist total
+$1,750. Type the actual guarantee only → the Deductions row shows
+"+ Withholding US$750"; click it → a "Withholding · 30%" line, Actual =
+$1,750, no "over expected". On a fresh show, **Fill from the deal** types the
+guarantee AND that withholding line in one go.

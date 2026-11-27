@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 import type { IncomeRow } from '@/lib/budget/income';
 import type { ShowWalk } from '@/lib/settlement/loadWalk';
 import { computeWalk } from '@/lib/settlement/walk';
-import { buildShowList, defaultShowId, expectedOf, fillFromDeal, hasNightFigures, showStatus, statusSummary } from './showMoney';
+import { applySettlementPatch, blankWalk, buildShowList, defaultShowId, expectedOf, fillFromDeal, fillPlan, hasNightFigures, recomputeWalk, showStatus, statusSummary, withholdingToAdd } from './showMoney';
 import { dealLabel, normaliseDealType, tieredShare } from './deal';
 
 const inc = (o: Partial<IncomeRow>): IncomeRow =>
@@ -124,5 +124,50 @@ describe('one deal list', () => {
     expect(tieredShare(30000, 600, 0.85, 500, 0.9)).toBeCloseTo(25750, 6);
     expect(tieredShare(30000, 500, 0.85, 500, 0.9)).toBeCloseTo(25500, 6);
     expect(tieredShare(30000, 600, 0.85, null, 0.9)).toBeCloseTo(25500, 6);
+  });
+});
+
+describe('the night, edited on the page (Nov 2026 — no page reload)', () => {
+  const deal = expectedOf({ pre_tax_guarantee: 2500, withholding_pct: 30, pre_tax_overage: 0, merch_income: 0, vip_income: 0 } as IncomeRow);
+
+  it('Adam’s screenshot: guarantee typed, withholding not — the night offers the $750 the deal takes off', () => {
+    const w = walkOf({ guarantee: 2500 });
+    expect(deal.settlementTotal).toBe(1750);
+    expect(withholdingToAdd(deal, w)).toBe(750);
+    // Once a withholding line is there, no second one.
+    expect(withholdingToAdd(deal, walkOf({ guarantee: 2500, deductions: [{ id: 'd', kind: 'withholding', label: null, amount: 750, currency: null }] }))).toBeNull();
+    // Nothing typed yet → nothing to take it off.
+    expect(withholdingToAdd(deal, walkOf({}))).toBeNull();
+    // No withholding on the deal → nothing.
+    expect(withholdingToAdd(expectedOf({ pre_tax_guarantee: 2500 } as IncomeRow), w)).toBeNull();
+  });
+
+  it('Fill from the deal types the guarantee AND the withholding, so Actual = Expected', () => {
+    const plan = fillPlan(deal, null);
+    expect(plan.patch).toEqual({ reconciled_guarantee: 2500 });
+    expect(plan.withholding).toBe(750);
+    let w = applySettlementPatch(blankWalk({ routingId: 'r', currency: 'USD', date: null, city: null, venue: null, dayType: 'show' }), plan.patch);
+    w = recomputeWalk({ ...w, deductions: [{ id: 't', kind: 'withholding', label: '30%', amount: plan.withholding!, currency: null }] });
+    expect(w.walk.artistTotal).toBe(deal.settlementTotal);
+  });
+
+  it('withholding is taken off the ACTUAL guarantee + overage, to the cent', () => {
+    expect(withholdingToAdd(expectedOf({ pre_tax_guarantee: 1000, withholding_pct: 37 } as IncomeRow), walkOf({ guarantee: 1234.56, overage: 100 }))).toBe(493.79);
+  });
+
+  it('a settlement save is shown at once with the same maths the server keeps', () => {
+    const w = applySettlementPatch(walkOf({ guarantee: 1000 }), { reconciled_overage: 200, deposit_received: 300, comps: 12, full_and_final: true, status: 'reconciled' });
+    expect(w.overage).toBe(200);
+    expect(w.walk.artistTotal).toBe(1200);
+    expect(w.walk.balanceDue).toBe(900);
+    expect(w.comps).toBe(12);
+    expect(w.fullAndFinal).toBe(true);
+    // Clearing a figure is 0 on the walk (blank on screen), not a crash.
+    expect(applySettlementPatch(w, { reconciled_overage: null }).walk.artistTotal).toBe(1000);
+  });
+
+  it('a legacy one-figure deduction still counts until lines are added', () => {
+    const legacy = { ...walkOf({ guarantee: 1000, deductionsAreLegacy: true }), walk: computeWalk({ guarantee: 1000, deductions: [{ amount: 100 }], expenses: [], overage: 0, merch: 0, depositReceived: 0, payments: [] }) };
+    expect(recomputeWalk(legacy).walk.artistTotal).toBe(900);
   });
 });

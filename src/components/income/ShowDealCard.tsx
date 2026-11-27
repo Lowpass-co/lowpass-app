@@ -3,10 +3,10 @@
 /* ============================================
    LOWPASS — <ShowDealCard>: the show's ONE deal = EXPECTED (Nov 2026, Adam)
 
-   The only place a deal is typed. Every field saves on blur as one
-   POST /api/budget/income { routing_id, <field> } (same route, same clamps,
-   423 → the version-lock modal); the server's merged row comes back up via
-   onMerged so Expected re-renders at once.
+   The only place a deal is typed. Every field saves on blur through the
+   page (onSave → ShowMoneyClient.saveIncome: shown at once, one save queue
+   per show, 423 → the version-lock modal); the server's merged row lays the
+   engine's outputs back on.
 
    The overage / merch / VIP lines are worked out by the projection engine
    (src/lib/budget/incomeProjection.ts) from the deal and the projection
@@ -15,18 +15,16 @@
    line can still be typed over ("Type it") and handed back ("Work it out").
    ============================================ */
 
-import { useCallback, useState } from 'react';
+import { useState } from 'react';
 import type { IncomeRow } from '@/lib/budget/income';
 import { DEAL_TYPES, normaliseDealType, isPercentageDeal } from '@/lib/income/deal';
 import type { Expected } from '@/lib/income/showMoney';
-import { useToast } from '@/components/ui/Toast';
 import { Card, FieldGrid, LinkButton, NumField, NumInput, SelField, fmtMoney, moneyFormat } from './moneyUi';
 
 const PCT_FIELDS = new Set(['withholding_pct', 'est_sell_thru', 'deal_pct', 'deal_pct_above', 'merch_fee_pct']);
 type OverrideFlag = 'overage_is_override' | 'merch_is_override' | 'vip_is_override';
 
 export function ShowDealCard({
-  routingId,
   row,
   expected,
   currency,
@@ -34,9 +32,8 @@ export function ShowDealCard({
   currencyOptions,
   versionLocked,
   onLockedEdit,
-  onMerged,
+  onSave,
 }: {
-  routingId: string;
   row: IncomeRow | null;
   expected: Expected;
   currency: string;
@@ -44,47 +41,26 @@ export function ShowDealCard({
   currencyOptions: string[];
   versionLocked: boolean;
   onLockedEdit: () => void;
-  onMerged: (routingId: string, merged: Partial<IncomeRow>) => void;
+  /** The page applies it at once and saves behind (ShowMoneyClient). */
+  onSave: (patch: Record<string, unknown>) => void;
 }) {
-  const { showToast } = useToast();
   const [moreOpen, setMoreOpen] = useState(false);
   const fmt = moneyFormat(currency);
   const dealType = normaliseDealType(row?.deal_type);
 
-  const save = useCallback(
-    async (patch: Record<string, unknown>) => {
-      if (versionLocked) {
-        onLockedEdit();
-        return;
-      }
-      try {
-        const res = await fetch('/api/budget/income', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ routing_id: routingId, ...patch }),
-        });
-        if (res.status === 423) {
-          onLockedEdit();
-          return;
-        }
-        const j = (await res.json().catch(() => null)) as (Partial<IncomeRow> & { error?: string }) | null;
-        if (!res.ok) {
-          showToast(j?.error ?? 'Could not save the deal', 'error');
-          return;
-        }
-        if (j) onMerged(routingId, j);
-      } catch {
-        showToast('Could not save the deal', 'error');
-      }
-    },
-    [routingId, versionLocked, onLockedEdit, onMerged, showToast],
-  );
+  const save = (patch: Record<string, unknown>) => {
+    if (versionLocked) {
+      onLockedEdit();
+      return;
+    }
+    onSave(patch);
+  };
 
   const num = (field: string) => (v: number | null) => {
     const value = v == null ? null : PCT_FIELDS.has(field) ? Math.max(0, Math.min(100, v)) : v;
-    void save({ [field]: value });
+    save({ [field]: value });
   };
-  const typeOver = (field: string, flag: OverrideFlag) => (v: number | null) => void save({ [field]: v ?? 0, [flag]: true });
+  const typeOver = (field: string, flag: OverrideFlag) => (v: number | null) => save({ [field]: v ?? 0, [flag]: true });
 
   const pctDeal = isPercentageDeal(dealType);
   const hasPct = pctDeal || dealType === 'PLUS';
@@ -100,32 +76,32 @@ export function ShowDealCard({
           value={dealType ?? ''}
           options={[{ value: '', label: '— Not set' }, ...DEAL_TYPES.map((d) => ({ value: d.value, label: d.label }))]}
           hint={DEAL_TYPES.find((d) => d.value === dealType)?.help}
-          onPick={(v) => void save({ deal_type: v || null })}
+          onPick={(v) => save({ deal_type: v || null })}
         />
         <SelField
           label="Currency"
           value={currency}
           options={currencyOptions.map((c) => ({ value: c, label: c === tourCurrency ? `${c} (tour)` : c }))}
-          onPick={(v) => void save({ currency: v === tourCurrency ? null : v })}
+          onPick={(v) => save({ currency: v === tourCurrency ? null : v })}
         />
-        <NumField label="Guarantee" suffix={currency} value={row?.pre_tax_guarantee ?? null} onCommit={num('pre_tax_guarantee')} />
-        <NumField label="Withholding %" value={row?.withholding_pct ?? null} onCommit={num('withholding_pct')} />
+        <NumField label="Guarantee" currency={currency} value={row?.pre_tax_guarantee ?? null} onCommit={num('pre_tax_guarantee')} />
+        <NumField label="Withholding" kind="pct" value={row?.withholding_pct ?? null} onCommit={num('withholding_pct')} />
         {hasPct ? (
           <>
-            <NumField label={dealType === 'DOOR' ? 'Door %' : 'Deal %'} value={row?.deal_pct ?? null} onCommit={num('deal_pct')} />
+            <NumField label={dealType === 'DOOR' ? 'Door %' : 'Deal %'} kind="pct" value={row?.deal_pct ?? null} onCommit={num('deal_pct')} />
             {/* The escalator — one rule for Expected and Actual (tieredShare). */}
             <div className="flex min-w-0 flex-col" style={{ gap: 'var(--lp-space-1)' }} title="Only the tickets above this count earn the higher %.">
               <span style={{ fontSize: 'var(--lp-text-xs)', color: 'var(--lp-text-secondary)' }}>Higher % above N tickets</span>
               <span className="flex items-center" style={{ gap: 'var(--lp-space-2)' }}>
-                <NumInput ariaLabel="Escalator tickets" value={row?.deal_threshold ?? null} onCommit={num('deal_threshold')} placeholder="tickets" />
+                <NumInput ariaLabel="Escalator tickets" kind="count" value={row?.deal_threshold ?? null} onCommit={num('deal_threshold')} placeholder="tickets" />
                 <span className="text-lp-text-tertiary" style={{ fontSize: 'var(--lp-text-xs)' }}>at</span>
-                <NumInput ariaLabel="Escalator %" value={row?.deal_pct_above ?? null} onCommit={num('deal_pct_above')} placeholder="%" />
+                <NumInput ariaLabel="Escalator %" kind="pct" value={row?.deal_pct_above ?? null} onCommit={num('deal_pct_above')} placeholder="%" />
               </span>
             </div>
           </>
         ) : null}
-        <NumField label="Capacity" value={row?.capacity ?? null} onCommit={num('capacity')} />
-        <NumField label="Ticket price" suffix={currency} value={row?.face_value ?? null} onCommit={num('face_value')} />
+        <NumField label="Capacity" kind="count" value={row?.capacity ?? null} onCommit={num('capacity')} />
+        <NumField label="Ticket price" currency={currency} value={row?.face_value ?? null} onCommit={num('face_value')} />
       </FieldGrid>
 
       <div style={{ marginTop: 'var(--lp-space-3)' }}>
@@ -135,11 +111,11 @@ export function ShowDealCard({
         {moreOpen ? (
           <div style={{ marginTop: 'var(--lp-space-2)' }}>
             <FieldGrid cols={3}>
-              <NumField label="Sell-through" suffix="%" value={row?.est_sell_thru ?? null} onCommit={num('est_sell_thru')} placeholder="Tour default" />
-              <NumField label="Merch per head" suffix={currency} value={row?.dollars_per_head ?? null} onCommit={num('dollars_per_head')} placeholder="Tour default" />
-              <NumField label="Merch fee" suffix="%" value={row?.merch_fee_pct ?? null} onCommit={num('merch_fee_pct')} placeholder="Tour default" />
-              <NumField label="VIP tickets" value={row?.vip_tickets ?? null} onCommit={num('vip_tickets')} />
-              <NumField label="VIP price" suffix={currency} value={row?.vip_price ?? null} onCommit={num('vip_price')} />
+              <NumField label="Sell-through" kind="pct" value={row?.est_sell_thru ?? null} onCommit={num('est_sell_thru')} placeholder="Tour default" />
+              <NumField label="Merch per head" currency={currency} value={row?.dollars_per_head ?? null} onCommit={num('dollars_per_head')} placeholder="Tour default" />
+              <NumField label="Merch fee" kind="pct" value={row?.merch_fee_pct ?? null} onCommit={num('merch_fee_pct')} placeholder="Tour default" />
+              <NumField label="VIP tickets" kind="count" value={row?.vip_tickets ?? null} onCommit={num('vip_tickets')} />
+              <NumField label="VIP price" currency={currency} value={row?.vip_price ?? null} onCommit={num('vip_price')} />
             </FieldGrid>
           </div>
         ) : null}
@@ -155,7 +131,7 @@ export function ShowDealCard({
           typed={dealType === 'PLUS' || !!row?.overage_is_override}
           canWorkOut={pctDeal}
           onType={typeOver('pre_tax_overage', 'overage_is_override')}
-          onWorkOut={() => void save({ overage_is_override: false })}
+          onWorkOut={() => save({ overage_is_override: false })}
           canType={dealType !== 'FLAT'}
           note={dealType === 'FLAT' ? 'none on a flat guarantee' : !dealType ? 'set the deal' : undefined}
         />
@@ -167,7 +143,7 @@ export function ShowDealCard({
           typed={!!row?.merch_is_override}
           canWorkOut
           onType={typeOver('merch_income', 'merch_is_override')}
-          onWorkOut={() => void save({ merch_is_override: false })}
+          onWorkOut={() => save({ merch_is_override: false })}
         />
         <Line label="= Settlement should come to" value={fmtMoney(fmt, expected.settlementTotal)} strong />
         <WorkedLine
@@ -177,7 +153,7 @@ export function ShowDealCard({
           typed={!!row?.vip_is_override}
           canWorkOut
           onType={typeOver('vip_income', 'vip_is_override')}
-          onWorkOut={() => void save({ vip_is_override: false })}
+          onWorkOut={() => save({ vip_is_override: false })}
         />
         <Line label="= Expected income" value={fmtMoney(fmt, expected.total)} strong />
       </div>
@@ -235,7 +211,7 @@ function WorkedLine({
       </span>
       <span className="flex items-center" style={{ gap: 'var(--lp-space-2)' }}>
         {showInput ? (
-          <NumInput ariaLabel={label} value={value} onCommit={(v) => { onType(v); setEditing(false); }} width="7.5rem" />
+          <NumInput ariaLabel={label} currency={fmt.resolvedOptions().currency ?? 'GBP'} zeroIsBlank={false} value={value} onCommit={(v) => { onType(v); setEditing(false); }} width="8.5rem" />
         ) : (
           <span className="lp-mono text-lp-text" style={{ fontSize: 'var(--lp-text-sm)' }}>{fmtMoney(fmt, value)}</span>
         )}

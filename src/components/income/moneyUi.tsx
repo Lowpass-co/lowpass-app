@@ -12,7 +12,8 @@
    Inputs that write ACTUAL money carry a green rule; deal inputs don't.
    ============================================ */
 
-import { useState, type CSSProperties, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type CSSProperties, type KeyboardEvent, type ReactNode } from 'react';
+import { editText, formatAmount, isBlankValue, parseAmount, type AmountKind } from '@/lib/income/amountText';
 
 export const HUE_ACTUAL = 'var(--color-lp-status-complete)';
 export const HUE_NEEDS = 'var(--color-lp-warning)';
@@ -78,91 +79,110 @@ export function Card({ title, hint, accent, action, children }: { title: string;
 }
 
 const labelStyle: CSSProperties = { fontSize: 'var(--lp-text-xs)', color: 'var(--lp-text-secondary)' };
-export const inputStyle: CSSProperties = {
-  width: '100%',
-  fontSize: 'var(--lp-text-sm)',
-  fontFamily: 'var(--lp-font-numeric)',
-  fontVariantNumeric: 'tabular-nums',
-  textAlign: 'right',
-  background: 'var(--lp-bg)',
-  color: 'var(--lp-text)',
-  border: '1px solid var(--lp-border)',
-  borderRadius: 'var(--lp-radius-md)',
-  padding: 'var(--lp-space-1) var(--lp-space-2)',
-};
 
-/** A labelled number that saves on blur / Enter. Blank saves null. */
+/* One box look for the page — the app's <TextInput> (rounded, surface,
+   orange focus ring), numbers right-aligned in tabular figures. Nov 2026,
+   Adam: "these text boxes look old". No spinners: the boxes are text. */
+export const BOX_CLASS =
+  'h-9 w-full min-w-0 rounded-lg border bg-lp-surface px-3 text-sm text-lp-text outline-none transition-colors ' +
+  'placeholder:text-lp-text-tertiary hover:border-[var(--lp-border-strong)] ' +
+  'focus-visible:border-[var(--color-lp-orange)] focus-visible:ring-2 focus-visible:ring-[var(--color-lp-orange)] focus-visible:ring-offset-0 ' +
+  'disabled:cursor-not-allowed disabled:opacity-50';
+const ACTUAL_RULE = `inset 3px 0 0 ${HUE_ACTUAL}`;
+
+/** Legacy export (LineAdder's selects + inputs). */
+export const inputStyle: CSSProperties = { fontVariantNumeric: 'tabular-nums' };
+
+/** A labelled amount that saves on blur / Enter. Blank saves null. */
 export function NumField({
   label,
-  value,
-  onCommit,
-  disabled,
   suffix,
-  placeholder,
   hint,
-  actual,
-}: {
-  label: string;
-  value: number | null | undefined;
-  onCommit: (v: number | null) => void;
-  disabled?: boolean;
-  suffix?: string;
-  placeholder?: string;
-  hint?: string;
-  /** Writes ACTUAL money — green rule. */
-  actual?: boolean;
-}) {
+  ...input
+}: Omit<NumInputProps, 'ariaLabel'> & { label: string; suffix?: string; hint?: string }) {
   return (
     <label className="flex min-w-0 flex-col" style={{ gap: 'var(--lp-space-1)' }} title={hint}>
       <span style={labelStyle}>
         {label}
         {suffix ? <span className="text-lp-text-tertiary"> ({suffix})</span> : null}
       </span>
-      <NumInput value={value} onCommit={onCommit} disabled={disabled} placeholder={placeholder} actual={actual} ariaLabel={label} />
+      <NumInput {...input} ariaLabel={label} />
     </label>
   );
 }
 
-export function NumInput({
-  value,
-  onCommit,
-  disabled,
-  placeholder,
-  actual,
-  ariaLabel,
-  width,
-}: {
+export interface NumInputProps {
   value: number | null | undefined;
   onCommit: (v: number | null) => void;
+  /** money → "US$4,500", pct → "37%", count → "1,250". Default money. */
+  kind?: AmountKind;
+  /** For money. */
+  currency?: string;
+  /** A 0 the database filled in for "not set" shows the dash. Default true;
+   *  false for counts where 0 means 0 (comps). */
+  zeroIsBlank?: boolean;
   disabled?: boolean;
   placeholder?: string;
+  /** Writes ACTUAL money — green rule. */
   actual?: boolean;
   ariaLabel: string;
   width?: string;
-}) {
+}
+
+/** Shows the value formatted at rest and the plain number while you type;
+ *  what you type stays put until you leave the box, whatever the page
+ *  re-renders underneath (the old box remounted on every save — Adam: "if
+ *  I edit before the new thing displays, it overwrites it"). */
+export function NumInput({ value, onCommit, kind = 'money', currency = 'GBP', zeroIsBlank = true, disabled, placeholder, actual, ariaLabel, width }: NumInputProps) {
+  const [draft, setDraft] = useState<string | null>(null);
+  const [bad, setBad] = useState(false);
+  const blank = isBlankValue(value, zeroIsBlank);
+  const shown = draft ?? (blank ? '' : formatAmount(Number(value), kind, currency));
   return (
     <input
-      key={`${ariaLabel}:${value ?? ''}`}
       aria-label={ariaLabel}
-      type="number"
+      aria-invalid={bad || undefined}
+      type="text"
       inputMode="decimal"
-      defaultValue={value ?? ''}
+      autoComplete="off"
+      spellCheck={false}
+      value={shown}
       disabled={disabled}
       placeholder={placeholder ?? '—'}
+      title={bad ? 'That isn’t a number — nothing was saved' : undefined}
+      className={BOX_CLASS}
+      style={{
+        width: width ?? '100%',
+        textAlign: 'right',
+        fontVariantNumeric: 'tabular-nums',
+        borderColor: bad ? 'var(--color-lp-error)' : undefined,
+        boxShadow: actual ? ACTUAL_RULE : undefined,
+      }}
+      onFocus={(e) => {
+        setBad(false);
+        setDraft(editText(value, zeroIsBlank));
+        const el = e.currentTarget;
+        requestAnimationFrame(() => el.select());
+      }}
+      onChange={(e) => setDraft(e.target.value)}
       onBlur={(e) => {
-        const raw = e.target.value.trim();
-        if (raw === String(value ?? '')) return;
-        const v = raw === '' ? null : Number(raw);
-        if (v != null && !Number.isFinite(v)) return;
+        const raw = e.target.value;
+        setDraft(null);
+        const v = parseAmount(raw);
+        if (v === 'invalid') {
+          setBad(true);
+          return;
+        }
+        const before = blank ? null : Number(value);
+        if (v === before || (v === 0 && before === null && zeroIsBlank && kind !== 'count')) return;
         onCommit(v);
       }}
       onKeyDown={(e) => {
         if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
-      }}
-      style={{
-        ...inputStyle,
-        width: width ?? '100%',
-        borderLeft: actual ? `3px solid ${HUE_ACTUAL}` : inputStyle.border,
+        if (e.key === 'Escape') {
+          setDraft(editText(value, zeroIsBlank));
+          requestAnimationFrame(() => (e.target as HTMLInputElement).blur());
+        }
       }}
     />
   );
@@ -191,8 +211,8 @@ export function SelField({
         value={value}
         disabled={disabled}
         onChange={(e) => onPick(e.target.value)}
-        className="lp-select"
-        style={{ ...inputStyle, background: undefined, padding: undefined, textAlign: 'left', fontFamily: 'inherit' }}
+        className={`lp-select ${BOX_CLASS}`}
+        style={{ paddingTop: 0, paddingBottom: 0 }}
       >
         {options.map((o) => (
           <option key={o.value} value={o.value}>
@@ -261,10 +281,10 @@ export function Button({ children, onClick, disabled, primary, title }: { childr
   );
 }
 
-/** Small inline adder: label + amount (+ an optional select). */
+/** Small inline adder: label + amount (+ an optional select). Enter adds,
+ *  Escape closes. The line appears at once (the page saves it behind). */
 export function LineAdder({
   addLabel,
-  busy,
   kinds,
   defaultKind,
   withDate,
@@ -272,7 +292,8 @@ export function LineAdder({
   onAdd,
 }: {
   addLabel: string;
-  busy: boolean;
+  /** Kept for callers; adding is never blocked by a save in flight now. */
+  busy?: boolean;
   kinds?: ReadonlyArray<{ value: string; label: string }>;
   defaultKind?: string;
   withDate?: boolean;
@@ -284,13 +305,51 @@ export function LineAdder({
   const [label, setLabel] = useState('');
   const [amount, setAmount] = useState('');
   const [date, setDate] = useState('');
+  const first = useRef<HTMLInputElement | HTMLSelectElement | null>(null);
+  useEffect(() => {
+    if (open) first.current?.focus();
+  }, [open]);
   if (!open) return <LinkButton onClick={() => setOpen(true)}>+ {addLabel}</LinkButton>;
-  const small: CSSProperties = { ...inputStyle, width: 'auto', textAlign: 'left', fontFamily: 'inherit' };
-  const amt = Number(amount);
+  const parsed = parseAmount(amount);
+  const amt = typeof parsed === 'number' ? parsed : NaN;
+  const ok = amt > 0;
+  const close = () => {
+    setOpen(false);
+    setLabel('');
+    setAmount('');
+    setDate('');
+  };
+  const add = () => {
+    if (!ok) return;
+    onAdd({ kind: kinds ? kind : undefined, label: label.trim() || null, amount: amt, date: date || null });
+    // Stay open for the next one; the line is already on the page.
+    setLabel('');
+    setAmount('');
+    setDate('');
+    first.current?.focus();
+  };
+  const keys = (e: KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      add();
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      close();
+    }
+  };
   return (
-    <div className="flex flex-wrap items-center" style={{ gap: 'var(--lp-space-2)' }}>
+    <div className="flex flex-wrap items-center" style={{ gap: 'var(--lp-space-2)', padding: 'var(--lp-space-1) 0' }} onKeyDown={keys}>
       {kinds ? (
-        <select aria-label="Kind" value={kind} onChange={(e) => setKind(e.target.value)} className="lp-select" style={{ ...small, padding: undefined }}>
+        <select
+          ref={(el) => {
+            if (kinds) first.current = el;
+          }}
+          aria-label="Kind"
+          value={kind}
+          onChange={(e) => setKind(e.target.value)}
+          className={`lp-select ${BOX_CLASS}`}
+          style={{ width: 'auto', paddingTop: 0, paddingBottom: 0 }}
+        >
           {kinds.map((k) => (
             <option key={k.value} value={k.value}>
               {k.label}
@@ -299,24 +358,35 @@ export function LineAdder({
         </select>
       ) : null}
       {withDate ? null : (
-        <input aria-label={placeholder} value={label} onChange={(e) => setLabel(e.target.value)} placeholder={placeholder} style={{ ...small, width: '9rem' }} />
+        <input
+          ref={(el) => {
+            if (!kinds) first.current = el;
+          }}
+          aria-label={placeholder}
+          value={label}
+          onChange={(e) => setLabel(e.target.value)}
+          placeholder={placeholder}
+          className={BOX_CLASS}
+          style={{ width: '10rem' }}
+        />
       )}
-      <input aria-label="Amount" value={amount} inputMode="decimal" onChange={(e) => setAmount(e.target.value)} placeholder="Amount" style={{ ...inputStyle, width: '7rem' }} />
-      {withDate ? <input aria-label="Date" type="date" value={date} onChange={(e) => setDate(e.target.value)} style={small} /> : null}
-      <LinkButton
-        disabled={busy || !(amt > 0)}
-        onClick={() => {
-          onAdd({ kind: kinds ? kind : undefined, label: label.trim() || null, amount: amt, date: date || null });
-          setOpen(false);
-          setLabel('');
-          setAmount('');
-          setDate('');
-        }}
-      >
+      <input
+        aria-label="Amount"
+        value={amount}
+        type="text"
+        inputMode="decimal"
+        autoComplete="off"
+        onChange={(e) => setAmount(e.target.value)}
+        placeholder="Amount"
+        className={BOX_CLASS}
+        style={{ width: '7.5rem', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}
+      />
+      {withDate ? <input aria-label="Date" type="date" value={date} onChange={(e) => setDate(e.target.value)} className={BOX_CLASS} style={{ width: 'auto' }} /> : null}
+      <Button primary={ok ? 'var(--color-lp-orange)' : undefined} disabled={!ok} onClick={add} title="Enter">
         Add
-      </LinkButton>
-      <LinkButton muted onClick={() => setOpen(false)}>
-        Cancel
+      </Button>
+      <LinkButton muted onClick={close}>
+        Done
       </LinkButton>
     </div>
   );
