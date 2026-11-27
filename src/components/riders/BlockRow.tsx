@@ -163,6 +163,14 @@ export function BlockRow({ block, index, ctx }: { block: RiderBlock; index: numb
           >
             <GripVertical size={14} />
           </span>
+          {/* The block's menu lives here, in the gutter — on the right it sat
+              on top of the line's own star / chevron (Adam: "hard to
+              accurately click things"). */}
+          {menu.length ? (
+            <span className="rdx-gmenu">
+              <ContextMenu items={menu} align="left" />
+            </span>
+          ) : null}
         </div>
       ) : null}
       {peers.length ? (
@@ -182,7 +190,6 @@ export function BlockRow({ block, index, ctx }: { block: RiderBlock; index: numb
             {tag}
           </button>
         ) : null}
-        {canEdit && menu.length ? <ContextMenu items={menu} /> : null}
       </div>
       {conflict ? (
         <div className="rdx-conflict" role="alert">

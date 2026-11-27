@@ -28,7 +28,7 @@ import { useCallback, useId, useRef, useState } from 'react';
 import { Upload, X as XIcon } from 'lucide-react';
 
 const ALLOWED_MIME = ['image/jpeg', 'image/png', 'image/webp'];
-const MAX_BYTES = 5 * 1024 * 1024;
+const MAX_BYTES = 4 * 1024 * 1024;
 
 export interface ArtistImageUploaderProps {
   artistId: string;
@@ -230,7 +230,7 @@ export function ArtistImageUploader({
                   color: 'var(--lp-text-tertiary)',
                 }}
               >
-                JPEG, PNG, or WebP · 5MB max
+                JPEG, PNG, or WebP · 4MB max
               </span>
             ) : null}
           </div>

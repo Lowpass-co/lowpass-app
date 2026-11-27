@@ -22,33 +22,26 @@
 
    Bucket policy: artist-assets is public-read per
    migration 007_storage_artist_assets_policies.sql.
+
+   WRITES GO THROUGH THE SERVER (Nov 2026). Uploading as the user hit
+   "new row violates row-level security policy": the bucket's write rule
+   (278) checks the path against the caller's CURRENT workspace
+   (profiles.workspace_id), so anyone working in more than one workspace —
+   or on a database where 278 wasn't pasted — couldn't set a logo. The route
+   now decides who may write (admin / manager of THIS artist's workspace),
+   checks the bytes really are a JPEG / PNG / WebP, and writes that one fixed
+   path with the service role. The user can never choose the path.
    ============================================ */
 
 import { NextResponse } from 'next/server';
 import { requireWrite } from '@/lib/auth/workspace-check';
-import { createServerSupabaseClient } from '@/lib/supabase-server';
+import { createServerSupabaseClient, createServiceSupabaseClient } from '@/lib/supabase-server';
+import { sniffImage } from '@/lib/riders/photos';
 
 const BUCKET = 'artist-assets';
-const MAX_SIZE = 5 * 1024 * 1024; // 5MB
+// Under Vercel's ~4.5 MB request-body limit (a bigger body never reaches us).
+const MAX_SIZE = 4 * 1024 * 1024; // 4MB
 const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
-const ALLOWED_EXTS = ['jpg', 'jpeg', 'png', 'webp'];
-
-function extToContentType(ext: string): string {
-  if (ext === 'jpg' || ext === 'jpeg') return 'image/jpeg';
-  if (ext === 'png') return 'image/png';
-  if (ext === 'webp') return 'image/webp';
-  return 'application/octet-stream';
-}
-
-function inferExt(file: File): string {
-  if (file.type === 'image/jpeg') return 'jpg';
-  if (file.type === 'image/png') return 'png';
-  if (file.type === 'image/webp') return 'webp';
-  // Fallback to filename extension; validated below.
-  const ext = file.name.split('.').pop()?.toLowerCase() ?? '';
-  return ALLOWED_EXTS.includes(ext) ? ext : 'png';
-}
-
 type ArtistRow = {
   id: string;
   workspace_id: string;
@@ -101,6 +94,14 @@ export async function POST(
       { status: 500 },
     );
   }
+  // requireWrite passed for the caller's ACTIVE workspace; the write below is
+  // made as the server, so it must be THIS artist's workspace too.
+  if (artistRow.workspace_id !== auth.workspaceId) {
+    return NextResponse.json(
+      { error: 'Switch to this artist’s workspace to change its images.' },
+      { status: 403 },
+    );
+  }
 
   // Multipart form.
   let formData: FormData;
@@ -127,15 +128,22 @@ export async function POST(
     );
   }
 
-  const ext = inferExt(file);
+  const buffer = Buffer.from(await file.arrayBuffer());
+  // The bytes decide the type, not the browser's label.
+  const sniffed = sniffImage(new Uint8Array(buffer.subarray(0, 32)));
+  if (sniffed !== 'image/jpeg' && sniffed !== 'image/png' && sniffed !== 'image/webp') {
+    return NextResponse.json({ error: 'That file isn’t a JPEG, PNG or WebP image.' }, { status: 400 });
+  }
+  const ext = sniffed === 'image/jpeg' ? 'jpg' : sniffed === 'image/png' ? 'png' : 'webp';
   const path = `${artistRow.workspace_id}/${artistRow.id}/${kind}.${ext}`;
+  const storage = createServiceSupabaseClient().storage;
 
   // First, list the prefix and remove any prior {kind}.* file with
   // a different extension (so a jpg→png upgrade doesn't leave an
   // orphan jpg). Best-effort; tolerate failures.
   try {
     const prefix = `${artistRow.workspace_id}/${artistRow.id}`;
-    const { data: existing } = await supabase.storage
+    const { data: existing } = await storage
       .from(BUCKET)
       .list(prefix, { limit: 100 });
     if (existing) {
@@ -147,7 +155,7 @@ export async function POST(
         )
         .map((name) => `${prefix}/${name}`);
       if (stale.length > 0) {
-        await supabase.storage.from(BUCKET).remove(stale);
+        await storage.from(BUCKET).remove(stale);
       }
     }
   } catch (err) {
@@ -157,11 +165,10 @@ export async function POST(
     );
   }
 
-  const buffer = Buffer.from(await file.arrayBuffer());
-  const { error: upErr } = await supabase.storage
+  const { error: upErr } = await storage
     .from(BUCKET)
     .upload(path, buffer, {
-      contentType: extToContentType(ext),
+      contentType: sniffed,
       upsert: true,
     });
 
@@ -184,7 +191,7 @@ export async function POST(
     return NextResponse.json({ error: upErr.message }, { status: 500 });
   }
 
-  const { data: urlData } = supabase.storage.from(BUCKET).getPublicUrl(path);
+  const { data: urlData } = storage.from(BUCKET).getPublicUrl(path);
   const publicUrl = urlData.publicUrl;
 
   // Update artists.branding JSONB. Read current value, merge in
@@ -245,13 +252,20 @@ export async function DELETE(
     return NextResponse.json({ error: 'Artist not found' }, { status: 404 });
   }
   const artistRow = artist as ArtistRow;
+  if (artistRow.workspace_id !== auth.workspaceId) {
+    return NextResponse.json(
+      { error: 'Switch to this artist’s workspace to change its images.' },
+      { status: 403 },
+    );
+  }
+  const storage = createServiceSupabaseClient().storage;
 
   // List the prefix and remove every {kind}.* (covers any
   // extension; we don't trust the URL alone since branding
   // could have a stale value).
   try {
     const prefix = `${artistRow.workspace_id}/${artistRow.id}`;
-    const { data: existing } = await supabase.storage
+    const { data: existing } = await storage
       .from(BUCKET)
       .list(prefix, { limit: 100 });
     if (existing && existing.length > 0) {
@@ -260,7 +274,7 @@ export async function DELETE(
         .filter((name) => name.startsWith(`${kind}.`))
         .map((name) => `${prefix}/${name}`);
       if (toRemove.length > 0) {
-        await supabase.storage.from(BUCKET).remove(toRemove);
+        await storage.from(BUCKET).remove(toRemove);
       }
     }
   } catch (err) {
