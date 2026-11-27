@@ -48,9 +48,10 @@ export interface ArtistTourOption {
 interface ArtistTemplateListProps {
   artistId: string;
   artistName: string;
-  /** 'rider' | 'channel_list' — passed through to the create
-   *  POST and the assign-to-tour route. */
-  kind: 'rider' | 'channel_list';
+  /** Passed through to the create POST and the assign-to-tour route.
+   *  Channel lists only since the Nov 2026 riders rebuild (riders are
+   *  each tour's documents + rider templates — /artists/[id]/riders). */
+  kind: 'channel_list';
   /** Single noun like "rider" or "channel list". Used in the
    *  "+ New {label}" button + the empty-state copy. */
   label: string;
@@ -109,9 +110,7 @@ export function ArtistTemplateList({
         setCreateError(body?.error ?? `Create failed (${res.status})`);
         return;
       }
-      // §RA14 — a freshly created rider template opens straight into the
-      // builder; channel_list keeps the legacy editor (bare path).
-      router.push(`/rider-packs/${body.id}${kind === 'rider' ? '?mode=edit' : ''}`);
+      router.push(`/rider-packs/${body.id}`);
     } catch (err) {
       setCreateError(err instanceof Error ? err.message : 'Network error');
     } finally {
@@ -242,10 +241,7 @@ export function ArtistTemplateList({
               }}
             >
               <Link
-                /* §RA14 — rider templates open the new shell in builder
-                   mode (artist-scope templates are the structure source).
-                   channel_list rows keep the bare path (legacy PackEditor). */
-                href={`/rider-packs/${row.id}${kind === 'rider' ? '?mode=edit' : ''}`}
+                href={`/rider-packs/${row.id}`}
                 style={{
                   minWidth: 0,
                   fontSize: 'var(--lp-text-sm)',

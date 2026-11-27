@@ -30,7 +30,13 @@ const MAX_SCAN_BYTES = 22 * 1024 * 1024;
 const MAX_SCAN_PAGES = 100;
 export const MAX_PACK_FILES = 10;
 const MAX_TEXT_CHARS = 160_000;
-const CHUNK_CHARS = 60_000;
+/** Speed (Nov 2026, Adam: "SLOW"): a read is as slow as its slowest call, and
+ *  a call is slow because of what it WRITES (an answer + verbatim quote per
+ *  question), not what it reads. So every document is split into small parts
+ *  read side by side — each part only answers what's on its pages. Text: ~24k
+ *  characters (~6k tokens) a part. Scans: 12 pages a part (pdf-lib). */
+const CHUNK_CHARS = 24_000;
+const SCAN_PART_PAGES = 12;
 
 export function packPrefix(workspaceId: string, tourId: string): string {
   return `advance-packs/${workspaceId}/${tourId}/`;
@@ -123,7 +129,7 @@ export async function toContent(file: { buffer: Buffer; mime: string; name: stri
 
 /* ---------- the model ---------- */
 
-export const PACK_MODEL = process.env.LP_IMPORT_MODEL || 'claude-sonnet-4-5';
+export const PACK_MODEL = process.env.LP_IMPORT_MODEL || 'claude-sonnet-5-5';
 
 type Block =
   | { type: 'text'; text: string }
@@ -189,7 +195,7 @@ function manifest(sections: AdvSection[]): string {
     .join('\n');
 }
 
-function system(show: { venue: string | null; city: string | null; date: string; artist: string | null }): string {
+function system(show: { venue: string | null; city: string | null; date: string; artist: string | null }, maxExtras: number): string {
   return `You read venue information packs (technical riders, production/hospitality sheets, site plans, emails) for a touring tour manager and answer their advance questions from them.
 
 The show: ${show.artist ? `${show.artist} at ` : ''}${show.venue ?? 'the venue'}${show.city ? `, ${show.city}` : ''} on ${show.date}.
@@ -199,7 +205,7 @@ Rules:
 - quote: copy the exact words you used from the document, verbatim (same spelling and numbers), at most ~200 characters. page: the page number it is on (pages are tagged <page n="…"> where the text is given).
 - value: concise and practical, in the document's facts ("125A CEE 3-phase stage left, 15 m from the stage edge"). Times as HH:MM. Yes/no questions: "yes" or "no".
 - If the document gives different values for the same thing, use the most specific and set confidence "low".
-- extras: up to 15 facts a touring production would want that none of the questions cover (power for buses, overtime/curfew penalties, forklift, Wi-Fi, parking limits, load limits…). Not contacts.
+- extras: up to ${maxExtras} facts a touring production would want that none of the questions cover (power for buses, overtime/curfew penalties, forklift, Wi-Fi, parking limits, load limits…). Not contacts.
 - show: the venue, city and date the document says it is for, if it says.
 Always answer by calling record_pack.`;
 }
@@ -221,25 +227,72 @@ function chunks(pages: PackPage[]): PackPage[][] {
   return out;
 }
 
+/** A scan part's page numbers count from 1; put them back on the document's. */
+export function shiftPages(raw: unknown, offset: number): unknown {
+  if (!raw || typeof raw !== 'object' || !offset) return raw;
+  const r = raw as { answers?: unknown; extras?: unknown };
+  const shift = (list: unknown) =>
+    Array.isArray(list) ? list.map((x) => (x && typeof x === 'object' && typeof (x as { page?: unknown }).page === 'number' ? { ...x, page: (x as { page: number }).page + offset } : x)) : list;
+  return { ...r, answers: shift(r.answers), extras: shift(r.extras) };
+}
+
 export interface PackReadResult {
   suggestions: Suggestion[];
   extras: Extra[];
   show: { venue: string | null; city: string | null; date: string | null };
   truncated: boolean;
+  /** Parts whose call failed — their pages weren't read. */
+  failedParts: number;
+  parts: number;
 }
 
 type Messages = { messages: { create: (req: unknown) => Promise<{ content: { type: string; name?: string; input?: unknown }[]; stop_reason?: string; usage: unknown }> } };
 
-/** Read one file against the day's questions. `call` is withAiUsage's runner. */
+/** A scan split into parts of `size` pages, each its own small PDF. One part
+ *  (the whole file) when it's short or pdf-lib can't open it. `first` is the
+ *  part's first page in the original (1-based). */
+export async function scanParts(base64: string, size = SCAN_PART_PAGES, limit = Infinity): Promise<{ base64: string; first: number; last: number }[]> {
+  try {
+    const { PDFDocument } = await import('pdf-lib');
+    const src = await PDFDocument.load(Buffer.from(base64, 'base64'), { ignoreEncryption: true });
+    const n = Math.min(src.getPageCount(), limit);
+    if (n <= size && n === src.getPageCount()) return [{ base64, first: 1, last: n }];
+    const out: { base64: string; first: number; last: number }[] = [];
+    for (let start = 0; start < n; start += size) {
+      const doc = await PDFDocument.create();
+      const idx = Array.from({ length: Math.min(size, n - start) }, (_, i) => start + i);
+      for (const pg of await doc.copyPages(src, idx)) doc.addPage(pg);
+      out.push({ base64: Buffer.from(await doc.save()).toString('base64'), first: start + 1, last: start + idx.length });
+    }
+    return out;
+  } catch (e) {
+    // Still read — whole, just slower. Logged so a pdf-lib failure isn't silent.
+    console.warn('[advance/packs] couldn’t split the scan; reading it whole', e instanceof Error ? e.message : e);
+    return [{ base64, first: 1, last: 0 }];
+  }
+}
+
+/** Progress hooks for a background read: `planned` once per file with its
+ *  number of parts, `done` after each part's call (answered or not). */
+export interface ReadProgress {
+  planned: (parts: number) => void;
+  done: () => void;
+}
+
+/** Read one file against the day's questions. `run` is withAiUsage's runner. */
 export async function extractFromContent(
   content: PackContent,
   sections: AdvSection[],
   show: { venue: string | null; city: string | null; date: string; artist: string | null },
   fileIndex: number,
   run: (fn: (anthropic: Messages) => Promise<{ result: unknown; usage: unknown }>) => Promise<unknown | null>,
+  progress?: ReadProgress,
 ): Promise<PackReadResult> {
   const ask = `Questions:\n${manifest(sections)}`;
-  const calls: Block[][] = [];
+  // Each part carries the page its numbering starts at: text parts are tagged
+  // with the real page numbers (offset 0); a scan part counts from 1, so its
+  // pages are shifted back by `first - 1` before they're checked.
+  const calls: { blocks: Block[]; offset: number }[] = [];
   let truncated = false;
   if (content.kind === 'text') {
     let pages = content.pages;
@@ -249,32 +302,55 @@ export async function extractFromContent(
       let n = 0;
       pages = pages.filter((p) => (n += p.text.length) <= MAX_TEXT_CHARS * 2);
     }
-    for (const group of total > MAX_TEXT_CHARS ? chunks(pages) : [pages]) {
+    const groups = chunks(pages);
+    for (const group of groups) {
       const text = group.map((p) => `<page n="${p.num}">\n${p.text}\n</page>`).join('\n');
-      calls.push([{ type: 'text', text: `Document “${content.name}”:\n${text}\n\n${ask}` }]);
+      const part = groups.length > 1 ? ` (part: pages ${group[0].num}–${group[group.length - 1].num} of ${content.pageCount})` : '';
+      calls.push({ blocks: [{ type: 'text', text: `Document “${content.name}”${part}:\n${text}\n\n${ask}` }], offset: 0 });
     }
   } else if (content.kind === 'pdf') {
-    calls.push([{ type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: content.base64 } }, { type: 'text', text: `Document “${content.name}”. Page numbers are the PDF’s pages.\n\n${ask}` }]);
+    const parts = await scanParts(content.base64);
+    for (const p of parts) {
+      const part =
+        parts.length > 1
+          ? `These are pages ${p.first}–${p.last} of a ${content.pageCount ?? p.last}-page document; give page numbers counting from 1 at the first page shown here.`
+          : 'Page numbers are the PDF’s pages.';
+      calls.push({ blocks: [{ type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: p.base64 } }, { type: 'text', text: `Document “${content.name}”. ${part}\n\n${ask}` }], offset: p.first - 1 });
+    }
   } else {
-    calls.push([{ type: 'image', source: { type: 'base64', media_type: content.mime, data: content.base64 } }, { type: 'text', text: `Image “${content.name}” (page 1).\n\n${ask}` }]);
+    calls.push({ blocks: [{ type: 'image', source: { type: 'base64', media_type: content.mime, data: content.base64 } }, { type: 'text', text: `Image “${content.name}” (page 1).\n\n${ask}` }], offset: 0 });
   }
+  progress?.planned(calls.length);
+  let failedParts = 0;
+  const maxExtras = calls.length > 1 ? 8 : 15;
 
   const outs = await Promise.all(
-    calls.map((blocks) =>
-      run(async (anthropic) => {
-        const r = await anthropic.messages.create({
-          model: PACK_MODEL,
-          max_tokens: 8000,
-          system: system(show),
-          tools: [TOOL],
-          tool_choice: { type: 'tool', name: 'record_pack' },
-          messages: [{ role: 'user', content: blocks }],
+    calls.map(async ({ blocks, offset }) => {
+      try {
+        const raw = await run(async (anthropic) => {
+          const r = await anthropic.messages.create({
+            model: PACK_MODEL,
+            max_tokens: 8000,
+            system: system(show, maxExtras),
+            tools: [TOOL],
+            tool_choice: { type: 'tool', name: 'record_pack' },
+            messages: [{ role: 'user', content: blocks }],
+          });
+          if (r.stop_reason === 'max_tokens') truncated = true;
+          const tool = r.content.find((b) => b.type === 'tool_use' && b.name === 'record_pack');
+          return { result: tool?.input ?? null, usage: r.usage };
         });
-        if (r.stop_reason === 'max_tokens') truncated = true;
-        const tool = r.content.find((b) => b.type === 'tool_use' && b.name === 'record_pack');
-        return { result: tool?.input ?? null, usage: r.usage };
-      }),
-    ),
+        return offset ? shiftPages(raw, offset) : raw;
+      } catch (e) {
+        // One part failing (overloaded, timeout) keeps the others' answers;
+        // the read says it's incomplete rather than throwing them all away.
+        console.error('[advance/packs] a part failed', content.name, e);
+        failedParts += 1;
+        return null;
+      } finally {
+        progress?.done();
+      }
+    }),
   );
 
   const pages = content.kind === 'text' ? content.pages : null;
@@ -289,5 +365,5 @@ export async function extractFromContent(
     const s = (raw as { show?: { venue?: string; city?: string; date?: string } }).show;
     if (s && !guess.venue) guess = { venue: s.venue ?? null, city: s.city ?? null, date: s.date ?? null };
   }
-  return { suggestions, extras, show: guess, truncated };
+  return { suggestions, extras, show: guess, truncated, failedParts, parts: calls.length };
 }

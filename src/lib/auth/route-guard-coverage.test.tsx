@@ -88,6 +88,7 @@ const UNGUARDED: Record<string, string> = {
   '/public/advance-intake/[token]/tech-pack': /* POST */ 'PERMANENT — public. Same token grant as the intake submit above.',
   '/public/advance-packet/[token]': /* POST */ 'PERMANENT — public. Venue opens a packet with no account; the token is the grant.',
   '/public/rider/[token]': /* POST */ 'PERMANENT — public. Tokenised rider view for people outside the workspace.',
+  '/public/riders/[token]': /* POST */ 'PERMANENT — public. The live rider (migration 301): the unguessable token IS the grant; ackPublic / replyPublic act only on the link the token resolves to, only on its latest published version (and that show), capped per link per hour.',
   '/public/file-link/[token]': /* POST */ 'PERMANENT — public. File/folder share link (migration 281): the unguessable token (+ optional password in the body) IS the grant; contents are scoped by fileInLink().',
   '/public/file-link/[token]/download': /* POST */ 'PERMANENT — public. Same token grant; signs a 60s forced-download URL only for a file fileInLink() places inside the link.',
   '/public/file-link/[token]/upload-url': /* POST */ 'PERMANENT — public. Same token grant; EDIT links only. prepareLinkUpload() checks access, scope, 100MB and the hourly cap (counted from issued grants) before issuing a one-time signed upload for a server-chosen path.',

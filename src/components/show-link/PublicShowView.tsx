@@ -21,8 +21,12 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Download, Lock } from 'lucide-react';
 import { ReadOnlyPackView } from '@/components/rider-pack/ReadOnlyPackView';
+import { RiderDocStyles, RiderDocView } from '@/components/riders/RiderDocView';
+import { fmtDay } from '@/lib/riders/blocks';
+import { docModel, versionLine } from '@/lib/riders/render';
 import type { PublicRiderPayload } from '@/lib/rider-packs/web-links';
 import type { PacketManifest } from '@/lib/advance-packet/manifest';
+import type { ShowRider } from '@/server/riders/public';
 
 type TabId = 'advance' | 'rider' | 'channel_list' | 'stage_plot' | 'downloads';
 
@@ -37,6 +41,8 @@ const TABS: Array<{ id: TabId; label: string }> = [
 interface ShowPayload {
   manifest: PacketManifest;
   payloads: PublicRiderPayload[];
+  /** The new rider's latest published version for this show (Nov 2026). */
+  rider: ShowRider | null;
   stage_plot_svg: string | null;
   intake_url: string | null;
   tour_id: string;
@@ -211,7 +217,12 @@ export function PublicShowView({ token }: { token: string }) {
           <Empty>The tour team hasn’t opened the advance form for this show yet.</Empty>
         ))}
 
+      {tab === 'rider' && data.rider ? (
+        <NewRider rider={data.rider} artist={manifest.tour.artist_name} venue={[routing?.venue, routing?.city].filter(Boolean).join(', ')} />
+      ) : null}
+
       {tab === 'rider' &&
+        !data.rider &&
         (split.riders.length > 0 ? (
           <div className="space-y-8">
             {split.riders.map((p) => (
@@ -252,7 +263,9 @@ export function PublicShowView({ token }: { token: string }) {
       {tab === 'downloads' && (
         <div className="rounded-xl border border-neutral-200 bg-white p-6">
           <p className="text-sm text-neutral-600">
-            Everything above, as one PDF — rider{split.channels.length ? ' + channel list' : ''} bundled in show order.
+            {data.rider
+              ? `Everything above but the rider, as one PDF${split.channels.length ? ' — channel list bundled in show order' : ''}.`
+              : `Everything above, as one PDF — rider${split.channels.length ? ' + channel list' : ''} bundled in show order.`}
           </p>
           <a
             href={pdfHref}
@@ -263,6 +276,17 @@ export function PublicShowView({ token }: { token: string }) {
             <Download className="h-4 w-4" />
             Download bundled PDF
           </a>
+          {data.rider?.linkToken ? (
+            <a
+              href={`/api/public/riders/${data.rider.linkToken}/pdf`}
+              target="_blank"
+              rel="noreferrer"
+              className="ml-2 mt-4 inline-flex items-center gap-2 rounded-lg border border-neutral-300 px-4 py-2 text-sm font-medium text-neutral-800 hover:border-neutral-500"
+            >
+              <Download className="h-4 w-4" />
+              Rider PDF (version {data.rider.version.label})
+            </a>
+          ) : null}
           {manifest.docs.length > 0 ? (
             <ul className="mt-4 space-y-1 border-t border-neutral-100 pt-3 text-xs text-neutral-500">
               {manifest.docs.map((d) => (
@@ -278,6 +302,40 @@ export function PublicShowView({ token }: { token: string }) {
 
       <footer className="pb-8 pt-2 text-center text-[10px] text-neutral-400">Shared via Lowpass</footer>
     </Frame>
+  );
+}
+
+/** The live rider (riders rebuild): the same document model + stylesheet as
+ *  /r/<token> and the PDF, read-only here. Acknowledge / reply / PDF live on
+ *  the show's own rider link when the team has made one. */
+function NewRider({ rider, artist, venue }: { rider: ShowRider; artist: string | null; venue: string }) {
+  const { snapshot, states, date, routingId, photos } = rider;
+  const header = {
+    artist,
+    version: versionLine(rider.version.label, rider.version.publishedAt),
+    show: date ? `For ${venue || 'this show'} — ${fmtDay(date, true)}` : null,
+  };
+  return (
+    <div className="space-y-4">
+      <RiderDocStyles />
+      {rider.linkToken ? (
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-neutral-200 bg-white px-4 py-3 text-sm">
+          <span className="text-neutral-600">Acknowledge it, reply on a line or download the PDF on the rider’s own page.</span>
+          <a href={`/r/${rider.linkToken}`} target="_blank" rel="noreferrer" className="font-semibold text-[var(--lp-orange)] hover:underline">
+            Open the live rider ↗
+          </a>
+        </div>
+      ) : null}
+      {snapshot.docs.map((d) => (
+        <div key={d.kind} className="rounded-xl border border-neutral-200 bg-white p-6 sm:p-10">
+          <RiderDocView
+            model={docModel(d, { date, party: snapshot.party, docs: snapshot.docs, attachments: snapshot.attachments, states, embeds: snapshot.embeds, routingId })}
+            header={header}
+            photoUrl={(p) => photos[p] ?? null}
+          />
+        </div>
+      ))}
+    </div>
   );
 }
 

@@ -105,12 +105,20 @@ export async function getPacketManifest(
   /* Riders + channel lists. rider_packs.kind discriminates
      between 'rider' and 'channel_list'. Scope sort gives a
      stable "more specific first" order (show → tour → artist). */
-  const { data: packs } = await supabase
-    .from('rider_packs')
-    .select('id, title, kind, scope')
-    .eq('tour_id', tourId)
-    .order('scope', { ascending: true })
-    .order('title', { ascending: true });
+  const [{ data: packs }, { count: publishedRiders }] = await Promise.all([
+    supabase
+      .from('rider_packs')
+      .select('id, title, kind, scope')
+      .eq('tour_id', tourId)
+      .order('scope', { ascending: true })
+      .order('title', { ascending: true }),
+    /* Riders rebuild (Nov 2026, migration 301): once the tour has PUBLISHED a
+       new rider, the old builder's rider packs are superseded and left out —
+       a venue must never see the old document beside the live one. (Before
+       301 is pasted the count is null: nothing changes.) */
+    supabase.from('rider_versions').select('id', { count: 'exact', head: true }).eq('tour_id', tourId),
+  ]);
+  const supersededRiders = (publishedRiders ?? 0) > 0;
 
   const docs: PacketDoc[] = [];
   for (const p of (packs ?? []) as Array<{
@@ -119,6 +127,7 @@ export async function getPacketManifest(
     kind: 'rider' | 'channel_list';
     scope: 'artist' | 'tour' | 'show';
   }>) {
+    if (supersededRiders && p.kind === 'rider') continue;
     docs.push({
       kind: p.kind,
       id: p.id,

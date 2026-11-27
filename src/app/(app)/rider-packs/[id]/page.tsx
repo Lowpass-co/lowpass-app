@@ -1,23 +1,14 @@
 /* ============================================
-   LOWPASS — Rider · Per-pack page (§RA12)
-
-   /rider-packs/[id] — the standalone rider editor. The body lives in the shared
-   <RiderPackEditorView> (also used by /operations/[tourId]/riders/[id]); this
-   route wraps it in its own shell (standalone). ?mode=edit → builder.
+   LOWPASS — /rider-packs/[id] — a channel-list document (PackEditor).
+   An old rider pack or stage-plot pack redirects to its new home; see
+   <RiderPackEditorView>.
    ============================================ */
 
 import { RiderPackEditorView } from '@/components/rider-pack/RiderPackEditorView';
 
 export const dynamic = 'force-dynamic';
 
-export default async function RiderPackPage({
-  params,
-  searchParams,
-}: {
-  params: Promise<{ id: string }>;
-  searchParams: Promise<{ mode?: string }>;
-}) {
+export default async function RiderPackPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const { mode } = await searchParams;
-  return <RiderPackEditorView packId={id} mode={mode} standalone />;
+  return <RiderPackEditorView packId={id} standalone />;
 }

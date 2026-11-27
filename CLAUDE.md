@@ -121,7 +121,8 @@ Where the mounts live:
 - The tourless landings /operations, /budget, /advance mount
   `<ShellV3Mount landing>` in their pages: workspace rail visible,
   live picker until a tour is picked.
-- The standalone rider editor /rider-packs/[id] is ARTIST scope —
+- /rider-packs/[id] (since the Nov 2026 riders rebuild: the CHANNEL-LIST
+  document editor only — an old rider pack redirects) is ARTIST scope —
   `RiderPackEditorView` wraps itself in `<ShellV3Mount>` with the
   pack's artist id; the rail lights "Riders & specs".
 
@@ -900,6 +901,103 @@ recreate a `_legacy/` tree: delete dead code instead of parking it.
   error says so — switching to http sends the key unencrypted; Adam's call.
 - `flight_lookups` has RLS on and no policies: service role only.
 
+### Riders — two documents, numbered versions, one live link per show (Nov 2026, Adam — migration 301)
+
+Adam: "it is a document… legally binding… make requests and demands really
+clearly… one link… a version number and edit date… things change as a tour
+goes on". The old builder (rider_packs kind 'rider') is DELETED — don't
+rebuild sections / cover pages / variables.
+
+- **Where**: Production › Riders, `/operations/[tourId]/riders` (`?doc=tech|
+  hospitality`, `?panel=outline|changes|shows|replies`). UI
+  `src/components/riders/`, rules pure in `src/lib/riders/`, server
+  `src/server/riders/`. API `/api/tours/[id]/riders` (GET + POST `action`),
+  `/riders/blocks` (POST / PATCH `ifVersion` / DELETE), `/riders/pdf`;
+  `/api/rider-templates(/[id])`; `/api/riders/bring-over`. Artist library:
+  `/artists/[id]/riders` (each tour's documents + templates).
+- **Model**: `riders` (one per tour × Tech / Hospitality) → `rider_blocks`
+  (heading, text (Tiptap, `cleanDoc`), request, table, contacts, summary,
+  files, break, input_list, stage_plot — the last two since 302). `parseContent` is THE gate for block content. Order is a
+  fractional `position` (`COLLATE "C"`, lib/riders/position.ts). A block can
+  be DATED (`applies_from` / `applies_until`) — that's how a mid-tour change
+  works ("Change from a show…" ends the old block the day before and starts a
+  copy); `inForce(block, date)` decides, never per-show copies.
+- **ONE look**: `docModel` + `RIDER_DOC_CSS` (lib/riders/render.ts) feed the
+  editor's preview, the promoter page, the PDF (`riderPdfHtml`) and the
+  legacy show link. Never fork the rendering — a second stylesheet is how a
+  PDF ends up disagreeing with the page.
+- **Versions**: Publish freezes both documents into `rider_versions`
+  (`snapshot`, major.minor, `changes` from `diffSnapshots`). The trigger
+  refuses every UPDATE and any DELETE that isn't a cascade. Promoters only
+  ever see the latest PUBLISHED version — never the draft. Publishing an
+  unchanged rider → 409 UNCHANGED.
+- **Live editing**: each block saves on its own, 700 ms after typing, with
+  its `version` (`ifVersion`); a stale save → 409 STALE + the current block →
+  a theirs / mine banner. Realtime `postgres_changes` on rider_blocks (+
+  replies, acks, versions); presence + broadcast on `riders:${tourId}`
+  (deletes are broadcast — Realtime can't filter DELETE). Database triggers
+  copy workspace / tour from the rider — don't send them from the client.
+- **Links**: `rider_links.token` IS the grant (one live link per show +
+  an optional whole-tour link). `/r/<token>` and `/api/public/riders/[token]`
+  (+ `/pdf`, `/file`) use the service role, scoped to the link's tour, its
+  show's date and the latest version (server/riders/public.ts). Acknowledge
+  + reply on a request line; caps 20 acks / 60 replies per link per hour.
+  **Lowpass never emails**: Send writes the email (Gmail / Mail app / Copy)
+  and records `rider_sends`. Per-show line states (confirmed / substitute /
+  cut) live on `rider_line_states`.
+- **To-do rules are ONE function each** (lib/riders/status.ts):
+  `showsToSend` (link's newest send ≠ latest version) and `repliesToAnswer`
+  (promoter spoke last, unresolved). The Riders page's tabs and the tour
+  Overview's "Needs you" both call them — never re-derive.
+- **The old builder's leftovers**: `rider_packs` kind 'rider' rows stay
+  (read only by bring-over, `rider_legacy_imports` ledger, never deleted).
+  `/api/rider-packs` refuses kind 'rider' (410); `/rider-packs/[id]` and
+  `/operations/[id]/riders/[packId]` redirect a rider (or stage-plot) pack;
+  `/r/<old token>` keeps the OLD reader for channel-list share links
+  (PackEditor still makes them), forwards an old rider link to the tour-wide
+  link only when it had no password, else "This rider has moved";
+  `/api/public/rider/[token]` answers 410 for rider packs.
+  `getPacketManifest` drops old rider packs once the tour has published a
+  rider; the legacy show link's Rider tab renders the new one
+  (`loadShowRider`). PackEditor still carries rider-era section types
+  (cover page, rich text, PDF import) — channel lists only now.
+- **Permissions**: tour tables are area `production` in
+  `scripts/permissions/rules.mjs` (`since: 301`); `rider_templates` is 'ref'
+  (library editors write); `rider_legacy_imports` manager. 301's rules block
+  is GENERATED between its markers by `gen293.mjs` — never hand-edit it.
+  DB tests: `database/tests/301_riders.test.mjs`. Smoke: RID-07…31.
+- **Input list + stage plot IN the tech rider** (Nov 2026, Adam: "standalone
+  tools but ALSO need to integrate into the tech rider" — migration 302): the
+  `input_list` / `stage_plot` blocks SHOW the documents; they are edited only
+  in their own tools ("Edit in … ↗"; the Riders tab refreshes on focus). Which
+  document: a show's own attachment → the tour's → the newest on the tour —
+  `buildEmbeds` (src/server/riders/embeds.ts) reads with the SERVICE ROLE,
+  pinned to the tour (show attachments are manager-only rows under RLS), so
+  every caller checks Production VIEW first (the page, GET route, publish,
+  PDF). Publish freezes copies into `snapshot.embeds` — only what the blocks
+  show (`embedsInUse` / `pickEmbeds`), through the gate `parseEmbeds`, maps
+  key-sorted: JSONB reorders keys, so compare with `sameEmbeds` /
+  `embedKey`, NEVER `JSON.stringify` of embeds (and never stringify a plot
+  per keystroke — it can be megabytes). The plot is ONLY ever an `<img>`
+  data URI (custom icons are uploaded SVG — inline it and it can run
+  script). "What changed" names channels (`diffEmbeds`). Attachments-block
+  items `channel_list` / `stage_plot` (riders made before 302) are PDFs of the
+  LIVE documents — kept, "Show it in the rider" moves one into its block; new
+  ones can't be added.
+- **The exact item** (request lines, Nov 2026): `link` (`cleanLink`;
+  typed → `typedLink`) and `photo` — a path `rider-photos/<ws>/<tour>/<uuid>.<ext>`
+  in tour-files, signed only after `photoBelongs` (the promoter routes are
+  service role). Uploads: `/riders/photos` upload-url → `uploadDirect` →
+  complete (sniffs the bytes; the stored content-type must equal them). "Use
+  the shop's photo": `safeFetch` (src/server/net/safeFetch.ts — THE only
+  server fetch of a user-typed URL: public addresses only, DNS pinned,
+  every redirect re-checked, size capped after unzip; never use `fetch` for
+  one) + `productFromHtml` (lib/riders/linkPreview.ts), and a COPY is stored
+  (shop images move). Promoter page: tap the item → photo, "See the exact
+  item ↗", reply. PDF: the item name links; no photos. Known: a photo taken
+  off a line stays in storage (a published version may still show it).
+  DB test: `302_rider_embed_blocks.test.mjs`. Smoke: RID-32…40.
+
 ### A city is not a venue (Nov 2026, Adam)
 
 - Days off / travel days have a city, never a venue. `venueIsCity()` /
@@ -935,6 +1033,20 @@ recreate a `_legacy/` tree: delete dead code instead of parking it.
   `advance_documents`; every suggested answer carries a quote + page, verified
   by `findQuote` before it is offered, and the viewer boxes it or outlines the
   page — never a box in the wrong place.
+- **Pack reads run in the background** (Nov 2026, Adam: "SLOW … doesnt
+  encourage you to close the window and come back" — migration 300,
+  `advance_pack_reads`, service role only). POST `packs/read` {mode:'extract',
+  reads:[{routingId, paths}]} starts one read per show and answers at once;
+  the read runs after the response (`after` from next/server) and writes
+  `parts_done / parts_total`, then its result. `<PackFlow>` polls, shows
+  "About N s left" (median of recent reads, `packWait.ts`) and **Close — I'll
+  come back**; `<PackReadsBanner>` (show page + board) is where a read waits.
+  Speed comes from PARTS: text in ~24k-character parts, scans in 12-page parts
+  (pdf-lib, `scanParts`), all side by side (≤ 6 at once per read) — a call is
+  slow because of what it WRITES, so never send a whole pack as one call. A
+  failed part keeps the others (`failedParts`, said in the notice). Model
+  `PACK_MODEL` (Sonnet 5.5; `LP_IMPORT_MODEL` overrides). Identify still runs
+  in the request (Haiku, a scan's first 3 pages).
 - **Day sheets are RETIRED** (pages, `/m/day` crew links — now a static "no
   longer active" page — tour roles, the Day Sheet PDF, the tour Labor page).
   Local crew calls live on each show's advance (`#crew-calls`). The

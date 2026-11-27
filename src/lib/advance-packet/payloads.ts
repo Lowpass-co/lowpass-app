@@ -91,9 +91,10 @@ export async function getPacketRiderPayloads(
   return payloads;
 }
 
-/** Per-pack payload assembly. Mirrors the public reader +
- *  /api/rider-packs/[id]/pdf flow exactly so the bundled
- *  output looks byte-identical to standalone renders. */
+/** Per-pack payload assembly. Mirrors the public reader
+ *  (/api/public/rider/[token]) so the bundled output looks
+ *  identical to a standalone render. (The single-pack PDF route
+ *  this also mirrored was deleted in the Nov 2026 riders rebuild.) */
 async function buildRiderPayload(
   client: SupabaseClient,
   pack: RiderPack,

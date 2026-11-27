@@ -1,5 +1,8 @@
 /* ============================================
-   LOWPASS — Public rider endpoint
+   LOWPASS — Public pack endpoint (old builder's share links)
+
+   Since the riders rebuild (Nov 2026) this serves CHANNEL-LIST documents
+   only; a rider pack answers 410 (the rider moved to /r/<rider_links token>).
 
    POST /api/public/rider/[token]
         Body: { password?: string }
@@ -79,6 +82,14 @@ export async function POST(
 
   if (!pack) {
     return NextResponse.json({ error: 'Link not found' }, { status: 404 });
+  }
+
+  /* Riders rebuild (Nov 2026, migration 301): an old RIDER pack is no longer
+     served — /r/<token> says it moved (or forwards to the tour's new link).
+     This reader stays only for channel-list documents, which PackEditor still
+     shares through rider_web_links. */
+  if (((pack as { kind?: string | null }).kind ?? 'rider') === 'rider') {
+    return NextResponse.json({ error: 'This rider has moved — ask the tour manager for the current link.' }, { status: 410 });
   }
 
   const { data: artist } = await service

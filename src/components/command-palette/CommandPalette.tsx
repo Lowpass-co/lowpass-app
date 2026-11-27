@@ -66,7 +66,7 @@ const KIND_LABEL: Record<SearchKind, string> = {
   tour: 'Tours',
   'budget-line': 'Budget lines',
   'bug-report': 'Bug reports',
-  'rider-pack': 'Rider packs',
+  'rider-pack': 'Riders & specs',
   'rental-job': 'Rental jobs',
   receipt: 'Receipts',
   page: 'Go to',
