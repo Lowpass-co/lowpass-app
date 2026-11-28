@@ -82,6 +82,8 @@ interface ExportOptions {
   discFixed: number;
   /** Defaults to light. Pass 'dark' for an inverted document that feels native to the app's dark mode. */
   mode?: PdfMode;
+  /** Days a week is charged as on this job (jobDaysPerWeek) — must match the screen. */
+  daysPerWeek?: number;
 }
 
 /** Load the Lowpass wordmark as a data URL so jsPDF can embed it. */
@@ -198,9 +200,9 @@ export async function exportJobPdf(opts: ExportOptions): Promise<void> {
     doc.rect(0, 0, PAGE_W, PAGE_H, 'F');
   };
 
-  const days     = calcDays(job.start_date, job.end_date);
+  const days     = calcDays(job.start_date, job.end_date, opts.daysPerWeek);
   const subtotal = jobItems.reduce((sum, it) => {
-    const inv  = inventory.find(i => i.id === it.inventory_id);
+    const inv  = inventory.find(i => i.id === it.gear_id);
     const rate = it.day_rate_override ?? (inv ? effectiveInventoryDayRate(inv) ?? 0 : 0);
     return sum + (it.quantity || 1) * days * rate;
   }, 0);
@@ -369,7 +371,7 @@ export async function exportJobPdf(opts: ExportOptions): Promise<void> {
   doc.setTextColor(...T.ink);
 
   const drawItemRow = (it: RentalJobItem) => {
-    const inv  = inventory.find(i => i.id === it.inventory_id);
+    const inv  = inventory.find(i => i.id === it.gear_id);
     const rate = it.day_rate_override ?? (inv ? effectiveInventoryDayRate(inv) ?? 0 : 0);
     const lineAmt = (it.quantity || 1) * days * rate;
     const itemName = inv?.name ?? 'Unknown';

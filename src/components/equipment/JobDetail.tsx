@@ -6,7 +6,8 @@
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { ArrowLeft, Plus, FileDown, Sun, Moon, Package, Search, X, ChevronDown, ChevronRight } from 'lucide-react';
-import { createClient } from '@/lib/supabase-client';
+import { jobDaysPerWeek, WEEK_CHOICES } from '@/lib/rental-pricing';
+import { rentalApi } from './rentalApi';
 import { useToast } from '@/components/ui/Toast';
 import { effectiveInventoryDayRate } from '@/lib/rental-pricing';
 import { StyledSelect, type StyledSelectOption } from '@/components/ui/StyledSelect';
@@ -33,9 +34,11 @@ interface Props {
   onEdit: () => void;
   onDelete: () => void;
   onJobUpdated: (job: RentalJob) => void;
+  /** The workspace's week (306); the job's own days_per_week wins. */
+  daysPerWeekDefault?: number | null;
 }
 
-export function JobDetail({ job, workspaceId, inventory, artists, tours, onBack, onEdit, onDelete, onJobUpdated }: Props) {
+export function JobDetail({ job, inventory, artists, tours, onBack, onEdit, onDelete, onJobUpdated, daysPerWeekDefault = null }: Props) {
   const { showToast } = useToast();
   const [jobItems, setJobItems] = useState<RentalJobItem[]>([]);
   const [loading, setLoading]   = useState(true);
@@ -112,11 +115,21 @@ export function JobDetail({ job, workspaceId, inventory, artists, tours, onBack,
      item. See resolveQuoteDisplay. */
   const { dispCur, converted } = resolveQuoteDisplay(cur, fxRate);
 
+  /** Every job change goes to the server (Nov 2026); the screen follows
+   *  what it saved, and a failure is said, never swallowed. */
+  async function saveJob(patch: Record<string, unknown>, what: string): Promise<boolean> {
+    try {
+      const saved = await rentalApi.updateJob(job.id, patch);
+      onJobUpdated({ ...job, ...saved });
+      return true;
+    } catch (e) {
+      showToast(`Couldn’t save ${what}: ` + (e instanceof Error ? e.message : 'unknown error'), 'error');
+      return false;
+    }
+  }
+
   async function handleCurrencyChange(next: string) {
-    const patch = { display_currency: next };
-    const { error } = await supabase.from('rental_jobs').update(patch).eq('id', job.id);
-    if (error) { showToast('Failed to set currency: ' + error.message, 'error'); return; }
-    onJobUpdated({ ...job, ...patch });
+    await saveJob({ display_currency: next }, 'the currency');
   }
 
   const [adding,   setAdding]   = useState(false);
@@ -135,8 +148,8 @@ export function JobDetail({ job, workspaceId, inventory, artists, tours, onBack,
     setPdfMode(document.documentElement.classList.contains('dark') ? 'dark' : 'light');
   }, []);
 
-  const supabase = createClient();
-  const days = calcDays(job.start_date, job.end_date);
+  const week = jobDaysPerWeek(job, daysPerWeekDefault);
+  const days = calcDays(job.start_date, job.end_date, week);
 
   /* Item 3 — search. Client-side is right here: Adam's audit put the inventory
      at 33 rows, so a filter is instant and a server round-trip would be slower
@@ -201,10 +214,13 @@ export function JobDetail({ job, workspaceId, inventory, artists, tours, onBack,
 
   const fetchItems = useCallback(async () => {
     setLoading(true);
-    const { data } = await supabase.from('rental_job_items').select('*').eq('job_id', job.id);
-    setJobItems(data ?? []);
+    try {
+      setJobItems(await rentalApi.lines(job.id));
+    } catch (e) {
+      showToast('Couldn’t load the lines: ' + (e instanceof Error ? e.message : 'unknown error'), 'error');
+    }
     setLoading(false);
-  }, [job.id]);
+  }, [job.id, showToast]);
 
   useEffect(() => { fetchItems(); }, [fetchItems]);
 
@@ -228,7 +244,7 @@ export function JobDetail({ job, workspaceId, inventory, artists, tours, onBack,
   /* ── Pricing ── */
   let subtotal = 0;
   for (const it of jobItems) {
-    const inv  = inventory.find(i => i.id === it.inventory_id);
+    const inv  = inventory.find(i => i.id === it.gear_id);
     const rate = it.day_rate_override ?? (inv ? effectiveInventoryDayRate(inv) ?? 0 : 0);
     subtotal  += (it.quantity || 1) * days * rate;
   }
@@ -254,62 +270,24 @@ export function JobDetail({ job, workspaceId, inventory, artists, tours, onBack,
   async function handleAddSelected() {
     if (sel.size === 0) return;
     setAdding(true);
-
-    const onJobBy = new Map(jobItems.map((it) => [it.inventory_id, it] as const));
-    const fresh: Array<{ id: string; qty: number; rate: number }> = [];
-    const bump: Array<{ row: RentalJobItem; qty: number }> = [];
-
-    for (const [invId, d] of sel) {
+    /* One call for the batch. The server adds to the quantity of an item
+       already on the job instead of making a second line, and checks every
+       item is in your stock. A rate equal to the item's own isn't stored as an
+       override — that would freeze the line against future rate changes. */
+    const items = [...sel].map(([gearId, d]) => {
       const q = Math.max(1, parseInt(d.qty) || 1);
       const r = parseFloat(d.rate);
-      const existing = onJobBy.get(invId);
-      if (existing) bump.push({ row: existing, qty: q });
-      else fresh.push({ id: invId, qty: q, rate: Number.isFinite(r) ? r : 0 });
+      const own = effectiveInventoryDayRate(inventory.find((i) => i.id === gearId) ?? { day_rate: null, purchase_cost: null }) ?? 0;
+      return { gear_id: gearId, quantity: q, day_rate_override: Number.isFinite(r) && Math.abs(r - own) >= 0.005 ? r : null };
+    });
+    try {
+      setJobItems(await rentalApi.addLines(job.id, items));
+    } catch (e) {
+      setAdding(false);
+      showToast('Failed to add: ' + (e instanceof Error ? e.message : 'unknown error'), 'error');
+      return;
     }
-
-    let failed = false;
-
-    if (fresh.length > 0) {
-      /* ONE insert for the batch, each row carrying ITS OWN qty and rate.
-         Sprint 12 §1 — workspace_id required by the canonical RLS WITH CHECK
-         clause from migration 095. */
-      const rows = fresh.map(({ id, qty: q, rate: r }) => {
-        const row: Record<string, unknown> = {
-          job_id: job.id,
-          inventory_id: id,
-          quantity: q,
-          /* Store the rate only when it DIFFERS from what the item derives —
-             an override equal to the auto rate is not an override, and pinning
-             it would silently freeze the line against future rate changes. */
-          day_rate_override:
-            Math.abs(r - (effectiveInventoryDayRate(
-              inventory.find((i) => i.id === id) ?? { day_rate: null, purchase_cost: null },
-            ) ?? 0)) < 0.005 ? null : r,
-        };
-        if (workspaceId) row.workspace_id = workspaceId;
-        return row;
-      });
-      const { data, error } = await supabase.from('rental_job_items').insert(rows).select();
-      if (error) { showToast('Failed to add: ' + error.message, 'error'); failed = true; }
-      else setJobItems((prev) => [...prev, ...((data ?? []) as RentalJobItem[])]);
-    }
-
-    /* Already-on-the-quote items increment instead of duplicating. Per-row
-       UPDATEs — Supabase has no bulk add-to-value — but this is the uncommon
-       path and it is bounded by the selection. */
-    for (const { row, qty: q } of bump) {
-      const nextQty = (row.quantity || 1) + q;
-      const { error } = await supabase
-        .from('rental_job_items')
-        .update({ quantity: nextQty })
-        .eq('id', row.id);
-      if (error) { showToast('Failed to update quantity: ' + error.message, 'error'); failed = true; continue; }
-      setJobItems((prev) => prev.map((r) => (r.id === row.id ? { ...r, quantity: nextQty } : r)));
-    }
-
     setAdding(false);
-    if (failed) return;
-
     /* Clears only on SUCCESS — a failed add that also wiped the selection would
        make the retry a re-pick. */
     setSel(new Map());
@@ -321,15 +299,8 @@ export function JobDetail({ job, workspaceId, inventory, artists, tours, onBack,
      name and derived rate, flattened into one view-model. GridRow<T> is
      generic, so this needed NO change to the shared primitive.
 
-     THE ITEM CELL IS NOT entityRef:'gear', and that is a finding, not a
-     shortcut. migration 249 added rental_job_items.gear_id and backfilled it,
-     but its own header says the picker starts WRITING gear_id after Stage C —
-     and this path never did: the app reads and writes inventory_id only. An
-     entityRef:'gear' cell would therefore render EMPTY for every line added
-     from today onward, since new rows carry gear_id NULL. Wiring the picker to
-     gear_id is a data-path change, separable and small; until it lands, the
-     item is a read-only computed cell showing the name. A cell that renders
-     blank for new rows is worse than one that cannot be edited.
+     Lines name their item by gear_id (the one stock list, Nov 2026 — 306
+     backfills old lines); the item cell is a read-only computed name.
 
      Rate uses the `currency` cell type, which takes the job currency straight
      from item 2 — the reason this column needed nothing bespoke. */
@@ -344,7 +315,7 @@ export function JobDetail({ job, workspaceId, inventory, artists, tours, onBack,
   };
 
   const lineRows: GridRow<QuoteLineVm>[] = jobItems.map((it) => {
-    const inv = inventory.find((i) => i.id === it.inventory_id);
+    const inv = inventory.find((i) => i.id === it.gear_id);
     const rateUsd = it.day_rate_override ?? (inv ? effectiveInventoryDayRate(inv) ?? 0 : 0);
     return {
       id: it.id,
@@ -403,37 +374,47 @@ export function JobDetail({ job, workspaceId, inventory, artists, tours, onBack,
     if (!Number.isFinite(n)) return;
     if (columnId === 'quantity') {
       const q = Math.max(1, Math.round(n));
-      const { error } = await supabase.from('rental_job_items').update({ quantity: q }).eq('id', rowId);
-      if (error) { showToast('Failed to save quantity: ' + error.message, 'error'); return; }
-      setJobItems((prev) => prev.map((r) => (r.id === rowId ? { ...r, quantity: q } : r)));
+      try {
+        const saved = await rentalApi.updateLine(job.id, rowId, { quantity: q });
+        setJobItems((prev) => prev.map((r) => (r.id === rowId ? saved : r)));
+      } catch (e) {
+        showToast('Failed to save quantity: ' + (e instanceof Error ? e.message : 'unknown error'), 'error');
+      }
       return;
     }
     if (columnId === 'rate') {
       const usd = fxRate && fxRate !== 0 ? n / fxRate : n;
-      const { error } = await supabase
-        .from('rental_job_items')
-        .update({ day_rate_override: usd })
-        .eq('id', rowId);
-      if (error) { showToast('Failed to save rate: ' + error.message, 'error'); return; }
-      setJobItems((prev) => prev.map((r) => (r.id === rowId ? { ...r, day_rate_override: usd } : r)));
+      try {
+        const saved = await rentalApi.updateLine(job.id, rowId, { day_rate_override: usd });
+        setJobItems((prev) => prev.map((r) => (r.id === rowId ? saved : r)));
+      } catch (e) {
+        showToast('Failed to save rate: ' + (e instanceof Error ? e.message : 'unknown error'), 'error');
+      }
     }
   }
 
   /* ── Remove item ── */
   async function handleRemove(id: string) {
-    const { error } = await supabase.from('rental_job_items').delete().eq('id', id);
-    if (error) { showToast('Failed to remove: ' + error.message, 'error'); return; }
-    setJobItems(prev => prev.filter(i => i.id !== id));
+    try {
+      await rentalApi.deleteLine(job.id, id);
+      setJobItems(prev => prev.filter(i => i.id !== id));
+    } catch (e) {
+      showToast('Failed to remove: ' + (e instanceof Error ? e.message : 'unknown error'), 'error');
+    }
   }
 
-  /* ── Discount save (debounced) ── */
+  /* ── Discount save (debounced) ──
+     Only when the boxes differ from what's saved — it used to write on every
+     open (Nov 2026). */
   useEffect(() => {
-    const t = setTimeout(async () => {
-      const updates = { discount_percent: parseFloat(discPct) || 0, discount_fixed: parseFloat(discFixed) || 0 };
-      await supabase.from('rental_jobs').update(updates).eq('id', job.id);
-      onJobUpdated({ ...job, ...updates });
+    const pct = parseFloat(discPct) || 0;
+    const fixed = parseFloat(discFixed) || 0;
+    if (pct === (Number(job.discount_percent) || 0) && fixed === (Number(job.discount_fixed) || 0)) return;
+    const t = setTimeout(() => {
+      void saveJob({ discount_percent: pct, discount_fixed: fixed }, 'the discount');
     }, 800);
     return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- saveJob closes over job; the boxes are the trigger
   }, [discPct, discFixed]);
 
   /* ── Export branded PDF ── */
@@ -450,6 +431,7 @@ export function JobDetail({ job, workspaceId, inventory, artists, tours, onBack,
         discPct: dp,
         discFixed: df,
         mode: pdfMode,
+        daysPerWeek: week,
       });
     } catch (err) {
       console.error('PDF export failed', err);
@@ -468,6 +450,7 @@ export function JobDetail({ job, workspaceId, inventory, artists, tours, onBack,
    *  there is no 'sent' status in this model to hang it on. Never re-stamped:
    *  once frozen, a later status change leaves the original rate alone. */
   async function handleStatusChange(val: string) {
+    const before = status;
     setStatus(val as RentalJob['status']);
     const patch: Record<string, unknown> = { status: val };
     const leavingDraft = job.status === 'draft' && val !== 'draft';
@@ -476,8 +459,8 @@ export function JobDetail({ job, workspaceId, inventory, artists, tours, onBack,
       patch.fx_rate = fxRate;
       patch.fx_rate_at = fxRateAt ?? new Date().toISOString();
     }
-    await supabase.from('rental_jobs').update(patch).eq('id', job.id);
-    onJobUpdated({ ...job, ...patch, status: val as RentalJob['status'] });
+    // A failed save puts the status back — it used to show the new one anyway.
+    if (!(await saveJob(patch, 'the status'))) setStatus(before);
   }
 
   return (
@@ -502,7 +485,7 @@ export function JobDetail({ job, workspaceId, inventory, artists, tours, onBack,
               {tourLabel && <span>🗺 {tourLabel}</span>}
               {job.client_name && <span>👤 {job.client_name}</span>}
               <span>📅 {fmtDate(job.start_date)} → {fmtDate(job.end_date)}</span>
-              <span title="3-day-week billing: each 7 calendar days = 3 billable days">
+              <span title={`Each 7 days on hire is charged as ${week} day${week === 1 ? '' : 's'}; days over a full week cost one each, never more than a week`}>
                 ⏱ {days} billable day{days !== 1 ? 's' : ''}
               </span>
             </div>
@@ -625,7 +608,7 @@ export function JobDetail({ job, workspaceId, inventory, artists, tours, onBack,
                     filteredInventory.map((i, idx) => {
                       const draft = sel.get(i.id);
                       const selected = !!draft;
-                      const onJob = jobItems.some((it) => it.inventory_id === i.id);
+                      const onJob = jobItems.some((it) => it.gear_id === i.id);
                       return (
                         <div
                           key={i.id}
@@ -648,6 +631,10 @@ export function JobDetail({ job, workspaceId, inventory, artists, tours, onBack,
                           <span className="min-w-0 flex-1 truncate" style={{ color: 'var(--lp-text)' }}>
                             {i.name}
                             {i.category ? <span style={{ color: 'var(--lp-text-tertiary)' }}> · {i.category}</span> : null}
+                            {(i.quantity ?? 1) > 1 ? <span style={{ color: 'var(--lp-text-tertiary)' }}> · {i.quantity} owned</span> : null}
+                            {i.status === 'retired' || i.status === 'maintenance' ? (
+                              <span style={{ color: 'var(--color-lp-warning)' }}> · {i.status === 'retired' ? 'retired' : 'in maintenance'}</span>
+                            ) : null}
                             {onJob ? (
                               <span className="lp-mono ml-2 text-[10px] uppercase" style={{ color: 'var(--lp-text-tertiary)' }}>
                                 on quote
@@ -844,6 +831,27 @@ export function JobDetail({ job, workspaceId, inventory, artists, tours, onBack,
                   style={{ borderColor: 'var(--lp-border)', backgroundColor: 'var(--lp-bg)', color: 'var(--lp-text)' }}
                 />
               </div>
+            </PricingField>
+          </div>
+
+          <div style={{ borderTop: '1px solid var(--lp-border)', paddingTop: '1rem' }} className="space-y-3">
+            {/* Adam, Nov 2026: "should be 3 day week, but customisable". The
+                job's own week, else the workspace's. */}
+            <PricingField label="A week is charged as">
+              <select
+                aria-label="A week is charged as"
+                className="lp-select w-full rounded-lg border px-3 py-2 text-sm"
+                style={{ borderColor: 'var(--lp-border)', backgroundColor: 'var(--lp-bg)', color: 'var(--lp-text)' }}
+                value={job.days_per_week == null ? '' : String(Number(job.days_per_week))}
+                onChange={(e) => void saveJob({ days_per_week: e.target.value === '' ? null : Number(e.target.value) }, 'the week')}
+              >
+                <option value="">Your default ({jobDaysPerWeek({}, daysPerWeekDefault)} days)</option>
+                {WEEK_CHOICES.map((n) => (
+                  <option key={n} value={String(n)}>
+                    {n === 7 ? '7 days (no week rate)' : `${n} days`}
+                  </option>
+                ))}
+              </select>
             </PricingField>
           </div>
 

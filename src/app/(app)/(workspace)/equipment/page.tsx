@@ -10,7 +10,8 @@ import { createServerSupabaseClient } from '@/lib/supabase-server';
    WorkspaceTabs) for /artists, /personnel, /equipment. */
 import { EquipmentClient } from '@/components/equipment/EquipmentClient';
 import { redirect } from 'next/navigation';
-import type { EquipmentArtistOption, EquipmentTourOption, RentalJob } from '@/components/equipment/types';
+import type { EquipmentArtistOption, EquipmentTourOption, RentalInventoryItem, RentalJob } from '@/components/equipment/types';
+import { loadDaysPerWeek, loadRentalStock } from '@/server/rental/stock';
 
 export const metadata = { title: 'Equipment — LOWPASS' };
 
@@ -28,10 +29,9 @@ export default async function EquipmentPage() {
   const ws = profile?.workspace_id ?? null;
 
   const [{ data: inventory }, { data: jobsRaw }, { data: artistsRaw }, { data: toursRaw }] = await Promise.all([
-    supabase
-      .from('rental_inventory')
-      .select('*')
-      .order('name'),
+    // ONE stock list (Nov 2026): the Gear & rentals page's `gear`, not the
+    // retired rental_inventory (server/rental/stock.ts).
+    ws ? loadRentalStock(supabase, ws).then((data) => ({ data })) : Promise.resolve({ data: [] as RentalInventoryItem[] }),
     supabase
       .from('rental_jobs')
       .select(`
@@ -64,6 +64,7 @@ export default async function EquipmentPage() {
       userId={user.id}
       workspaceId={ws}
       initialInventory={inventory ?? []}
+      daysPerWeekDefault={ws ? await loadDaysPerWeek(supabase, ws) : null}
       initialJobs={jobs}
       initialArtists={artists}
       initialTours={tours}

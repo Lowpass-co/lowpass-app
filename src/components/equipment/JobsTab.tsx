@@ -8,6 +8,8 @@
 import { useCallback, useMemo, useState } from 'react';
 import { Plus, Pencil, Search, Trash2 } from 'lucide-react';
 import { createClient } from '@/lib/supabase-client';
+import { jobDaysPerWeek } from '@/lib/rental-pricing';
+import { rentalApi } from './rentalApi';
 import { useToast } from '@/components/ui/Toast';
 import { StyledSelect, type StyledSelectOption } from '@/components/ui/StyledSelect';
 import { JobModal } from './JobModal';
@@ -36,6 +38,7 @@ interface Props {
   tours: EquipmentTourOption[];
   setArtists: (a: EquipmentArtistOption[]) => void;
   setTours: (t: EquipmentTourOption[]) => void;
+  daysPerWeekDefault?: number | null;
 }
 
 export function JobsTab({
@@ -48,13 +51,13 @@ export function JobsTab({
   tours,
   setArtists,
   setTours,
+  daysPerWeekDefault = null,
 }: Props) {
   const [modalOpen, setModal] = useState(false);
   const [editingJob, setEditingJob] = useState<RentalJob | null>(null);
   const [activeJobId, setActiveJob] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('');
-  const supabase = createClient();
   const { showToast } = useToast();
 
   const activeJob = jobs.find((j) => j.id === activeJobId) ?? null;
@@ -107,9 +110,10 @@ export function JobsTab({
   }
 
   async function onJobDeleted(id: string) {
-    const { error } = await supabase.from('rental_jobs').delete().eq('id', id);
-    if (error) {
-      showToast('Delete failed: ' + error.message, 'error');
+    try {
+      await rentalApi.deleteJob(id);
+    } catch (e) {
+      showToast('Delete failed: ' + (e instanceof Error ? e.message : 'unknown error'), 'error');
       return;
     }
     setJobs(jobs.filter((j) => j.id !== id));
@@ -171,6 +175,7 @@ export function JobsTab({
           onEdit={() => openEditJob(activeJob)}
           onDelete={() => onJobDeleted(activeJob.id)}
           onJobUpdated={onJobUpdated}
+          daysPerWeekDefault={daysPerWeekDefault}
         />
       </div>
     );
@@ -268,7 +273,7 @@ export function JobsTab({
               </thead>
               <tbody>
                 {filtered.map((job, idx) => {
-                  const days = calcDays(job.start_date, job.end_date);
+                  const days = calcDays(job.start_date, job.end_date, jobDaysPerWeek(job, daysPerWeekDefault));
                   const style = STATUS_STYLES[job.status] ?? STATUS_STYLES.draft;
                   const artistLabel = job.artist?.name ?? (job.artist_id ? '—' : '—');
                   const tourLabel = job.tour?.name ?? (job.tour_id ? '—' : '—');

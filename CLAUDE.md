@@ -1177,6 +1177,35 @@ expand where needed.
 - **Budget templates** gained an Admin section (visas, passes, phones, bank
   fees) on every touring scale, Rehearsals on Support / Club; migration 304 is
   generated (`gen304.ts`) and additive.
+### Rental — job builder on the one stock list (Nov 2026, Adam — migration 306)
+
+Adam: "the gear hire side… is basically just for me… I like the job builder,
+I use it as an active tool… make the rental house feature more professional,
+and reliable". Phased: 1 foundations (this) → visual redesign (moved up —
+Adam: "remember how important sleek visuals are") → availability by date →
+per-item earnings / paid-off → pull sheets + check-out/in → tour budget link
+(a confirmed job on a tour becomes its Production hire line; the tour Gear
+page then goes — Adam never used it).
+
+- **ONE stock list: `gear`.** The job builder reads it through
+  `loadRentalStock` (src/server/rental/stock.ts → the `RentalInventoryItem`
+  shape, id = gear.id). Lines name their item by `rental_job_items.gear_id`;
+  `inventory_id` is the old pointer, nullable since 306, never written.
+  `rental_inventory` is retired — nothing reads it for jobs (QR labels
+  `/rental/print-labels` + `qr.svg` still do: phase 4).
+- **Every job write goes through the server** (`src/server/rental/jobs.ts`,
+  routes `/api/rental/jobs`, `/[id]`, `/[id]/items`, `/[id]/items/[itemId]`,
+  `/api/rental/settings`; client `rentalApi`). It checks workspace, stock
+  ownership and numbers; adding an item already on the job adds to its
+  quantity. Never write rental_* tables from the browser again.
+- **Week pricing**: `calcRentalBillableDays(start, end, week)` = full weeks ×
+  week + min(leftover, week). Week = the job's `days_per_week` ?? the
+  workspace's `rental_days_per_week` ?? 3 (`jobDaysPerWeek`). Leftovers were
+  uncapped (6 days billed 6, 7 billed 3) — fixed, tested.
+- **Quantity**: `gear.quantity` (how many you own). The gear panel's Rental
+  section edits quantity, purchase cost and day rate (blank = 3% of cost,
+  `DAY_RATE_PCT_OF_VALUE`). Smoke: RNT-01…06 (rental.md).
+
 ### Auth + RLS
 
 - Site admin gating: `getUserAndAdminStatus()` from `@/lib/site-admin`. Mirror the pattern used in `src/app/(app)/bugs/page.tsx` for any admin-only page.
