@@ -38,6 +38,8 @@ export interface RentalInventoryItem {
   value_currency?: string | null;
   dimensions_cm?: { l?: number; w?: number; h?: number } | null;
   qr_token?: string | null;
+  /** How many you own (gear.quantity, 306) — 1 for a serialised item. */
+  quantity?: number;
   created_at: string;
 }
 
@@ -88,6 +90,8 @@ export interface RentalJob {
   fx_rate?: number | null;
   /** When fx_rate was captured — printed on the quote for auditability. */
   fx_rate_at?: string | null;
+  /** Days a week is charged as on this job; null = the workspace's (306). */
+  days_per_week?: number | null;
   /** Populated when listing with Supabase embed `artist:artists(...)` */
   artist?: { id: string; name: string } | null;
   /** Populated when listing with Supabase embed `tour:tours(...)` */
@@ -109,7 +113,10 @@ export interface EquipmentTourOption {
 export interface RentalJobItem {
   id: string;
   job_id: string;
-  inventory_id: string;
+  /** The item (gear.id) — the one stock list since Nov 2026. */
+  gear_id: string | null;
+  /** The old pointer (rental_inventory), on lines made before; never written. */
+  inventory_id: string | null;
   quantity: number;
   day_rate_override: number | null;
   created_at: string;
@@ -143,9 +150,10 @@ export const STATUS_STYLES: Record<string, { bg: string; text: string }> = {
   completed: { bg: 'rgba(139,92,246,0.12)',  text: '#8B5CF6' },
 };
 
-/** @see calcRentalBillableDays — 3-day-week billable count for job pricing */
-export function calcDays(start: string | null, end: string | null): number {
-  return calcRentalBillableDays(start, end);
+/** @see calcRentalBillableDays — billable days for job pricing; `daysPerWeek`
+ *  is the job's week (jobDaysPerWeek). */
+export function calcDays(start: string | null, end: string | null, daysPerWeek?: number): number {
+  return calcRentalBillableDays(start, end, daysPerWeek);
 }
 
 /**

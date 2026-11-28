@@ -69,6 +69,12 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   if (body.country_of_origin !== undefined) payload.country_of_origin = body.country_of_origin;
   if (body.customs_hs_code !== undefined) payload.customs_hs_code = body.customs_hs_code;
   if (body.qr_token !== undefined) payload.qr_token = body.qr_token;
+  // 306 — how many you own. A whole number, 1 or more.
+  if (body.quantity !== undefined) {
+    const q = Math.round(Number(body.quantity));
+    if (!Number.isFinite(q) || q < 1) return NextResponse.json({ error: 'Quantity must be 1 or more.' }, { status: 400 });
+    payload.quantity = q;
+  }
 
   if (Object.keys(payload).length > 0) {
     const { error: updateErr } = await supabase.from('gear').update(payload).eq('id', id);

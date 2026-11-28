@@ -18,6 +18,11 @@ type GearRow = {
   image_url: string | null;
   /** UX21 bridge — null when this gear isn't from the rental house. */
   rental_inventory_id?: string | null;
+  /* Rental (S1 247 + 306). */
+  purchase_cost?: number | string | null;
+  day_rate?: number | string | null;
+  day_rate_manual?: boolean | null;
+  quantity?: number | null;
   created_at: string;
   updated_at: string;
   tour_gear?: TourGearRow[];
@@ -74,6 +79,10 @@ function mapGear(row: GearRow): Gear & { tourGear?: TourGear[] } {
     notes: row.notes,
     imageUrl: row.image_url,
     rentalInventoryId: row.rental_inventory_id ?? null,
+    purchaseCost: row.purchase_cost == null ? null : Number(row.purchase_cost),
+    dayRate: row.day_rate == null ? null : Number(row.day_rate),
+    dayRateManual: row.day_rate_manual ?? false,
+    quantity: Math.max(1, Number(row.quantity) || 1),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     tourGear: (row.tour_gear ?? []).map(mapTourGear),

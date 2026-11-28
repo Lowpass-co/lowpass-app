@@ -1,5 +1,6 @@
 'use client';
 
+import { DAY_RATE_PCT_OF_VALUE, dayRateFromPurchase } from '@/lib/rental-pricing';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Loader2, ExternalLink, X } from 'lucide-react';
 import Link from 'next/link';
@@ -150,6 +151,63 @@ export default function GearSlideOver({ id, onClose }: { id: string; onClose: ()
                 defaultValue={gear.serialNumber ?? ''}
                 onBlur={(e) => void save({ serial_number: e.target.value || null })}
               />
+            </section>
+
+            {/* Rental (Nov 2026): what the job builder prices from. Day rate is
+                3% of the purchase cost unless one is typed (rental-pricing.ts). */}
+            <section className="space-y-2">
+              <h4 className="text-xs uppercase tracking-wider text-lp-text-secondary">Rental</h4>
+              <div className="grid grid-cols-3 gap-2">
+                <label className="space-y-1 text-xs text-lp-text-secondary">
+                  <span>Quantity owned</span>
+                  <input
+                    aria-label="Quantity owned"
+                    className="w-full rounded border border-lp-border bg-transparent px-2 py-1 text-sm text-lp-text"
+                    type="number"
+                    min={1}
+                    step={1}
+                    defaultValue={gear.quantity ?? 1}
+                    onBlur={(e) => {
+                      const q = Math.round(Number(e.target.value));
+                      if (q >= 1 && q !== (gear.quantity ?? 1)) void save({ quantity: q });
+                    }}
+                  />
+                </label>
+                <label className="space-y-1 text-xs text-lp-text-secondary">
+                  <span>Purchase cost</span>
+                  <input
+                    aria-label="Purchase cost"
+                    className="w-full rounded border border-lp-border bg-transparent px-2 py-1 text-sm text-lp-text"
+                    type="number"
+                    min={0}
+                    step="0.01"
+                    defaultValue={gear.purchaseCost ?? ''}
+                    onBlur={(e) => {
+                      const v = e.target.value === '' ? null : Number(e.target.value);
+                      if (v !== (gear.purchaseCost ?? null)) void save({ purchase_cost: v });
+                    }}
+                  />
+                </label>
+                <label className="space-y-1 text-xs text-lp-text-secondary">
+                  <span>Day rate</span>
+                  <input
+                    aria-label="Day rate"
+                    className="w-full rounded border border-lp-border bg-transparent px-2 py-1 text-sm text-lp-text"
+                    type="number"
+                    min={0}
+                    step="0.01"
+                    placeholder={gear.purchaseCost ? String(dayRateFromPurchase(gear.purchaseCost) ?? '') : ''}
+                    defaultValue={gear.dayRateManual ? gear.dayRate ?? '' : ''}
+                    onBlur={(e) => {
+                      const v = e.target.value === '' ? null : Number(e.target.value);
+                      void save(v == null ? { day_rate_manual: false, day_rate: null } : { day_rate_manual: true, day_rate: v });
+                    }}
+                  />
+                </label>
+              </div>
+              <p className="text-xs text-lp-text-tertiary">
+                Blank day rate = {Math.round(DAY_RATE_PCT_OF_VALUE * 100)}% of the purchase cost. Quantity is how many you own — 1 for a serialised item.
+              </p>
             </section>
 
             <section className="space-y-2">

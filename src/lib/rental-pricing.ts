@@ -60,12 +60,33 @@ export function effectiveInventoryDayRate(item: DayRateManualFields): number | n
   return item.day_rate;
 }
 
-/**
- * Billable rental days (3-day week): each full 7-day calendar span counts as 3 rental days;
- * leftover days count 1:1. Inclusive of start and end dates.
- * Example: 30 calendar days (4×7 + 2) → 4×3 + 2 = 14 billable days.
- */
-export function calcRentalBillableDays(start: string | null, end: string | null): number {
+/** Days a week is charged as when nothing else says — the trade's "3-day
+ *  week" (Adam, Nov 2026: "should be 3 day week, but customisable"). The
+ *  workspace default (workspaces.rental_days_per_week) and a job's own
+ *  days_per_week override it. */
+export const DEFAULT_DAYS_PER_WEEK = 3;
+
+/** The week lengths offered (7 = no week rate). */
+export const WEEK_CHOICES = [2, 2.5, 3, 3.5, 4, 5, 7] as const;
+
+/** A usable week length: 1–7 days (half days allowed), else the default. */
+export function weekLength(v: unknown): number {
+  const n = Number(v);
+  return Number.isFinite(n) && n >= 1 && n <= 7 ? Math.round(n * 2) / 2 : DEFAULT_DAYS_PER_WEEK;
+}
+
+/** The job's week: its own setting, else the workspace's, else 3. */
+export function jobDaysPerWeek(job: { days_per_week?: number | string | null }, workspaceDefault?: number | string | null): number {
+  if (job.days_per_week != null) return weekLength(job.days_per_week);
+  return weekLength(workspaceDefault ?? DEFAULT_DAYS_PER_WEEK);
+}
+
+/** Billable days for a hire from `start` to `end` inclusive: every full 7
+ *  calendar days costs one WEEK (`daysPerWeek` days), and the days left over
+ *  cost one each — but never more than a week. Nov 2026 fix: leftovers were
+ *  uncapped, so a 6-day hire cost 6 days while a 7-day hire cost 3. */
+export function calcRentalBillableDays(start: string | null, end: string | null, daysPerWeek: number = DEFAULT_DAYS_PER_WEEK): number {
+  const week = weekLength(daysPerWeek);
   if (!start || !end) return 1;
   const msPerDay = 86400000;
   const inclusiveCalendarDays =
@@ -73,6 +94,6 @@ export function calcRentalBillableDays(start: string | null, end: string | null)
   const calendarDays = Math.max(1, inclusiveCalendarDays);
   const fullWeeks = Math.floor(calendarDays / 7);
   const remainder = calendarDays % 7;
-  const billable = fullWeeks * 3 + remainder;
+  const billable = fullWeeks * week + Math.min(remainder, week);
   return Math.max(1, billable);
 }

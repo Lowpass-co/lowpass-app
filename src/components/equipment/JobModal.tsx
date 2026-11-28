@@ -7,7 +7,7 @@
 import { useState, useRef, useEffect, useMemo } from 'react';
 import { X, ExternalLink, ChevronDown, ChevronRight } from 'lucide-react';
 import Link from 'next/link';
-import { createClient } from '@/lib/supabase-client';
+import { rentalApi } from './rentalApi';
 import { useToast } from '@/components/ui/Toast';
 import { useTourEditor } from '@/contexts/TourEditorContext';
 import { StyledSelect, type StyledSelectOption } from '@/components/ui/StyledSelect';
@@ -29,7 +29,6 @@ interface Props {
 }
 
 export function JobModal({
-  userId,
   workspaceId,
   editing,
   artists,
@@ -59,7 +58,6 @@ export function JobModal({
 
   const [saving, setSaving] = useState(false);
   const nameRef = useRef<HTMLInputElement>(null);
-  const supabase = createClient();
 
   useEffect(() => {
     nameRef.current?.focus();
@@ -94,11 +92,13 @@ export function JobModal({
     [toursForArtist, artistId]
   );
 
-  useEffect(() => {
-    if (!tourId) return;
+  /** Changing the artist drops a tour that isn't theirs (done in the
+   *  handler — it used to be an effect that set state). */
+  function pickArtist(next: string) {
+    setArtistId(next);
     const t = tours.find((x) => x.id === tourId);
-    if (t && artistId && t.artist_id !== artistId) setTourId('');
-  }, [artistId, tourId, tours]);
+    if (t && next && t.artist_id !== next) setTourId('');
+  }
 
   async function handleSave() {
     if (!name.trim() || !start || !end) return;
@@ -109,7 +109,6 @@ export function JobModal({
     setSaving(true);
 
     const payload: Record<string, unknown> = {
-      user_id: userId,
       name: name.trim(),
       client_name: client.trim() || null,
       artist_id: artistId || null,
@@ -122,37 +121,19 @@ export function JobModal({
       billing_phone:   billingPhone.trim()   || null,
       billing_tax_id:  billingTaxId.trim()   || null,
     };
-    /* Sprint 12 §1 — workspace_id required by the canonical
-       RLS WITH CHECK clause from migration 095. Only set on
-       INSERT. */
-    if (!editing && workspaceId) {
-      payload.workspace_id = workspaceId;
-    }
 
-    let result;
-    if (editing) {
-      result = await supabase.from('rental_jobs').update(payload).eq('id', editing.id).select(`
-        *,
-        artist:artists ( id, name ),
-        tour:tours ( id, name )
-      `).single();
-    } else {
-      result = await supabase.from('rental_jobs').insert(payload).select(`
-        *,
-        artist:artists ( id, name ),
-        tour:tours ( id, name )
-      `).single();
+    /* Saved by the server (Nov 2026 — server/rental/jobs.ts): it checks the
+       dates and stamps the workspace; the browser never writes the row. */
+    let saved: RentalJob;
+    try {
+      saved = editing ? await rentalApi.updateJob(editing.id, payload) : await rentalApi.createJob(payload);
+    } catch (e) {
+      setSaving(false);
+      showToast('Save failed: ' + (e instanceof Error ? e.message : 'unknown error'), 'error');
+      return;
     }
-
     setSaving(false);
-    if (result.error) {
-      showToast('Save failed: ' + result.error.message, 'error');
-      return;
-    }
-    if (!result.data) {
-      showToast('Save failed: no row returned', 'error');
-      return;
-    }
+    const result = { data: saved as unknown };
     onSave(normalizeJobRow(result.data as Record<string, unknown>));
   }
 
@@ -193,7 +174,7 @@ export function JobModal({
 
           <div className="space-y-2">
             <Field label="Artist">
-              <StyledSelect value={artistId} onChange={setArtistId} options={artistOptions} placeholder="Select artist" />
+              <StyledSelect value={artistId} onChange={pickArtist} options={artistOptions} placeholder="Select artist" />
             </Field>
             {workspaceId ? (
               <Link

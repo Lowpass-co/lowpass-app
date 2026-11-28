@@ -17,6 +17,12 @@ export type Gear = {
   imageUrl: string | null;
   /** UX21 — bridge to rental_inventory when this gear is owned via the rental house. */
   rentalInventoryId: string | null;
+  /** What it cost — its day rate is 3% of this unless one is typed. */
+  purchaseCost?: number | null;
+  dayRate?: number | null;
+  dayRateManual?: boolean;
+  /** How many you own (306) — 1 for a serialised item. */
+  quantity?: number;
   createdAt: string;
   updatedAt: string;
 };
