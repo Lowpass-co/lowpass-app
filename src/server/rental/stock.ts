@@ -12,6 +12,7 @@
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { RentalInventoryItem } from '@/components/equipment/types';
+import { cleanValidDays, DEFAULT_QUOTE_VALID_DAYS } from '@/lib/rental/quote';
 
 const COLS =
   'id, workspace_id, name, category, serial_number, country_of_origin, purchase_cost, day_rate, day_rate_manual, weight_kg, image_url, notes, status, last_used_at, customs_hs_code, value_amount, value_currency, dimensions_cm, qr_token, quantity, created_at';
@@ -58,7 +59,31 @@ export async function loadRentalStock(client: SupabaseClient, workspaceId: strin
 
 /** The workspace's default week (306), 3 until it's set. */
 export async function loadDaysPerWeek(client: SupabaseClient, workspaceId: string): Promise<number | null> {
-  const { data, error } = await client.from('workspaces').select('rental_days_per_week').eq('id', workspaceId).maybeSingle();
-  if (error || !data) return null;
-  return Number((data as { rental_days_per_week: unknown }).rental_days_per_week) || null;
+  return (await loadRentalSettings(client, workspaceId)).daysPerWeek;
+}
+
+export interface RentalSettings {
+  /** null before 306 → the app uses 3. */
+  daysPerWeek: number | null;
+  /** 14 before 307. */
+  quoteValidDays: number;
+  /** Free text printed on the PDF when asked (307); null = none. */
+  paymentDetails: string | null;
+}
+
+/** The workspace's rental settings (306 + 307). Reads what exists: before 307
+ *  only the week, before 306 nothing — never an error page for a missing
+ *  column. */
+export async function loadRentalSettings(client: SupabaseClient, workspaceId: string): Promise<RentalSettings> {
+  const out: RentalSettings = { daysPerWeek: null, quoteValidDays: DEFAULT_QUOTE_VALID_DAYS, paymentDetails: null };
+  const read = (cols: string) => client.from('workspaces').select(cols).eq('id', workspaceId).maybeSingle();
+  let res: { data: unknown; error: { message: string } | null } = await read('rental_days_per_week, rental_quote_valid_days, rental_payment_details');
+  if (res.error && /rental_quote_valid_days|rental_payment_details/.test(res.error.message)) res = await read('rental_days_per_week');
+  if (res.error || !res.data) return out;
+  const row = res.data as Record<string, unknown>;
+  out.daysPerWeek = Number(row.rental_days_per_week) || null;
+  if (row.rental_quote_valid_days != null) out.quoteValidDays = cleanValidDays(row.rental_quote_valid_days);
+  const pd = typeof row.rental_payment_details === 'string' ? row.rental_payment_details.trim() : '';
+  out.paymentDetails = pd || null;
+  return out;
 }

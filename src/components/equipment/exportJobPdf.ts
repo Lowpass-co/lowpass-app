@@ -7,7 +7,8 @@
    ============================================================ */
 
 import { jsPDF } from 'jspdf';
-import { effectiveInventoryDayRate } from '@/lib/rental-pricing';
+import { DEFAULT_DAYS_PER_WEEK } from '@/lib/rental-pricing';
+import { DEFAULT_QUOTE_VALID_DAYS, priceQuote, quoteValidUntil, weekRuleText, type PricedLine } from '@/lib/rental/quote';
 import { calcDays, fmtMoney, jobCurrency, fmtDate, resolveQuoteDisplay, type RentalJob, type RentalInventoryItem, type RentalJobItem } from './types';
 
 /* ── Theme tokens ─────────────────────────────────────────────────
@@ -78,12 +79,14 @@ interface ExportOptions {
   inventory: RentalInventoryItem[];
   artistLabel: string | null;
   tourLabel: string | null;
-  discPct: number;
-  discFixed: number;
   /** Defaults to light. Pass 'dark' for an inverted document that feels native to the app's dark mode. */
   mode?: PdfMode;
   /** Days a week is charged as on this job (jobDaysPerWeek) — must match the screen. */
   daysPerWeek?: number;
+  /** A quote prints "Valid until issue + N days" (workspace setting, 307). */
+  validDays?: number;
+  /** Printed under the totals when given (the export menu's tick, 307). */
+  paymentDetails?: string | null;
 }
 
 /** Load the Lowpass wordmark as a data URL so jsPDF can embed it. */
@@ -173,7 +176,10 @@ async function registerFonts(doc: jsPDF): Promise<{ body: string; display: strin
 }
 
 export async function exportJobPdf(opts: ExportOptions): Promise<void> {
-  const { job, jobItems, inventory, artistLabel, tourLabel, discPct, discFixed } = opts;
+  const { job, jobItems, inventory, artistLabel, tourLabel } = opts;
+  const week = opts.daysPerWeek ?? DEFAULT_DAYS_PER_WEEK;
+  const discPct = Number(job.discount_percent) || 0;
+  const discFixed = Number(job.discount_fixed) || 0;
   const mode: PdfMode = opts.mode ?? 'light';
   const T = getPdfTokens(mode);
   /* The quote is denominated once, on the job. Every money figure below goes
@@ -200,17 +206,18 @@ export async function exportJobPdf(opts: ExportOptions): Promise<void> {
     doc.rect(0, 0, PAGE_W, PAGE_H, 'F');
   };
 
-  const days     = calcDays(job.start_date, job.end_date, opts.daysPerWeek);
-  const subtotal = jobItems.reduce((sum, it) => {
-    const inv  = inventory.find(i => i.id === it.gear_id);
-    const rate = it.day_rate_override ?? (inv ? effectiveInventoryDayRate(inv) ?? 0 : 0);
-    return sum + (it.quantity || 1) * days * rate;
-  }, 0);
-  const discAmt = subtotal * (discPct / 100) + discFixed;
-  const total   = Math.max(0, subtotal - discAmt);
+  const days  = calcDays(job.start_date, job.end_date, week);
+  /* The same pricing as the screen and the jobs list (priceQuote). */
+  const quote = priceQuote({ lines: jobItems, stock: inventory, days, discountPercent: discPct, discountFixed: discFixed });
+  const { subtotal, total } = quote;
+  const discAmt = quote.discount;
 
   const documentNumber = `LP-${job.id.slice(0, 8).toUpperCase()}`;
-  const issueDate = new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+  const issued = new Date();
+  const issueDate = issued.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+  /* Quotes (draft / confirmed) carry a validity date; invoices and receipts don't. */
+  const isQuote = job.status === 'draft' || job.status === 'confirmed';
+  const validUntil = isQuote ? fmtDate(quoteValidUntil(issued, opts.validDays ?? DEFAULT_QUOTE_VALID_DAYS)) : null;
 
   const docTitle =
     job.status === 'invoiced'  ? 'RENTAL INVOICE'
@@ -251,8 +258,9 @@ export async function exportJobPdf(opts: ExportOptions): Promise<void> {
   doc.setTextColor(...T.muted);
   doc.text(`No. ${documentNumber}`, PAGE_W - MARGIN_X, y + 13.5, { align: 'right' });
   doc.text(`Issued ${issueDate}`,    PAGE_W - MARGIN_X, y + 17.5, { align: 'right' });
+  if (validUntil) doc.text(`Valid until ${validUntil}`, PAGE_W - MARGIN_X, y + 21.5, { align: 'right' });
 
-  y += 22;
+  y += validUntil ? 26 : 22;
 
   // Orange separator rule
   doc.setDrawColor(...ORANGE);
@@ -330,10 +338,11 @@ export async function exportJobPdf(opts: ExportOptions): Promise<void> {
   doc.setFont(BODY, 'normal');
   doc.setFontSize(8.5);
   doc.setTextColor(...T.muted);
-  doc.text(`${days} billable day${days !== 1 ? 's' : ''}`, c3, yPer);
+  doc.text(`${days} day${days !== 1 ? 's' : ''} billed`, c3, yPer);
   yPer += 3.8;
   doc.setTextColor(...T.faint);
-  doc.text('(3-day-week rule)', c3, yPer);
+  // The job's own week — it used to print "3-day-week rule" whatever the job said.
+  doc.text(weekRuleText(week), c3, yPer);
   yPer += 4;
 
   y = Math.max(yBill, yJob, yPer, metaTop) + 6;
@@ -370,66 +379,60 @@ export async function exportJobPdf(opts: ExportOptions): Promise<void> {
   doc.setFontSize(9);
   doc.setTextColor(...T.ink);
 
-  const drawItemRow = (it: RentalJobItem) => {
-    const inv  = inventory.find(i => i.id === it.gear_id);
-    const rate = it.day_rate_override ?? (inv ? effectiveInventoryDayRate(inv) ?? 0 : 0);
-    const lineAmt = (it.quantity || 1) * days * rate;
-    const itemName = inv?.name ?? 'Unknown';
-    const itemNameLines = doc.splitTextToSize(itemName, (colQty - colItem) - 4) as string[];
-    const hasCategory = !!inv?.category;
-    const hasOverride = it.day_rate_override != null;
-    // Row height accounts for wrapped name + optional category/override
-    const baseLineH = 4.2;
-    const extraLines = (hasCategory ? 1 : 0) + (hasOverride ? 1 : 0);
-    const rowH = Math.max(7, itemNameLines.length * baseLineH + extraLines * 3.6 + 3);
+  /** Room for a block of `h` mm; a new page (with the table header) when not. */
+  const ensureRoom = (h: number, withHeader: boolean) => {
+    if (y + h <= PAGE_H - MARGIN_BOTTOM - 14) return;
+    doc.addPage();
+    paintPageBg();
+    y = MARGIN_TOP;
+    if (withHeader) drawTableHeader();
+  };
 
-    // Pagination check
-    if (y + rowH > PAGE_H - MARGIN_BOTTOM - 60) {
-      // Save room for totals/terms; spill onto next page if needed
-      doc.addPage();
-      paintPageBg();
-      y = MARGIN_TOP;
-      drawTableHeader();
-      doc.setFont(BODY, 'normal');
-      doc.setFontSize(9);
-      doc.setTextColor(...T.ink);
-    }
+  /** A category heading with its subtotal — the same groups as the screen. */
+  const drawGroupHeader = (category: string, groupSubtotal: number) => {
+    ensureRoom(16, true);
+    y += 2;
+    doc.setFont(BODY, 'bold');
+    doc.setFontSize(8);
+    doc.setTextColor(...ORANGE);
+    doc.text(category.toUpperCase(), colItem + 2, y + 4.5);
+    doc.setTextColor(...T.muted);
+    doc.text(fmtMoney(conv(groupSubtotal), dispCur), colSub - 2, y + 4.5, { align: 'right' });
+    y += 6.5;
+    doc.setDrawColor(...T.hair);
+    doc.setLineWidth(0.2);
+    doc.line(MARGIN_X, y, PAGE_W - MARGIN_X, y);
+  };
+
+  const drawItemRow = (line: PricedLine) => {
+    const itemNameLines = doc.splitTextToSize(line.name, (colQty - colItem) - 4) as string[];
+    const baseLineH = 4.2;
+    const rowH = Math.max(7, itemNameLines.length * baseLineH + (line.custom ? 3.6 : 0) + 3);
+    ensureRoom(rowH, true);
 
     let yRow = y + 5;
-    // Item name
     doc.setFont(BODY, 'bold');
     doc.setFontSize(9.5);
     doc.setTextColor(...T.ink);
     doc.text(itemNameLines, colItem + 2, yRow);
     yRow += itemNameLines.length * baseLineH;
-    // Category
-    if (hasCategory) {
-      doc.setFont(BODY, 'normal');
-      doc.setFontSize(7.5);
-      doc.setTextColor(...T.muted);
-      doc.text(inv!.category!, colItem + 2, yRow);
-      yRow += 3.6;
-    }
-    // Override pill
-    if (hasOverride) {
+    if (line.custom) {
       doc.setFont(BODY, 'bold');
       doc.setFontSize(7.5);
       doc.setTextColor(...ORANGE);
       doc.text('Custom rate', colItem + 2, yRow);
     }
 
-    // Numeric columns
     doc.setFont(BODY, 'normal');
     doc.setFontSize(9.5);
     doc.setTextColor(...T.ink);
     const midY = y + 5;
-    doc.text(String(it.quantity ?? 1), colQty, midY, { align: 'center' });
-    doc.text(String(days),             colDays, midY, { align: 'center' });
-    doc.text(fmtMoney(conv(rate), dispCur),             colRate, midY, { align: 'right' });
+    doc.text(String(line.quantity), colQty, midY, { align: 'center' });
+    doc.text(String(days),          colDays, midY, { align: 'center' });
+    doc.text(fmtMoney(conv(line.rate), dispCur),  colRate, midY, { align: 'right' });
     doc.setFont(BODY, 'bold');
-    doc.text(fmtMoney(conv(lineAmt), dispCur),          colSub - 2, midY, { align: 'right' });
+    doc.text(fmtMoney(conv(line.total), dispCur), colSub - 2, midY, { align: 'right' });
 
-    // Hairline separator
     y += rowH;
     doc.setDrawColor(...T.hair);
     doc.setLineWidth(0.2);
@@ -447,10 +450,15 @@ export async function exportJobPdf(opts: ExportOptions): Promise<void> {
     doc.setLineWidth(0.2);
     doc.line(MARGIN_X, y, PAGE_W - MARGIN_X, y);
   } else {
-    for (const it of jobItems) drawItemRow(it);
+    for (const g of quote.groups) {
+      drawGroupHeader(g.category, g.subtotal);
+      for (const line of g.lines) drawItemRow(line);
+    }
   }
 
   y += 6;
+  // The totals block stays together.
+  ensureRoom(discAmt > 0 ? 40 : 33, false);
 
   // ── TOTALS BLOCK (right-aligned) ───────────────────────────────
   const totalsW = CONTENT_W * 0.42;
@@ -496,14 +504,16 @@ export async function exportJobPdf(opts: ExportOptions): Promise<void> {
 
   // ── NOTES ──────────────────────────────────────────────────────
   if (job.notes && job.notes.trim()) {
-    if (y > PAGE_H - MARGIN_BOTTOM - 50) { doc.addPage(); paintPageBg(); y = MARGIN_TOP; }
+    doc.setFont(BODY, 'normal');
+    doc.setFontSize(9);
+    const notesLines = doc.splitTextToSize(job.notes.trim(), CONTENT_W - 8) as string[];
+    const notesH = notesLines.length * 4.2 + 6;
+    ensureRoom(notesH + 11, false);
     drawColLabel(doc, 'NOTES', MARGIN_X, y, BODY);
     y += 5;
     doc.setFont(BODY, 'normal');
     doc.setFontSize(9);
     doc.setTextColor(...T.ink);
-    const notesLines = doc.splitTextToSize(job.notes.trim(), CONTENT_W - 8) as string[];
-    const notesH = notesLines.length * 4.2 + 6;
     doc.setFillColor(...T.surface);
     doc.setDrawColor(...T.surfaceBorder);
     doc.setLineWidth(0.2);
@@ -513,25 +523,68 @@ export async function exportJobPdf(opts: ExportOptions): Promise<void> {
     y += notesH + 6;
   }
 
+  // ── PAYMENT DETAILS (optional, as typed in Rental settings) ────
+  const payment = (opts.paymentDetails ?? '').trim();
+  if (payment) {
+    doc.setFont(BODY, 'normal');
+    doc.setFontSize(9);
+    const payLines = doc.splitTextToSize(payment, CONTENT_W - 8) as string[];
+    const payH = payLines.length * 4.2 + 6;
+    ensureRoom(payH + 6, false);
+    drawColLabel(doc, 'PAYMENT DETAILS', MARGIN_X, y, BODY);
+    y += 5;
+    doc.setFillColor(...T.surface);
+    doc.setDrawColor(...T.surfaceBorder);
+    doc.setLineWidth(0.2);
+    doc.roundedRect(MARGIN_X, y, CONTENT_W, payH, 1.2, 1.2, 'FD');
+    doc.setFont(BODY, 'normal');
+    doc.setFontSize(9);
+    doc.setTextColor(...T.ink);
+    doc.text(payLines, MARGIN_X + 4, y + 5);
+    y += payH + 6;
+  }
+
   // ── TERMS ──────────────────────────────────────────────────────
+  const weekN = Number.isInteger(week) ? String(week) : week.toFixed(1);
   const terms = [
     'All equipment remains the property of the lessor and must be returned in the condition supplied.',
-    'Billable days follow the 3-day-week rule (each 7 calendar days = 3 billable days).',
+    week >= 7
+      ? 'Every day on hire is charged.'
+      : `Each 7 days on hire is charged as ${weekN} day${week === 1 ? '' : 's'}; days over a full week are charged one each, never more than a week.`,
     'Lessee assumes responsibility for loss, theft, and damage during the rental period.',
-    'Quote is valid for 30 days from issue date. Final invoice may vary based on additions or losses.',
+    isQuote
+      ? `This quote is valid until ${validUntil}. The final invoice may vary with additions or losses.`
+      : 'The final invoice may vary with additions or losses.',
   ];
 
-  if (y > PAGE_H - MARGIN_BOTTOM - 40) { doc.addPage(); paintPageBg(); y = MARGIN_TOP; }
+  doc.setFont(BODY, 'normal');
+  doc.setFontSize(8);
+  const termLines = terms.map((t, i) => doc.splitTextToSize(`${i + 1}.  ${t}`, CONTENT_W - 4) as string[]);
+  ensureRoom(5 + termLines.reduce((h, l) => h + l.length * 3.6 + 1.2, 0), false);
   drawColLabel(doc, 'TERMS', MARGIN_X, y, BODY);
   y += 5;
   doc.setFont(BODY, 'normal');
   doc.setFontSize(8);
   doc.setTextColor(...T.muted);
-  for (let i = 0; i < terms.length; i++) {
-    const numbered = `${i + 1}.  ${terms[i]}`;
-    const lines = doc.splitTextToSize(numbered, CONTENT_W - 4) as string[];
+  for (const lines of termLines) {
     doc.text(lines, MARGIN_X, y + 3.2);
     y += lines.length * 3.6 + 1.2;
+  }
+
+  // ── FOOTER on every page: number · page x of y · credit ─────────
+  const pages = doc.getNumberOfPages();
+  for (let p = 1; p <= pages; p++) {
+    doc.setPage(p);
+    const fy = PAGE_H - 7;
+    doc.setDrawColor(...T.hair);
+    doc.setLineWidth(0.2);
+    doc.line(MARGIN_X, fy - 4, PAGE_W - MARGIN_X, fy - 4);
+    doc.setFont(BODY, 'normal');
+    doc.setFontSize(7.5);
+    doc.setTextColor(...T.faint);
+    doc.text(documentNumber, MARGIN_X, fy);
+    doc.text(`Page ${p} of ${pages}`, PAGE_W / 2, fy, { align: 'center' });
+    doc.text('Generated with Lowpass', PAGE_W - MARGIN_X, fy, { align: 'right' });
   }
 
   // Save & download
