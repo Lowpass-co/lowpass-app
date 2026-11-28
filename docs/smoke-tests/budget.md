@@ -2614,3 +2614,10 @@ photo or PDF over the page: the bar turns orange. Drop it on the bar, or
 anywhere on the page: "Adding receipts" appears under the bar, and when it
 finishes the receipt is in the list. Click the bar: a file picker opens. The
 empty state no longer mentions an "Expenses tab".
+
+#### BUD-101 — Each receipt says what it is
+Drop a receipt (e.g. a flight). Every card in the review has a "What it is"
+box, filled from the scan where it could read one. Type "Flight BNA → LAX,
+Adam": on a new-line card, "New line: Delta Air Lines — Flight BNA → LAX,
+Adam" updates as you type. Apply: the new budget line has that name, the
+transaction's note says it, and the receipt in Receipts shows it.

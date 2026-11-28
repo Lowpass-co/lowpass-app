@@ -25,12 +25,15 @@ import { NextResponse } from 'next/server';
 import { requireWrite } from '@/lib/auth/workspace-check';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { resolveSection } from '@/lib/budget/receiptSection';
+import { receiptLineName } from '@/lib/budget/receiptMatch';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
 
 interface ProposalValue {
   vendor: string | null;
+  /** What the receipt is for (the card's "What it is"). */
+  description?: string | null;
   date: string | null;
   amount: number | null;
   currency: string | null;
@@ -129,6 +132,7 @@ export async function POST(request: Request): Promise<NextResponse> {
       const v: ProposalValue = { ...row.value, ...(edits[row.id] ?? {}) };
       const amount = Number(v.amount ?? 0);
       const vendorName = (v.vendor ?? '').trim() || 'Receipt';
+      const description = typeof v.description === 'string' && v.description.trim() ? v.description.trim() : null;
       if (!Number.isFinite(amount) || amount === 0) {
         errors.push(`${row.id}: no amount to record`);
         continue;
@@ -175,7 +179,9 @@ export async function POST(request: Request): Promise<NextResponse> {
           headers: { 'Content-Type': 'application/json', cookie },
           body: JSON.stringify({
             tour_id: batch.tour_id,
-            label: v.label ?? vendorName,
+            // Vendor + what it is, as the card previewed it — rebuilt here so
+            // an edit to either on the card names the line.
+            label: v.description !== undefined || 'vendor' in (edits[row.id] ?? {}) ? receiptLineName(v.vendor, description) : v.label ?? vendorName,
             category: v.sectionName ?? 'Uncategorised',
             section_id: sectionId,
             proposed_cost: amount,
@@ -215,6 +221,7 @@ export async function POST(request: Request): Promise<NextResponse> {
           tour_id: batch.tour_id,
           vendor_name: vendorName,
           amount,
+          ...(description ? { notes: description } : {}),
           // Money repair — the receipt's own currency. Omitted, the amount was
           // stamped with the LINE's currency: a $ receipt linked to a £ line
           // counted its dollars as pounds.
@@ -233,7 +240,7 @@ export async function POST(request: Request): Promise<NextResponse> {
       if (row.receipt_id) {
         await supabase
           .from('expense_receipts')
-          .update({ in_budget: true, linked_line_item_id: lineItemId })
+          .update({ in_budget: true, linked_line_item_id: lineItemId, ...(description ? { description } : {}) })
           .eq('id', row.receipt_id);
       }
 

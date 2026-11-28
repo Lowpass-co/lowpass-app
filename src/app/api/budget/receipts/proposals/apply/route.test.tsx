@@ -67,3 +67,31 @@ describe('apply puts a new line in a real section', () => {
     expect(lineBody()).toMatchObject({ section_id: null });
   });
 });
+
+/* Nov 2026, Adam: "we are missing the receipt name/description to know what
+   the actual receipt IS". */
+describe('what the receipt is travels with it', () => {
+  const txnBody = () => posts.find((p) => /\/transactions$/.test(p.url))?.body;
+
+  it('a new line is named "vendor — what it is"; the note and the receipt carry it', async () => {
+    db.seed('expense_receipts', [{ id: 'rc1', workspace_id: 'ws', description: null }]);
+    pending({ amount: 200, vendor: 'Delta Air Lines', description: null, label: 'Delta Air Lines', sectionId: 's-tr', sectionName: 'Travel' });
+    await apply({ description: 'Flight BNA → LAX, Adam' });
+    expect(lineBody()).toMatchObject({ label: 'Delta Air Lines — Flight BNA → LAX, Adam' });
+    expect(txnBody()).toMatchObject({ notes: 'Flight BNA → LAX, Adam' });
+    expect(db.t('expense_receipts')[0].description).toBe('Flight BNA → LAX, Adam');
+  });
+
+  it('the scan’s own description names the line when nobody edits it', async () => {
+    pending({ amount: 20, vendor: 'Venmo', description: 'Runner tip', label: 'Venmo — Runner tip', sectionId: 's-tr', sectionName: 'Travel' });
+    await apply();
+    expect(lineBody()).toMatchObject({ label: 'Venmo — Runner tip' });
+  });
+
+  it('a proposal made before this change (no description) keeps its label and sends no note', async () => {
+    pending({ amount: 10, vendor: 'Sixt', label: 'Sixt Rent a Car', sectionId: 's-tr', sectionName: 'Travel' });
+    await apply();
+    expect(lineBody()).toMatchObject({ label: 'Sixt Rent a Car' });
+    expect(txnBody()).not.toHaveProperty('notes');
+  });
+});
