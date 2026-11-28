@@ -74,3 +74,19 @@ default, on a Quote off; ticked, they print under the totals as typed.
 #### RNT-13 — Before 307 is pasted
 Rental jobs and the PDF work (valid 14 days, no payment details); Settings ›
 Save says "Paste migration 307 first."
+
+#### RNT-14 — Editing a line saves however you leave it
+On a job, click a line's Qty, type 34, then click another cell (or anywhere
+off the table): it saves 34 on THAT line and the editor closes — the number
+doesn't follow the click. Same for Day rate. Enter and Tab still save too.
+
+#### RNT-15 — Remove, one more, one fewer
+Each line has an × at the right: it comes off the job. Right-click a line:
+One more / One fewer (when > 1) / Reset to the item's rate (custom rates) /
+Remove from job (red, last). The menu closes on a click elsewhere or Esc.
+
+#### RNT-16 — Right-click the lists
+Rental jobs: right-click a job → Open · Edit details · Duplicate (a copy with
+its lines, "(copy)") · Mark … (every other status; a GBP draft freezes its
+rate) · Delete job (asks). Gear & rentals: right-click an item → Open · Move…
+· Mark available / in use / maintenance / retired.

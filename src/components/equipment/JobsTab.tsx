@@ -18,7 +18,9 @@ import {
   fmtRange, groupJobsByMonth, groupJobsByStatus,
   JOB_STATUS_LABEL, JOB_STATUS_ORDER, type JobStatus,
 } from '@/lib/rental/jobList';
-import { rentalApi } from './rentalApi';
+import { rentalApi, statusPatch } from './rentalApi';
+import { DeleteConfirmationModal } from '@/components/ui/DeleteConfirmationModal';
+import type { RowMenuItem } from '@/components/data-table/DataTableRowMenu';
 import { useToast } from '@/components/ui/Toast';
 import { Button } from '@/components/ui/Button';
 import { FilterChips } from '@/components/ui/FilterChips';
@@ -88,6 +90,55 @@ export function JobsTab({
   }
 
   const activeJob = jobs.find((j) => j.id === activeJobId) ?? null;
+  const [deleting, setDeleting] = useState<RentalJob | null>(null);
+
+  async function changeStatus(job: RentalJob, next: JobStatus) {
+    try {
+      const saved = await rentalApi.updateJob(job.id, await statusPatch(job, next));
+      setJobs(jobs.map((j) => (j.id === job.id ? { ...j, ...saved } : j)));
+    } catch (e) {
+      showToast('Couldn’t change the status: ' + (e instanceof Error ? e.message : 'unknown error'), 'error');
+    }
+  }
+
+  /** A copy of the job and its lines (same dates — change them on the copy). */
+  async function duplicate(job: RentalJob) {
+    try {
+      const copy = await rentalApi.createJob({
+        name: `${job.name} (copy)`,
+        client_name: job.client_name, artist_id: job.artist_id, tour_id: job.tour_id,
+        start_date: job.start_date, end_date: job.end_date,
+        discount_percent: job.discount_percent, discount_fixed: job.discount_fixed,
+        notes: job.notes, billing_address: job.billing_address, billing_email: job.billing_email,
+        billing_phone: job.billing_phone, billing_tax_id: job.billing_tax_id,
+        display_currency: job.display_currency, days_per_week: job.days_per_week,
+      });
+      const src = (linesByJob[job.id] ?? []).filter((l) => l.gear_id);
+      const lines = src.length
+        ? await rentalApi.addLines(copy.id, src.map((l) => ({ gear_id: l.gear_id!, quantity: l.quantity, day_rate_override: l.day_rate_override })))
+        : [];
+      onLinesChange(copy.id, lines);
+      setJobs([{ ...job, ...copy, artist: job.artist, tour: job.tour }, ...jobs]);
+      showToast('Job duplicated', 'success');
+    } catch (e) {
+      showToast('Couldn’t duplicate it: ' + (e instanceof Error ? e.message : 'unknown error'), 'error');
+    }
+  }
+
+  function jobMenu(r: Row): RowMenuItem[] {
+    const job = r.job;
+    return [
+      { label: 'Open', onSelect: () => setActiveJob(job.id) },
+      { label: 'Edit details', onSelect: () => { setEditingJob(job); setModal(true); } },
+      { label: 'Duplicate', onSelect: () => void duplicate(job) },
+      ...JOB_STATUS_ORDER.filter((s) => s !== job.status).map((s, i) => ({
+        label: `Mark ${JOB_STATUS_LABEL[s].toLowerCase()}`,
+        sep: i === 0,
+        onSelect: () => void changeStatus(job, s),
+      })),
+      { label: 'Delete job', danger: true, sep: true, onSelect: () => setDeleting(job) },
+    ];
+  }
 
   const rows: Row[] = useMemo(
     () =>
@@ -312,6 +363,7 @@ export function JobsTab({
                     columns={columns}
                     rowKey={(r) => r.id}
                     onRowClick={(r) => setActiveJob(r.id)}
+                    rowMenu={jobMenu}
                     searchable={false}
                     toolbar={false}
                     pagination="none"
@@ -327,6 +379,13 @@ export function JobsTab({
       )}
 
       {jobModal}
+      <DeleteConfirmationModal
+        open={!!deleting}
+        itemName={deleting?.name ?? ''}
+        onClose={() => setDeleting(null)}
+        onConfirm={async () => { if (deleting) await deleteJob(deleting.id); }}
+        description="Its lines go with it. Your stock isn’t touched."
+      />
     </div>
   );
 }

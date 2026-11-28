@@ -59,6 +59,7 @@ export function SpreadsheetGrid<T>(props: SpreadsheetGridProps<T>) {
     rowOpenLabel = 'Open',
     onRowDelete,
     onRowDuplicate,
+    rowDeleteLabel = 'Delete',
     contextMenuItems,
     containerHeight = '100%',
     ariaLabel = 'Spreadsheet',
@@ -136,6 +137,27 @@ export function SpreadsheetGrid<T>(props: SpreadsheetGridProps<T>) {
   const [bulkErr, setBulkErr] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [ctx, setCtx] = useState<{ x: number; y: number; rowId: string } | null>(null);
+  const ctxRef = useRef<HTMLDivElement>(null);
+  /* The right-click menu closes on a click elsewhere, Escape or a scroll —
+     it used to stay open until one of its own items was picked. */
+  useEffect(() => {
+    if (!ctx) return;
+    const down = (e: MouseEvent) => {
+      if (!ctxRef.current?.contains(e.target as Node)) setCtx(null);
+    };
+    const key = (e: globalThis.KeyboardEvent) => {
+      if (e.key === 'Escape') setCtx(null);
+    };
+    const close = () => setCtx(null);
+    document.addEventListener('mousedown', down);
+    document.addEventListener('keydown', key);
+    window.addEventListener('scroll', close, true);
+    return () => {
+      document.removeEventListener('mousedown', down);
+      document.removeEventListener('keydown', key);
+      window.removeEventListener('scroll', close, true);
+    };
+  }, [ctx]);
   const drag = useRef(false);
   const gridRef = useRef<HTMLDivElement>(null);
   const liveRef = useRef<HTMLDivElement>(null);
@@ -431,6 +453,19 @@ export function SpreadsheetGrid<T>(props: SpreadsheetGridProps<T>) {
     }
   }, [edit.mode]);
 
+  // A click anywhere outside the grid saves the open edit too (the same
+  // click-away rule; the page's other controls take the click as normal).
+  useEffect(() => {
+    if (edit.mode !== 'edit') return;
+    const down = (e: MouseEvent) => {
+      const t = e.target as Node | null;
+      if (t && gridRef.current?.contains(t)) return;
+      void finishEdit('none');
+    };
+    document.addEventListener('mousedown', down, true);
+    return () => document.removeEventListener('mousedown', down, true);
+  }, [edit.mode, finishEdit]);
+
   // The focused cell stays on screen as the keyboard moves it.
   useEffect(() => {
     const f = sel.focus;
@@ -450,6 +485,12 @@ export function SpreadsheetGrid<T>(props: SpreadsheetGridProps<T>) {
     // Payroll's Employment dropdown "doesn't work").
     if (isCellEditing(rowId, colId) && (e.target as HTMLElement).closest?.('select, input, textarea')) return;
     e.preventDefault();
+    // Clicking another cell SAVES the one being typed in, like a spreadsheet.
+    // It used to leave the editor open with the typed value, which then
+    // followed the highlight to every cell clicked (Nov 2026, Adam: "if I
+    // type a number it doesn't save and wherever I click, that number then
+    // populates"). finishEdit reads the OLD focus, so it runs first.
+    if (edit.mode === 'edit') void finishEdit('none');
     gridRef.current?.focus();
     drag.current = true;
     const c: CellCoord = { rowId, columnId: colId };
@@ -736,6 +777,7 @@ export function SpreadsheetGrid<T>(props: SpreadsheetGridProps<T>) {
       {ctx &&
         createPortal(
           <div
+            ref={ctxRef}
             className="fixed z-[200] min-w-48 rounded-lg border py-1 shadow-lg"
             style={{
               top: ctx.y,
@@ -748,7 +790,7 @@ export function SpreadsheetGrid<T>(props: SpreadsheetGridProps<T>) {
             {onRowOpen && (
               <button
                 type="button"
-                className="block w-full px-3 py-1.5 text-left text-sm"
+                className="block w-full px-3 py-1.5 text-left text-sm text-lp-text hover:bg-lp-surface-hover"
                 onClick={() => {
                   const r = rows.find(x => x.id === ctx.rowId);
                   if (r) onRowOpen(r.data);
@@ -758,22 +800,10 @@ export function SpreadsheetGrid<T>(props: SpreadsheetGridProps<T>) {
                 {rowOpenLabel}
               </button>
             )}
-            {onRowDelete && (
-              <button
-                type="button"
-                className="block w-full px-3 py-1.5 text-left text-sm"
-                onClick={() => {
-                  onRowDelete(ctx.rowId);
-                  setCtx(null);
-                }}
-              >
-                Delete
-              </button>
-            )}
             {onRowDuplicate && (
               <button
                 type="button"
-                className="block w-full px-3 py-1.5 text-left text-sm"
+                className="block w-full px-3 py-1.5 text-left text-sm text-lp-text hover:bg-lp-surface-hover"
                 onClick={() => {
                   onRowDuplicate(ctx.rowId);
                   setCtx(null);
@@ -786,7 +816,7 @@ export function SpreadsheetGrid<T>(props: SpreadsheetGridProps<T>) {
               <button
                 key={m.id}
                 type="button"
-                className="block w-full px-3 py-1.5 text-left text-sm"
+                className="block w-full px-3 py-1.5 text-left text-sm text-lp-text hover:bg-lp-surface-hover"
                 onClick={() => {
                   m.onSelect();
                   setCtx(null);
@@ -795,6 +825,19 @@ export function SpreadsheetGrid<T>(props: SpreadsheetGridProps<T>) {
                 {m.label}
               </button>
             ))}
+            {onRowDelete && (
+              <button
+                type="button"
+                className="block w-full px-3 py-1.5 text-left text-sm text-lp-text hover:bg-lp-surface-hover"
+                style={{ color: 'var(--color-lp-error)' }}
+                onClick={() => {
+                  onRowDelete(ctx.rowId);
+                  setCtx(null);
+                }}
+              >
+                {rowDeleteLabel}
+              </button>
+            )}
           </div>,
           document.body
         )}
