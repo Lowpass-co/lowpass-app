@@ -12,9 +12,30 @@
 
 import { CATEGORIES } from '@/components/equipment/types';
 
-export const GEAR_LOOKUP_MODEL = process.env.LP_GEAR_LOOKUP_MODEL || 'claude-sonnet-5-5';
-/** Searches the model may run per lookup (each is billed). */
-export const GEAR_LOOKUP_MAX_SEARCHES = 3;
+/* Two depths (Nov 2026, Adam chose "B": cheap by default, pay more only
+   when asked). QUICK — Haiku 5.5, ≤ 2 searches, about 1–2 ¢. THOROUGH —
+   Sonnet 5.5, ≤ 3 searches, about 6–10 ¢, from the panel's "Try harder".
+   Estimates, not measured: the AI usage log has the real cost per call. */
+export type LookupDepth = 'quick' | 'thorough';
+export const LOOKUP_DEPTHS: Record<LookupDepth, { model: string; maxSearches: number; endpoint: string }> = {
+  quick: { model: process.env.LP_GEAR_LOOKUP_QUICK_MODEL || 'claude-haiku-5-5', maxSearches: 2, endpoint: 'gear.lookup.quick' },
+  thorough: { model: process.env.LP_GEAR_LOOKUP_MODEL || 'claude-sonnet-5-5', maxSearches: 3, endpoint: 'gear.lookup' },
+};
+
+export function lookupDepth(v: unknown): LookupDepth {
+  return v === 'thorough' ? 'thorough' : 'quick';
+}
+
+/** What a quick answer left out — the panel offers "Try harder" louder when
+ *  any of these is missing. */
+export function missingFacts(r: GearLookup): string[] {
+  const out: string[] = [];
+  if (!r.retail) out.push('price');
+  if (r.weightKg == null) out.push('weight');
+  if (!r.imageUrl) out.push('photo');
+  if (!r.manufacturer && !r.model) out.push('make / model');
+  return out;
+}
 
 export interface GearLookup {
   name: string;

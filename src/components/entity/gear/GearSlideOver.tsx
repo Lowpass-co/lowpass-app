@@ -32,7 +32,7 @@ import { createClient } from '@/lib/supabase-client';
 import { uploadDirect } from '@/lib/uploads/directUpload';
 import { dayRateFromPurchase } from '@/lib/rental-pricing';
 import { CATEGORIES, fmtMoney } from '@/components/equipment/types';
-import type { GearLookup } from '@/lib/gear/lookup';
+import { missingFacts, type GearLookup, type LookupDepth } from '@/lib/gear/lookup';
 import type { Gear, GearOwnership, TourGear } from '@/lib/types/gear';
 import { StatusPill, STOCK_STATUS_TONE } from '@/components/equipment/StatusPill';
 
@@ -116,23 +116,54 @@ export function toBody(d: Draft): Record<string, unknown> {
   };
 }
 
-/** Fill only what's blank — a lookup never overwrites what you typed. */
-export function fillBlanks(d: Draft, r: GearLookup): Draft {
+/** What a lookup offers for each field it can fill. */
+function offered(r: GearLookup): Pick<Draft, 'name' | 'manufacturer' | 'model' | 'category' | 'valueAmount' | 'valueCurrency' | 'purchaseCost' | 'weightKg' | 'dims' | 'notes'> {
   return {
-    ...d,
-    name: d.name.trim() ? d.name : r.name,
-    manufacturer: d.manufacturer || r.manufacturer || '',
-    model: d.model || r.model || '',
-    category: d.category || r.category || '',
-    valueAmount: d.valueAmount ?? r.retail?.amount ?? null,
-    valueCurrency: d.valueAmount != null ? d.valueCurrency : r.retail?.currency ?? d.valueCurrency,
+    name: r.name,
+    manufacturer: r.manufacturer ?? '',
+    model: r.model ?? '',
+    category: r.category ?? '',
+    valueAmount: r.retail?.amount ?? null,
+    valueCurrency: r.retail?.currency ?? '',
     // Stock is priced in USD: a USD retail price is a fair purchase cost to
     // start from (change it to what you paid).
-    purchaseCost: d.purchaseCost ?? (r.retail?.currency === 'USD' ? r.retail.amount : null),
-    weightKg: d.weightKg ?? r.weightKg,
-    dims: d.dims.l ? d.dims : { l: r.dimensionsCm?.l ?? null, w: r.dimensionsCm?.w ?? null, h: r.dimensionsCm?.h ?? null },
-    notes: d.notes || r.description || '',
+    purchaseCost: r.retail?.currency === 'USD' ? r.retail.amount : null,
+    weightKg: r.weightKg,
+    dims: { l: r.dimensionsCm?.l ?? null, w: r.dimensionsCm?.w ?? null, h: r.dimensionsCm?.h ?? null },
+    notes: r.description ?? '',
   };
+}
+
+const sameValue = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
+const isBlank = (v: unknown) =>
+  v == null || (typeof v === 'string' && v.trim() === '') ||
+  (typeof v === 'object' && v !== null && 'l' in v && (v as Draft['dims']).l == null);
+
+/** A lookup's answer into the form. A field takes the new value when it's
+ *  blank, or when it still holds exactly what the PREVIOUS lookup put there
+ *  (so "Try harder" corrects the quick answer); anything you typed is kept.
+ *  An empty new value never wipes a field. */
+export function applyLookup(d: Draft, next: GearLookup, prev: GearLookup | null = null): Draft {
+  const n = offered(next);
+  const p = prev ? offered(prev) : null;
+  const out: Draft = { ...d };
+  const keys = ['name', 'manufacturer', 'model', 'category', 'purchaseCost', 'weightKg', 'dims', 'notes'] as const;
+  for (const k of keys) {
+    const take = isBlank(d[k]) || (p != null && !isBlank(p[k]) && sameValue(d[k], p[k]));
+    if (take && !isBlank(n[k])) (out as unknown as Record<string, unknown>)[k] = n[k];
+  }
+  // Value and its currency move together.
+  const takeValue = d.valueAmount == null || (p != null && p.valueAmount != null && d.valueAmount === p.valueAmount && d.valueCurrency === p.valueCurrency);
+  if (takeValue && n.valueAmount != null) {
+    out.valueAmount = n.valueAmount;
+    out.valueCurrency = n.valueCurrency || d.valueCurrency;
+  }
+  return out;
+}
+
+/** Fill only what's blank — a first lookup never overwrites what you typed. */
+export function fillBlanks(d: Draft, r: GearLookup): Draft {
+  return applyLookup(d, r, null);
 }
 
 export default function GearSlideOver({
@@ -404,9 +435,10 @@ function Form({
         <Lookup
           initial={lookupFirst ? lookupQuery ?? '' : [d.manufacturer, d.model].filter(Boolean).join(' ') || d.name}
           prominent={!!lookupFirst}
-          onResult={(r) => {
-            set((p) => fillBlanks(provisionalName && p.name === provisionalName ? { ...p, name: '' } : p, r));
-            if (!imageUrl && r.imageUrl) onImage(r.imageUrl);
+          onResult={(r, prev) => {
+            set((p) => applyLookup(provisionalName && p.name === provisionalName ? { ...p, name: '' } : p, r, prev));
+            // The photo: none yet, or still the one the last lookup found.
+            if (r.imageUrl && (!imageUrl || (prev && imageUrl === prev.imageUrl))) onImage(r.imageUrl);
           }}
         />
       </div>
@@ -700,32 +732,39 @@ function PhotoBox({ url, onChange }: { url: string | null; onChange: (url: strin
 
 /* ─────────────────────────── look it up ─────────────────────────── */
 
-function Lookup({ initial, prominent, onResult }: { initial: string; prominent: boolean; onResult: (r: GearLookup) => void }) {
+function Lookup({ initial, prominent, onResult }: { initial: string; prominent: boolean; onResult: (r: GearLookup, prev: GearLookup | null) => void }) {
   const [q, setQ] = useState(initial);
-  const [busy, setBusy] = useState(false);
+  const [busy, setBusy] = useState<LookupDepth | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [sources, setSources] = useState<string[]>([]);
+  /** The last answer, and how hard it looked. */
+  const [last, setLast] = useState<{ r: GearLookup; depth: LookupDepth; q: string } | null>(null);
 
-  async function run() {
+  async function run(depth: LookupDepth) {
     if (q.trim().length < 2 || busy) return;
-    setBusy(true);
+    setBusy(depth);
     setError(null);
     const res = await fetch('/api/gear/lookup', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ query: q.trim() }),
+      body: JSON.stringify({ query: q.trim(), depth }),
     });
-    const j = (await res.json().catch(() => ({}))) as { result?: GearLookup; error?: string };
-    setBusy(false);
+    const j = (await res.json().catch(() => ({}))) as { result?: GearLookup; depth?: LookupDepth; error?: string };
+    setBusy(null);
     if (!res.ok || !j.result) {
       setError(j.error ?? 'The lookup didn’t work just now.');
       return;
     }
-    setSources(j.result.sources);
-    onResult(j.result);
+    // "Try harder" on the same search may replace what the quick one filled.
+    const prev = last && last.q === q.trim() ? last.r : null;
+    setLast({ r: j.result, depth: j.depth ?? depth, q: q.trim() });
+    onResult(j.result, prev);
   }
 
-  const hosts = [...new Set(sources.map((s) => { try { return new URL(s).hostname.replace(/^www\./, ''); } catch { return null; } }).filter(Boolean))] as string[];
+  const hosts = last
+    ? ([...new Set(last.r.sources.map((s) => { try { return new URL(s).hostname.replace(/^www\./, ''); } catch { return null; } }).filter(Boolean))] as string[])
+    : [];
+  const missing = last ? missingFacts(last.r) : [];
+  const canTryHarder = !!last && last.depth === 'quick' && last.q === q.trim();
 
   return (
     <div
@@ -743,20 +782,38 @@ function Lookup({ initial, prominent, onResult }: { initial: string; prominent: 
             className={`${BOX_CLASS} pl-8`}
             value={q}
             onChange={(e) => setQ(e.target.value)}
-            onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); void run(); } }}
+            onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); void run('quick'); } }}
             placeholder="Make and model, e.g. AKG C414 XLII"
             aria-label="Look it up online"
             autoFocus={prominent}
           />
         </div>
-        <Button variant={prominent ? 'primary' : 'secondary'} size="md" loading={busy} onClick={() => void run()} data-submit>
-          {busy ? 'Searching…' : 'Look it up'}
+        <Button variant={prominent ? 'primary' : 'secondary'} size="md" loading={busy === 'quick'} disabled={!!busy} onClick={() => void run('quick')} data-submit>
+          {busy === 'quick' ? 'Searching…' : 'Look it up'}
         </Button>
       </div>
       {error ? (
         <p className="text-xs" style={{ color: 'var(--color-lp-error)' }}>{error}</p>
-      ) : hosts.length ? (
-        <p className="text-xs text-lp-text-tertiary">Filled the blanks from {hosts.slice(0, 3).join(', ')}. Check the numbers before you quote them.</p>
+      ) : last ? (
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-lp-text-tertiary">
+          <span className="min-w-0">
+            {missing.length ? `No ${missing.join(', ')} found` : 'Filled the blanks'}
+            {hosts.length ? ` · from ${hosts.slice(0, 3).join(', ')}` : ''}. Check the numbers before you quote them.
+          </span>
+          {canTryHarder ? (
+            <button
+              type="button"
+              onClick={() => void run('thorough')}
+              disabled={!!busy}
+              className="inline-flex items-center gap-1 font-medium disabled:opacity-60"
+              style={{ color: missing.length ? 'var(--lp-orange)' : 'var(--lp-text-secondary)' }}
+              title="A slower, more careful search — about 8¢ instead of 1–2¢"
+            >
+              {busy === 'thorough' ? <Loader2 size={12} className="animate-spin" aria-hidden /> : null}
+              {busy === 'thorough' ? 'Looking harder…' : 'Try harder'}
+            </button>
+          ) : null}
+        </div>
       ) : (
         <p className="text-xs text-lp-text-tertiary">Retail value, weight, size and a photo. Fills only what’s blank.</p>
       )}
