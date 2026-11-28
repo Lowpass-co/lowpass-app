@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { readAddQuery, searchStock } from './AddGear';
 import type { RentalInventoryItem } from './types';
 
@@ -30,5 +30,43 @@ describe('Add gear', () => {
     expect(searchStock(stock, 'cables').map((i) => i.id)).toEqual(['d']);
     expect(searchStock(stock, 'shure 58a').map((i) => i.id)).toEqual(['a']);
     expect(searchStock(stock, '   ')).toEqual([]);
+  });
+});
+
+import { fireEvent, render, screen } from '@testing-library/react';
+import { AddGear } from './AddGear';
+
+describe('Add gear › Add to stock', () => {
+  const stock = [item('a', 'SM58'), item('b', 'Shure Beta 58A')];
+  function setup() {
+    const onAddToStock = vi.fn();
+    const onAdd = vi.fn(async () => true);
+    render(<AddGear stock={stock} onJob={() => 0} conv={(n) => n} currency="USD" onAdd={onAdd} onAddToStock={onAddToStock} />);
+    const box = screen.getByLabelText('Add gear') as HTMLInputElement;
+    fireEvent.focus(box);
+    return { box, onAddToStock, onAdd };
+  }
+
+  it('offers it when nothing matches; Enter takes it, with the typed quantity', () => {
+    const { box, onAddToStock, onAdd } = setup();
+    fireEvent.change(box, { target: { value: '4 C414 XLII' } });
+    expect(screen.getByText('Add “C414 XLII” to stock')).toBeTruthy();
+    fireEvent.keyDown(box, { key: 'Enter' });
+    expect(onAddToStock).toHaveBeenCalledWith('C414 XLII', 4);
+    expect(onAdd).not.toHaveBeenCalled();
+  });
+
+  it('comes after the matches — ↓ reaches it — and hides when the exact item is in stock', () => {
+    const { box, onAddToStock, onAdd } = setup();
+    fireEvent.change(box, { target: { value: '58a' } });
+    expect(screen.getByText('Add “58a” to stock')).toBeTruthy();
+    fireEvent.keyDown(box, { key: 'Enter' });
+    expect(onAdd).toHaveBeenCalledWith('b', 1);
+    fireEvent.change(box, { target: { value: '58a' } });
+    fireEvent.keyDown(box, { key: 'ArrowDown' });
+    fireEvent.keyDown(box, { key: 'Enter' });
+    expect(onAddToStock).toHaveBeenCalledWith('58a', 1);
+    fireEvent.change(box, { target: { value: 'sm58' } });
+    expect(screen.queryByText(/to stock/)).toBeNull();
   });
 });

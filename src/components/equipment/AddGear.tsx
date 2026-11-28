@@ -7,10 +7,12 @@
    Enter adds one and keeps the box open for the next item. A number first
    adds that many: "8 sm58" or "8x sm58". "/" anywhere on the page jumps here.
    An item already on the job adds to its quantity (the server does that).
+   Not in stock? The last row, "Add 'X' to stock", opens the new-item panel
+   (with the online lookup) and puts it on the job once it's saved.
    ============================================ */
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Package, Search } from 'lucide-react';
+import { Package, Plus, Search } from 'lucide-react';
 import { effectiveInventoryDayRate } from '@/lib/rental-pricing';
 import { fmtMoney, type RentalInventoryItem } from './types';
 import { Thumb } from './rentalUi';
@@ -42,6 +44,7 @@ export function AddGear({
   conv,
   currency,
   onAdd,
+  onAddToStock,
 }: {
   stock: RentalInventoryItem[];
   /** How many of this item are on the job already. */
@@ -49,6 +52,8 @@ export function AddGear({
   conv: (usd: number) => number;
   currency: string;
   onAdd: (gearId: string, qty: number) => Promise<boolean>;
+  /** Not in stock: make it (and put `qty` on the job). */
+  onAddToStock?: (text: string, qty: number) => void;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [q, setQ] = useState('');
@@ -58,7 +63,18 @@ export function AddGear({
 
   const { qty, text } = readAddQuery(q);
   const results = useMemo(() => searchStock(stock, text), [stock, text]);
-  const shownActive = Math.min(active, Math.max(0, results.length - 1));
+  /* The "Add to stock" row sits after the results (unless one of them IS
+     what was typed) — the keyboard can reach it like any other row. */
+  const offerNew = !!onAddToStock && text.length >= 2 && !results.some((r) => r.name.trim().toLowerCase() === text.toLowerCase());
+  const rowCount = results.length + (offerNew ? 1 : 0);
+  const shownActive = Math.min(active, Math.max(0, rowCount - 1));
+  const newActive = offerNew && shownActive === results.length;
+
+  function addToStock() {
+    onAddToStock?.(text, qty);
+    setQ('');
+    setActive(0);
+  }
 
   /* "/" focuses the box unless you're typing somewhere else. */
   useEffect(() => {
@@ -106,14 +122,17 @@ export function AddGear({
           onKeyDown={(e) => {
             if (e.key === 'ArrowDown') {
               e.preventDefault();
-              setActive(Math.min(shownActive + 1, results.length - 1));
+              setActive(Math.min(shownActive + 1, rowCount - 1));
             } else if (e.key === 'ArrowUp') {
               e.preventDefault();
               setActive(Math.max(shownActive - 1, 0));
             } else if (e.key === 'Enter') {
               e.preventDefault();
-              const item = results[shownActive];
-              if (item) void add(item);
+              if (newActive) addToStock();
+              else {
+                const item = results[shownActive];
+                if (item) void add(item);
+              }
             } else if (e.key === 'Escape') {
               if (q) setQ('');
               else inputRef.current?.blur();
@@ -145,7 +164,7 @@ export function AddGear({
           className="absolute left-0 right-0 top-full mt-1.5 overflow-hidden rounded-xl border"
           style={{ zIndex: 'var(--lp-z-dropdown)', borderColor: 'var(--lp-border)', backgroundColor: 'var(--lp-surface)', boxShadow: 'var(--lp-shadow-lg)' }}
         >
-          {results.length === 0 ? (
+          {results.length === 0 && !offerNew ? (
             <p className="px-3 py-3 text-sm text-lp-text-tertiary">Nothing in your stock matches “{text}”.</p>
           ) : (
             results.map((i, idx) => {
@@ -184,6 +203,33 @@ export function AddGear({
               );
             })
           )}
+          {offerNew ? (
+            <div
+              role="option"
+              aria-selected={newActive}
+              onMouseDown={(e) => e.preventDefault()}
+              onMouseEnter={() => setActive(results.length)}
+              onClick={addToStock}
+              className="flex cursor-pointer items-center gap-3 px-3 py-2 text-sm"
+              style={{
+                backgroundColor: newActive ? 'var(--lp-surface-hover)' : undefined,
+                borderTop: results.length ? '1px solid var(--lp-border-light)' : undefined,
+              }}
+            >
+              <span
+                className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md"
+                style={{ color: 'var(--lp-orange)', backgroundColor: 'color-mix(in srgb, var(--lp-orange) 10%, transparent)' }}
+              >
+                <Plus size={14} aria-hidden />
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-lp-text">Add “{text}” to stock</span>
+                <span className="block truncate text-xs text-lp-text-tertiary">
+                  {results.length === 0 ? 'Not in your stock yet — ' : ''}look it up online, then {qty > 1 ? `${qty} go` : 'it goes'} on this job
+                </span>
+              </span>
+            </div>
+          ) : null}
         </div>
       ) : null}
     </div>

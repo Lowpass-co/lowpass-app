@@ -23,6 +23,8 @@ import { NumInput } from '@/components/income/moneyUi';
 import { SpreadsheetGrid } from '@/components/spreadsheet-grid/SpreadsheetGrid';
 import type { GridColumn, GridRow, SectionHeader } from '@/components/spreadsheet-grid/types';
 import { rentalApi, statusPatch } from './rentalApi';
+import GearSlideOver from '@/components/entity/gear/GearSlideOver';
+import { gearToStock } from '@/lib/rental/stockRow';
 import { AddGear } from './AddGear';
 import { Popover, StatusMenu, Thumb } from './rentalUi';
 import { exportJobPdf, type PdfMode } from './exportJobPdf';
@@ -54,10 +56,28 @@ interface Props {
   onDelete: () => Promise<void>;
   onJobUpdated: (job: RentalJob) => void;
   settings: RentalSettingsView;
+  /** An item was just added to stock from this job. */
+  onStockAdded: (item: RentalInventoryItem) => void;
 }
 
-export function JobDetail({ job, inventory, artists, tours, lines, onLinesChange, onBack, onEdit, onDelete, onJobUpdated, settings }: Props) {
+export function JobDetail({ job, inventory, artists, tours, lines, onLinesChange, onBack, onEdit, onDelete, onJobUpdated, settings, onStockAdded }: Props) {
   const { showToast } = useToast();
+  /** "Add 'X' to stock" from Add gear: the new-item panel, then onto the job. */
+  const [newStock, setNewStock] = useState<{ text: string; qty: number } | null>(null);
+
+  async function stockCreated(gearId: string) {
+    const want = newStock;
+    setNewStock(null);
+    try {
+      const res = await fetch(`/api/gear/${gearId}`, { cache: 'no-store' });
+      if (!res.ok) throw new Error(String(res.status));
+      onStockAdded(gearToStock((await res.json()) as Record<string, unknown>));
+    } catch {
+      showToast('It’s in your stock, but this page couldn’t load it — refresh to add it.', 'error');
+      return;
+    }
+    await addGear(gearId, want?.qty ?? 1);
+  }
   const setLines = useCallback((next: LinesUpdate) => onLinesChange(job.id, next), [job.id, onLinesChange]);
   const [confirmDelete, setConfirmDelete] = useState(false);
 
@@ -321,6 +341,7 @@ export function JobDetail({ job, inventory, artists, tours, lines, onLinesChange
             conv={conv}
             currency={dispCur}
             onAdd={addGear}
+            onAddToStock={(text, qty) => setNewStock({ text, qty })}
           />
           <div className="overflow-hidden rounded-xl border" style={{ borderColor: 'var(--lp-border)', backgroundColor: 'var(--lp-surface)' }}>
             {rows.length === 0 ? (
@@ -434,6 +455,15 @@ export function JobDetail({ job, inventory, artists, tours, lines, onLinesChange
           </dl>
         </aside>
       </div>
+
+      {newStock ? (
+        <GearSlideOver
+          id={null}
+          initialQuery={newStock.text}
+          onClose={() => setNewStock(null)}
+          onCreated={(id) => void stockCreated(id)}
+        />
+      ) : null}
 
       <DeleteConfirmationModal
         open={confirmDelete}

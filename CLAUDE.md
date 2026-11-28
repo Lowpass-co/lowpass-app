@@ -1237,6 +1237,12 @@ page then goes — Adam never used it).
   **Delete** only for an item never on a job / tour (409 IN_USE → retire).
   **Import**: `/api/gear/import` + `parseImport` (lists or CSV/TSV with a
   header, columns by name). Smoke: RNT-14…22.
+- **Add to stock from a job**: `<AddGear onAddToStock>` — the last row when
+  nothing is exactly the typed name; opens `<GearSlideOver id={null}
+  initialQuery>` (name + lookup prefilled; an untouched name takes the
+  lookup's), then the job fetches the new row (`gearToStock`,
+  src/lib/rental/stockRow.ts — pure, shared with the server) and adds the
+  typed quantity. Smoke: RNT-23.
 
 ### Auth + RLS
 

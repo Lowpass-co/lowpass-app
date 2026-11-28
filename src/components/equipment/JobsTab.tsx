@@ -49,6 +49,7 @@ interface Props {
   setTours: (t: EquipmentTourOption[]) => void;
   settings: RentalSettingsView;
   onOpenSettings: () => void;
+  onStockAdded: (item: RentalInventoryItem) => void;
 }
 
 type Row = {
@@ -69,7 +70,7 @@ const GROUP_KEY = 'lowpass:rental:jobs:group';
 
 export function JobsTab({
   userId, workspaceId, jobs, setJobs, linesByJob, onLinesChange, inventory,
-  artists, tours, setArtists, setTours, settings, onOpenSettings,
+  artists, tours, setArtists, setTours, settings, onOpenSettings, onStockAdded,
 }: Props) {
   const { showToast } = useToast();
   const [modalOpen, setModal] = useState(false);
@@ -289,6 +290,7 @@ export function JobsTab({
           onDelete={() => deleteJob(activeJob.id)}
           onJobUpdated={onJobUpdated}
           settings={settings}
+          onStockAdded={onStockAdded}
         />
       </div>
     );

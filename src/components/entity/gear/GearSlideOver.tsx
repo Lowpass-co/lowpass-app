@@ -140,9 +140,13 @@ export default function GearSlideOver({
   onClose,
   onCreated,
   onChanged,
+  initialQuery,
 }: {
   /** null = add a new item. */
   id: string | null;
+  /** Add mode: what was typed where the item wasn't found (the job's Add
+   *  gear) — it starts the name and the lookup. */
+  initialQuery?: string;
   onClose: () => void;
   onCreated?: (id: string) => void;
   /** Something about the item changed (refresh lists). */
@@ -175,15 +179,16 @@ export default function GearSlideOver({
   return id && gear ? (
     <EditItem key={gear.id} gear={gear} onClose={onClose} onChanged={onChanged} />
   ) : (
-    <NewItem onClose={onClose} onCreated={onCreated} />
+    <NewItem onClose={onClose} onCreated={onCreated} initialQuery={initialQuery} />
   );
 }
 
 /* ─────────────────────────── add ─────────────────────────── */
 
-function NewItem({ onClose, onCreated }: { onClose: () => void; onCreated?: (id: string) => void }) {
+function NewItem({ onClose, onCreated, initialQuery }: { onClose: () => void; onCreated?: (id: string) => void; initialQuery?: string }) {
   const { showToast } = useToast();
-  const [d, setD] = useState<Draft>(EMPTY);
+  const start = initialQuery?.trim() ?? '';
+  const [d, setD] = useState<Draft>({ ...EMPTY, name: start });
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -229,6 +234,8 @@ function NewItem({ onClose, onCreated }: { onClose: () => void; onCreated?: (id:
         imageUrl={imageUrl}
         onImage={setImageUrl}
         lookupFirst
+        lookupQuery={start}
+        provisionalName={start}
       />
     </SlideOver>
   );
@@ -367,6 +374,8 @@ function Form({
   imageUrl,
   onImage,
   lookupFirst,
+  lookupQuery,
+  provisionalName,
   ownership,
   onOwnership,
   tours,
@@ -376,6 +385,11 @@ function Form({
   imageUrl: string | null;
   onImage: (url: string | null) => void;
   lookupFirst?: boolean;
+  /** Starts the lookup box. */
+  lookupQuery?: string;
+  /** A name nobody has edited yet (what was searched for): the lookup's
+   *  proper name replaces it. Anything typed over it is kept. */
+  provisionalName?: string;
   ownership?: GearOwnership;
   onOwnership?: (o: GearOwnership) => void;
   tours?: TourGear[];
@@ -388,10 +402,10 @@ function Form({
       <div className="grid grid-cols-[132px_minmax(0,1fr)] gap-5">
         <PhotoBox url={imageUrl} onChange={onImage} />
         <Lookup
-          initial={lookupFirst ? '' : [d.manufacturer, d.model].filter(Boolean).join(' ') || d.name}
+          initial={lookupFirst ? lookupQuery ?? '' : [d.manufacturer, d.model].filter(Boolean).join(' ') || d.name}
           prominent={!!lookupFirst}
           onResult={(r) => {
-            set((p) => fillBlanks(p, r));
+            set((p) => fillBlanks(provisionalName && p.name === provisionalName ? { ...p, name: '' } : p, r));
             if (!imageUrl && r.imageUrl) onImage(r.imageUrl);
           }}
         />
