@@ -1205,6 +1205,23 @@ page then goes — Adam never used it).
 - **Quantity**: `gear.quantity` (how many you own). The gear panel's Rental
   section edits quantity, purchase cost and day rate (blank = 3% of cost,
   `DAY_RATE_PCT_OF_VALUE`). Smoke: RNT-01…06 (rental.md).
+- **Priced once: `priceQuote`** (`src/lib/rental/quote.ts`) — the job page,
+  the jobs list's totals and the PDF all call it (they each summed lines
+  before). Lines are USD (the stock's unit), grouped by category in
+  `CATEGORY_ORDER` (then A–Z, then "Other"); callers convert for display.
+  Never sum rental lines anywhere else.
+- **The look (visual pass, Nov 2026 — migration 307):** status pills are
+  `<StatusPill>` with token tones (`JOB_STATUS_TONE` / `STOCK_STATUS_TONE`) —
+  no hex maps. The job page: title + clickable status pill, one facts line
+  (opens Edit details), `<AddGear>` (one search box: `/` focuses, "8 sm58"
+  adds 8, Enter keeps it open), lines grouped by category in the
+  `<SpreadsheetGrid>` (section labels carry the subtotal), and one sticky rail
+  with every figure once. The list: grouped by month (`groupJobsByMonth`,
+  this month first) or status, one flat `<DataTable toolbar={false}>` per
+  group. Rental settings (the list's Settings): week, quote validity (14
+  days default, `workspaces.rental_quote_valid_days`) and payment details
+  (`rental_payment_details`, printed only when the export ticks it). Smoke:
+  RNT-07…13.
 
 ### Auth + RLS
 

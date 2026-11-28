@@ -10,8 +10,9 @@ import { createServerSupabaseClient } from '@/lib/supabase-server';
    WorkspaceTabs) for /artists, /personnel, /equipment. */
 import { EquipmentClient } from '@/components/equipment/EquipmentClient';
 import { redirect } from 'next/navigation';
-import type { EquipmentArtistOption, EquipmentTourOption, RentalInventoryItem, RentalJob } from '@/components/equipment/types';
-import { loadDaysPerWeek, loadRentalStock } from '@/server/rental/stock';
+import type { EquipmentArtistOption, EquipmentTourOption, RentalInventoryItem, RentalJob, RentalJobItem } from '@/components/equipment/types';
+import { loadRentalSettings, loadRentalStock } from '@/server/rental/stock';
+import { LINE_COLS } from '@/server/rental/jobs';
 
 export const metadata = { title: 'Equipment — LOWPASS' };
 
@@ -56,6 +57,14 @@ export default async function EquipmentPage() {
       tour_id: j.tour_id ?? null,
     };
   });
+  /* Every job's lines, so the list can show each job's total (one read). */
+  const ids = jobs.map((j) => j.id);
+  const [{ data: linesRaw }, settings] = await Promise.all([
+    ids.length
+      ? supabase.from('rental_job_items').select(LINE_COLS).in('job_id', ids)
+      : Promise.resolve({ data: [] as RentalJobItem[] }),
+    ws ? loadRentalSettings(supabase, ws) : Promise.resolve(null),
+  ]);
   const artists = (artistsRaw ?? []) as EquipmentArtistOption[];
   const tours = (toursRaw ?? []) as EquipmentTourOption[];
 
@@ -64,7 +73,8 @@ export default async function EquipmentPage() {
       userId={user.id}
       workspaceId={ws}
       initialInventory={inventory ?? []}
-      daysPerWeekDefault={ws ? await loadDaysPerWeek(supabase, ws) : null}
+      initialLines={(linesRaw ?? []) as unknown as RentalJobItem[]}
+      settings={settings ?? { daysPerWeek: null, quoteValidDays: 14, paymentDetails: null }}
       initialJobs={jobs}
       initialArtists={artists}
       initialTours={tours}

@@ -1,31 +1,36 @@
 /* ============================================
-   LOWPASS — Equipment / Jobs Tab
-   Mirrors inventory toolbar + table shell.
+   LOWPASS — Rental jobs list (Nov 2026 visual pass)
+
+   Grouped by month (this month on, soonest first, then earlier), or by status
+   (Adam: "months and then optional sort by status"). Each group is a flat
+   <DataTable>; status chips and one search sit above. Totals come from
+   priceQuote — the job page's own pricing.
    ============================================ */
 
 'use client';
 
 import { useCallback, useMemo, useState } from 'react';
-import { Plus, Pencil, Search, Trash2 } from 'lucide-react';
+import { Plus, Search, Settings } from 'lucide-react';
 import { createClient } from '@/lib/supabase-client';
 import { jobDaysPerWeek } from '@/lib/rental-pricing';
+import { priceQuote } from '@/lib/rental/quote';
+import {
+  fmtRange, groupJobsByMonth, groupJobsByStatus,
+  JOB_STATUS_LABEL, JOB_STATUS_ORDER, type JobStatus,
+} from '@/lib/rental/jobList';
 import { rentalApi } from './rentalApi';
 import { useToast } from '@/components/ui/Toast';
-import { StyledSelect, type StyledSelectOption } from '@/components/ui/StyledSelect';
+import { Button } from '@/components/ui/Button';
+import { FilterChips } from '@/components/ui/FilterChips';
+import { DataTable } from '@/components/data-table/DataTable';
+import type { ColumnDef } from '@/components/data-table/types';
 import { JobModal } from './JobModal';
-import { JobDetail } from './JobDetail';
-import { cn } from '@/lib/utils';
+import { JobDetail, type LinesUpdate, type RentalSettingsView } from './JobDetail';
+import { JOB_STATUS_TONE, StatusPill } from './StatusPill';
 import {
-  EQUIPMENT_TABLE_MIN_CLASS,
-  EQUIPMENT_TOOLBAR_GRID_CLASS,
-  STATUS_OPTIONS,
-  STATUS_STYLES,
-  calcDays,
-  fmtDate,
-  type EquipmentArtistOption,
-  type EquipmentTourOption,
-  type RentalJob,
-  type RentalInventoryItem,
+  calcDays, fmtMoney, jobCurrency, resolveQuoteDisplay,
+  type EquipmentArtistOption, type EquipmentTourOption,
+  type RentalJob, type RentalInventoryItem, type RentalJobItem,
 } from './types';
 
 interface Props {
@@ -33,112 +38,177 @@ interface Props {
   workspaceId: string | null;
   jobs: RentalJob[];
   setJobs: (jobs: RentalJob[]) => void;
+  linesByJob: Record<string, RentalJobItem[]>;
+  onLinesChange: (jobId: string, next: LinesUpdate) => void;
   inventory: RentalInventoryItem[];
   artists: EquipmentArtistOption[];
   tours: EquipmentTourOption[];
   setArtists: (a: EquipmentArtistOption[]) => void;
   setTours: (t: EquipmentTourOption[]) => void;
-  daysPerWeekDefault?: number | null;
+  settings: RentalSettingsView;
+  onOpenSettings: () => void;
 }
 
+type Row = {
+  job: RentalJob;
+  id: string;
+  name: string;
+  status: string;
+  start_date: string | null;
+  artistTour: string;
+  billed: number;
+  /** In the figures' own currency (dispCur). */
+  total: number;
+  currency: string;
+};
+
+type Grouping = 'month' | 'status';
+const GROUP_KEY = 'lowpass:rental:jobs:group';
+
 export function JobsTab({
-  userId,
-  workspaceId,
-  jobs,
-  setJobs,
-  inventory,
-  artists,
-  tours,
-  setArtists,
-  setTours,
-  daysPerWeekDefault = null,
+  userId, workspaceId, jobs, setJobs, linesByJob, onLinesChange, inventory,
+  artists, tours, setArtists, setTours, settings, onOpenSettings,
 }: Props) {
+  const { showToast } = useToast();
   const [modalOpen, setModal] = useState(false);
   const [editingJob, setEditingJob] = useState<RentalJob | null>(null);
   const [activeJobId, setActiveJob] = useState<string | null>(null);
   const [search, setSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState<string>('');
-  const { showToast } = useToast();
+  const [statusFilter, setStatusFilter] = useState<'all' | JobStatus>('all');
+  const [grouping, setGroupingState] = useState<Grouping>(() => {
+    try {
+      return typeof window !== 'undefined' && window.localStorage.getItem(GROUP_KEY) === 'status' ? 'status' : 'month';
+    } catch {
+      return 'month';
+    }
+  });
+  function setGrouping(g: Grouping) {
+    setGroupingState(g);
+    try { window.localStorage.setItem(GROUP_KEY, g); } catch { /* private mode */ }
+  }
 
   const activeJob = jobs.find((j) => j.id === activeJobId) ?? null;
 
-  const statusOptions: StyledSelectOption<string>[] = useMemo(
-    () => [
-      { value: '', label: 'All statuses' },
-      ...STATUS_OPTIONS.map((s) => ({
-        value: s,
-        label: s.charAt(0).toUpperCase() + s.slice(1),
-      })),
-    ],
-    []
+  const rows: Row[] = useMemo(
+    () =>
+      jobs.map((job) => {
+        const billed = calcDays(job.start_date, job.end_date, jobDaysPerWeek(job, settings.daysPerWeek));
+        const q = priceQuote({
+          lines: linesByJob[job.id] ?? [],
+          stock: inventory,
+          days: billed,
+          discountPercent: job.discount_percent,
+          discountFixed: job.discount_fixed,
+        });
+        /* The list has no live rate: a frozen job shows its frozen
+           conversion, a draft in another currency shows dollars, labelled. */
+        const rate = job.fx_rate != null ? Number(job.fx_rate) : null;
+        const { dispCur } = resolveQuoteDisplay(jobCurrency(job), rate);
+        const artist = job.artist?.name ?? artists.find((a) => a.id === job.artist_id)?.name;
+        const tour = job.tour?.name ?? tours.find((t) => t.id === job.tour_id)?.name;
+        return {
+          job,
+          id: job.id,
+          name: job.name,
+          status: job.status,
+          start_date: job.start_date,
+          artistTour: [artist, tour].filter(Boolean).join(' / '),
+          billed,
+          total: dispCur === 'USD' || rate == null ? q.total : q.total * rate,
+          currency: dispCur,
+        };
+      }),
+    [jobs, linesByJob, inventory, settings.daysPerWeek, artists, tours],
   );
+
+  const counts = useMemo(() => {
+    const c: Record<string, number> = {};
+    for (const j of jobs) c[j.status] = (c[j.status] ?? 0) + 1;
+    return c;
+  }, [jobs]);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    return jobs.filter((j) => {
-      const matchS = !statusFilter || j.status === statusFilter;
-      if (!q) return matchS;
-      const blob = [
-        j.name,
-        j.client_name,
-        j.artist?.name,
-        j.tour?.name,
-        j.notes,
-      ]
-        .filter(Boolean)
-        .join(' ')
-        .toLowerCase();
-      return matchS && blob.includes(q);
+    return rows.filter((r) => {
+      if (statusFilter !== 'all' && r.status !== statusFilter) return false;
+      if (!q) return true;
+      return [r.name, r.job.client_name, r.artistTour, r.job.notes].filter(Boolean).join(' ').toLowerCase().includes(q);
     });
-  }, [jobs, search, statusFilter]);
+  }, [rows, search, statusFilter]);
+
+  const groups = useMemo(
+    () => (grouping === 'status' ? groupJobsByStatus(filtered) : groupJobsByMonth(filtered, new Date())),
+    [filtered, grouping],
+  );
+
+  const columns = useMemo<ColumnDef<Row>[]>(
+    () => [
+      {
+        id: 'name', header: 'Job', accessor: 'name', flex: true, minWidth: 220,
+        cell: (_, r) => (
+          <span className="block min-w-0">
+            <span className="block truncate font-medium text-lp-text">{r.name}</span>
+            {r.job.client_name ? <span className="block truncate text-xs text-lp-text-tertiary">{r.job.client_name}</span> : null}
+          </span>
+        ),
+      },
+      { id: 'artist', header: 'Artist / tour', accessor: 'artistTour', width: 220, cell: (v) => <span className="text-lp-text-secondary">{String(v || '—')}</span> },
+      {
+        id: 'dates', header: 'Dates', accessor: (r) => r.start_date ?? '', width: 200,
+        cell: (_, r) => (
+          <span className="block">
+            <span className="block text-lp-text-secondary">{fmtRange(r.job.start_date, r.job.end_date)}</span>
+            <span className="block text-xs text-lp-text-tertiary">{r.billed} day{r.billed === 1 ? '' : 's'} billed</span>
+          </span>
+        ),
+      },
+      { id: 'total', header: 'Total', accessor: 'total', align: 'right', width: 130, cell: (_, r) => <span className="tabular-nums text-lp-text">{fmtMoney(r.total, r.currency)}</span> },
+      {
+        id: 'status', header: 'Status', accessor: 'status', width: 130,
+        cell: (_, r) => <StatusPill tone={JOB_STATUS_TONE[r.status] ?? 'neutral'}>{JOB_STATUS_LABEL[r.status as JobStatus] ?? r.status}</StatusPill>,
+      },
+    ],
+    [],
+  );
 
   function openNewJob() {
     setEditingJob(null);
     setModal(true);
   }
-  function openEditJob(job: RentalJob) {
-    setEditingJob(job);
-    setModal(true);
-  }
 
   function onJobSaved(saved: RentalJob) {
     const exists = jobs.find((j) => j.id === saved.id);
-    if (exists) setJobs(jobs.map((j) => (j.id === saved.id ? saved : j)));
+    if (exists) setJobs(jobs.map((j) => (j.id === saved.id ? { ...j, ...saved } : j)));
     else setJobs([saved, ...jobs]);
     setModal(false);
     setActiveJob(saved.id);
   }
 
-  async function onJobDeleted(id: string) {
-    try {
-      await rentalApi.deleteJob(id);
-    } catch (e) {
-      showToast('Delete failed: ' + (e instanceof Error ? e.message : 'unknown error'), 'error');
-      return;
-    }
+  async function deleteJob(id: string) {
+    await rentalApi.deleteJob(id);
     setJobs(jobs.filter((j) => j.id !== id));
     setActiveJob(null);
+    showToast('Job deleted', 'success');
   }
 
-  function onJobUpdated(updated: RentalJob) {
-    setJobs(jobs.map((j) => (j.id === updated.id ? updated : j)));
-  }
+  const onJobUpdated = useCallback(
+    (updated: RentalJob) => setJobs(jobs.map((j) => (j.id === updated.id ? updated : j))),
+    [jobs, setJobs],
+  );
 
   const refreshWorkspaceLists = useCallback(async () => {
     if (!workspaceId) return;
     const sb = createClient();
     const [{ data: a }, { data: t }] = await Promise.all([
       sb.from('artists').select('id, name').eq('workspace_id', workspaceId).order('name'),
-      sb
-        .from('tours')
-        .select('id, name, artist_id')
-        .eq('workspace_id', workspaceId)
-        .order('start_date', { ascending: false }),
+      sb.from('tours').select('id, name, artist_id').eq('workspace_id', workspaceId).order('start_date', { ascending: false }),
     ]);
     if (a) setArtists(a as EquipmentArtistOption[]);
     if (t) setTours(t as EquipmentTourOption[]);
   }, [workspaceId, setArtists, setTours]);
 
+  /* R2-5 — the modal renders in BOTH branches (the job page's Edit lives in
+     the other one). One shared block so nobody can fix one copy. */
   const jobModal = modalOpen ? (
     <JobModal
       userId={userId}
@@ -152,225 +222,109 @@ export function JobsTab({
     />
   ) : null;
 
-  /* R2-5 — THE EDIT BUTTON NEVER OPENED ANYTHING.
-     <JobModal> is rendered at the bottom of the OTHER branch, and this early
-     return fires whenever a job is open — which is the only place the Edit
-     button exists. So clicking Edit set modalOpen = true and then returned past
-     the JSX that reads it. Not a date bug at all: nothing in that dialog worked
-     from this screen, because there was no dialog.
-
-     The modal is rendered in BOTH branches now. Kept as one shared block below
-     rather than duplicated markup, so the next person cannot fix one copy. */
   if (activeJob) {
     return (
       <div className="w-full min-w-0">
         {jobModal}
         <JobDetail
           job={activeJob}
-          workspaceId={workspaceId}
           inventory={inventory}
           artists={artists}
           tours={tours}
+          lines={linesByJob[activeJob.id] ?? []}
+          onLinesChange={onLinesChange}
           onBack={() => setActiveJob(null)}
-          onEdit={() => openEditJob(activeJob)}
-          onDelete={() => onJobDeleted(activeJob.id)}
+          onEdit={() => { setEditingJob(activeJob); setModal(true); }}
+          onDelete={() => deleteJob(activeJob.id)}
           onJobUpdated={onJobUpdated}
-          daysPerWeekDefault={daysPerWeekDefault}
+          settings={settings}
         />
       </div>
     );
   }
 
-  return (
-    <div className="flex w-full min-w-0 flex-col gap-4">
-      <div className={EQUIPMENT_TOOLBAR_GRID_CLASS}>
-        <div className="relative min-w-0">
-          <Search
-            size={14}
-            className="absolute left-3 top-1/2 -translate-y-1/2"
-            style={{ color: 'var(--lp-text-tertiary)' }}
-          />
-          <input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search jobs…"
-            className="w-full min-w-0 rounded-lg border py-2 pl-8 pr-3 text-sm"
-            style={{
-              backgroundColor: 'var(--lp-surface)',
-              borderColor: 'var(--lp-border)',
-              color: 'var(--lp-text)',
-            }}
-          />
-        </div>
-        <div className="w-[160px] shrink-0 justify-self-stretch">
-          <StyledSelect
-            size="sm"
-            value={statusFilter}
-            onChange={setStatusFilter}
-            options={statusOptions}
-            placeholder="All statuses"
-          />
-        </div>
-        <span className="text-right text-xs tabular-nums whitespace-nowrap" style={{ color: 'var(--lp-text-tertiary)' }}>
-          {jobs.length} job{jobs.length !== 1 ? 's' : ''}
-        </span>
-        <button
-          type="button"
-          onClick={openNewJob}
-          className="flex w-full min-w-0 items-center justify-center gap-2 rounded-lg px-2 py-2 text-xs font-bold uppercase tracking-wider text-white transition-colors"
-          style={{ backgroundColor: '#FF4500' }}
-          onMouseOver={(e) => (e.currentTarget.style.backgroundColor = '#E63E00')}
-          onMouseOut={(e) => (e.currentTarget.style.backgroundColor = '#FF4500')}
-        >
-          <Plus size={14} strokeWidth={2.5} /> New Job
-        </button>
-      </div>
+  const chipOptions = [
+    { value: 'all' as const, label: 'All', count: jobs.length },
+    ...JOB_STATUS_ORDER.map((s) => ({ value: s, label: JOB_STATUS_LABEL[s], count: counts[s] ?? 0 })),
+  ];
 
-      <div
-        className={cn('flex flex-col overflow-hidden rounded-xl border', EQUIPMENT_TABLE_MIN_CLASS)}
-        style={{ borderColor: 'var(--lp-border)', backgroundColor: 'var(--lp-surface)' }}
-      >
-        {filtered.length === 0 ? (
-          <div className="flex flex-1 flex-col items-center justify-center gap-3 px-4 py-16">
-            <div className="text-3xl">📋</div>
-            <p className="text-sm font-medium" style={{ color: 'var(--lp-text-secondary)' }}>
-              {jobs.length === 0 ? 'No jobs yet.' : 'No jobs match that search'}
-            </p>
-            {jobs.length === 0 && (
-              <button
-                type="button"
-                onClick={openNewJob}
-                className="text-xs font-semibold"
-                style={{ color: '#FF4500' }}
-              >
-                Create your first job →
-              </button>
-            )}
+  return (
+    <div className="flex w-full min-w-0 flex-col gap-5">
+      <header className="flex flex-wrap items-center justify-between gap-3">
+        <h1 className="lp-page-title" style={{ margin: 0, color: 'var(--lp-text)' }}>Rental jobs</h1>
+        <div className="flex items-center gap-2">
+          <Button variant="ghost" size="sm" leadingIcon={<Settings size={14} aria-hidden />} onClick={onOpenSettings}>Settings</Button>
+          <Button variant="primary" size="sm" leadingIcon={<Plus size={14} aria-hidden />} onClick={openNewJob}>New job</Button>
+        </div>
+      </header>
+
+      {jobs.length === 0 ? (
+        <div className="rounded-xl border px-6 py-16 text-center" style={{ borderColor: 'var(--lp-border)', backgroundColor: 'var(--lp-surface)' }}>
+          <p className="text-base font-medium text-lp-text">Start your first job</p>
+          <p className="mx-auto mt-1 max-w-sm text-sm text-lp-text-tertiary">A job is one hire: who it’s for, the dates, and the gear going out. Quotes and invoices come from it.</p>
+          <div className="mt-4 flex justify-center">
+            <Button variant="primary" size="sm" leadingIcon={<Plus size={14} aria-hidden />} onClick={openNewJob}>New job</Button>
           </div>
-        ) : (
-          <div className="min-h-0 flex-1 overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr
-                  style={{
-                    borderBottom: '1px solid var(--lp-border)',
-                    backgroundColor: 'var(--lp-bg-secondary)',
-                  }}
-                >
-                  {['Name', 'Artist', 'Tour', 'Client', 'Dates', 'Status', ''].map((h, i) => (
-                    <th
-                      key={h || i}
-                      className={cn(
-                        'px-4 py-3 text-left text-xs font-extrabold uppercase tracking-wider',
-                        i === 6 && 'w-24 text-right'
-                      )}
-                      style={{ color: 'var(--lp-text-tertiary)' }}
-                    >
-                      {h}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {filtered.map((job, idx) => {
-                  const days = calcDays(job.start_date, job.end_date, jobDaysPerWeek(job, daysPerWeekDefault));
-                  const style = STATUS_STYLES[job.status] ?? STATUS_STYLES.draft;
-                  const artistLabel = job.artist?.name ?? (job.artist_id ? '—' : '—');
-                  const tourLabel = job.tour?.name ?? (job.tour_id ? '—' : '—');
-                  return (
-                    <tr
-                      key={job.id}
-                      className="cursor-pointer transition-colors"
-                      style={{
-                        borderBottom:
-                          idx < filtered.length - 1 ? '1px solid var(--lp-border-light)' : 'none',
-                      }}
-                      onClick={() => setActiveJob(job.id)}
-                      onMouseOver={(e) =>
-                        (e.currentTarget.style.backgroundColor = 'var(--lp-surface-hover)')
-                      }
-                      onMouseOut={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
-                    >
-                      <td className="px-4 py-2.5">
-                        <div className="font-semibold" style={{ color: 'var(--lp-text)' }}>
-                          {job.name}
-                        </div>
-                        {job.notes && (
-                          <div
-                            className="mt-0.5 max-w-[240px] truncate text-xs"
-                            style={{ color: 'var(--lp-text-tertiary)' }}
-                          >
-                            {job.notes}
-                          </div>
-                        )}
-                      </td>
-                      <td className="px-4 py-2.5" style={{ color: 'var(--lp-text-secondary)' }}>
-                        {artistLabel}
-                      </td>
-                      <td className="px-4 py-2.5" style={{ color: 'var(--lp-text-secondary)' }}>
-                        {tourLabel}
-                      </td>
-                      <td className="px-4 py-2.5" style={{ color: 'var(--lp-text-secondary)' }}>
-                        {job.client_name ?? '—'}
-                      </td>
-                      <td className="px-4 py-2.5 text-xs" style={{ color: 'var(--lp-text-secondary)' }}>
-                        <div>{fmtDate(job.start_date)} → {fmtDate(job.end_date)}</div>
-                        <div
-                          className="mt-0.5"
-                          style={{ color: 'var(--lp-text-tertiary)' }}
-                          title="Billable rental days (3-day-week rule)"
-                        >
-                          {days} billable day{days !== 1 ? 's' : ''}
-                        </div>
-                      </td>
-                      <td className="px-4 py-2.5">
-                        <span
-                          className="inline-flex rounded-full px-2.5 py-0.5 text-xs font-semibold"
-                          style={{ backgroundColor: style.bg, color: style.text }}
-                        >
-                          {job.status}
-                        </span>
-                      </td>
-                      <td className="px-4 py-2.5 text-right" onClick={(e) => e.stopPropagation()}>
-                        <div className="flex justify-end gap-1">
-                          <button
-                            type="button"
-                            onClick={() => openEditJob(job)}
-                            className="rounded-md p-1.5 transition-colors"
-                            style={{ color: 'var(--lp-text-tertiary)' }}
-                            onMouseOver={(e) => (e.currentTarget.style.color = 'var(--lp-text)')}
-                            onMouseOut={(e) =>
-                              (e.currentTarget.style.color = 'var(--lp-text-tertiary)')
-                            }
-                            title="Edit"
-                          >
-                            <Pencil size={14} />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              if (confirm(`Delete job "${job.name}"?`)) void onJobDeleted(job.id);
-                            }}
-                            className="rounded-md p-1.5 transition-colors"
-                            style={{ color: 'var(--lp-text-tertiary)' }}
-                            onMouseOver={(e) => (e.currentTarget.style.color = '#EF4444')}
-                            onMouseOut={(e) =>
-                              (e.currentTarget.style.color = 'var(--lp-text-tertiary)')
-                            }
-                            title="Delete"
-                          >
-                            <Trash2 size={14} />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+        </div>
+      ) : (
+        <>
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="relative w-full max-w-xs">
+              <Search size={14} aria-hidden className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-lp-text-tertiary" />
+              <input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search jobs, clients, artists"
+                aria-label="Search jobs"
+                className="h-9 w-full rounded-lg border bg-lp-surface pl-8 pr-3 text-sm text-lp-text outline-none placeholder:text-lp-text-tertiary focus-visible:border-[var(--color-lp-orange)]"
+                style={{ borderColor: 'var(--lp-border)' }}
+              />
+            </div>
+            <FilterChips options={chipOptions} value={statusFilter} onChange={setStatusFilter} ariaLabel="Filter by status" />
+            <div className="ml-auto flex items-center gap-2 text-xs text-lp-text-tertiary">
+              Group by
+              <FilterChips
+                options={[{ value: 'month' as const, label: 'Month' }, { value: 'status' as const, label: 'Status' }]}
+                value={grouping}
+                onChange={setGrouping}
+                ariaLabel="Group jobs by"
+              />
+            </div>
           </div>
-        )}
-      </div>
+
+          {groups.length === 0 ? (
+            <p className="py-10 text-center text-sm text-lp-text-tertiary">Nothing matches that.</p>
+          ) : (
+            groups.map((g) => {
+              const curs = new Set(g.jobs.map((r) => r.currency));
+              const sum = curs.size === 1 ? g.jobs.reduce((s, r) => s + r.total, 0) : null;
+              return (
+                <section key={g.key} className="space-y-2">
+                  <div className="flex items-baseline justify-between gap-3 px-1">
+                    <h2 className={`text-sm font-medium ${g.past ? 'text-lp-text-secondary' : 'text-lp-text'}`}>{g.label}</h2>
+                    <span className="text-xs tabular-nums text-lp-text-tertiary">
+                      {g.jobs.length} job{g.jobs.length === 1 ? '' : 's'}
+                      {sum != null ? ` · ${fmtMoney(sum, [...curs][0])}` : ''}
+                    </span>
+                  </div>
+                  <DataTable<Row>
+                    rows={g.jobs}
+                    columns={columns}
+                    rowKey={(r) => r.id}
+                    onRowClick={(r) => setActiveJob(r.id)}
+                    searchable={false}
+                    toolbar={false}
+                    pagination="none"
+                    stickyHeader={false}
+                    density="comfortable"
+                    ariaLabel={`Rental jobs — ${g.label}`}
+                  />
+                </section>
+              );
+            })
+          )}
+        </>
+      )}
 
       {jobModal}
     </div>

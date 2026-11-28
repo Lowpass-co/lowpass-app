@@ -19,9 +19,17 @@ import { DataTable } from '@/components/data-table/DataTable';
 import type { ColumnDef } from '@/components/data-table/types';
 import { StyledSelect } from '@/components/ui/StyledSelect';
 import GearSlideOver from '@/components/entity/gear/GearSlideOver';
+import { Package } from 'lucide-react';
+import { effectiveInventoryDayRate } from '@/lib/rental-pricing';
+import { Thumb } from '@/components/equipment/rentalUi';
+import { StatusPill, STOCK_STATUS_TONE } from '@/components/equipment/StatusPill';
+import { fmtMoney } from '@/components/equipment/types';
 import type { AssetsData, AssetItem, AssetSpace, AssetContainer } from '@/lib/spaces/loadAssets';
 
 const OWNERSHIPS = ['owned', 'sub_hired', 'hired_to_client'] as const;
+
+const STOCK_STATUS_LABEL: Record<string, string> = { available: 'Available', in_use: 'In use', maintenance: 'Maintenance', retired: 'Retired' };
+const OWNERSHIP_LABEL: Record<string, string> = { owned: 'Owned', sub_hired: 'Sub-hired', hired_to_client: 'Hired out' };
 
 type Filter = { kind: 'all' } | { kind: 'unassigned' } | { kind: 'space'; id: string } | { kind: 'container'; id: string };
 
@@ -74,12 +82,30 @@ export function AssetsClient({ initial, tours }: { initial: AssetsData; tours: {
   }
 
   const columns = useMemo<ColumnDef<AssetItem>[]>(() => [
-    { id: 'name', header: 'Item', accessor: 'name', sortable: true, frozen: true },
-    { id: 'category', header: 'Category', accessor: (r) => r.category ?? '', sortable: true, cell: (v) => String(v || '—') },
-    { id: 'status', header: 'Status', accessor: (r) => r.status ?? 'available', sortable: true, cell: (v) => String(v).replaceAll('_', ' ') },
-    { id: 'ownership', header: 'Ownership', accessor: (r) => String(r.ownership), sortable: true, cell: (v) => String(v).replaceAll('_', '-') },
+    {
+      id: 'name', header: 'Item', accessor: 'name', sortable: true, frozen: true, flex: true, minWidth: 240,
+      cell: (_, r) => (
+        <span className="flex min-w-0 items-center gap-3">
+          <Thumb src={r.image_url} size={32} icon={<Package size={14} strokeWidth={1.75} aria-hidden />} />
+          <span className="min-w-0 truncate text-lp-text">{r.name}</span>
+        </span>
+      ),
+    },
+    { id: 'category', header: 'Category', accessor: (r) => r.category ?? '', sortable: true, cell: (v) => <span className="text-lp-text-secondary">{String(v || '—')}</span> },
+    { id: 'quantity', header: 'Owned', accessor: (r) => Number(r.quantity) || 1, align: 'right', sortable: true, width: 90 },
+    {
+      id: 'rate', header: 'Day rate', accessor: (r) => effectiveInventoryDayRate({ purchase_cost: r.purchase_cost ?? null, day_rate: r.day_rate ?? null, day_rate_manual: r.day_rate_manual ?? false }) ?? 0,
+      align: 'right', sortable: true, width: 110,
+      /* Stock is priced in USD (the job builder converts per quote). */
+      cell: (v) => (Number(v) > 0 ? fmtMoney(Number(v), 'USD') : '—'),
+    },
+    {
+      id: 'status', header: 'Status', accessor: (r) => r.status ?? 'available', sortable: true, width: 140,
+      cell: (v) => <StatusPill tone={STOCK_STATUS_TONE[String(v)] ?? 'neutral'}>{STOCK_STATUS_LABEL[String(v)] ?? String(v).replaceAll('_', ' ')}</StatusPill>,
+    },
+    { id: 'ownership', header: 'Ownership', accessor: (r) => String(r.ownership), sortable: true, cell: (v) => <span className="text-lp-text-secondary">{OWNERSHIP_LABEL[String(v)] ?? String(v).replaceAll('_', '-')}</span> },
     { id: 'weight', header: 'Weight', accessor: (r) => r.weight_kg ?? 0, align: 'right', sortable: true, cell: (_, r) => (r.weight_kg == null ? '—' : `${r.weight_kg} kg`) },
-    { id: 'place', header: 'Placed in', accessor: (r) => placeLabel(r, data.spaces, data.containers), cell: (v) => String(v) },
+    { id: 'place', header: 'Placed in', accessor: (r) => placeLabel(r, data.spaces, data.containers), cell: (v) => <span className="text-lp-text-secondary">{String(v)}</span> },
   ], [data.spaces, data.containers]);
 
   return (

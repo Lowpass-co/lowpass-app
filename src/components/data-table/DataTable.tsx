@@ -58,6 +58,7 @@ export function DataTable<T>(props: DataTableProps<T>) {
     onRowClick,
     rowClassName,
     searchable: searchableP = true,
+    toolbar = true,
     searchPlaceholder = 'Search…',
     searchAccessor,
     pageSize = DEFAULT_PAGE,
@@ -352,7 +353,7 @@ export function DataTable<T>(props: DataTableProps<T>) {
       role="region"
       aria-label={ariaLabel}
     >
-      <DataTableToolbar
+      {toolbar || (selectedIdsP?.length ?? 0) > 0 ? <DataTableToolbar
         columns={columns}
         filterState={filterState}
         onFilterStateChange={onFilterChange}
@@ -387,7 +388,7 @@ export function DataTable<T>(props: DataTableProps<T>) {
             </button>
           ) : null
         }
-      />
+      /> : null}
 
       <div
         ref={scrollRef}

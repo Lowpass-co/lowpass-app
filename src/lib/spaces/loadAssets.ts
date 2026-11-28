@@ -36,6 +36,12 @@ export interface AssetItem {
   container_id: string | null;
   hire_cost_amount: number | null;
   hire_cost_currency: string | null;
+  image_url?: string | null;
+  purchase_cost?: number | null;
+  day_rate?: number | null;
+  day_rate_manual?: boolean | null;
+  /** How many you own (306); 1 before it's pasted. */
+  quantity?: number | null;
 }
 export interface AssetsData {
   spaces: AssetSpace[];
@@ -51,15 +57,17 @@ export interface AssetsData {
 }
 
 export async function loadAssets(supabase: SupabaseClient, workspaceId: string): Promise<AssetsData> {
-  const [{ data: spaces }, { data: containers }, { data: items }] = await Promise.all([
+  const ITEM_COLS =
+    'id, name, category, ownership, status, weight_kg, value_amount, value_currency, space_id, container_id, hire_cost_amount, hire_cost_currency, image_url, purchase_cost, day_rate, day_rate_manual, quantity';
+  const readItems = (cols: string) => supabase.from('gear').select(cols).eq('workspace_id', workspaceId).order('name');
+  const [{ data: spaces }, { data: containers }, first] = await Promise.all([
     supabase.from('spaces').select('id, name, kind, monthly_cost_amount, cost_currency').eq('workspace_id', workspaceId).order('name'),
     supabase.from('containers').select('id, name, kind, space_id, weight_empty_kg').eq('workspace_id', workspaceId).order('name'),
-    supabase
-      .from('gear')
-      .select('id, name, category, ownership, status, weight_kg, value_amount, value_currency, space_id, container_id, hire_cost_amount, hire_cost_currency')
-      .eq('workspace_id', workspaceId)
-      .order('name'),
+    readItems(ITEM_COLS),
   ]);
+  /* gear.quantity arrives with 306 — read without it until it's pasted. */
+  let items: unknown = first.data;
+  if (first.error && /quantity/.test(first.error.message)) items = (await readItems(ITEM_COLS.replace(', quantity', ''))).data;
 
   const itemRows = (items ?? []) as AssetItem[];
   const totalWeightKg = itemRows.reduce((n, i) => n + (Number(i.weight_kg) || 0), 0);
