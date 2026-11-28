@@ -1228,10 +1228,14 @@ page then goes — Adam never used it).
   cards), right-click via DataTable `rowMenu`. The item panel is
   `<GearSlideOver id|null>` — ADD and EDIT; hybrid save (autosave for the
   fields, ownership + photo separate). **Look it up online**:
-  `/api/gear/lookup` — Sonnet 5.5 + Anthropic web search (≤ 3 searches,
-  billed: `WEB_SEARCH_MICROS` in pricing.ts) through `withAiUsage`;
-  `parseLookup` (src/lib/gear/lookup.ts) is THE gate; it fills only BLANK
-  fields (`fillBlanks`). Photos: public `artist-assets` bucket,
+  `/api/gear/lookup` + Anthropic web search (billed: `WEB_SEARCH_MICROS` in
+  pricing.ts) through `withAiUsage`, at two depths (`LOOKUP_DEPTHS`, Adam
+  chose cheap-by-default): QUICK = Haiku 5.5, ≤ 2 searches (~1–2 ¢, the
+  default; a quick failure retries once as thorough) and THOROUGH = Sonnet
+  5.5, ≤ 3 searches (~6–10 ¢) from the panel's **Try harder**.
+  `parseLookup` (src/lib/gear/lookup.ts) is THE gate. `applyLookup` fills
+  blanks, and a thorough answer replaces only what the quick one put there
+  and you haven't touched. Photos: public `artist-assets` bucket,
   `gear-photos/<ws>/<uuid>.<ext>` (`gearPhotoBelongs`), uploaded through
   storage grants (`/api/gear/photos`), shop photos copied via `safeFetch`.
   **Delete** only for an item never on a job / tour (409 IN_USE → retire).

@@ -142,3 +142,12 @@ with the proper one (unless you typed over it). Add to stock → the panel
 closes and 4 are on the job, priced, under their category. The item is in
 Gear & rentals too. Typing the exact name of something you own doesn't offer
 the row.
+
+#### RNT-24 — Quick lookup, Try harder
+Look it up runs the quick search (Haiku). The line under the box says what it
+didn't find ("No weight, photo found · from …") with **Try harder** (orange
+when something is missing). Type your own purchase cost, then Try harder:
+the name / value / weight / notes the quick search filled are replaced by
+the better answer, your purchase cost stays, and the photo swaps only if it
+was the quick search's. Settings › AI limits / the usage log shows
+`gear.lookup.quick` and `gear.lookup` as separate lines with their costs.

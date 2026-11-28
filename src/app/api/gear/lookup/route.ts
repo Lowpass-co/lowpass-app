@@ -1,5 +1,5 @@
 /* ============================================
-   POST /api/gear/lookup { query } — look an item up online (Nov 2026, Adam:
+   POST /api/gear/lookup { query, depth?: 'quick' | 'thorough' } — look an item up online (Nov 2026, Adam:
    "you should be able to google search for an item though to pull retail
    value, basic info, weight and picture").
 
@@ -19,7 +19,7 @@ import type Anthropic from '@anthropic-ai/sdk';
 import { requireWrite } from '@/lib/auth/workspace-check';
 import { createServerSupabaseClient, createServiceSupabaseClient } from '@/lib/supabase-server';
 import { aiCapExceededResponse, withAiUsage } from '@/lib/ai/usage';
-import { GEAR_LOOKUP_MAX_SEARCHES, GEAR_LOOKUP_MODEL, LOOKUP_SYSTEM, jsonOf, lookupPrompt, parseLookup } from '@/lib/gear/lookup';
+import { LOOKUP_DEPTHS, LOOKUP_SYSTEM, jsonOf, lookupDepth, lookupPrompt, parseLookup, type LookupDepth } from '@/lib/gear/lookup';
 import { GearPhotoError, photoBytesFromLink, storeGearPhoto } from '@/server/gear/photos';
 import { FetchRefused } from '@/server/net/safeFetch';
 
@@ -36,8 +36,13 @@ export async function POST(request: Request) {
   const supabase = await createServerSupabaseClient();
   const auth = await requireWrite(supabase);
   if ('error' in auth) return auth.error;
+  const workspaceId = auth.workspaceId;
+  const userId = auth.user.id;
 
-  const body = (await request.json().catch(() => null)) as { query?: unknown } | null;
+  const body = (await request.json().catch(() => null)) as { query?: unknown; depth?: unknown } | null;
+  /* quick (default): Haiku 5.5, ≤ 2 searches. thorough: Sonnet 5.5, ≤ 3 —
+     the panel's "Try harder". See LOOKUP_DEPTHS. */
+  const depth: LookupDepth = lookupDepth(body?.depth);
   const query = typeof body?.query === 'string' ? body.query.trim() : '';
   if (query.length < 2) return NextResponse.json({ error: 'Type what you’re looking for — a make and model works best.' }, { status: 400 });
   if (query.length > 200) return NextResponse.json({ error: 'That’s too long to look up.' }, { status: 400 });
@@ -48,45 +53,61 @@ export async function POST(request: Request) {
   RECENT.set(auth.user.id, [...mine, now]);
   if (RECENT.size > 5000) RECENT.clear();
 
-  let reply: string;
-  try {
-    const r = await withAiUsage(
-      { workspaceId: auth.workspaceId, userId: auth.user.id, endpoint: 'gear.lookup', model: GEAR_LOOKUP_MODEL, metadata: { query } },
-      async (anthropic) => {
-        /* A server-tool turn can come back 'pause_turn' (still working); it's
-           continued by sending the reply back. Usage is summed over every
-           call so the budget sees all of it. */
-        const messages: Anthropic.MessageParam[] = [{ role: 'user', content: lookupPrompt(query) }];
-        const usage = { input_tokens: 0, output_tokens: 0, cache_read_input_tokens: 0, cache_creation_input_tokens: 0, server_tool_use: { web_search_requests: 0 } };
-        let m: Anthropic.Message | null = null;
-        for (let turn = 0; turn < 3; turn++) {
-          m = await anthropic.messages.create({
-            model: GEAR_LOOKUP_MODEL,
-            max_tokens: 1500,
-            system: LOOKUP_SYSTEM,
-            tools: [{ type: 'web_search_20250305', name: 'web_search', max_uses: GEAR_LOOKUP_MAX_SEARCHES }],
-            messages,
-          });
-          usage.input_tokens += m.usage.input_tokens ?? 0;
-          usage.output_tokens += m.usage.output_tokens ?? 0;
-          usage.cache_read_input_tokens += m.usage.cache_read_input_tokens ?? 0;
-          usage.cache_creation_input_tokens += m.usage.cache_creation_input_tokens ?? 0;
-          usage.server_tool_use.web_search_requests += m.usage.server_tool_use?.web_search_requests ?? 0;
-          if (m.stop_reason !== 'pause_turn') break;
-          messages.push({ role: 'assistant', content: m.content });
-        }
-        return { result: m!, usage };
-      },
-    );
-    if (r.blocked) return aiCapExceededResponse(r.blockReason!);
-    reply = r.result!.content.map((c) => (c.type === 'text' ? c.text : '')).join('\n');
-  } catch (e) {
-    console.error('[gear lookup]', e);
-    const msg = e instanceof Error ? e.message : '';
+  /** One lookup at a depth → the model's text reply, or a Response to send. */
+  async function ask(d: LookupDepth): Promise<{ reply: string } | { response: NextResponse } | { failed: string }> {
+    const cfg = LOOKUP_DEPTHS[d];
+    try {
+      const r = await withAiUsage(
+        { workspaceId, userId, endpoint: cfg.endpoint, model: cfg.model, metadata: { query, depth: d } },
+        async (anthropic) => {
+          /* A server-tool turn can come back 'pause_turn' (still working); it's
+             continued by sending the reply back. Usage is summed over every
+             call so the budget sees all of it. */
+          const messages: Anthropic.MessageParam[] = [{ role: 'user', content: lookupPrompt(query) }];
+          const usage = { input_tokens: 0, output_tokens: 0, cache_read_input_tokens: 0, cache_creation_input_tokens: 0, server_tool_use: { web_search_requests: 0 } };
+          let m: Anthropic.Message | null = null;
+          for (let turn = 0; turn < 3; turn++) {
+            m = await anthropic.messages.create({
+              model: cfg.model,
+              max_tokens: 1500,
+              system: LOOKUP_SYSTEM,
+              tools: [{ type: 'web_search_20250305', name: 'web_search', max_uses: cfg.maxSearches }],
+              messages,
+            });
+            usage.input_tokens += m.usage.input_tokens ?? 0;
+            usage.output_tokens += m.usage.output_tokens ?? 0;
+            usage.cache_read_input_tokens += m.usage.cache_read_input_tokens ?? 0;
+            usage.cache_creation_input_tokens += m.usage.cache_creation_input_tokens ?? 0;
+            usage.server_tool_use.web_search_requests += m.usage.server_tool_use?.web_search_requests ?? 0;
+            if (m.stop_reason !== 'pause_turn') break;
+            messages.push({ role: 'assistant', content: m.content });
+          }
+          return { result: m!, usage };
+        },
+      );
+      if (r.blocked) return { response: aiCapExceededResponse(r.blockReason!) };
+      return { reply: r.result!.content.map((c) => (c.type === 'text' ? c.text : '')).join('\n') };
+    } catch (e) {
+      console.error('[gear lookup]', d, e);
+      return { failed: e instanceof Error ? e.message : '' };
+    }
+  }
+
+  let answer = await ask(depth);
+  let usedDepth = depth;
+  /* The quick model failing outright (not a budget stop) → one go at the
+     thorough one, so a model that can't search never leaves you with nothing. */
+  if ('failed' in answer && depth === 'quick') {
+    answer = await ask('thorough');
+    usedDepth = 'thorough';
+  }
+  if ('response' in answer) return answer.response;
+  if ('failed' in answer) {
     // Web search has to be switched on for the API key's organisation.
-    if (/web.?search/i.test(msg)) return NextResponse.json({ error: 'Web search isn’t switched on for this server’s AI key.' }, { status: 502 });
+    if (/web.?search/i.test(answer.failed)) return NextResponse.json({ error: 'Web search isn’t switched on for this server’s AI key.' }, { status: 502 });
     return NextResponse.json({ error: 'The lookup didn’t work just now. Try again.' }, { status: 502 });
   }
+  const reply = answer.reply;
 
   const found = parseLookup(jsonOf(reply));
   if (!found) return NextResponse.json({ error: `Nothing clear came back for “${query}”. Try the make and model.` }, { status: 404 });
@@ -104,5 +125,5 @@ export async function POST(request: Request) {
     }
   }
 
-  return NextResponse.json({ result: { ...found, imageUrl: photo?.url ?? null } }, { headers: { 'Cache-Control': 'no-store' } });
+  return NextResponse.json({ result: { ...found, imageUrl: photo?.url ?? null }, depth: usedDepth }, { headers: { 'Cache-Control': 'no-store' } });
 }
