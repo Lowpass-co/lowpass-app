@@ -132,3 +132,13 @@ Every column fits at 1280 px wide (no cut-off Weight / Place).
 Labelled fields; no ids anywhere; tours listed by name. Typing saves
 (SaveStatus pill); Cancel puts back what it was when you opened it; Done
 closes.
+
+#### RNT-23 — Add to stock from a job
+On a job, type something you don't own in Add gear ("4 C414 XLII"): the last
+row is "Add “C414 XLII” to stock — not in your stock yet — look it up online,
+then 4 go on this job" (↓ reaches it; Enter takes it). The new-item panel
+opens with the name and the lookup box filled; Look it up replaces the name
+with the proper one (unless you typed over it). Add to stock → the panel
+closes and 4 are on the job, priced, under their category. The item is in
+Gear & rentals too. Typing the exact name of something you own doesn't offer
+the row.

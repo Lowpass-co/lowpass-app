@@ -40,7 +40,7 @@ export function EquipmentClient({
   settings: initialSettings,
 }: Props) {
   // Stock is managed on Gear & rentals (/assets); here it's read for pricing + the picker.
-  const [inventory] = useState<RentalInventoryItem[]>(initialInventory);
+  const [inventory, setInventory] = useState<RentalInventoryItem[]>(initialInventory);
   const [jobs, setJobs] = useState<RentalJob[]>(initialJobs);
   const [artists, setArtists] = useState<EquipmentArtistOption[]>(initialArtists);
   const [tours, setTours] = useState<EquipmentTourOption[]>(initialTours);
@@ -73,6 +73,7 @@ export function EquipmentClient({
         setTours={setTours}
         settings={settings}
         onOpenSettings={() => setSettingsOpen(true)}
+        onStockAdded={(item) => setInventory((prev) => [...prev.filter((i) => i.id !== item.id), item])}
       />
       <RentalSettingsPanel
         open={settingsOpen}
