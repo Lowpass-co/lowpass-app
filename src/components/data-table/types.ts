@@ -44,6 +44,8 @@ export type DataTableProps<T> = {
   selectionActions?: ReactNode;
 
   onRowClick?: (row: T) => void;
+  /** Right-click menu for a row (opt-in). Empty list = the browser's menu. */
+  rowMenu?: (row: T) => import('./DataTableRowMenu').RowMenuItem[];
   rowClassName?: (row: T) => string;
 
   searchable?: boolean;

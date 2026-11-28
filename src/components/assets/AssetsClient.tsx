@@ -24,6 +24,7 @@ import { effectiveInventoryDayRate } from '@/lib/rental-pricing';
 import { Thumb } from '@/components/equipment/rentalUi';
 import { StatusPill, STOCK_STATUS_TONE } from '@/components/equipment/StatusPill';
 import { fmtMoney } from '@/components/equipment/types';
+import type { RowMenuItem } from '@/components/data-table/DataTableRowMenu';
 import type { AssetsData, AssetItem, AssetSpace, AssetContainer } from '@/lib/spaces/loadAssets';
 
 const OWNERSHIPS = ['owned', 'sub_hired', 'hired_to_client'] as const;
@@ -80,6 +81,19 @@ export function AssetsClient({ initial, tours }: { initial: AssetsData; tours: {
       await refresh();
     } finally { setBusy(false); }
   }
+
+  async function setStatus(id: string, status: string) {
+    await fetch(`/api/gear/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status }) });
+    await refresh();
+  }
+
+  const itemMenu = (r: AssetItem): RowMenuItem[] => [
+    { label: 'Open', onSelect: () => setOpenId(r.id) },
+    { label: 'Move…', onSelect: () => { setSelectedIds([r.id]); setMoveOpen(true); } },
+    ...Object.entries(STOCK_STATUS_LABEL)
+      .filter(([v]) => v !== (r.status ?? 'available'))
+      .map(([v, label], i) => ({ label: `Mark ${label.toLowerCase()}`, sep: i === 0, onSelect: () => void setStatus(r.id, v) })),
+  ];
 
   const columns = useMemo<ColumnDef<AssetItem>[]>(() => [
     {
@@ -175,6 +189,7 @@ export function AssetsClient({ initial, tours }: { initial: AssetsData; tours: {
               </div>
             }
             onRowClick={(r) => setOpenId(r.id)}
+            rowMenu={itemMenu}
             emptyState="No items here"
           />
         </div>

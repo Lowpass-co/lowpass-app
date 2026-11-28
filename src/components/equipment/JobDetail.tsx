@@ -11,7 +11,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { ArrowLeft, FileDown, Package, Pencil, Trash2 } from 'lucide-react';
+import { ArrowLeft, FileDown, Package, Pencil, Trash2, X } from 'lucide-react';
 import { jobDaysPerWeek, WEEK_CHOICES } from '@/lib/rental-pricing';
 import { priceQuote, weekRuleText, type PricedLine } from '@/lib/rental/quote';
 import { fmtRange, hireDays, type JobStatus } from '@/lib/rental/jobList';
@@ -22,7 +22,7 @@ import { DeleteConfirmationModal } from '@/components/ui/DeleteConfirmationModal
 import { NumInput } from '@/components/income/moneyUi';
 import { SpreadsheetGrid } from '@/components/spreadsheet-grid/SpreadsheetGrid';
 import type { GridColumn, GridRow, SectionHeader } from '@/components/spreadsheet-grid/types';
-import { rentalApi } from './rentalApi';
+import { rentalApi, statusPatch } from './rentalApi';
 import { AddGear } from './AddGear';
 import { Popover, StatusMenu, Thumb } from './rentalUi';
 import { exportJobPdf, type PdfMode } from './exportJobPdf';
@@ -218,17 +218,32 @@ export function JobDetail({ job, inventory, artists, tours, lines, onLinesChange
       id: 'total', header: 'Total', accessor: 'shownTotal', width: 130, align: 'right',
       type: { kind: 'computed', render: (r) => <span className="tabular-nums text-lp-text">{fmtMoney((r as LineVm).shownTotal, dispCur)}</span> },
     },
+    {
+      /* A remove button you can see (Adam: "I need to be able to remove
+         items from a job") — right-click has it too. */
+      id: 'remove', header: '', accessor: 'id', width: 44, align: 'center', resizable: false,
+      type: {
+        kind: 'computed',
+        render: (r) => (
+          <button
+            type="button"
+            aria-label={`Remove ${(r as LineVm).name} from the job`}
+            title="Remove from job"
+            onClick={() => void removeLine((r as LineVm).id)}
+            className="inline-flex h-6 w-6 items-center justify-center rounded-md text-lp-text-tertiary hover:bg-lp-surface-hover hover:text-[var(--color-lp-error)]"
+          >
+            <X size={14} aria-hidden />
+          </button>
+        ),
+      },
+    },
   ];
 
   /* ── Status ── Freeze the FX rate the first time this job leaves 'draft'.
      Never re-stamped: a later status change leaves the original rate alone. */
   async function handleStatusChange(next: JobStatus) {
-    const patch: Record<string, unknown> = { status: next };
-    if (job.status === 'draft' && next !== 'draft' && job.fx_rate == null && cur !== 'USD' && fxRate != null) {
-      patch.fx_rate = fxRate;
-      patch.fx_rate_at = fxRateAt ?? new Date().toISOString();
-    }
-    await saveJob(patch, 'the status');
+    const known = isDraft && fxRate != null ? { rate: fxRate, at: fxRateAt ?? new Date().toISOString() } : null;
+    await saveJob(await statusPatch(job, next, known), 'the status');
   }
 
   const facts = [
@@ -322,11 +337,16 @@ export function JobDetail({ job, inventory, artists, tours, lines, onLinesChange
                 columnWidthsKey="lp-cols-rental-lines"
                 onCommitCell={commitLineCell}
                 onRowDelete={(rowId) => void removeLine(rowId)}
-                contextMenuItems={(row) =>
-                  row.data.custom
+                rowDeleteLabel="Remove from job"
+                contextMenuItems={(row) => [
+                  { id: 'more', label: 'One more', onSelect: () => void saveLine(row.id, { quantity: row.data.quantity + 1 }, 'quantity') },
+                  ...(row.data.quantity > 1
+                    ? [{ id: 'fewer', label: 'One fewer', onSelect: () => void saveLine(row.id, { quantity: row.data.quantity - 1 }, 'quantity') }]
+                    : []),
+                  ...(row.data.custom
                     ? [{ id: 'reset', label: 'Reset to the item’s rate', onSelect: () => void saveLine(row.id, { day_rate_override: null }, 'rate') }]
-                    : []
-                }
+                    : []),
+                ]}
                 density="compact"
               />
             )}

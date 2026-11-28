@@ -19,6 +19,7 @@ import { DataTablePagination } from './DataTablePagination';
 import { DataTableRow } from './DataTableRow';
 import { DataTableSkeleton } from './DataTableSkeleton';
 import { DataTableToolbar } from './DataTableToolbar';
+import { DataTableRowMenu, type RowMenuItem } from './DataTableRowMenu';
 import { applySearch, rowPassesFilters, sortRows } from './utils';
 import type { ColumnDef, FilterValue } from './types';
 
@@ -56,6 +57,7 @@ export function DataTable<T>(props: DataTableProps<T>) {
     onSelectionChange,
     selectionActions,
     onRowClick,
+    rowMenu,
     rowClassName,
     searchable: searchableP = true,
     toolbar = true,
@@ -88,6 +90,8 @@ export function DataTable<T>(props: DataTableProps<T>) {
   });
   const [page, setPage] = useState(0);
   const [focusIndex, setFocusIndex] = useState(0);
+  const [menu, setMenu] = useState<{ x: number; y: number; items: RowMenuItem[] } | null>(null);
+  const closeMenu = useCallback(() => setMenu(null), []);
   const anchorIndex = useRef<number | null>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -457,6 +461,17 @@ export function DataTable<T>(props: DataTableProps<T>) {
                     focused={isFocused}
                     density={density}
                     onRowClick={onRowClick}
+                    onRowMenu={
+                      rowMenu
+                        ? (e) => {
+                            const items = rowMenu(row);
+                            if (items.length === 0) return;
+                            e.preventDefault();
+                            setFocusIndex(i);
+                            setMenu({ x: e.clientX, y: e.clientY, items });
+                          }
+                        : undefined
+                    }
                     onRowFocus={() => setFocusIndex(i)}
                     onCheckbox={e => onCheckbox(e, i, id)}
                     frozenLeft={frozenLeft}
@@ -490,6 +505,7 @@ export function DataTable<T>(props: DataTableProps<T>) {
           }}
         />
       )}
+      {menu ? <DataTableRowMenu x={menu.x} y={menu.y} items={menu.items} onClose={closeMenu} /> : null}
     </div>
   );
 }

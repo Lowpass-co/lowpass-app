@@ -16,6 +16,7 @@ type DataTableRowProps<T> = {
   focusedRef?: RefObject<HTMLTableRowElement | null>;
   density: 'comfortable' | 'compact' | 'cozy';
   onRowClick?: (row: T) => void;
+  onRowMenu?: (e: MouseEvent) => void;
   onRowFocus: () => void;
   onCheckbox: (e: MouseEvent) => void;
   rowClassName?: (row: T) => string;
@@ -50,6 +51,7 @@ export function DataTableRow<T>({
   focusedRef,
   density,
   onRowClick,
+  onRowMenu,
   onRowFocus,
   onCheckbox,
   rowClassName,
@@ -85,6 +87,7 @@ export function DataTableRow<T>({
         onRowFocus();
         onRowClick?.(row);
       }}
+      onContextMenu={onRowMenu}
       onMouseDown={e => {
         if ((e.target as HTMLElement).closest('input[type="checkbox"]')) {
           e.preventDefault();

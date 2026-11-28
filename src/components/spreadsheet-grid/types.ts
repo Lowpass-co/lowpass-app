@@ -75,6 +75,8 @@ export type SpreadsheetGridProps<T> = {
   /** Right-click label for onRowOpen (default "Open"). Payroll: "Open full profile". */
   rowOpenLabel?: string;
   onRowDelete?: (rowId: string) => void;
+  /** Right-click label for onRowDelete (default "Delete"; rental lines: "Remove from job"). */
+  rowDeleteLabel?: string;
   onRowDuplicate?: (rowId: string) => void;
   contextMenuItems?: (row: GridRow<T>) => Array<{ id: string; label: string; onSelect: () => void }>;
 

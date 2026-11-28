@@ -99,3 +99,39 @@ describe('Backspace clears', () => {
     expect(onCommitCell).not.toHaveBeenCalledWith(expect.anything(), 'kind', expect.anything());
   });
 });
+
+/* Nov 2026, Adam (rental lines): "if I type a number it doesn't save and
+   wherever I click, that number then populates till I click away." Only
+   Enter / Tab committed; a click left the editor open, following the
+   highlight with the typed draft. */
+describe('clicking away saves', () => {
+  async function typeInto(cell: (t: string) => HTMLElement, grid: HTMLElement, text: string, value: string) {
+    fireEvent.mouseDown(cell(text), { button: 0 });
+    grid.focus();
+    fireEvent.keyDown(grid, { key: 'Enter' });
+    const input = (await screen.findByLabelText('Number cell editor')) as HTMLInputElement;
+    fireEvent.change(input, { target: { value } });
+    return input;
+  }
+
+  it('a click on another cell commits the typed value to the FIRST cell and closes the editor', async () => {
+    const { onCommitCell, grid, cell } = setup();
+    await typeInto(cell, grid, '600', '34');
+    act(() => {
+      fireEvent.mouseDown(cell('400'), { button: 0 });
+    });
+    await vi.waitFor(() => expect(onCommitCell).toHaveBeenCalledWith('a', 'show', 34));
+    expect(onCommitCell).toHaveBeenCalledTimes(1);
+    expect(screen.queryByLabelText('Number cell editor')).toBeNull();
+  });
+
+  it('a click outside the grid commits too', async () => {
+    const { onCommitCell, grid, cell } = setup();
+    await typeInto(cell, grid, '600', '72');
+    act(() => {
+      fireEvent.mouseDown(screen.getByText('Paint: Show'), { button: 0 });
+    });
+    await vi.waitFor(() => expect(onCommitCell).toHaveBeenCalledWith('a', 'show', 72));
+    expect(screen.queryByLabelText('Number cell editor')).toBeNull();
+  });
+});
