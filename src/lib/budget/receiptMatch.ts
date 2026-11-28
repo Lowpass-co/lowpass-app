@@ -99,6 +99,10 @@ export interface ReceiptProposal {
   /** The payload the apply path will POST. Amount is ALWAYS a transaction. */
   value: {
     vendor: string | null;
+    /** What the receipt is for, as the scan read it ("Flight BNA → LAX").
+     *  Editable on the card; becomes the new line's name with the vendor,
+     *  the transaction's note and the receipt's description. */
+    description: string | null;
     date: string | null;
     amount: number | null;
     currency: string | null;
@@ -237,6 +241,7 @@ export function proposeForReceipt(
 
   const baseValue0 = {
     vendor: receipt.vendor,
+    description: receipt.description,
     date: receipt.date,
     amount: receipt.total_amount,
     currency: receipt.currency,
@@ -263,6 +268,7 @@ export function proposeForReceipt(
   const best = scored[0];
   const baseValue = {
     vendor: receipt.vendor,
+    description: receipt.description,
     date: receipt.date,
     amount: receipt.total_amount,
     currency: receipt.currency,
@@ -298,7 +304,7 @@ export function proposeForReceipt(
         .map((l) => [l.sectionName as string, { id: l.sectionId, name: l.sectionName as string }]),
     ).values()];
   const section = resolveSection(receipt.category, sectionPool, fallbackSectionName ?? 'Uncategorised');
-  const label = [receipt.vendor, receipt.description].filter(Boolean).join(' — ') || 'Receipt';
+  const label = receiptLineName(receipt.vendor, receipt.description);
 
   return {
     target: 'receipt_line',
@@ -319,4 +325,10 @@ export function proposeForReceipt(
       sectionReason: section.reason,
     },
   };
+}
+
+/** A new line's name from a receipt: "Vendor — what it is" (either alone if
+ *  that's all there is). The card previews it; apply uses the same rule. */
+export function receiptLineName(vendor: string | null | undefined, description: string | null | undefined): string {
+  return [vendor?.trim(), description?.trim()].filter(Boolean).join(' — ') || 'Receipt';
 }

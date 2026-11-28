@@ -216,6 +216,7 @@ export async function POST(request: Request): Promise<NextResponse> {
           receipt_id: r.receiptId,
           value: {
             vendor: r.ocr.vendor,
+            description: r.ocr.description ?? null,
             date: r.ocr.date,
             amount: shares[i],
             currency: r.ocr.currency,

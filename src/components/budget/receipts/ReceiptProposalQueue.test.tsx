@@ -190,3 +190,32 @@ describe('batch controls are explicit, never auto-apply', () => {
     });
   });
 });
+
+/* Nov 2026, Adam: "we are missing the receipt name/description to know what
+   the actual receipt IS". */
+describe('what the receipt is', () => {
+  const NEW: QueueProposal = {
+    id: 'p9', target: 'receipt_line', receipt_id: 'r9', source_ref: 'R-009', dup_of: null, dup_reason: null, status: 'pending',
+    value: { vendor: 'Delta Air Lines', description: null, date: '2026-11-27', amount: 200, currency: 'USD', label: 'Delta Air Lines', lineItemId: null, sectionName: 'Transport' },
+  };
+
+  it('every card has a “What it is” box, filled from the scan', () => {
+    renderQueue([CLEAN, { ...NEW, value: { ...NEW.value, description: 'Flight BNA → LAX' } }]);
+    const boxes = screen.getAllByTestId('proposal-description') as HTMLInputElement[];
+    expect(boxes).toHaveLength(2);
+    expect(boxes[1].value).toBe('Flight BNA → LAX');
+    expect(screen.getByText('New line: Delta Air Lines — Flight BNA → LAX')).toBeTruthy();
+  });
+
+  it('typing it previews the new line’s name and sends it', async () => {
+    renderQueue([NEW]);
+    expect(screen.getByText('New line: Delta Air Lines')).toBeTruthy();
+    fireEvent.change(screen.getByTestId('proposal-description'), { target: { value: 'Flight BNA → LAX, Adam' } });
+    expect(screen.getByText('New line: Delta Air Lines — Flight BNA → LAX, Adam')).toBeTruthy();
+    fireEvent.click(screen.getByTestId('receipt-apply'));
+    await waitFor(() => expect(fetch).toHaveBeenCalled());
+    const edits = lastBody?.edits as Record<string, { description?: string }>;
+    expect(edits.p9.description).toBe('Flight BNA → LAX, Adam');
+  });
+});
+

@@ -29,6 +29,7 @@
 
 'use client';
 
+import { receiptLineName } from '@/lib/budget/receiptMatch';
 import { useMemo, useState } from 'react';
 import { AlertTriangle, Check, Link2, Plus, X } from 'lucide-react';
 
@@ -48,6 +49,8 @@ export interface QueueProposal {
   status: string;
   value: {
     vendor: string | null;
+    /** What the receipt is for — the scan's description, editable here. */
+    description?: string | null;
     date: string | null;
     amount: number | null;
     currency: string | null;
@@ -264,6 +267,25 @@ export function ReceiptProposalQueue({
                     />
                   </label>
                 </div>
+
+                {/* What the receipt IS (Nov 2026, Adam: "we are missing the receipt
+                    name/description to know what the actual receipt IS"). The
+                    scan's description, editable; a new line is named from it. */}
+                <label style={{ display: 'grid', gap: 2 }}>
+                  <Cap>What it is</Cap>
+                  <input
+                    data-testid="proposal-description"
+                    style={fieldStyle}
+                    value={p.value.description ?? ''}
+                    placeholder="e.g. Flight BNA → LAX, Adam · Runner tip · Van hire, 5 days"
+                    onChange={(e) => patch(p.id, { description: e.target.value })}
+                  />
+                  {!isLink ? (
+                    <span style={{ fontSize: 'var(--lp-text-2xs)', color: 'var(--lp-text-tertiary)' }}>
+                      New line: {receiptLineName(p.value.vendor, p.value.description)}
+                    </span>
+                  ) : null}
+                </label>
 
                 {/* The action itself is editable: pick a line, or switch to a new one. */}
                 <label style={{ display: 'grid', gap: 2 }}>
