@@ -91,6 +91,11 @@ export function DataTable<T>(props: DataTableProps<T>) {
   const [page, setPage] = useState(0);
   const [focusIndex, setFocusIndex] = useState(0);
   const [menu, setMenu] = useState<{ x: number; y: number; items: RowMenuItem[] } | null>(null);
+  /* The keyboard cursor (orange ring) shows only while focus is INSIDE this
+     table. It used to sit on row 1 of every table at rest — on a page of
+     several tables (rental jobs by month) every first row looked selected
+     (Nov 2026, Adam: "what's the orange highlight here?"). */
+  const [hasFocus, setHasFocus] = useState(false);
   const closeMenu = useCallback(() => setMenu(null), []);
   const anchorIndex = useRef<number | null>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -340,6 +345,10 @@ export function DataTable<T>(props: DataTableProps<T>) {
 
   return (
     <div
+      onFocus={() => setHasFocus(true)}
+      onBlur={(e) => {
+        if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setHasFocus(false);
+      }}
       className={`mx-auto flex min-h-0 w-full flex-1 flex-col overflow-hidden${flat ? '' : ' rounded-xl'}`}
       style={{
         /* Raised panel — an elevated surface distinct from the page
@@ -458,7 +467,7 @@ export function DataTable<T>(props: DataTableProps<T>) {
                     columns={columns}
                     selectable={!!selectable && !!onSelectionChange}
                     selected={selectedSet.has(id)}
-                    focused={isFocused}
+                    focused={isFocused && hasFocus}
                     density={density}
                     onRowClick={onRowClick}
                     onRowMenu={

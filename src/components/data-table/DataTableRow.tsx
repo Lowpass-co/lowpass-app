@@ -65,6 +65,7 @@ export function DataTableRow<T>({
       ref={focused ? focusedRef : undefined}
       tabIndex={tabIndex}
       data-row-id={rowId}
+      data-focused={focused ? '' : undefined}
       onKeyDown={onKeyDown}
       className={cn('border-b text-sm outline-none transition-colors', rowClassName?.(row))}
       style={{
