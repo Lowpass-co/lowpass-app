@@ -74,8 +74,8 @@ export type DataTableProps<T> = {
 
   /** Draw the search / count / filter bar. Default true. False for a table
    *  that is one group of several under a shared toolbar (rental jobs by
-   *  month) — the bar would repeat per group. Ignored while rows are
-   *  selected, so selection actions always show. */
+   *  month) — the bar would repeat per group. It still shows while rows are
+   *  selected IF selectionActions are given, so those always show. */
   toolbar?: boolean;
 
   ariaLabel?: string;

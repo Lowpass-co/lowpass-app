@@ -1,522 +1,752 @@
 'use client';
 
-import { DAY_RATE_PCT_OF_VALUE, dayRateFromPurchase } from '@/lib/rental-pricing';
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Loader2, ExternalLink, X } from 'lucide-react';
-import Link from 'next/link';
-import Image from 'next/image';
-import {
-  getGearById,
-  linkGearToRentalInventory,
-  searchUnlinkedRentalInventory,
-  updateGear,
-} from '@/lib/api/gear';
-import type { Gear, TourGear } from '@/lib/types/gear';
-import type { RentalInventory } from '@/lib/types/rental';
+/* ============================================
+   LOWPASS — a stock item (Nov 2026 rebuild, Adam: "this pop out also sucks")
+
+   One panel to ADD an item (id = null) or EDIT one. Labelled fields, the
+   photo at the top (upload, drop, or from a link), "Look it up" online
+   (retail value, basic info, weight, photo — /api/gear/lookup; it only
+   fills BLANK fields), status as one tap, tours by name, no ids.
+
+   Edit = hybrid save (CLAUDE.md "Multi-field slide-overs"):
+     safe fields   → useAutoSave (name, make, model, category, serial, owned,
+                     purchase cost, day rate, value, weight, size, status,
+                     notes, owner label) — Cancel restores the snapshot.
+     ownership     → its own save with a confirm (owned → unlinks derived
+                     budget hire rows on linked tours).
+     photo         → saved the moment it's set.
+     delete        → only an item never on a job or tour (409 → Retire).
+   Add = one explicit "Add to stock".
+   ============================================ */
+
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
+import { ImagePlus, Link2, Loader2, Search, Sparkles, Trash2 } from 'lucide-react';
 import { SlideOver } from '@/components/ui/SlideOver';
+import { Button } from '@/components/ui/Button';
+import { useToast } from '@/components/ui/Toast';
+import { SaveStatus } from '@/components/forms/SaveStatus';
+import { NumInput, BOX_CLASS } from '@/components/income/moneyUi';
+import { useAutoSave } from '@/lib/forms/useAutoSave';
+import { getGearById, updateGear } from '@/lib/api/gear';
+import { createClient } from '@/lib/supabase-client';
+import { uploadDirect } from '@/lib/uploads/directUpload';
+import { dayRateFromPurchase } from '@/lib/rental-pricing';
+import { CATEGORIES, fmtMoney } from '@/components/equipment/types';
+import type { GearLookup } from '@/lib/gear/lookup';
+import type { Gear, GearOwnership, TourGear } from '@/lib/types/gear';
+import { StatusPill, STOCK_STATUS_TONE } from '@/components/equipment/StatusPill';
 
 type GearWithTours = Gear & { tourGear?: TourGear[] };
+type Status = NonNullable<Gear['status']>;
 
-export default function GearSlideOver({ id, onClose }: { id: string; onClose: () => void }) {
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+const STATUSES: Array<{ value: Status; label: string }> = [
+  { value: 'available', label: 'Available' },
+  { value: 'in_use', label: 'In use' },
+  { value: 'maintenance', label: 'Maintenance' },
+  { value: 'retired', label: 'Retired' },
+];
+
+/** Everything the panel edits, in one shape (autosave's T). */
+export interface Draft {
+  name: string;
+  manufacturer: string;
+  model: string;
+  category: string;
+  serial: string;
+  quantity: number;
+  purchaseCost: number | null;
+  /** null = 3% of the purchase cost. */
+  dayRate: number | null;
+  valueAmount: number | null;
+  valueCurrency: string;
+  weightKg: number | null;
+  dims: { l: number | null; w: number | null; h: number | null };
+  status: Status;
+  notes: string;
+  ownerLabel: string;
+}
+
+export const EMPTY: Draft = {
+  name: '', manufacturer: '', model: '', category: '', serial: '', quantity: 1,
+  purchaseCost: null, dayRate: null, valueAmount: null, valueCurrency: 'USD', weightKg: null,
+  dims: { l: null, w: null, h: null }, status: 'available', notes: '', ownerLabel: '',
+};
+
+function fromGear(g: GearWithTours): Draft {
+  const d = g.dimensionsCm ?? {};
+  return {
+    name: g.name ?? '',
+    manufacturer: g.manufacturer ?? '',
+    model: g.model ?? '',
+    category: g.category ?? '',
+    serial: g.serialNumber ?? '',
+    quantity: g.quantity ?? 1,
+    purchaseCost: g.purchaseCost ?? null,
+    dayRate: g.dayRateManual ? g.dayRate ?? null : null,
+    valueAmount: g.valueAmount ?? null,
+    valueCurrency: (g.valueCurrency || 'USD').toUpperCase(),
+    weightKg: g.weightKg ?? null,
+    dims: { l: d.l ?? null, w: d.w ?? null, h: d.h ?? null },
+    status: g.status ?? 'available',
+    notes: g.notes ?? '',
+    ownerLabel: g.ownerLabel ?? '',
+  };
+}
+
+/** The PATCH / POST body for a draft. */
+export function toBody(d: Draft): Record<string, unknown> {
+  const dims = d.dims.l && d.dims.w && d.dims.h ? { l: d.dims.l, w: d.dims.w, h: d.dims.h } : {};
+  return {
+    name: d.name.trim(),
+    manufacturer: d.manufacturer.trim() || null,
+    model: d.model.trim() || null,
+    category: d.category.trim() || null,
+    serial_number: d.serial.trim() || null,
+    quantity: Math.max(1, Math.round(d.quantity) || 1),
+    purchase_cost: d.purchaseCost,
+    day_rate: d.dayRate,
+    day_rate_manual: d.dayRate != null,
+    value_amount: d.valueAmount,
+    value_currency: d.valueAmount != null ? d.valueCurrency : null,
+    weight_kg: d.weightKg,
+    dimensions_cm: dims,
+    status: d.status,
+    notes: d.notes.trim() || null,
+    owner_label: d.ownerLabel.trim() || null,
+  };
+}
+
+/** Fill only what's blank — a lookup never overwrites what you typed. */
+export function fillBlanks(d: Draft, r: GearLookup): Draft {
+  return {
+    ...d,
+    name: d.name.trim() ? d.name : r.name,
+    manufacturer: d.manufacturer || r.manufacturer || '',
+    model: d.model || r.model || '',
+    category: d.category || r.category || '',
+    valueAmount: d.valueAmount ?? r.retail?.amount ?? null,
+    valueCurrency: d.valueAmount != null ? d.valueCurrency : r.retail?.currency ?? d.valueCurrency,
+    // Stock is priced in USD: a USD retail price is a fair purchase cost to
+    // start from (change it to what you paid).
+    purchaseCost: d.purchaseCost ?? (r.retail?.currency === 'USD' ? r.retail.amount : null),
+    weightKg: d.weightKg ?? r.weightKg,
+    dims: d.dims.l ? d.dims : { l: r.dimensionsCm?.l ?? null, w: r.dimensionsCm?.w ?? null, h: r.dimensionsCm?.h ?? null },
+    notes: d.notes || r.description || '',
+  };
+}
+
+export default function GearSlideOver({
+  id,
+  onClose,
+  onCreated,
+  onChanged,
+}: {
+  /** null = add a new item. */
+  id: string | null;
+  onClose: () => void;
+  onCreated?: (id: string) => void;
+  /** Something about the item changed (refresh lists). */
+  onChanged?: () => void;
+}) {
   const [gear, setGear] = useState<GearWithTours | null>(null);
-  const [newTourId, setNewTourId] = useState('');
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   useEffect(() => {
+    if (!id) return;
     let cancelled = false;
-    setLoading(true);
-    setError(null);
-    void getGearById(id)
-      .then((row) => {
-        if (!cancelled) setGear(row as GearWithTours | null);
-      })
-      .catch((e) => !cancelled && setError((e as Error).message))
-      .finally(() => !cancelled && setLoading(false));
-    return () => {
-      cancelled = true;
-    };
+    getGearById(id).then(
+      (row) => { if (!cancelled) { if (row) setGear(row); else setLoadError('This item isn’t there any more.'); } },
+      (e) => { if (!cancelled) setLoadError((e as Error).message); },
+    );
+    return () => { cancelled = true; };
   }, [id]);
 
-  const ownership = gear?.ownership ?? 'owned';
-  const showCost = ownership !== 'owned';
+  if (id && !gear) {
+    return (
+      <SlideOver open onClose={onClose} title="Item" width="wide" backdrop>
+        {loadError ? (
+          <p className="text-sm" style={{ color: 'var(--color-lp-error)' }}>{loadError}</p>
+        ) : (
+          <div className="flex items-center gap-2 text-sm text-lp-text-secondary"><Loader2 className="h-4 w-4 animate-spin" /> Loading…</div>
+        )}
+      </SlideOver>
+    );
+  }
+  return id && gear ? (
+    <EditItem key={gear.id} gear={gear} onClose={onClose} onChanged={onChanged} />
+  ) : (
+    <NewItem onClose={onClose} onCreated={onCreated} />
+  );
+}
 
-  const save = async (patch: Record<string, unknown>) => {
-    if (!gear) return;
-    setSaving(true);
-    try {
-      const updated = (await updateGear(gear.id, patch)) as GearWithTours;
-      setGear(updated);
-    } catch (e) {
-      setError((e as Error).message);
-    } finally {
-      setSaving(false);
+/* ─────────────────────────── add ─────────────────────────── */
+
+function NewItem({ onClose, onCreated }: { onClose: () => void; onCreated?: (id: string) => void }) {
+  const { showToast } = useToast();
+  const [d, setD] = useState<Draft>(EMPTY);
+  const [imageUrl, setImageUrl] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  async function add() {
+    if (!d.name.trim()) {
+      showToast('Give it a name first.', 'error');
+      return;
     }
-  };
-
-  const tourUsage = useMemo(() => gear?.tourGear ?? [], [gear?.tourGear]);
-
-  const handleOwnershipChange = async (nextOwnership: 'owned' | 'sub_hired' | 'hired_to_client') => {
-    if (!gear) return;
-    if (nextOwnership === gear.ownership) return;
-    if (nextOwnership === 'owned') {
-      const ok = window.confirm(
-        'Set ownership to owned and unlink derived budget hire rows for linked tours?'
-      );
-      if (!ok) return;
-    }
-    const syncTourIds = (gear.tourGear ?? []).map((tg) => tg.tourId);
-    await save({ ownership: nextOwnership, sync_tour_ids: syncTourIds });
-  };
-
-  const updateTourGear = async (nextTourGear: TourGear[]) => {
-    if (!gear) return;
-    const syncTourIds = nextTourGear.map((tg) => tg.tourId);
-    await save({
-      tour_gear: nextTourGear.map((tg) => ({
-        id: tg.id,
-        tour_id: tg.tourId,
-        tour_ownership: tg.tourOwnership,
-        tour_hire_cost_amount: tg.tourHireCostAmount,
-        tour_hire_cost_currency: tg.tourHireCostCurrency,
-        tour_hire_cost_period: tg.tourHireCostPeriod,
-        starts_on: tg.startsOn,
-        ends_on: tg.endsOn,
-        quantity: tg.quantity,
-        notes: tg.notes,
-      })),
-      sync_tour_ids: syncTourIds,
+    setBusy(true);
+    const res = await fetch('/api/gear', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...toBody(d), image_url: imageUrl, ownership: 'owned' }),
     });
-  };
-
-  const title = loading ? 'Gear' : (gear?.name ?? 'Gear');
+    const j = (await res.json().catch(() => ({}))) as { id?: string; error?: string };
+    setBusy(false);
+    if (!res.ok || !j.id) {
+      showToast('Couldn’t add it: ' + (j.error ?? res.status), 'error');
+      return;
+    }
+    showToast(`${d.name.trim()} added to stock`, 'success');
+    onCreated?.(j.id);
+  }
 
   return (
     <SlideOver
       open
       onClose={onClose}
-      title={title}
-      subtitle={
-        <span className="text-xs" style={{ color: 'var(--lp-text-secondary)' }}>
-          Canonical gear record
-        </span>
-      }
+      title={d.name.trim() || 'New item'}
+      subtitle={<Facts d={d} />}
       width="wide"
       backdrop
       footer={
         <div className="flex items-center justify-end gap-2">
-          <button type="button" className="rounded-md border border-lp-border px-3 py-2 text-sm text-lp-text" onClick={onClose}>
-            Close
-          </button>
+          <Button variant="ghost" size="sm" onClick={onClose}>Cancel</Button>
+          <Button variant="primary" size="sm" loading={busy} onClick={() => void add()} data-submit>Add to stock</Button>
         </div>
       }
     >
-      <div className="space-y-6">
-        {loading && (
-          <div className="flex items-center gap-2 text-sm text-lp-text-secondary">
-            <Loader2 className="h-4 w-4 animate-spin" />
-            Loading gear...
-          </div>
-        )}
-        {!loading && !gear && <div className="text-sm text-red-500">{error ?? 'Gear not found'}</div>}
-        {!loading && gear && (
-          <>
-            {error && <div className="text-xs text-red-500">{error}</div>}
-
-            <section className="space-y-2">
-              <h4 className="text-xs uppercase tracking-wider text-lp-text-secondary">Identity</h4>
-              <input className="w-full rounded border border-lp-border bg-transparent px-2 py-1 text-sm" defaultValue={gear.name} onBlur={(e) => void save({ name: e.target.value })} />
-              <input
-                className="w-full rounded border border-lp-border bg-transparent px-2 py-1 text-sm"
-                placeholder="Category"
-                defaultValue={gear.category ?? ''}
-                onBlur={(e) => void save({ category: e.target.value || null })}
-              />
-              <input
-                className="w-full rounded border border-lp-border bg-transparent px-2 py-1 text-sm"
-                placeholder="Manufacturer"
-                defaultValue={gear.manufacturer ?? ''}
-                onBlur={(e) => void save({ manufacturer: e.target.value || null })}
-              />
-              <input
-                className="w-full rounded border border-lp-border bg-transparent px-2 py-1 text-sm"
-                placeholder="Model"
-                defaultValue={gear.model ?? ''}
-                onBlur={(e) => void save({ model: e.target.value || null })}
-              />
-              <input
-                className="w-full rounded border border-lp-border bg-transparent px-2 py-1 text-sm"
-                placeholder="Serial"
-                defaultValue={gear.serialNumber ?? ''}
-                onBlur={(e) => void save({ serial_number: e.target.value || null })}
-              />
-            </section>
-
-            {/* Rental (Nov 2026): what the job builder prices from. Day rate is
-                3% of the purchase cost unless one is typed (rental-pricing.ts). */}
-            <section className="space-y-2">
-              <h4 className="text-xs uppercase tracking-wider text-lp-text-secondary">Rental</h4>
-              <div className="grid grid-cols-3 gap-2">
-                <label className="space-y-1 text-xs text-lp-text-secondary">
-                  <span>Quantity owned</span>
-                  <input
-                    aria-label="Quantity owned"
-                    className="w-full rounded border border-lp-border bg-transparent px-2 py-1 text-sm text-lp-text"
-                    type="number"
-                    min={1}
-                    step={1}
-                    defaultValue={gear.quantity ?? 1}
-                    onBlur={(e) => {
-                      const q = Math.round(Number(e.target.value));
-                      if (q >= 1 && q !== (gear.quantity ?? 1)) void save({ quantity: q });
-                    }}
-                  />
-                </label>
-                <label className="space-y-1 text-xs text-lp-text-secondary">
-                  <span>Purchase cost</span>
-                  <input
-                    aria-label="Purchase cost"
-                    className="w-full rounded border border-lp-border bg-transparent px-2 py-1 text-sm text-lp-text"
-                    type="number"
-                    min={0}
-                    step="0.01"
-                    defaultValue={gear.purchaseCost ?? ''}
-                    onBlur={(e) => {
-                      const v = e.target.value === '' ? null : Number(e.target.value);
-                      if (v !== (gear.purchaseCost ?? null)) void save({ purchase_cost: v });
-                    }}
-                  />
-                </label>
-                <label className="space-y-1 text-xs text-lp-text-secondary">
-                  <span>Day rate</span>
-                  <input
-                    aria-label="Day rate"
-                    className="w-full rounded border border-lp-border bg-transparent px-2 py-1 text-sm text-lp-text"
-                    type="number"
-                    min={0}
-                    step="0.01"
-                    placeholder={gear.purchaseCost ? String(dayRateFromPurchase(gear.purchaseCost) ?? '') : ''}
-                    defaultValue={gear.dayRateManual ? gear.dayRate ?? '' : ''}
-                    onBlur={(e) => {
-                      const v = e.target.value === '' ? null : Number(e.target.value);
-                      void save(v == null ? { day_rate_manual: false, day_rate: null } : { day_rate_manual: true, day_rate: v });
-                    }}
-                  />
-                </label>
-              </div>
-              <p className="text-xs text-lp-text-tertiary">
-                Blank day rate = {Math.round(DAY_RATE_PCT_OF_VALUE * 100)}% of the purchase cost. Quantity is how many you own — 1 for a serialised item.
-              </p>
-            </section>
-
-            <section className="space-y-2">
-              <h4 className="text-xs uppercase tracking-wider text-lp-text-secondary">Ownership</h4>
-              <select className="w-full rounded border border-lp-border bg-transparent px-2 py-1 text-sm" value={ownership} onChange={(e) => void handleOwnershipChange(e.target.value as 'owned' | 'sub_hired' | 'hired_to_client')}>
-                <option value="owned">Owned</option>
-                <option value="sub_hired">Sub-hired</option>
-                <option value="hired_to_client">Hired-to-client</option>
-              </select>
-              {ownership !== 'owned' && (
-                <input
-                  className="w-full rounded border border-lp-border bg-transparent px-2 py-1 text-sm"
-                  placeholder="Owner label"
-                  defaultValue={gear.ownerLabel ?? ''}
-                  onBlur={(e) => void save({ owner_label: e.target.value || null })}
-                />
-              )}
-            </section>
-
-            {showCost && (
-              <section className="space-y-2">
-                <h4 className="text-xs uppercase tracking-wider text-lp-text-secondary">Cost</h4>
-                <input
-                  className="w-full rounded border border-lp-border bg-transparent px-2 py-1 text-sm"
-                  type="number"
-                  defaultValue={gear.hireCostAmount ?? 0}
-                  onBlur={(e) => void save({ hire_cost_amount: Number(e.target.value) || 0 })}
-                />
-                <input
-                  className="w-full rounded border border-lp-border bg-transparent px-2 py-1 text-sm"
-                  placeholder="Currency"
-                  defaultValue={gear.hireCostCurrency ?? 'GBP'}
-                  onBlur={(e) => void save({ hire_cost_currency: e.target.value || 'GBP' })}
-                />
-                <select className="w-full rounded border border-lp-border bg-transparent px-2 py-1 text-sm" value={gear.hireCostPeriod ?? ''} onChange={(e) => void save({ hire_cost_period: e.target.value || null })}>
-                  <option value="">Select period</option>
-                  <option value="day">Day</option>
-                  <option value="week">Week</option>
-                  <option value="flat">Flat</option>
-                </select>
-              </section>
-            )}
-
-            <section className="space-y-2">
-              <h4 className="text-xs uppercase tracking-wider text-lp-text-secondary">Image</h4>
-              <input className="w-full rounded border border-lp-border bg-transparent px-2 py-1 text-sm" placeholder="Image URL" defaultValue={gear.imageUrl ?? ''} onBlur={(e) => void save({ image_url: e.target.value || null })} />
-              {gear.imageUrl ? (
-                <div className="relative h-44 w-full overflow-hidden rounded border border-lp-border">
-                  <Image src={gear.imageUrl} alt={gear.name} fill className="object-contain" />
-                </div>
-              ) : null}
-            </section>
-
-            <section className="space-y-2">
-              <h4 className="text-xs uppercase tracking-wider text-lp-text-secondary">Tour usage</h4>
-              <div className="space-y-1">
-                {tourUsage.length === 0 && <div className="text-xs text-lp-text-secondary">No linked tours.</div>}
-                {tourUsage.map((tg) => (
-                  <div key={tg.id} className="rounded border border-lp-border p-2 text-xs text-lp-text-secondary space-y-1">
-                    <div>Tour: {tg.tourId}</div>
-                    <div className="grid grid-cols-3 gap-2">
-                      <input
-                        className="rounded border border-lp-border bg-transparent px-2 py-1"
-                        type="number"
-                        defaultValue={tg.quantity}
-                        onBlur={(e) => {
-                          const qty = Math.max(1, Number(e.target.value) || 1);
-                          void updateTourGear(
-                            tourUsage.map((row) => (row.id === tg.id ? { ...row, quantity: qty } : row))
-                          );
-                        }}
-                      />
-                      <select
-                        className="rounded border border-lp-border bg-transparent px-2 py-1"
-                        defaultValue={tg.tourOwnership ?? ''}
-                        onChange={(e) => {
-                          const val = e.target.value as 'owned' | 'sub_hired' | 'hired_to_client' | '';
-                          void updateTourGear(
-                            tourUsage.map((row) => (row.id === tg.id ? { ...row, tourOwnership: val || null } : row))
-                          );
-                        }}
-                      >
-                        <option value="">inherit</option>
-                        <option value="owned">owned</option>
-                        <option value="sub_hired">sub-hired</option>
-                        <option value="hired_to_client">hired-to-client</option>
-                      </select>
-                      <input
-                        className="rounded border border-lp-border bg-transparent px-2 py-1"
-                        type="number"
-                        defaultValue={tg.tourHireCostAmount ?? gear.hireCostAmount ?? 0}
-                        onBlur={(e) => {
-                          const amount = Number(e.target.value) || 0;
-                          void updateTourGear(
-                            tourUsage.map((row) =>
-                              row.id === tg.id ? { ...row, tourHireCostAmount: amount } : row
-                            )
-                          );
-                        }}
-                      />
-                    </div>
-                  </div>
-                ))}
-                <div className="flex gap-2">
-                  <input
-                    className="w-full rounded border border-lp-border bg-transparent px-2 py-1 text-xs"
-                    placeholder="Tour ID to link"
-                    value={newTourId}
-                    onChange={(e) => setNewTourId(e.target.value)}
-                  />
-                  <button
-                    type="button"
-                    className="rounded border border-lp-border px-2 py-1 text-xs hover:bg-lp-bg-tertiary"
-                    onClick={() => {
-                      const tid = newTourId.trim();
-                      if (!tid) return;
-                      if (tourUsage.some((t) => t.tourId === tid)) return;
-                      const next: TourGear[] = [
-                        ...tourUsage,
-                        {
-                          id: `new-${tid}`,
-                          workspaceId: gear.workspaceId,
-                          tourId: tid,
-                          gearId: gear.id,
-                          tourOwnership: null,
-                          tourHireCostAmount: gear.hireCostAmount,
-                          tourHireCostCurrency: gear.hireCostCurrency,
-                          tourHireCostPeriod: gear.hireCostPeriod,
-                          startsOn: null,
-                          endsOn: null,
-                          quantity: 1,
-                          notes: null,
-                          createdAt: new Date().toISOString(),
-                        },
-                      ];
-                      void updateTourGear(next);
-                      setNewTourId('');
-                    }}
-                  >
-                    Add
-                  </button>
-                </div>
-              </div>
-            </section>
-
-            <RentalInventoryLinkSection
-              gearId={gear.id}
-              rentalInventoryId={gear.rentalInventoryId}
-              onChange={(updated) => setGear(updated)}
-            />
-
-            <section className="space-y-2">
-              <h4 className="text-xs uppercase tracking-wider text-lp-text-secondary">Notes</h4>
-              <textarea
-                className="w-full rounded border border-lp-border bg-transparent px-2 py-1 text-sm"
-                rows={4}
-                defaultValue={gear.notes ?? ''}
-                onBlur={(e) => void save({ notes: e.target.value || null })}
-              />
-            </section>
-
-            <section className="space-y-1 text-xs text-lp-text-secondary">
-              <h4 className="uppercase tracking-wider">Activity</h4>
-              <p>Created: {new Date(gear.createdAt).toLocaleString()}</p>
-              <p>Updated: {new Date(gear.updatedAt).toLocaleString()}</p>
-              <p>{saving ? 'Saving...' : 'All changes saved'}</p>
-            </section>
-          </>
-        )}
-      </div>
+      <Form
+        d={d}
+        set={(fn) => setD(fn)}
+        imageUrl={imageUrl}
+        onImage={setImageUrl}
+        lookupFirst
+      />
     </SlideOver>
   );
 }
 
-/**
- * UX21 — Rental inventory link section inside GearSlideOver.
- * - When linked: shows the link with a deep-link to /equipment and an Unlink button.
- * - When unlinked: shows a debounced picker over the workspace's unlinked
- *   rental_inventory rows. Selecting one calls linkGearToRentalInventory.
- */
-function RentalInventoryLinkSection({
-  gearId,
-  rentalInventoryId,
-  onChange,
-}: {
-  gearId: string;
-  rentalInventoryId: string | null;
-  onChange: (updated: Gear & { tourGear?: TourGear[] }) => void;
-}) {
-  const [pickerQuery, setPickerQuery] = useState('');
-  const [results, setResults] = useState<RentalInventory[]>([]);
-  const [searching, setSearching] = useState(false);
-  const [linkErr, setLinkErr] = useState<string | null>(null);
-  const [linking, setLinking] = useState(false);
+/* ─────────────────────────── edit ─────────────────────────── */
 
-  const runSearch = useCallback((q: string) => {
-    setSearching(true);
-    setLinkErr(null);
-    void searchUnlinkedRentalInventory(q, { limit: 20 })
-      .then((items) => setResults(items))
-      .catch((e) => setLinkErr((e as Error).message))
-      .finally(() => setSearching(false));
-  }, []);
+function EditItem({ gear, onClose, onChanged }: { gear: GearWithTours; onClose: () => void; onChanged?: () => void }) {
+  const { showToast } = useToast();
+  const [current, setCurrent] = useState(gear);
+  const [ownership, setOwnership] = useState<GearOwnership>(gear.ownership ?? 'owned');
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [inUse, setInUse] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const dirty = useRef(false);
 
-  // Debounced search when picker is open (rentalInventoryId is null).
-  useEffect(() => {
-    if (rentalInventoryId) return;
-    const t = window.setTimeout(() => runSearch(pickerQuery.trim()), 220);
-    return () => window.clearTimeout(t);
-  }, [rentalInventoryId, pickerQuery, runSearch]);
-
-  const link = useCallback(
-    async (rentalInvId: string | null) => {
-      setLinking(true);
-      setLinkErr(null);
-      try {
-        const updated = await linkGearToRentalInventory(gearId, rentalInvId);
-        onChange(updated);
-      } catch (e) {
-        setLinkErr((e as Error).message);
-      } finally {
-        setLinking(false);
-      }
+  const auto = useAutoSave<Draft>({
+    initialState: fromGear(gear),
+    onSave: async (state) => {
+      if (!state.name.trim()) throw new Error('An item needs a name.');
+      const saved = (await updateGear(gear.id, toBody(state))) as GearWithTours;
+      setCurrent((c) => ({ ...c, ...saved, tourGear: c.tourGear }));
+      dirty.current = true;
     },
-    [gearId, onChange],
-  );
+  });
+
+  const close = useCallback(async () => {
+    await auto.flushSave();
+    if (dirty.current) onChanged?.();
+    onClose();
+  }, [auto, onChanged, onClose]);
+
+  async function saveImage(url: string | null) {
+    try {
+      const saved = (await updateGear(gear.id, { image_url: url })) as GearWithTours;
+      setCurrent((c) => ({ ...c, imageUrl: saved.imageUrl }));
+      dirty.current = true;
+    } catch (e) {
+      showToast('Couldn’t save the photo: ' + (e as Error).message, 'error');
+    }
+  }
+
+  async function changeOwnership(next: GearOwnership) {
+    if (next === ownership) return;
+    if (next === 'owned' && (current.tourGear ?? []).length > 0) {
+      if (!window.confirm('Mark it owned? Its hire lines on linked tours’ budgets come off.')) return;
+    }
+    const before = ownership;
+    setOwnership(next);
+    try {
+      await updateGear(gear.id, { ownership: next, sync_tour_ids: (current.tourGear ?? []).map((t) => t.tourId) });
+      dirty.current = true;
+    } catch (e) {
+      setOwnership(before);
+      showToast('Couldn’t change ownership: ' + (e as Error).message, 'error');
+    }
+  }
+
+  async function remove() {
+    setDeleting(true);
+    const res = await fetch(`/api/gear/${gear.id}`, { method: 'DELETE' });
+    setDeleting(false);
+    if (res.status === 204) {
+      showToast(`${current.name} deleted`, 'success');
+      onChanged?.();
+      onClose();
+      return;
+    }
+    const j = (await res.json().catch(() => ({}))) as { error?: string; code?: string };
+    if (j.code === 'IN_USE') {
+      setInUse(j.error ?? 'It’s been on a job, so it can’t be deleted — retire it instead.');
+      setConfirmDelete(false);
+      return;
+    }
+    showToast('Couldn’t delete it: ' + (j.error ?? res.status), 'error');
+  }
 
   return (
-    <section className="space-y-2">
-      <h4 className="text-xs uppercase tracking-wider text-lp-text-secondary">
-        Rental inventory link
-      </h4>
-
-      {rentalInventoryId ? (
-        <div className="space-y-2">
-          <div className="rounded border border-lp-border bg-lp-bg-tertiary/40 px-3 py-2 text-xs">
-            <p className="text-lp-text-secondary">
-              Linked to a rental inventory item. The Channel List picker will surface this gear
-              from the rental house source.
-            </p>
-            <p className="mt-1 font-mono text-[10px] text-lp-text-tertiary">{rentalInventoryId}</p>
-          </div>
-          <div className="flex items-center gap-2">
-            <Link
-              href="/equipment"
-              className="inline-flex items-center gap-1 rounded border border-lp-border px-2 py-1 text-xs text-lp-text-secondary hover:border-lp-orange hover:text-lp-orange"
-            >
-              <ExternalLink className="h-3 w-3" /> Open /equipment
-            </Link>
-            <button
-              type="button"
-              disabled={linking}
-              onClick={() => void link(null)}
-              className="inline-flex items-center gap-1 rounded border border-lp-border px-2 py-1 text-xs text-lp-text-secondary hover:border-red-500 hover:text-red-500 disabled:opacity-50"
-            >
-              <X className="h-3 w-3" /> Unlink
-            </button>
-          </div>
+    <SlideOver
+      open
+      onClose={() => void close()}
+      title={auto.state.name.trim() || 'Item'}
+      subtitle={<Facts d={auto.state} />}
+      headerActions={<StatusPill tone={STOCK_STATUS_TONE[auto.state.status] ?? 'neutral'}>{STATUSES.find((s) => s.value === auto.state.status)?.label}</StatusPill>}
+      width="wide"
+      backdrop
+      footer={
+        <div className="flex items-center gap-2">
+          {confirmDelete ? (
+            <span className="flex items-center gap-2 text-sm">
+              <span className="text-lp-text-secondary">Delete for good?</span>
+              <Button variant="danger" size="sm" loading={deleting} onClick={() => void remove()}>Delete</Button>
+              <Button variant="ghost" size="sm" onClick={() => setConfirmDelete(false)}>Keep</Button>
+            </span>
+          ) : (
+            <Button variant="ghost" size="sm" leadingIcon={<Trash2 size={14} aria-hidden />} onClick={() => setConfirmDelete(true)}>Delete</Button>
+          )}
+          <span className="ml-auto" />
+          <SaveStatus status={auto.status} lastSavedAt={auto.lastSavedAt} errorMessage={auto.errorMessage} onRetry={() => void auto.flushSave()} />
+          <Button variant="ghost" size="sm" onClick={async () => { await auto.cancel(); onClose(); }}>Cancel</Button>
+          <Button variant="primary" size="sm" onClick={() => void close()}>Done</Button>
         </div>
-      ) : (
-        <div className="space-y-2">
-          <p className="text-xs text-lp-text-secondary">
-            Link this canonical gear to its underlying rental_inventory row.
-          </p>
-          <input
-            type="text"
-            value={pickerQuery}
-            onChange={(e) => setPickerQuery(e.target.value)}
-            placeholder="Search rental inventory…"
-            className="w-full rounded border border-lp-border bg-transparent px-2 py-1 text-sm"
-          />
-          <div className="max-h-44 overflow-y-auto rounded border border-lp-border">
-            {searching && results.length === 0 ? (
-              <div className="px-3 py-2 text-xs text-lp-text-tertiary">Searching…</div>
-            ) : results.length === 0 ? (
-              <div className="px-3 py-2 text-xs text-lp-text-tertiary">
-                No unlinked rental items match.
-              </div>
-            ) : (
-              <ul className="divide-y divide-lp-border">
-                {results.map((r) => (
-                  <li key={r.id}>
-                    <button
-                      type="button"
-                      disabled={linking}
-                      onClick={() => void link(r.id)}
-                      className="flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-xs hover:bg-lp-bg-tertiary/40 disabled:opacity-50"
-                    >
-                      <span className="min-w-0 truncate">
-                        <span className="font-medium text-lp-text">{r.name}</span>
-                        {r.category ? (
-                          <span className="ml-2 text-lp-text-secondary">· {r.category}</span>
-                        ) : null}
-                      </span>
-                      {r.dayRate != null ? (
-                        <span className="shrink-0 text-lp-text-tertiary tabular-nums">
-                          £{r.dayRate}/day
-                        </span>
-                      ) : null}
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
+      }
+    >
+      {inUse ? (
+        <div className="mb-5 flex items-start gap-3 rounded-xl border px-4 py-3 text-sm" style={{ borderColor: 'var(--lp-border)', backgroundColor: 'color-mix(in srgb, var(--color-lp-warning) 10%, transparent)' }}>
+          <span className="min-w-0 flex-1 text-lp-text">{inUse}</span>
+          {auto.state.status !== 'retired' ? (
+            <Button size="sm" variant="secondary" onClick={() => { auto.set((s) => ({ ...s, status: 'retired' })); setInUse(null); }}>Retire it</Button>
+          ) : null}
         </div>
-      )}
+      ) : null}
+      <Form
+        d={auto.state}
+        set={(fn) => auto.set(fn)}
+        imageUrl={current.imageUrl}
+        onImage={(url) => void saveImage(url)}
+        ownership={ownership}
+        onOwnership={(o) => void changeOwnership(o)}
+        tours={current.tourGear ?? []}
+      />
+    </SlideOver>
+  );
+}
 
-      {linkErr ? <p className="text-xs text-red-500">{linkErr}</p> : null}
+/* ─────────────────────────── the form ─────────────────────────── */
+
+function Facts({ d }: { d: Draft }) {
+  const bits = [d.category, [d.manufacturer, d.model].filter(Boolean).join(' '), d.quantity > 1 ? `${d.quantity} owned` : null].filter(Boolean);
+  return bits.length ? <span className="text-sm text-lp-text-secondary">{bits.join(' · ')}</span> : null;
+}
+
+function Form({
+  d,
+  set,
+  imageUrl,
+  onImage,
+  lookupFirst,
+  ownership,
+  onOwnership,
+  tours,
+}: {
+  d: Draft;
+  set: (fn: (prev: Draft) => Draft) => void;
+  imageUrl: string | null;
+  onImage: (url: string | null) => void;
+  lookupFirst?: boolean;
+  ownership?: GearOwnership;
+  onOwnership?: (o: GearOwnership) => void;
+  tours?: TourGear[];
+}) {
+  const field = <K extends keyof Draft>(k: K) => (v: Draft[K]) => set((p) => ({ ...p, [k]: v }));
+  const autoRate = d.purchaseCost ? dayRateFromPurchase(d.purchaseCost) : null;
+
+  return (
+    <div className="space-y-7">
+      <div className="grid grid-cols-[132px_minmax(0,1fr)] gap-5">
+        <PhotoBox url={imageUrl} onChange={onImage} />
+        <Lookup
+          initial={lookupFirst ? '' : [d.manufacturer, d.model].filter(Boolean).join(' ') || d.name}
+          prominent={!!lookupFirst}
+          onResult={(r) => {
+            set((p) => fillBlanks(p, r));
+            if (!imageUrl && r.imageUrl) onImage(r.imageUrl);
+          }}
+        />
+      </div>
+
+      <Section title="Details">
+        <div className="grid grid-cols-2 gap-x-4 gap-y-3">
+          <Field label="Name" wide>
+            <input className={BOX_CLASS} value={d.name} onChange={(e) => field('name')(e.target.value)} placeholder="AKG C414 XLII" autoFocus={!lookupFirst && !d.name} />
+          </Field>
+          <Field label="Manufacturer">
+            <input className={BOX_CLASS} value={d.manufacturer} onChange={(e) => field('manufacturer')(e.target.value)} placeholder="AKG" />
+          </Field>
+          <Field label="Model">
+            <input className={BOX_CLASS} value={d.model} onChange={(e) => field('model')(e.target.value)} placeholder="C414 XLII" />
+          </Field>
+          <Field label="Category">
+            <input className={BOX_CLASS} list="lp-gear-categories" value={d.category} onChange={(e) => field('category')(e.target.value)} placeholder="Audio" />
+            <datalist id="lp-gear-categories">{CATEGORIES.map((c) => <option key={c} value={c} />)}</datalist>
+          </Field>
+          <Field label="Serial number">
+            <input className={BOX_CLASS} value={d.serial} onChange={(e) => field('serial')(e.target.value)} placeholder="—" />
+          </Field>
+        </div>
+      </Section>
+
+      <Section title="Status">
+        <div className="grid grid-cols-4 gap-1 rounded-lg p-1" style={{ backgroundColor: 'var(--lp-bg-secondary)' }} role="radiogroup" aria-label="Status">
+          {STATUSES.map((s) => {
+            const on = d.status === s.value;
+            return (
+              <button
+                key={s.value}
+                type="button"
+                role="radio"
+                aria-checked={on}
+                onClick={() => field('status')(s.value)}
+                className="rounded-md py-1.5 text-sm transition-colors"
+                style={{
+                  backgroundColor: on ? 'var(--lp-surface)' : 'transparent',
+                  color: on ? 'var(--lp-text)' : 'var(--lp-text-secondary)',
+                  boxShadow: on ? 'var(--lp-shadow-sm)' : undefined,
+                  fontWeight: on ? 'var(--lp-weight-medium)' : undefined,
+                }}
+              >
+                {s.label}
+              </button>
+            );
+          })}
+        </div>
+        {d.status === 'retired' ? <p className="mt-2 text-xs text-lp-text-tertiary">Retired items aren’t offered on new jobs. Old quotes keep them.</p> : null}
+      </Section>
+
+      <Section title="Rental">
+        <div className="grid grid-cols-3 gap-x-4 gap-y-3">
+          <Field label="Owned">
+            <NumInput ariaLabel="Quantity owned" kind="count" zeroIsBlank={false} value={d.quantity} onCommit={(v) => field('quantity')(Math.max(1, Math.round(v ?? 1)))} />
+          </Field>
+          <Field label="Purchase cost (USD)">
+            <NumInput ariaLabel="Purchase cost" currency="USD" value={d.purchaseCost} onCommit={(v) => field('purchaseCost')(v)} />
+          </Field>
+          <Field label="Day rate (USD)">
+            <NumInput
+              ariaLabel="Day rate"
+              currency="USD"
+              value={d.dayRate}
+              placeholder={autoRate != null ? `${fmtMoney(autoRate, 'USD')} · 3%` : '—'}
+              onCommit={(v) => field('dayRate')(v)}
+            />
+          </Field>
+        </div>
+        <p className="mt-2 text-xs text-lp-text-tertiary">Leave the day rate blank to charge 3% of the purchase cost.</p>
+      </Section>
+
+      <Section title="Physical">
+        <div className="grid grid-cols-3 gap-x-4 gap-y-3">
+          <Field label={`Retail value${d.valueCurrency ? ` (${d.valueCurrency})` : ''}`}>
+            <NumInput ariaLabel="Retail value" currency={d.valueCurrency || 'USD'} value={d.valueAmount} onCommit={(v) => field('valueAmount')(v)} />
+          </Field>
+          <Field label="Weight (kg)">
+            <NumInput ariaLabel="Weight in kg" kind="count" value={d.weightKg} onCommit={(v) => field('weightKg')(v)} />
+          </Field>
+          <Field label="Size L × W × H (cm)">
+            <div className="grid grid-cols-3 gap-1">
+              {(['l', 'w', 'h'] as const).map((k) => (
+                <NumInput key={k} ariaLabel={`${k.toUpperCase()} in cm`} kind="count" value={d.dims[k]} onCommit={(v) => set((p) => ({ ...p, dims: { ...p.dims, [k]: v } }))} />
+              ))}
+            </div>
+          </Field>
+        </div>
+      </Section>
+
+      {onOwnership && ownership ? (
+        <Section title="Ownership">
+          <div className="grid grid-cols-2 gap-x-4 gap-y-3">
+            <Field label="Who owns it">
+              <select className={`lp-select ${BOX_CLASS}`} value={ownership} onChange={(e) => onOwnership(e.target.value as GearOwnership)}>
+                <option value="owned">Owned</option>
+                <option value="sub_hired">Sub-hired in</option>
+                <option value="hired_to_client">Hired out</option>
+              </select>
+            </Field>
+            {ownership !== 'owned' ? (
+              <Field label="From / to">
+                <input className={BOX_CLASS} value={d.ownerLabel} onChange={(e) => field('ownerLabel')(e.target.value)} placeholder="Company" />
+              </Field>
+            ) : null}
+          </div>
+        </Section>
+      ) : null}
+
+      {tours && tours.length > 0 ? <ToursList tours={tours} /> : null}
+
+      <Section title="Notes">
+        <textarea
+          className={`${BOX_CLASS} h-auto py-2`}
+          rows={3}
+          value={d.notes}
+          onChange={(e) => field('notes')(e.target.value)}
+          placeholder="Anything the crew should know"
+          style={{ resize: 'vertical' }}
+        />
+      </Section>
+    </div>
+  );
+}
+
+function Section({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <section>
+      <h3 className="mb-2.5 text-sm font-medium text-lp-text">{title}</h3>
+      {children}
     </section>
   );
 }
+
+function Field({ label, wide, children }: { label: string; wide?: boolean; children: ReactNode }) {
+  return (
+    <label className={`flex min-w-0 flex-col gap-1 ${wide ? 'col-span-2' : ''}`}>
+      <span className="text-xs text-lp-text-tertiary">{label}</span>
+      {children}
+    </label>
+  );
+}
+
+/** Tours this item is on — by name, read-only (the tour Gear page is going). */
+function ToursList({ tours }: { tours: TourGear[] }) {
+  const [names, setNames] = useState<Record<string, string>>({});
+  useEffect(() => {
+    let cancelled = false;
+    const ids = [...new Set(tours.map((t) => t.tourId))];
+    void createClient()
+      .from('tours')
+      .select('id, name')
+      .in('id', ids)
+      .then(({ data }) => {
+        if (cancelled || !data) return;
+        setNames(Object.fromEntries((data as Array<{ id: string; name: string }>).map((t) => [t.id, t.name])));
+      });
+    return () => { cancelled = true; };
+  }, [tours]);
+  return (
+    <Section title="On tours">
+      <ul className="divide-y rounded-lg border text-sm" style={{ borderColor: 'var(--lp-border)' }}>
+        {tours.map((t) => (
+          <li key={t.id} className="flex items-center justify-between gap-3 px-3 py-2" style={{ borderColor: 'var(--lp-border)' }}>
+            <span className="truncate text-lp-text">{names[t.tourId] ?? 'A tour'}</span>
+            <span className="shrink-0 text-lp-text-tertiary">× {t.quantity}</span>
+          </li>
+        ))}
+      </ul>
+    </Section>
+  );
+}
+
+/* ─────────────────────────── photo ─────────────────────────── */
+
+async function uploadPhoto(file: File): Promise<string> {
+  const type = file.type;
+  const grantRes = await fetch('/api/gear/photos', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ action: 'upload-url', type, size: file.size }),
+  });
+  const grant = (await grantRes.json().catch(() => ({}))) as { bucket?: string; path?: string; token?: string; error?: string };
+  if (!grantRes.ok || !grant.path || !grant.token || !grant.bucket) throw new Error(grant.error ?? 'Couldn’t start the upload.');
+  await uploadDirect({ bucket: grant.bucket, path: grant.path, token: grant.token }, file);
+  const doneRes = await fetch('/api/gear/photos', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ action: 'complete', path: grant.path }),
+  });
+  const done = (await doneRes.json().catch(() => ({}))) as { url?: string; error?: string };
+  if (!doneRes.ok || !done.url) throw new Error(done.error ?? 'The upload didn’t finish.');
+  return done.url;
+}
+
+function PhotoBox({ url, onChange }: { url: string | null; onChange: (url: string | null) => void }) {
+  const { showToast } = useToast();
+  const input = useRef<HTMLInputElement>(null);
+  const [busy, setBusy] = useState(false);
+  const [linkOpen, setLinkOpen] = useState(false);
+  const [link, setLink] = useState('');
+  const [over, setOver] = useState(false);
+
+  async function take(file: File | undefined) {
+    if (!file) return;
+    setBusy(true);
+    try {
+      onChange(await uploadPhoto(file));
+    } catch (e) {
+      showToast((e as Error).message, 'error');
+    }
+    setBusy(false);
+  }
+
+  async function fromLink() {
+    if (!link.trim()) return;
+    setBusy(true);
+    const res = await fetch('/api/gear/photos', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'from-link', url: link.trim() }),
+    });
+    const j = (await res.json().catch(() => ({}))) as { url?: string; error?: string };
+    setBusy(false);
+    if (!res.ok || !j.url) {
+      showToast(j.error ?? 'Couldn’t get a photo from that link.', 'error');
+      return;
+    }
+    onChange(j.url);
+    setLink('');
+    setLinkOpen(false);
+  }
+
+  return (
+    <div className="flex flex-col gap-2">
+      <button
+        type="button"
+        onClick={() => input.current?.click()}
+        onDragOver={(e) => { e.preventDefault(); setOver(true); }}
+        onDragLeave={() => setOver(false)}
+        onDrop={(e) => { e.preventDefault(); setOver(false); void take(e.dataTransfer.files?.[0]); }}
+        aria-label={url ? 'Change the photo' : 'Add a photo'}
+        className="relative flex aspect-square w-full items-center justify-center overflow-hidden rounded-xl border transition-colors"
+        style={{
+          borderColor: over ? 'var(--lp-orange)' : 'var(--lp-border)',
+          borderStyle: url ? 'solid' : 'dashed',
+          backgroundColor: 'var(--lp-bg-secondary)',
+        }}
+      >
+        {url ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={url} alt="" className="h-full w-full object-contain" style={{ backgroundColor: 'var(--lp-surface)' }} />
+        ) : (
+          <span className="flex flex-col items-center gap-1.5 text-xs text-lp-text-tertiary">
+            <ImagePlus size={20} aria-hidden />
+            Add photo
+          </span>
+        )}
+        {busy ? (
+          <span className="absolute inset-0 flex items-center justify-center" style={{ backgroundColor: 'color-mix(in srgb, var(--lp-surface) 70%, transparent)' }}>
+            <Loader2 className="h-5 w-5 animate-spin text-lp-text-secondary" />
+          </span>
+        ) : null}
+      </button>
+      <input ref={input} type="file" accept="image/jpeg,image/png,image/webp,image/gif" className="hidden" onChange={(e) => void take(e.target.files?.[0])} />
+      {linkOpen ? (
+        <div className="flex gap-1" data-submit-scope>
+          <input
+            className={`${BOX_CLASS} h-8 text-xs`}
+            value={link}
+            onChange={(e) => setLink(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); void fromLink(); } }}
+            placeholder="Paste a link"
+            autoFocus
+          />
+        </div>
+      ) : (
+        <div className="flex justify-center gap-3 text-xs">
+          <button type="button" className="inline-flex items-center gap-1 text-lp-text-secondary hover:text-lp-text" onClick={() => setLinkOpen(true)}>
+            <Link2 size={12} aria-hidden /> Link
+          </button>
+          {url ? (
+            <button type="button" className="text-lp-text-secondary hover:text-[var(--color-lp-error)]" onClick={() => onChange(null)}>Remove</button>
+          ) : null}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ─────────────────────────── look it up ─────────────────────────── */
+
+function Lookup({ initial, prominent, onResult }: { initial: string; prominent: boolean; onResult: (r: GearLookup) => void }) {
+  const [q, setQ] = useState(initial);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [sources, setSources] = useState<string[]>([]);
+
+  async function run() {
+    if (q.trim().length < 2 || busy) return;
+    setBusy(true);
+    setError(null);
+    const res = await fetch('/api/gear/lookup', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ query: q.trim() }),
+    });
+    const j = (await res.json().catch(() => ({}))) as { result?: GearLookup; error?: string };
+    setBusy(false);
+    if (!res.ok || !j.result) {
+      setError(j.error ?? 'The lookup didn’t work just now.');
+      return;
+    }
+    setSources(j.result.sources);
+    onResult(j.result);
+  }
+
+  const hosts = [...new Set(sources.map((s) => { try { return new URL(s).hostname.replace(/^www\./, ''); } catch { return null; } }).filter(Boolean))] as string[];
+
+  return (
+    <div
+      className="flex flex-col justify-center gap-2 rounded-xl border p-4"
+      style={{ borderColor: prominent ? 'color-mix(in srgb, var(--lp-orange) 35%, var(--lp-border))' : 'var(--lp-border)', backgroundColor: prominent ? 'color-mix(in srgb, var(--lp-orange) 5%, transparent)' : 'transparent' }}
+    >
+      <div className="flex items-center gap-2 text-sm font-medium text-lp-text">
+        <Sparkles size={15} aria-hidden style={{ color: 'var(--lp-orange)' }} />
+        Look it up online
+      </div>
+      <div className="flex gap-2" data-submit-scope>
+        <div className="relative min-w-0 flex-1">
+          <Search size={14} aria-hidden className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-lp-text-tertiary" />
+          <input
+            className={`${BOX_CLASS} pl-8`}
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); void run(); } }}
+            placeholder="Make and model, e.g. AKG C414 XLII"
+            aria-label="Look it up online"
+            autoFocus={prominent}
+          />
+        </div>
+        <Button variant={prominent ? 'primary' : 'secondary'} size="md" loading={busy} onClick={() => void run()} data-submit>
+          {busy ? 'Searching…' : 'Look it up'}
+        </Button>
+      </div>
+      {error ? (
+        <p className="text-xs" style={{ color: 'var(--color-lp-error)' }}>{error}</p>
+      ) : hosts.length ? (
+        <p className="text-xs text-lp-text-tertiary">Filled the blanks from {hosts.slice(0, 3).join(', ')}. Check the numbers before you quote them.</p>
+      ) : (
+        <p className="text-xs text-lp-text-tertiary">Retail value, weight, size and a photo. Fills only what’s blank.</p>
+      )}
+    </div>
+  );
+}
+

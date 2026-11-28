@@ -67,7 +67,14 @@ export interface AnthropicUsageLike {
   output_tokens?: number | null;
   cache_read_input_tokens?: number | null;
   cache_creation_input_tokens?: number | null;
+  /** Server tools the model ran (web search is billed per search). */
+  server_tool_use?: { web_search_requests?: number | null } | null;
 }
+
+/** Web search: USD 10 per 1,000 searches = 10,000 micro-USD each, on top of
+ *  the tokens its results add. FRAGILE — Anthropic's published rate when this
+ *  was written (Nov 2026); check docs.claude.com pricing if it looks off. */
+export const WEB_SEARCH_MICROS = 10_000;
 
 /**
  * Resolve a price card for a (possibly dated) model id by longest
@@ -102,8 +109,10 @@ export function computeCostMicros(
   const cacheRead = num(usage.cache_read_input_tokens) * card.cacheRead;
   const cacheWrite = num(usage.cache_creation_input_tokens) * card.cacheWrite;
 
+  const searches = num(usage.server_tool_use?.web_search_requests) * WEB_SEARCH_MICROS;
+
   // tokens * (USD per MTok) == micro-USD (see header identity).
-  return { micros: Math.round(input + output + cacheRead + cacheWrite), priced: true };
+  return { micros: Math.round(input + output + cacheRead + cacheWrite + searches), priced: true };
 }
 
 function num(v: number | null | undefined): number {

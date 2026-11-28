@@ -37,6 +37,9 @@ export interface AssetItem {
   hire_cost_amount: number | null;
   hire_cost_currency: string | null;
   image_url?: string | null;
+  manufacturer?: string | null;
+  model?: string | null;
+  serial_number?: string | null;
   purchase_cost?: number | null;
   day_rate?: number | null;
   day_rate_manual?: boolean | null;
@@ -58,7 +61,7 @@ export interface AssetsData {
 
 export async function loadAssets(supabase: SupabaseClient, workspaceId: string): Promise<AssetsData> {
   const ITEM_COLS =
-    'id, name, category, ownership, status, weight_kg, value_amount, value_currency, space_id, container_id, hire_cost_amount, hire_cost_currency, image_url, purchase_cost, day_rate, day_rate_manual, quantity';
+    'id, name, category, ownership, status, weight_kg, value_amount, value_currency, space_id, container_id, hire_cost_amount, hire_cost_currency, image_url, manufacturer, model, serial_number, purchase_cost, day_rate, day_rate_manual, quantity';
   const readItems = (cols: string) => supabase.from('gear').select(cols).eq('workspace_id', workspaceId).order('name');
   const [{ data: spaces }, { data: containers }, first] = await Promise.all([
     supabase.from('spaces').select('id, name, kind, monthly_cost_amount, cost_currency').eq('workspace_id', workspaceId).order('name'),

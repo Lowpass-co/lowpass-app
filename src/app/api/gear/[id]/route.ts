@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { requireWrite } from '@/lib/auth/workspace-check';
-import { createServerSupabaseClient } from '@/lib/supabase-server';
+import type { SupabaseClient } from '@supabase/supabase-js';
+import { createServerSupabaseClient, createServiceSupabaseClient } from '@/lib/supabase-server';
+import { GEAR_PHOTO_BUCKET, gearPhotoBelongs } from '@/lib/gear/photos';
 import { syncDerivedBudgetRowForTour } from '@/lib/gear/deriveBudget';
 
 export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -145,4 +147,53 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     .single();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json(data);
+}
+
+/* DELETE — only an item that has never been on a rental job or a tour
+   (Adam, Nov 2026: "Delete or retire? … ok"). Anything with history is
+   refused (409 IN_USE) — retire it instead, so old quotes keep its name.
+   rental_job_items.gear_id is ON DELETE RESTRICT too; this says why first. */
+export async function DELETE(_request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  const supabase = await createServerSupabaseClient();
+  const auth = await requireWrite(supabase);
+  if ('error' in auth) return auth.error;
+
+  const { data: item } = await supabase.from('gear').select('id, workspace_id, image_url').eq('id', id).maybeSingle();
+  if (!item || (item as { workspace_id: string }).workspace_id !== auth.workspaceId) {
+    return NextResponse.json({ error: 'Not found' }, { status: 404 });
+  }
+  const [jobs, tours] = await Promise.all([
+    supabase.from('rental_job_items').select('id', { count: 'exact', head: true }).eq('gear_id', id),
+    supabase.from('tour_gear').select('id', { count: 'exact', head: true }).eq('gear_id', id),
+  ]);
+  const onJobs = jobs.count ?? 0;
+  const onTours = tours.count ?? 0;
+  if (onJobs > 0 || onTours > 0) {
+    const where = [onJobs ? `${onJobs} job line${onJobs === 1 ? '' : 's'}` : null, onTours ? `${onTours} tour${onTours === 1 ? '' : 's'}` : null]
+      .filter(Boolean)
+      .join(' and ');
+    return NextResponse.json(
+      { error: `It’s on ${where}, so it can’t be deleted — retire it instead. Old quotes keep its name.`, code: 'IN_USE', jobs: onJobs, tours: onTours },
+      { status: 409 },
+    );
+  }
+
+  const { data: gone, error } = await supabase.from('gear').delete().eq('id', id).select('id');
+  if (error) {
+    if (error.code === '23503') return NextResponse.json({ error: 'It’s still used somewhere — retire it instead.', code: 'IN_USE' }, { status: 409 });
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+  if (!gone || gone.length === 0) return NextResponse.json({ error: 'You can’t delete stock here.' }, { status: 403 });
+
+  // Its stored photo goes with it (only ever one of OUR gear photos).
+  const url = String((item as { image_url: string | null }).image_url ?? '');
+  const marker = `/object/public/${GEAR_PHOTO_BUCKET}/`;
+  const at = url.indexOf(marker);
+  const path = at >= 0 ? decodeURIComponent(url.slice(at + marker.length).split('?')[0]) : null;
+  if (path && gearPhotoBelongs(path, auth.workspaceId)) {
+    const service = createServiceSupabaseClient() as unknown as SupabaseClient;
+    await service.storage.from(GEAR_PHOTO_BUCKET).remove([path]);
+  }
+  return new NextResponse(null, { status: 204 });
 }

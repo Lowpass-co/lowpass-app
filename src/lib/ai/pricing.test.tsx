@@ -23,3 +23,11 @@ describe('AI pricing', () => {
     expect(computeCostMicros('claude-unknown-9', { input_tokens: 1000 })).toEqual({ micros: 0, priced: false });
   });
 });
+
+describe('web search cost', () => {
+  it('adds 10,000 micro-USD per search to the token cost', () => {
+    const base = computeCostMicros('claude-sonnet-5-5', { input_tokens: 1000, output_tokens: 100 });
+    const withSearch = computeCostMicros('claude-sonnet-5-5', { input_tokens: 1000, output_tokens: 100, server_tool_use: { web_search_requests: 3 } });
+    expect(withSearch.micros - base.micros).toBe(30_000);
+  });
+});

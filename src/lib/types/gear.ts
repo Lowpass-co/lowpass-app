@@ -23,6 +23,14 @@ export type Gear = {
   dayRateManual?: boolean;
   /** How many you own (306) — 1 for a serialised item. */
   quantity?: number;
+  status?: 'available' | 'in_use' | 'maintenance' | 'retired';
+  weightKg?: number | null;
+  /** Retail / replacement value (the lookup fills it). */
+  valueAmount?: number | null;
+  valueCurrency?: string | null;
+  dimensionsCm?: { l?: number; w?: number; h?: number } | null;
+  spaceId?: string | null;
+  containerId?: string | null;
   createdAt: string;
   updatedAt: string;
 };

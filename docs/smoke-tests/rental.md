@@ -90,3 +90,45 @@ Rental jobs: right-click a job → Open · Edit details · Duplicate (a copy wit
 its lines, "(copy)") · Mark … (every other status; a GBP draft freezes its
 rate) · Delete job (asks). Gear & rentals: right-click an item → Open · Move…
 · Mark available / in use / maintenance / retired.
+
+## Stock (Gear & rentals) — Nov 2026
+
+#### RNT-17 — Add an item, looked up online
+Gear & rentals › New item. Type "AKG C414 XLII" in Look it up online → Look
+it up: within ~20 s the blanks fill (name, make, model, Audio, a description
+in Notes, retail value, weight, size) and a photo appears; "Filled the blanks
+from …" names the sites. A USD retail price also fills Purchase cost, so the
+day rate shows "$… · 3%". Add to stock → it's in the list under Audio and
+the panel stays open on it. Type a name first, then look up: your name stays.
+(No ANTHROPIC_API_KEY → "Online lookup isn't set up"; web search not enabled
+on the key → it says so.)
+
+#### RNT-18 — Photo
+On an item: drop a JPEG on the photo box, or click it and choose one → it
+shows, and the list row shows it. Link → paste a product page → its photo is
+copied in. Remove clears it. A .svg or a renamed text file is refused.
+
+#### RNT-19 — Status, retire, delete
+The panel's Status (Available · In use · Maintenance · Retired) saves as you
+tap; the pill in the header follows. Retired items aren't offered by a job's
+Add gear. Delete on an item never used on a job → gone (with its photo).
+Delete on one that's been on a job → "It's on N job lines… retire it
+instead" with a Retire it button. Right-click a row → Delete does the same.
+
+#### RNT-20 — Import
+Import › paste "8 x SM58\n2 x Beta 91A\nAvid S6L" → three rows (8, 2, 1).
+Paste cells with a header (Item, Qty, Category, Cost…) → "Columns: Name, Qty,
+Category, Cost"; totals rows skipped. A name already in stock comes unticked
+("already in stock"). Add N items → they're in the list with those quantities.
+
+#### RNT-21 — The page
+Full width; facts line "N items · N pieces · N kg · N spaces"; items grouped by
+category (Group by › Place regroups); status chips with counts; the place
+menu filters (a space includes its containers) and makes New space / New
+container. Tick items across groups → one bar: Move… · Mark … · Retire · Clear.
+Every column fits at 1280 px wide (no cut-off Weight / Place).
+
+#### RNT-22 — The panel
+Labelled fields; no ids anywhere; tours listed by name. Typing saves
+(SaveStatus pill); Cancel puts back what it was when you opened it; Done
+closes.
