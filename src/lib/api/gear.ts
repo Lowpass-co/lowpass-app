@@ -23,6 +23,13 @@ type GearRow = {
   day_rate?: number | string | null;
   day_rate_manual?: boolean | null;
   quantity?: number | null;
+  status?: string | null;
+  weight_kg?: number | string | null;
+  value_amount?: number | string | null;
+  value_currency?: string | null;
+  dimensions_cm?: { l?: number; w?: number; h?: number } | null;
+  space_id?: string | null;
+  container_id?: string | null;
   created_at: string;
   updated_at: string;
   tour_gear?: TourGearRow[];
@@ -83,6 +90,13 @@ function mapGear(row: GearRow): Gear & { tourGear?: TourGear[] } {
     dayRate: row.day_rate == null ? null : Number(row.day_rate),
     dayRateManual: row.day_rate_manual ?? false,
     quantity: Math.max(1, Number(row.quantity) || 1),
+    status: (['available', 'in_use', 'maintenance', 'retired'].includes(String(row.status)) ? row.status : 'available') as Gear['status'],
+    weightKg: row.weight_kg == null ? null : Number(row.weight_kg),
+    valueAmount: row.value_amount == null ? null : Number(row.value_amount),
+    valueCurrency: row.value_currency ?? null,
+    dimensionsCm: row.dimensions_cm ?? null,
+    spaceId: row.space_id ?? null,
+    containerId: row.container_id ?? null,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     tourGear: (row.tour_gear ?? []).map(mapTourGear),
@@ -219,7 +233,10 @@ export async function updateGear(id: string, payload: Record<string, unknown>) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
   });
-  if (!res.ok) throw new Error('Failed to update gear');
+  if (!res.ok) {
+    const j = (await res.json().catch(() => ({}))) as { error?: string };
+    throw new Error(j.error ?? 'Couldn’t save the item.');
+  }
   const row = (await res.json()) as GearRow;
   return mapGear(row);
 }

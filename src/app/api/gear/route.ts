@@ -91,6 +91,8 @@ export async function POST(request: Request) {
       dimensions_cm: body.dimensions_cm ?? {},
       country_of_origin: body.country_of_origin ?? null,
       customs_hs_code: body.customs_hs_code ?? null,
+      // How many you own (306) — whole, ≥ 1.
+      ...(body.quantity !== undefined ? { quantity: Math.max(1, Math.round(Number(body.quantity) || 1)) } : {}),
     })
     .select('*')
     .single();

@@ -357,7 +357,7 @@ export function DataTable<T>(props: DataTableProps<T>) {
       role="region"
       aria-label={ariaLabel}
     >
-      {toolbar || (selectedIdsP?.length ?? 0) > 0 ? <DataTableToolbar
+      {toolbar || (!!selectionActions && (selectedIdsP?.length ?? 0) > 0) ? <DataTableToolbar
         columns={columns}
         filterState={filterState}
         onFilterStateChange={onFilterChange}
